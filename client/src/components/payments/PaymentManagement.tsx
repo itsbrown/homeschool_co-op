@@ -648,7 +648,8 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
         retryCount: typeof payment.retryCount === 'number' ? payment.retryCount : 0,
         failureReason: payment.failureReason ?? null,
         overdue: payment.overdue === true,
-        isCheckoutDue: payment.isCheckoutDue === true,
+        isCheckoutDue:
+          payment.isCheckoutDue === true || payment.status === 'checkout_due',
         checkoutPaymentIntentId: payment.checkoutPaymentIntentId,
       }));
     },
@@ -1204,14 +1205,19 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                       {allUpcomingPayments.map((payment: any) => {
                         const rowKey = `${payment.source}-${payment.id}`;
                         const cov = creditCoverageMap.get(rowKey);
+                        const isIncompleteCheckout =
+                          payment.isCheckoutDue === true ||
+                          payment.status === 'checkout_due';
                         const urgent =
-                          payment.status === 'failed' ||
-                          payment.status === 'overdue' ||
-                          payment.overdue === true;
+                          !isIncompleteCheckout &&
+                          (payment.status === 'failed' ||
+                            payment.status === 'overdue' ||
+                            payment.overdue === true);
                         const retryCount =
                           typeof payment.retryCount === 'number' ? payment.retryCount : 0;
-                        const leftBorder =
-                          payment.source === 'database_scheduled'
+                        const leftBorder = isIncompleteCheckout
+                          ? 'border-l-4 border-l-amber-500'
+                          : payment.source === 'database_scheduled'
                             ? urgent
                               ? 'border-l-4 border-l-red-500'
                               : 'border-l-4 border-l-blue-500'
@@ -1248,9 +1254,9 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                                     Class Enrollment
                                   </Badge>
                                 )}
-                                {payment.isCheckoutDue && (
+                                {isIncompleteCheckout && (
                                   <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
-                                    Checkout due
+                                    Checkout incomplete
                                   </Badge>
                                 )}
                                 {payment.source === 'stripe_scheduled' && (
@@ -1268,12 +1274,26 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                                 )}
                               </div>
                               <p className="text-sm text-muted-foreground">
-                                Due: {formatDate(payment.dueDate!)} • {payment.childName}
-                                {payment.installmentNumber && payment.totalInstallments && (
-                                  <span> • Installment {payment.installmentNumber} of {payment.totalInstallments}</span>
+                                {isIncompleteCheckout ? (
+                                  <>
+                                    Enrollment is not confirmed until checkout is finished and the
+                                    first payment succeeds. Your full installment schedule will appear
+                                    here after that.
+                                  </>
+                                ) : (
+                                  <>
+                                    Due: {formatDate(payment.dueDate!)} • {payment.childName}
+                                    {payment.installmentNumber && payment.totalInstallments ? (
+                                      <span>
+                                        {' '}
+                                        • Installment {payment.installmentNumber} of{' '}
+                                        {payment.totalInstallments}
+                                      </span>
+                                    ) : null}
+                                  </>
                                 )}
                               </p>
-                              {payment.paymentPlan && (
+                              {!isIncompleteCheckout && payment.paymentPlan && (
                                 <p className="text-xs text-muted-foreground mt-0.5">
                                   Plan: {payment.paymentPlan}
                                 </p>
@@ -1293,7 +1313,19 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                           </div>
                         <div className="flex flex-col items-end gap-2">
                           <div className="text-right">
-                            <p className={`font-medium ${urgent ? 'text-red-600' : ''}`}>{formatCurrency(payment.amount)}</p>
+                            <p
+                              className={`font-medium ${
+                                isIncompleteCheckout
+                                  ? 'text-amber-800'
+                                  : urgent
+                                    ? 'text-red-600'
+                                    : ''
+                              }`}
+                            >
+                              {isIncompleteCheckout
+                                ? `Est. first payment: ${formatCurrency(payment.amount)}`
+                                : formatCurrency(payment.amount)}
+                            </p>
                           </div>
                           {fullyCovered ? (
                             <span className="text-xs text-emerald-700 font-medium text-right max-w-[10rem]">

@@ -287,14 +287,8 @@ export class StripePaymentPlanService {
     // Installments 2+ are created only after installment 1 succeeds (webhook).
     const scheduledPayments: any[] = [];
 
-    // Update enrollments with PaymentIntent reference
-    await this.updateEnrollmentsWithPaymentIntent(
-      data.enrollmentIds,
-      paymentIntent.id,
-      customer.id,
-      data.paymentPlan as CheckoutPaymentPlanId,
-      data.paymentFrequency ?? 'one_time',
-    );
+    // Enrollment payment-plan fields are committed only after installment 1 succeeds
+    // (see persistRemainingScheduledPaymentsAfterFirstCheckoutPayment).
 
     console.log(
       '✅ Payment plan created with PaymentIntent for installment 1;',
@@ -341,6 +335,29 @@ export class StripePaymentPlanService {
     }
     if (enrollmentIds.length === 0) return [];
 
+    const parentUser = await this.storage.getUserByEmail(parentEmail);
+    if (!parentUser) return [];
+
+    const customerId =
+      typeof paymentIntent.customer === 'string'
+        ? paymentIntent.customer
+        : (paymentIntent.customer as { id?: string } | null)?.id ??
+          String(meta.stripeCustomerId ?? '');
+
+    if (customerId) {
+      const normalizedPlan = normalizeCheckoutPaymentPlanRequest(
+        meta.paymentPlan ?? 'full',
+        meta.paymentFrequency ?? 'one_time',
+      );
+      await this.updateEnrollmentsWithPaymentIntent(
+        enrollmentIds,
+        paymentIntent.id,
+        customerId,
+        normalizedPlan.paymentPlan,
+        normalizedPlan.paymentFrequency,
+      );
+    }
+
     const totalInstallments = parseInt(String(meta.totalInstallments ?? '1'), 10) || 1;
     const installmentNumber = parseInt(String(meta.installmentNumber ?? '1'), 10) || 1;
     if (totalInstallments <= 1 || installmentNumber !== 1) {
@@ -369,9 +386,6 @@ export class StripePaymentPlanService {
       console.warn('⚠️ Skipping scheduled payments — missing totalAmount on PI', paymentIntent.id);
       return [];
     }
-
-    const parentUser = await this.storage.getUserByEmail(parentEmail);
-    if (!parentUser) return [];
 
     let programStartDate: Date | null = null;
     let programEndDate: Date | null = null;

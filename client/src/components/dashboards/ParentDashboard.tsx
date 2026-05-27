@@ -595,7 +595,9 @@ export default function ParentDashboard() {
     if (!Array.isArray(payments)) return 0;
     return payments.filter(
       (p: any) =>
-        p.overdue === true || p.status === "overdue" || p.status === "failed"
+        !p.isCheckoutDue &&
+        p.status !== "checkout_due" &&
+        (p.overdue === true || p.status === "overdue" || p.status === "failed")
     ).length;
   })();
 
@@ -1011,33 +1013,61 @@ export default function ParentDashboard() {
                     >
                       {formatCurrency(nextScheduledPayment.amount)}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Next payment
-                      {nextScheduledPayment.installmentNumber != null &&
-                      nextScheduledPayment.totalInstallments != null
-                        ? ` (${nextScheduledPayment.installmentNumber} of ${nextScheduledPayment.totalInstallments})`
-                        : ""}
-                      {nextScheduledPayment.dueDate
-                        ? ` · due ${format(new Date(nextScheduledPayment.dueDate), "MMM d, yyyy")}`
-                        : ""}
-                    </p>
-                    {(nextScheduledPayment.className || nextScheduledPayment.childName) && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate">
-                        {[nextScheduledPayment.childName, nextScheduledPayment.className]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
+                    {nextScheduledPayment.isCheckoutDue ||
+                    nextScheduledPayment.status === "checkout_due" ? (
+                      <>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Checkout started — payment not completed
+                        </p>
+                        {(nextScheduledPayment.className || nextScheduledPayment.childName) && (
+                          <p className="text-xs text-muted-foreground mt-1 truncate">
+                            {[nextScheduledPayment.childName, nextScheduledPayment.className]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-snug">
+                          Finish checkout to confirm enrollment. You are not on an active payment
+                          plan until the first payment succeeds.
+                        </p>
+                        <Button className="mt-3 w-full h-11" asChild data-testid="button-complete-checkout-dashboard">
+                          <Link href="/cart/checkout">
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Complete checkout
+                          </Link>
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Next payment
+                          {nextScheduledPayment.installmentNumber != null &&
+                          nextScheduledPayment.totalInstallments != null
+                            ? ` (${nextScheduledPayment.installmentNumber} of ${nextScheduledPayment.totalInstallments})`
+                            : ""}
+                          {nextScheduledPayment.dueDate
+                            ? ` · due ${format(new Date(nextScheduledPayment.dueDate), "MMM d, yyyy")}`
+                            : ""}
+                        </p>
+                        {(nextScheduledPayment.className || nextScheduledPayment.childName) && (
+                          <p className="text-xs text-muted-foreground mt-1 truncate">
+                            {[nextScheduledPayment.childName, nextScheduledPayment.className]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-snug">
+                          Class balances are on your payment plan — pay installments from Upcoming
+                          Payments, not checkout.
+                        </p>
+                        <Button className="mt-3 w-full h-11" asChild data-testid="button-view-payment-plan-dashboard">
+                          <Link href="/payments?tab=upcoming">
+                            <Calendar className="h-4 w-4 mr-2" />
+                            View payment plan
+                          </Link>
+                        </Button>
+                      </>
                     )}
-                    <p className="text-xs text-muted-foreground mt-1.5 leading-snug">
-                      Class balances are on your payment plan — pay installments from Upcoming
-                      Payments, not checkout.
-                    </p>
-                    <Button className="mt-3 w-full h-11" asChild data-testid="button-view-payment-plan-dashboard">
-                      <Link href="/payments?tab=upcoming">
-                        <Calendar className="h-4 w-4 mr-2" />
-                        View payment plan
-                      </Link>
-                    </Button>
                   </>
                 ) : (
                   <>

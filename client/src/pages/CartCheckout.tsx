@@ -14,6 +14,8 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient, safeJsonParse } from '@/lib/queryClient';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Link } from 'wouter';
 import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award, RefreshCw, ArrowLeft, Zap } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
@@ -61,7 +63,7 @@ type AuthoritativeDataType = {
   freeEnrollmentReason: FreeEnrollmentReason | null;
 };
 
-function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled, hasPaymentMethod, togglingAutoPay, toggleAutoPay }: { selectedPaymentPlan: string; selectedPlanAmount: number; autoPayEnabled: boolean; hasPaymentMethod: boolean; togglingAutoPay: boolean; toggleAutoPay: (enabled: boolean) => void }) {
+function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled, hasPaymentMethod, togglingAutoPay, toggleAutoPay, checkoutBlocked, checkoutBlockedReason }: { selectedPaymentPlan: string; selectedPlanAmount: number; autoPayEnabled: boolean; hasPaymentMethod: boolean; togglingAutoPay: boolean; toggleAutoPay: (enabled: boolean) => void; checkoutBlocked?: boolean; checkoutBlockedReason?: string }) {
   const stripe = useStripe();
   const elements = useElements();
   const { cart, clearCart } = useCart();
@@ -93,6 +95,15 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
       toast({
         title: "Payment Form Loading",
         description: "Please wait a moment for the payment form to finish loading.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (checkoutBlocked) {
+      toast({
+        title: "Action required",
+        description: checkoutBlockedReason || "Complete the required steps before paying.",
         variant: "destructive",
       });
       return;
@@ -197,7 +208,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
       <Button 
         type="submit" 
         className="w-full" 
-        disabled={!stripe || !elementsReady || processing || (cart.items.length === 0 && !cart.membership)}
+        disabled={!stripe || !elementsReady || processing || checkoutBlocked || (cart.items.length === 0 && !cart.membership)}
         size="lg"
         data-testid="button-checkout-submit"
       >
@@ -223,7 +234,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
 }
 
 export default function CartCheckout() {
-  const { cart, cartHydrated, cartLoading, clearCart, applyPromoCode, removePromoCode, refreshCart } = useCart();
+  const { cart, cartHydrated, cartLoading, clearCart, applyPromoCode, removePromoCode, refreshCart, setMembership } = useCart();
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -358,6 +369,31 @@ export default function CartCheckout() {
   }, [cart.membership, authoritativeData]);
 
   const actualPayableAmount = cart.total + effectiveMembershipCents;
+
+  const agreementSchoolId =
+    authoritativeData?.membershipSchoolId ?? membershipForOrderSummary?.schoolId ?? null;
+
+  const { data: agreementStatus, isLoading: agreementStatusLoading } = useQuery<{
+    hasSigned: boolean;
+    requiresNewSignature: boolean;
+  }>({
+    queryKey: ['agreement-status-checkout', agreementSchoolId],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      const res = await fetch(`/api/parent/agreements/check/${agreementSchoolId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        throw new Error('Failed to check membership agreement status');
+      }
+      return res.json();
+    },
+    enabled: !!agreementSchoolId && isAuthenticated,
+    staleTime: 30_000,
+  });
+
+  const mustSignAgreement = agreementStatus?.requiresNewSignature === true;
 
   const isFreeEnrollmentApproved = gateIsFreeEnrollmentApproved(actualPayableAmount, authoritativeData);
   const cartLooksFreeButUnverified = gateCartLooksFreeButUnverified(actualPayableAmount, authoritativeData);
@@ -784,6 +820,20 @@ export default function CartCheckout() {
 
       // Store authoritative data in state for UI components
       setAuthoritativeData(authData);
+
+      if (
+        authData.membershipRequired &&
+        !authData.membershipAlreadyPaid &&
+        authData.membershipAmount > 0 &&
+        authData.membershipSchoolId != null
+      ) {
+        setMembership({
+          schoolId: authData.membershipSchoolId,
+          schoolName: authData.membershipSchoolName,
+          amount: authData.membershipAmount,
+          year: authData.membershipYear,
+        });
+      }
 
       // Update available credits from snapshot
       setAvailableCredits(snapshot.credits.available);
@@ -2203,7 +2253,27 @@ export default function CartCheckout() {
                     Enter your payment details to complete enrollment
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  {mustSignAgreement && (
+                    <Alert variant="destructive" data-testid="checkout-agreement-required">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription className="space-y-2">
+                        <p>
+                          You must review and sign the school membership agreement before paying
+                          {membershipForOrderSummary
+                            ? ` (includes ${formatCurrency(membershipForOrderSummary.amount)} annual membership).`
+                            : '.'}
+                        </p>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link
+                            href={`/membership-agreement?schoolId=${agreementSchoolId}&return=${encodeURIComponent('/cart/checkout')}`}
+                          >
+                            Review & sign agreement
+                          </Link>
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   {!stripeReady ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -2237,6 +2307,12 @@ export default function CartCheckout() {
                         hasPaymentMethod={hasPaymentMethod}
                         togglingAutoPay={togglingAutoPay}
                         toggleAutoPay={toggleAutoPay}
+                        checkoutBlocked={mustSignAgreement || agreementStatusLoading}
+                        checkoutBlockedReason={
+                          agreementStatusLoading
+                            ? 'Checking membership agreement status…'
+                            : 'Please sign the membership agreement before completing payment.'
+                        }
                       />
                     </Elements>
                   ) : (

@@ -1331,17 +1331,20 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (schoolResponse.ok) {
           const schoolResult = await schoolResponse.json();
-          if (schoolResult.success && schoolResult.school && schoolResult.school.membershipFeeAmount > 0) {
+          const school = schoolResult.school;
+          const fee = school?.membershipFeeAmount ?? 0;
+          const required = school?.membershipRequired ?? true;
+          if (schoolResult.success && school && fee > 0 && required) {
             console.log('🎫 CartContext: Adding new membership fee during hydration:', {
-              schoolId: schoolResult.school.id,
-              schoolName: schoolResult.school.name,
-              amount: schoolResult.school.membershipFeeAmount,
+              schoolId: school.id,
+              schoolName: school.name,
+              amount: fee,
             });
 
             return {
-              schoolId: schoolResult.school.id,
-              schoolName: schoolResult.school.name,
-              amount: schoolResult.school.membershipFeeAmount,
+              schoolId: school.id,
+              schoolName: school.name,
+              amount: fee,
               year: new Date().getFullYear(),
             };
           }
