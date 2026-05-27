@@ -424,7 +424,18 @@ export default function SchoolSettingsPage() {
   // Membership update mutation
   const membershipUpdateMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest('PATCH', '/api/school-admin/my-school/membership', data);
+      const response = await apiRequest('PATCH', '/api/school-admin/my-school/membership', data);
+      if (!response.ok) {
+        let errorMessage = 'Failed to update membership configuration';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData?.message || errorMessage;
+        } catch {
+          // keep default message when body isn't JSON
+        }
+        throw new Error(errorMessage);
+      }
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -432,6 +443,7 @@ export default function SchoolSettingsPage() {
         description: "Membership configuration updated successfully",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/my-school'] });
+      queryClient.refetchQueries({ queryKey: ['/api/school-admin/my-school'] });
       setMembershipDialogOpen(false);
     },
     onError: (error: Error) => {

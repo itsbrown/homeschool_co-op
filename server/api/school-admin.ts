@@ -2944,9 +2944,14 @@ router.patch("/my-school/membership", supabaseAuth, async (req: any, res) => {
     const updateData: Partial<InsertSchool> = {};
 
     if (membershipFeeAmount !== undefined) {
-      // Frontend already converts dollars to cents, so accept the value as-is
-      const feeInCents = typeof membershipFeeAmount === 'number' ? 
-        Math.round(membershipFeeAmount) : 0;
+      // Accept either number or numeric string to avoid silently coercing valid input to 0
+      const numericFee = typeof membershipFeeAmount === 'number'
+        ? membershipFeeAmount
+        : Number(membershipFeeAmount);
+      if (Number.isNaN(numericFee) || numericFee < 0) {
+        return res.status(400).json({ message: "Invalid membership fee amount (must be 0 or greater)" });
+      }
+      const feeInCents = Math.round(numericFee);
       updateData.membershipFeeAmount = feeInCents;
     }
 
