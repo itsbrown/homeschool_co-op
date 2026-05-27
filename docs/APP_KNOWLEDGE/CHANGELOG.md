@@ -2,6 +2,10 @@
 
 Dated updates to this knowledge base (not product release notes).
 
+## 2026-05-27
+
+- **School admin Classes page 500:** `GET /api/school-admin/classes` calls `storage.getHiddenCategoryIds()` but the method was dropped from `server/storage.ts` / `server/dbStorage.ts` during a May merge while the API call remained — restores method + `categories.isPublic` in Drizzle schema.
+
 ## 2026-05-26
 
 - **Comp enrollment balance:** `resolveEnrollmentEffectiveBalance` prefers computed `total_cost - total_paid - comp_amount_cents` when stored `effective_balance` drifts; comp API uses same helper; Parent Profile drops `remainingBalance` fallback; `server/scripts/repair-comp-amount-cents.sql` for legacy rows with `comp_percentage` but zero `comp_amount_cents`.
