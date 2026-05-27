@@ -420,157 +420,28 @@ router.get("/debug-users", async (req, res) => {
 // School admin login now handled through Supabase authentication
 // Removed hardcoded authentication bypass for security
 
-import { jwtCheck } from '../middleware/auth0-auth';
-
 // Get the school associated with the logged-in school administrator
-router.get("/my-school", jwtCheck, async (req: any, res) => {
+router.get("/my-school", supabaseAuth, async (req: any, res) => {
   try {
-    console.log('🏫 Fetching school data for admin');
-    
-    // User is already authenticated and synced by jwtCheck middleware
-    const user = req.user;
-    
-    if (!user || !user.email) {
-      return res.status(401).json({ message: "Authentication failed" });
-    }
-    
-    console.log('✅ Authenticated user from middleware:', user.email);
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
 
-    // Get admin user from middleware (already synced to database)
-    const adminUser = user;
-    
-    if (!adminUser) {
-      console.log('❌ User not synced to database:', user.email);
-      return res.status(500).json({ message: "User sync failed" });
+    const school = await storage.getSchool(schoolId);
+    if (!school) {
+      return res.status(404).json({ message: "School not found" });
     }
-    
-    const dbUser = adminUser.dbUser;
-    let userSchoolId: number | null = null;
-    if (dbUser) {
-      const { resolveSchoolIdForUser } = await import('../lib/resolve-school-id');
-      userSchoolId = await resolveSchoolIdForUser(dbUser);
-    }
-    if (userSchoolId == null) {
-      userSchoolId = adminUser.dbUser?.schoolId ?? req.auth?.schoolId ?? null;
-    }
-    
-    console.log('✅ Found admin user:', { 
-      id: adminUser.id, 
-      email: adminUser.email, 
-      role: adminUser.role,
-      dbUserSchoolId: adminUser.dbUser?.schoolId,
-      reqAuthSchoolId: req.auth?.schoolId,
-      finalSchoolId: userSchoolId
+
+    const registrationCode =
+      (await ensureSchoolRegistrationCode(school.id)) ?? school.registrationCode;
+    const locations = await storage.getLocationsBySchoolId(school.id);
+
+    return res.json({
+      ...school,
+      registrationCode,
+      locations,
     });
-    
-    // This is the authoritative source of truth from the database
-    if (userSchoolId) {
-      console.log(`🎯 Using user's schoolId from database: ${userSchoolId}`);
-      const school = await storage.getSchool(userSchoolId);
-      
-      if (school) {
-        console.log('✅ Found school for user:', school.name);
-        
-        const registrationCode =
-          (await ensureSchoolRegistrationCode(school.id)) ?? school.registrationCode;
-        
-        // Load locations for this school
-        const locations = await storage.getLocationsBySchoolId(school.id);
-        console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
-        
-        const responseData = {
-          ...school,
-          registrationCode,
-          locations
-        };
-        
-        console.log('🚀 SENDING RESPONSE FROM DATABASE (schoolId):', JSON.stringify(responseData, null, 2));
-        
-        // Return school with embedded locations
-        return res.json(responseData);
-      } else {
-        console.error(`❌ School ${adminUser.schoolId} not found in database!`);
-      }
-    }
-    
-    console.log('🔍 Fetching schools from database...');
-    
-    // Fallback: Get all schools from database
-    const allSchools = await storage.getAllSchools();
-    console.log('📋 Found schools in database:', allSchools.length);
-    console.log('🔍 All schools:', allSchools.map((s: any) => ({ id: s.id, name: s.name, adminId: s.adminId })));
-
-    // Try to find a school already associated with this admin user via adminId
-    // Use the database user ID (from dbUser), not the Supabase UUID
-    const dbUserId = adminUser.dbUser?.id;
-    
-    console.log('🔍 Looking for school with adminId:', dbUserId);
-    
-    let school = allSchools.find((s: any) => 
-      s.adminId === dbUserId
-    );
-
-    if (school) {
-      console.log('✅ Found existing school for admin (via adminId):', school.name);
-      console.log('📊 RAW DATABASE DATA:', JSON.stringify(school, null, 2));
-      
-      const registrationCode =
-        (await ensureSchoolRegistrationCode(school.id)) ?? school.registrationCode;
-      
-      // Load locations for this school
-      const locations = await storage.getLocationsBySchoolId(school.id);
-      console.log(`🏢 Found ${locations.length} locations for school ${school.name}`);
-      
-      const responseData = {
-        ...school,
-        registrationCode,
-        locations
-      };
-      
-      console.log('🚀 SENDING RESPONSE FROM DATABASE:', JSON.stringify(responseData, null, 2));
-      console.log('🔍 Description field value:', responseData.description);
-      console.log('🔍 Registration code value:', responseData.registrationCode);
-      
-      // Return school with embedded locations
-      return res.json(responseData);
-    }
-
-    // If no associated school found, try to find an unassociated "American Seekers Academy" school
-    const unassociatedSchool = allSchools.find((s: any) => 
-      s.name === 'American Seekers Academy' && 
-      (!s.adminId || s.adminId === null)
-    );
-
-    if (unassociatedSchool) {
-      console.log('🔗 Associating school with admin user:', unassociatedSchool.name);
-      
-      // Update the school to associate it with this admin
-      const updatedSchool = await storage.updateSchool(unassociatedSchool.id, {
-        // adminId is set during school creation, not via update
-      });
-      
-      if (updatedSchool) {
-        console.log('✅ School associated successfully');
-        
-        // Load locations for the newly associated school
-        const locations = await storage.getLocationsBySchoolId(updatedSchool.id);
-        console.log(`🏢 Found ${locations.length} locations for school ${updatedSchool.name}`);
-        
-        // Return school with embedded locations
-        return res.json({
-          ...updatedSchool,
-          locations
-        });
-      }
-    }
-
-    console.log('❌ No school found to associate with this admin');
-    return res.status(404).json({ message: "No school found for this admin" });
   } catch (error: unknown) {
     console.error("Error fetching school information:", error);
-    if (error instanceof Error) {
-      console.error("Error stack:", error.stack);
-    }
     return res.status(500).json({ message: "Error fetching school information" });
   }
 });
