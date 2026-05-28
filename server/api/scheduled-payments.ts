@@ -447,6 +447,28 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       });
     }
 
+    let stripeCreditHoldSessionId: string | null = null;
+    if (decision.creditsToApply > 0) {
+      stripeCreditHoldSessionId = `parent_manual_sp_${scheduledPayment.id}_${Date.now()}`;
+      const { totalHeld } = await storage.createCreditHolds(
+        userId,
+        decision.creditsToApply,
+        stripeCreditHoldSessionId,
+        `Parent Pay Now — scheduled payment ${scheduledPayment.id} (card + credits)`,
+        60,
+      );
+      if (totalHeld < decision.creditsToApply) {
+        await storage.releaseCreditHolds(stripeCreditHoldSessionId).catch(() => {});
+        stripeCreditHoldSessionId = null;
+        await storage.releaseScheduledPaymentParentClaim(numericPaymentId, parentUserId).catch(() => {});
+        claimAcquired = false;
+        return res.status(400).json({
+          success: false,
+          error: 'Could not reserve enough credits for this payment. Try again or pay by card only.',
+        });
+      }
+    }
+
     const stripe = await getStripeClient();
     let paymentIntent: Stripe.PaymentIntent;
     try {
@@ -464,6 +486,7 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
           creditsAppliedCents: decision.creditsToApply > 0 ? decision.creditsToApply : undefined,
           originalAmountCents: decision.creditsToApply > 0 ? decision.originalAmount : undefined,
           chargeAmountCents: decision.chargeAmount,
+          creditHoldSessionId: stripeCreditHoldSessionId ?? undefined,
           description: description || `Scheduled Payment ${scheduledPayment.installmentNumber}`,
         }),
         automatic_payment_methods: {
@@ -471,6 +494,9 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
         },
       });
     } catch (stripeErr) {
+      if (stripeCreditHoldSessionId) {
+        await storage.releaseCreditHolds(stripeCreditHoldSessionId).catch(() => {});
+      }
       await storage.releaseScheduledPaymentParentClaim(numericPaymentId, parentUserId).catch(() => {});
       claimAcquired = false;
       throw stripeErr;

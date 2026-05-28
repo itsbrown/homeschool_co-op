@@ -41,36 +41,48 @@ export async function consumeCreditsFromPaymentIntentMetadata(
     return { creditsConsumedCents: 0, creditsSkippedAlreadyApplied: true };
   }
 
-  let payId = paymentHistoryId ?? undefined;
-  if (!payId) {
-    const row = await storage.getPaymentByStripeId(paymentIntent.id);
-    payId = row?.id;
+  const checkoutDescription = `Checkout ${paymentIntent.id}`;
+  const checkoutLogs = await storage.getUnifiedCreditUsageLogsByCheckoutPaymentIntentId(paymentIntent.id);
+  const alreadyFromCheckout = checkoutLogs.reduce((sum, log) => sum + (log.amountCents || 0), 0);
+  if (alreadyFromCheckout >= creditsAppliedCents) {
+    return { creditsConsumedCents: alreadyFromCheckout, creditsSkippedAlreadyApplied: true };
   }
 
-  if (payId) {
-    const existingLogs = await storage.getUnifiedCreditUsageLogsByPaymentHistoryId(payId);
+  let stripeHistoryId = paymentHistoryId ?? undefined;
+  if (!stripeHistoryId) {
+    const stripeHist = await storage.getStripePaymentByIntentId(paymentIntent.id);
+    stripeHistoryId = stripeHist?.id;
+  }
+
+  if (stripeHistoryId) {
+    const existingLogs = await storage.getUnifiedCreditUsageLogsByPaymentHistoryId(stripeHistoryId);
     const alreadyUsed = existingLogs.reduce((sum, log) => sum + (log.amountCents || 0), 0);
     if (alreadyUsed >= creditsAppliedCents) {
       return { creditsConsumedCents: alreadyUsed, creditsSkippedAlreadyApplied: true };
     }
-    const remainder = creditsAppliedCents - alreadyUsed;
+    const remainder = creditsAppliedCents - Math.max(alreadyFromCheckout, alreadyUsed);
+    if (remainder <= 0) {
+      return {
+        creditsConsumedCents: Math.max(alreadyFromCheckout, alreadyUsed),
+        creditsSkippedAlreadyApplied: true,
+      };
+    }
     const { totalUsed } = await storage.useCredits(
       userId,
       remainder,
-      payId,
-      `Checkout ${paymentIntent.id}`,
+      stripeHistoryId,
+      checkoutDescription,
     );
     return {
-      creditsConsumedCents: alreadyUsed + totalUsed,
+      creditsConsumedCents: Math.max(alreadyFromCheckout, alreadyUsed) + totalUsed,
       creditsSkippedAlreadyApplied: false,
     };
   }
 
-  const { totalUsed } = await storage.useCredits(
-    userId,
-    creditsAppliedCents,
-    undefined,
-    `Checkout ${paymentIntent.id}`,
-  );
-  return { creditsConsumedCents: totalUsed, creditsSkippedAlreadyApplied: false };
+  const remainder = creditsAppliedCents - alreadyFromCheckout;
+  const { totalUsed } = await storage.useCredits(userId, remainder, undefined, checkoutDescription);
+  return {
+    creditsConsumedCents: alreadyFromCheckout + totalUsed,
+    creditsSkippedAlreadyApplied: false,
+  };
 }

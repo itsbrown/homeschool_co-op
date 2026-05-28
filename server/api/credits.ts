@@ -706,4 +706,48 @@ router.get('/parents', requireSchoolContext, async (req: any, res) => {
   }
 });
 
+/** School-admin: ledger integrity + repair (Task credit ledger) */
+router.get('/admin/integrity-check', requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = parseInt(req.schoolId, 10);
+    const { runCreditIntegrityCheck } = await import('../services/credit-integrity-check');
+    const { findMissingCreditLedgerEntries } = await import('../lib/credit-ledger-repair');
+
+    const [integrityReport, missingLedger] = await Promise.all([
+      runCreditIntegrityCheck(schoolId),
+      findMissingCreditLedgerEntries(schoolId),
+    ]);
+
+    return res.json({
+      integrity: integrityReport,
+      missingLedger: {
+        count: missingLedger.length,
+        entries: missingLedger.slice(0, 100),
+      },
+    });
+  } catch (error: unknown) {
+    console.error('Error running credit integrity check:', error);
+    res.status(500).json({ error: 'Failed to run credit integrity check' });
+  }
+});
+
+router.post('/admin/repair-ledger', requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolId = parseInt(req.schoolId, 10);
+    const dryRun = req.body?.dryRun !== false;
+    const limit =
+      typeof req.body?.limit === 'number' && req.body.limit > 0
+        ? Math.min(req.body.limit, 500)
+        : 100;
+
+    const { repairAllMissingCreditLedgerEntries } = await import('../lib/credit-ledger-repair');
+    const summary = await repairAllMissingCreditLedgerEntries({ schoolId, dryRun, limit });
+
+    return res.json(summary);
+  } catch (error: unknown) {
+    console.error('Error repairing credit ledger:', error);
+    res.status(500).json({ error: 'Failed to repair credit ledger' });
+  }
+});
+
 export default router;

@@ -12,6 +12,7 @@ import {
   updateLocationCore,
 } from './lib/location-db';
 import { getAllSchoolsCore, getSchoolCoreById, insertSchoolCore } from './lib/school-db';
+import * as apDb from './lib/assessment-progress-db';
 import {
   User, InsertUser, users,
   UserRole, userRoles,
@@ -2480,6 +2481,15 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(categories).where(eq(categories.isActive, true));
   }
 
+  async getHiddenCategoryIds(): Promise<number[]> {
+    const db = await getDb();
+    const rows = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(and(eq(categories.isPublic, false), eq(categories.isActive, true)));
+    return rows.map((row) => row.id);
+  }
+
   async createCategory(category: InsertCategory): Promise<Category> {
     const db = await getDb();
     const [newCategory] = await db
@@ -3755,7 +3765,18 @@ export class DatabaseStorage implements IStorage {
     return db
       .select()
       .from(unifiedCreditUsageLogs)
-      .where(like(unifiedCreditUsageLogs.description, `Scheduled payment ${scheduledPaymentId} -%`))
+      .where(like(unifiedCreditUsageLogs.description, `%Scheduled payment ${scheduledPaymentId}%`))
+      .orderBy(desc(unifiedCreditUsageLogs.createdAt));
+  }
+
+  async getUnifiedCreditUsageLogsByCheckoutPaymentIntentId(
+    paymentIntentId: string,
+  ): Promise<UnifiedCreditUsageLog[]> {
+    const db = await getDb();
+    return db
+      .select()
+      .from(unifiedCreditUsageLogs)
+      .where(eq(unifiedCreditUsageLogs.description, `Checkout ${paymentIntentId}`))
       .orderBy(desc(unifiedCreditUsageLogs.createdAt));
   }
 
@@ -4255,4 +4276,43 @@ export class DatabaseStorage implements IStorage {
     `);
     return (result.rows as Record<string, unknown>[]).map((row) => this.mapPaymentReminderLogRow(row));
   }
+
+  // Assessment & progress (see server/lib/assessment-progress-db.ts)
+  getChildByIdForSchool = apDb.getChildByIdForSchool;
+  getChildrenForSchool = apDb.getChildrenForSchool;
+  fuzzyMatchStudentsForSchool = apDb.fuzzyMatchStudentsForSchool;
+  resolveActiveSessionIdForChild = apDb.resolveActiveSessionIdForChild;
+  getAssessmentTypesBySchoolId = apDb.getAssessmentTypesBySchoolId;
+  getAssessmentTypeById = apDb.getAssessmentTypeById;
+  createAssessmentType = apDb.createAssessmentType;
+  updateAssessmentType = apDb.updateAssessmentType;
+  deleteAssessmentType = apDb.deleteAssessmentType;
+  getCurriculumBooksByAssessmentTypeId = apDb.getCurriculumBooksByAssessmentTypeId;
+  getCurriculumBookById = apDb.getCurriculumBookById;
+  createCurriculumBook = apDb.createCurriculumBook;
+  updateCurriculumBook = apDb.updateCurriculumBook;
+  deleteCurriculumBook = apDb.deleteCurriculumBook;
+  getStudentAssessmentById = apDb.getStudentAssessmentById;
+  getStudentAssessmentsByChildId = apDb.getStudentAssessmentsByChildId;
+  getStudentAssessmentsBySchoolId = apDb.getStudentAssessmentsBySchoolId;
+  createStudentAssessment = apDb.createStudentAssessment;
+  updateStudentAssessment = apDb.updateStudentAssessment;
+  deleteStudentAssessment = apDb.deleteStudentAssessment;
+  recordLexileAssessment = apDb.recordLexileAssessment;
+  getLexileHistoryForChildBySchool = apDb.getLexileHistoryForChildBySchool;
+  getProgressSubjectsBySchool = apDb.getProgressSubjectsBySchool;
+  createProgressSubject = apDb.createProgressSubject;
+  updateProgressSubject = apDb.updateProgressSubject;
+  getProgressTracksBySubject = apDb.getProgressTracksBySubject;
+  getProgressTrackById = apDb.getProgressTrackById;
+  createProgressTrack = apDb.createProgressTrack;
+  updateProgressTrack = apDb.updateProgressTrack;
+  createStudentProgressLog = apDb.createStudentProgressLog;
+  getStudentProgressCurrent = apDb.getStudentProgressCurrent;
+  getStudentProgressLog = apDb.getStudentProgressLog;
+  getRecentProgressLogForSchool = apDb.getRecentProgressLogForSchool;
+  getParentProgressSummary = apDb.getParentProgressSummary;
+  getProgressInsightCache = apDb.getProgressInsightCache;
+  saveProgressInsightCache = apDb.saveProgressInsightCache;
+  ensureProgressSubjectsForSchool = apDb.ensureProgressSubjectsForSchool;
 }

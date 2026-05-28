@@ -1,14 +1,30 @@
 # App knowledge changelog
 
+## 2026-05-28 (credit ledger)
+
+- **Credits not deducted / reusable after refresh:** Webhook consumes credits before `scheduled_payments.completed` early-exit; throws if ledger incomplete (Stripe retry). Parent Pay Now (card + credits) reserves `credit_holds`. Checkout idempotency via `Checkout {pi_id}` logs. See `docs/CREDIT_LEDGER_REPAIR.md`.
+- **Repair:** `npx tsx server/scripts/backfill-missing-credit-ledger.ts --dry-run|--apply`; school admin `GET /api/credits/admin/integrity-check`, `POST /api/credits/admin/repair-ledger`.
+
+## 2026-05-26 (multi-subject progress)
+
+- **F-14 + curriculum progress wired:** Drizzle tables, `assessment-progress-db` storage, routes in `app-init.ts` (`/api/assessments`, `/api/lexile`, `/api/progress`, `/api/progress/insights`).
+- **Educator:** Progress tab on assessments page, quick log on student detail; POST uses `score` / `lesson`.
+- **Parent:** `/parent/progress` hub; sidebar Progress entry; concierge `get_child_progress`.
+- **Admin:** Progress catalog tab on assessments management.
+- **Tests:** `progress-log-validation.test.ts`; integration smokes `assessments-api`, `progress-api` (require `TEST_DATABASE_URL`).
+
 ## 2026-05-27
 
+- **School admin Classes page 500:** `GET /api/school-admin/classes` calls `storage.getHiddenCategoryIds()` but the method was dropped from `server/storage.ts` / `server/dbStorage.ts` during a May merge while the API call remained — restores method + `categories.isPublic` in Drizzle schema.
 - **Checkout abandon / false payment plan:** `POST /api/stripe/create-payment-intent` no longer writes `paymentPlan` or `initialPaymentIntentId` on enrollments before Stripe succeeds; those fields are set in `persistRemainingScheduledPaymentsAfterFirstCheckoutPayment` after installment 1. Dashboard and Payments → Upcoming treat `checkout_due` as **incomplete checkout** (amber), not overdue; no fake “installment 1 of N” until first payment succeeds — full schedule appears only after webhook creates `scheduled_payments` rows 2..N.
 - **Membership at checkout:** `resolveMembershipOwedForCheckout` in `server/utils/cart-pricing.ts` is used by cart snapshot and payment intent so annual membership is included when the school requires it, even if the client omits it. Cart checkout syncs membership from snapshot and gates pay on signed agreement (`/api/parent/agreements/check/:schoolId`).
+- **Checkout school for membership:** `resolveCheckoutSchoolId` prefers the school that owns cart classes/enrollments over `users.school_id` (snapshot, validate, Stripe intent). `alreadyPaid` only when `isActiveMembership` status — not `remainingBalance <= 0` on pending rows. Checkout loads `/api/cart/snapshot` on mount and uses `totals.membershipTotal` for the order summary line.
 
 Dated updates to this knowledge base (not product release notes).
 
 ## 2026-05-26
 
+- **Location activation threshold (implemented):** Schema `249-location-activation-threshold.sql`, `location-activation-service`, scheduler, wishlist enroll path, cart/Stripe guards, admin + parent UI. See domain doc.
 - **Location activation threshold (planned):** Product rules locked in `domains/registration-and-locations.md` — student count, `sessions.location_id`, short notice before batch charge, early admin activate + audit, expiry cancels wishlist and releases cards.
 - **School-wide staff permissions:** `user_school_permissions` table + `/api/school-admin/user-school-permissions` (GET/POST/PATCH). Middleware `checkLocationPermission` honors school-wide grants at every location. Staff Permissions page has a **School-wide access** card; `my-permissions` returns `schoolWide` for sidebar nav.
 - **Staff Permissions:** `StaffPermissionsPage` grants location access to any school user via `/api/school-admin/users` (search + quick list), not only `/api/school-admin/staff` roles; assign block always visible below the permissions table. `STAFF_TYPE_ROLES` includes `mentor`/`aide` with case-insensitive match on `/api/school-admin/staff`.

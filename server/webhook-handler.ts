@@ -20,6 +20,7 @@ import {
   fulfillBalancePaymentIntent,
 } from './lib/fulfill-balance-payment-intent';
 import { resolveScheduledPaymentEnrollmentIds } from './lib/scheduled-payment-intent-metadata';
+import { ensureScheduledPaymentCreditsConsumed } from './lib/ensure-scheduled-payment-credits-consumed';
 
 // Stripe client will be lazily initialized within the webhook handler
 const RECENT_WEBHOOK_EVENTS_MAX = 1000;
@@ -348,6 +349,35 @@ export const webhookHandler = async (req: Request, res: Response) => {
           
           if (scheduledPayment) {
             const spId = parseInt(scheduledPaymentId, 10);
+            const creditsAppliedCents =
+              parseInt(String(paymentIntent.metadata.creditsAppliedCents || '0'), 10) || 0;
+            const userIdForCredits = parseInt(String(paymentIntent.metadata.userId || '0'), 10) || 0;
+            const creditHoldSessionId =
+              (paymentIntent.metadata.creditHoldSessionId as string) ||
+              (paymentIntent.metadata.holdSessionId as string) ||
+              '';
+
+            if (creditsAppliedCents > 0 && userIdForCredits > 0) {
+              const creditResult = await ensureScheduledPaymentCreditsConsumed({
+                scheduledPaymentId: spId,
+                userId: userIdForCredits,
+                creditsAppliedCents,
+                creditHoldSessionId: creditHoldSessionId || undefined,
+                installmentNumber: paymentIntent.metadata.installmentNumber,
+                totalInstallments: paymentIntent.metadata.totalInstallments,
+              });
+              console.log(`💰 Scheduled payment ${scheduledPaymentId} credits:`, creditResult);
+              if (
+                creditResult.consumedCents < creditsAppliedCents &&
+                !creditResult.skippedAlreadyApplied
+              ) {
+                throw new Error(
+                  `Credit ledger incomplete for scheduled payment ${scheduledPaymentId}: ` +
+                    `expected ${creditsAppliedCents}c, recorded ${creditResult.consumedCents}c`
+                );
+              }
+            }
+
             if (String(scheduledPayment.status) === 'completed') {
               console.log(
                 `ℹ️ Scheduled payment ${scheduledPaymentId} already completed; skipping duplicate ledger application for PI ${paymentIntent.id}`,
@@ -362,44 +392,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
               completionSource: completionSrc,
             });
             console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed (${completionSrc})`);
-
-            const creditsAppliedCents =
-              parseInt(String(paymentIntent.metadata.creditsAppliedCents || '0'), 10) || 0;
-            const userIdForCredits = parseInt(String(paymentIntent.metadata.userId || '0'), 10) || 0;
-            const creditHoldSessionId =
-              (paymentIntent.metadata.creditHoldSessionId as string) ||
-              (paymentIntent.metadata.holdSessionId as string) ||
-              '';
-
-            if (creditsAppliedCents > 0 && userIdForCredits > 0) {
-              try {
-                if (creditHoldSessionId) {
-                  console.log(
-                    `💰 Finalizing credit hold ${creditHoldSessionId} for scheduled payment ${scheduledPaymentId}`
-                  );
-                  const { totalFinalized } = await storage.finalizeCreditHolds(
-                    creditHoldSessionId,
-                    undefined,
-                    `Scheduled payment ${scheduledPaymentId} — installment ${paymentIntent.metadata.installmentNumber}/${paymentIntent.metadata.totalInstallments}`
-                  );
-                  console.log(`💰 ✅ Finalized ${totalFinalized} cents via hold ${creditHoldSessionId}`);
-                } else {
-                  console.log(`💰 Consuming ${creditsAppliedCents} cents of credits for user ${userIdForCredits}`);
-                  const { totalUsed } = await storage.useCredits(
-                    userIdForCredits,
-                    creditsAppliedCents,
-                    undefined,
-                    `Scheduled payment ${scheduledPaymentId} — installment ${paymentIntent.metadata.installmentNumber}/${paymentIntent.metadata.totalInstallments}`
-                  );
-                  console.log(`💰 ✅ Consumed ${totalUsed} cents of credits`);
-                }
-              } catch (creditError) {
-                console.error(
-                  `❌ Failed to consume/finalize credits for scheduled payment ${scheduledPaymentId}:`,
-                  creditError
-                );
-              }
-            }
 
             const enrollmentIds = resolveScheduledPaymentEnrollmentIds(
               scheduledPayment,

@@ -147,6 +147,17 @@ describeIntegration('Integration: scheduled_payment Stripe webhooks', () => {
   it('applies original installment cents to enrollment when credits covered part of the Stripe charge', async () => {
     const { app, parent, enrollment, scheduledPayment } = await seedScheduledPaymentFixture();
 
+    const credit = await storage.createCredit({
+      userId: parent.id,
+      schoolId: enrollment.schoolId,
+      creditType: 'manual',
+      sourceType: 'test',
+      creditAmountCents: 5000,
+      usedAmountCents: 0,
+      status: 'approved',
+      title: 'Webhook partial credit test',
+    } as any);
+
     const res = await request(app)
       .post(endpoint)
       .set('stripe-signature', 't=1,v1=fake')
@@ -175,10 +186,87 @@ describeIntegration('Integration: scheduled_payment Stripe webhooks', () => {
     expect(res.status).toBe(200);
     const enr = await storage.getProgramEnrollmentById(enrollment.id);
     expect(enr?.totalPaid).toBe(10000);
+
+    const updated = await storage.getCreditById(credit.id);
+    expect(updated?.usedAmountCents).toBe(2000);
+    expect(updated?.status).toBe('partially_used');
+  });
+
+  it('consumes credits on webhook replay when installment is already completed', async () => {
+    const { app, parent, enrollment, scheduledPayment } = await seedScheduledPaymentFixture();
+
+    const credit = await storage.createCredit({
+      userId: parent.id,
+      schoolId: enrollment.schoolId,
+      creditType: 'manual',
+      sourceType: 'test',
+      creditAmountCents: 5000,
+      usedAmountCents: 0,
+      status: 'approved',
+      title: 'Webhook replay credit test',
+    } as any);
+
+    await storage.updateScheduledPayment(scheduledPayment.id, {
+      status: 'completed',
+      processedAt: new Date(),
+      completionSource: 'stripe_checkout',
+    } as any);
+
+    const payload = {
+      id: 'evt_sched_replay_credits',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_sched_replay_credits',
+          amount: 3000,
+          currency: 'usd',
+          metadata: {
+            paymentType: 'scheduled_payment',
+            scheduledPaymentId: String(scheduledPayment.id),
+            parentEmail: parent.email,
+            installmentNumber: '2',
+            totalInstallments: '4',
+            creditsAppliedCents: '2000',
+            userId: String(parent.id),
+            originalAmountCents: '5000',
+          },
+        },
+      },
+    };
+
+    const res = await request(app)
+      .post(endpoint)
+      .set('stripe-signature', 't=1,v1=fake')
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    const updated = await storage.getCreditById(credit.id);
+    expect(updated?.usedAmountCents).toBe(2000);
   });
 
   it('finalizes credit holds when creditHoldSessionId is present on success', async () => {
-    const { app, parent, scheduledPayment } = await seedScheduledPaymentFixture();
+    const { app, parent, enrollment, scheduledPayment } = await seedScheduledPaymentFixture();
+
+    const credit = await storage.createCredit({
+      userId: parent.id,
+      schoolId: enrollment.schoolId,
+      creditType: 'manual',
+      sourceType: 'test',
+      creditAmountCents: 5000,
+      usedAmountCents: 0,
+      status: 'approved',
+      title: 'Hold finalize test',
+    } as any);
+
+    const holdSessionId = 'hold_sess_integration_1';
+    const { totalHeld } = await storage.createCreditHolds(
+      parent.id,
+      2000,
+      holdSessionId,
+      'Integration hold test',
+      60,
+    );
+    expect(totalHeld).toBe(2000);
 
     await request(app)
       .post(endpoint)
@@ -200,17 +288,22 @@ describeIntegration('Integration: scheduled_payment Stripe webhooks', () => {
               creditsAppliedCents: '2000',
               userId: String(parent.id),
               originalAmountCents: '5000',
-              creditHoldSessionId: 'hold_sess_1',
+              creditHoldSessionId: holdSessionId,
             },
           },
         },
       });
 
-    // We assert on the observable effect via storage and rely on dedicated
-    // helper tests for the exact finalizeCreditHolds wiring.
     const rows = await storage.getScheduledPaymentsByParentEmail(parent.email);
     const row = rows.find((p) => p.id === scheduledPayment.id);
     expect(row?.status).toBe('completed');
+
+    const updatedCredit = await storage.getCreditById(credit.id);
+    expect(updatedCredit?.usedAmountCents).toBe(2000);
+
+    const logs = await storage.getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPayment.id);
+    expect(logs.length).toBeGreaterThan(0);
+    expect(logs.reduce((s, l) => s + (l.amountCents || 0), 0)).toBe(2000);
   });
 
   it('payment_intent.payment_failed resets to pending, increments retry, and releases holds', async () => {
