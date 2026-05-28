@@ -2,7 +2,7 @@
 
 ## Where to run E2E
 
-**Use GitHub Actions** (`.github/workflows/e2e.yml`) for Playwright. CI runs `npx playwright install chromium --with-deps` on Ubuntu with full system libraries.
+**Use GitHub Actions** (`.github/workflows/e2e.yml`) for Playwright. CI runs `npx playwright install --with-deps chromium chromium-headless-shell` (headless shell needs its own OS libs on Ubuntu).
 
 Replit’s Nix environment does **not** support the large native dependency set Chromium needs. An attempt to add `replit.nix` plus many `[nix].packages` entries (e.g. `alsa-lib`, `libdrm`, `gdk-pixbuf`) broke the Repl build (“Nix environment is broken”). `.replit` is kept minimal: `packages = ["jq"]` only.
 
@@ -18,7 +18,7 @@ The Playwright **browser** may download, but **OS libraries** for Chromium are m
 ## Local / CI
 
 ```bash
-npx playwright install chromium --with-deps
+npx playwright install --with-deps chromium chromium-headless-shell
 # or
 npm run playwright:install:deps
 ```

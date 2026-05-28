@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-05-28 (E2E CI headless shell deps)
+
+- **`.github/workflows/e2e.yml`:** install `chromium-headless-shell` system libs (`libglib-2.0`, etc.) — `playwright install chromium --with-deps` alone left CI failing with `libglib-2.0.so.0` on `parent-full-journey`.
+
 ## 2026-05-28 (school-admin my-school context)
 
 - **`getSchoolIdFromRequest`** (`server/api/school-admin.ts`) now uses `resolveSchoolIdForUser` (same as `requireSchoolContext`), so `GET /api/school-admin/my-school` returns the `schools.admin_id` school when `users.school_id` is stale.

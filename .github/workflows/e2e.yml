@@ -24,8 +24,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium --with-deps
+      - name: Install Playwright Chromium and OS libraries
+        run: |
+          # Headless tests use chromium-headless-shell; its deps are separate from chromium.
+          npx playwright install --with-deps chromium chromium-headless-shell
+          npx playwright install-deps chromium-headless-shell --dry-run
 
       - name: Run Playwright
         env:
