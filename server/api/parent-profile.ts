@@ -170,7 +170,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     }
 
     // Get ALL children for this parent
-    const allChildren = await storage.getChildrenByParentEmail(parent.email);
+    const childrenByParentId = await storage.getChildrenByParentId(parent.id);
+    const childrenByEmail = await storage.getChildrenByParentEmail(parent.email);
+    const allChildren = childrenByParentId.length > 0 ? childrenByParentId : childrenByEmail;
     
     // For school admins, we need to determine visibility based on multiple factors:
     // 1. Child's schoolId matches admin's school

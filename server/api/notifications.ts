@@ -4,6 +4,8 @@ import { insertNotificationSchema } from "@shared/schema";
 import { storage } from '../storage';
 import { sendSMS, isTwilioConfigured, getTwilioConnectionSummary } from '../services/twilio';
 import * as brevo from '@getbrevo/brevo';
+import { getUserIdsWithLabelsAtSchool } from '../lib/user-labels';
+import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
 
 const router = express.Router();
 
@@ -28,15 +30,59 @@ type CombinedTargetingBody = {
   roles?: string[];
   locationIds?: number[];
   classIds?: number[];
+  schoolId?: number;
 };
 
+async function resolveNotificationSchoolId(
+  req: any,
+  body?: { schoolId?: number },
+): Promise<number | null> {
+  const fromBody = Number(body?.schoolId ?? req.body?.schoolId ?? req.query?.schoolId);
+  if (Number.isFinite(fromBody) && fromBody > 0) return fromBody;
+
+  const email = req.user?.email ?? req.auth?.payload?.email;
+  if (!email) return null;
+  const adminUser = await storage.getUserByEmail(email);
+  if (!adminUser) return null;
+  return resolveSchoolIdForUser(adminUser);
+}
+
 /** Union recipient user IDs from the school notification compose UI (individuals, roles, locations, classes). */
-async function resolveCombinedRecipientIds(body: CombinedTargetingBody): Promise<number[]> {
+async function resolveCombinedRecipientIds(
+  body: CombinedTargetingBody,
+  schoolId?: number | null,
+): Promise<number[]> {
   const ids = new Set<number>();
+  const scopedSchoolId =
+    schoolId ?? (body.schoolId && Number(body.schoolId) > 0 ? Number(body.schoolId) : null);
 
   if (body.includeAll) {
-    const users = await storage.getAllUsers();
-    for (const u of users) ids.add(u.id);
+    if (scopedSchoolId) {
+      const allAtSchool = await getUserIdsWithLabelsAtSchool(scopedSchoolId, [
+        'parent',
+        'educator',
+        'teacher',
+        'director',
+        'schoolAdmin',
+        'student',
+        'learner',
+        'staff',
+      ], { includeLegacyUsersRoleFallback: true });
+      for (const id of allAtSchool) ids.add(id);
+      // Also include anyone with any user_roles row at this school
+      const { getDb } = await import('../db');
+      const { userRoles } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const db = await getDb();
+      const rows = await db
+        .select({ userId: userRoles.userId })
+        .from(userRoles)
+        .where(eq(userRoles.schoolId, scopedSchoolId));
+      for (const r of rows) ids.add(r.userId);
+    } else {
+      const users = await storage.getAllUsers();
+      for (const u of users) ids.add(u.id);
+    }
     return [...ids].filter((id) => id > 0);
   }
 
@@ -46,10 +92,19 @@ async function resolveCombinedRecipientIds(body: CombinedTargetingBody): Promise
   }
 
   for (const role of body.roles || []) {
-    const allUsers = await storage.getAllUsers();
-    const rLower = String(role).toLowerCase();
-    for (const u of allUsers) {
-      if (String(u.role || "").toLowerCase() === rLower) ids.add(u.id);
+    if (scopedSchoolId) {
+      const roleUserIds = await getUserIdsWithLabelsAtSchool(
+        scopedSchoolId,
+        [role],
+        { includeLegacyUsersRoleFallback: true },
+      );
+      for (const id of roleUserIds) ids.add(id);
+    } else {
+      const allUsers = await storage.getAllUsers();
+      const rLower = String(role).toLowerCase();
+      for (const u of allUsers) {
+        if (String(u.role || "").toLowerCase() === rLower) ids.add(u.id);
+      }
     }
   }
 
@@ -283,7 +338,8 @@ router.post("/preview-recipients", async (req: any, res) => {
       });
     }
     const body = (req.body || {}) as CombinedTargetingBody;
-    const recipientIds = await resolveCombinedRecipientIds(body);
+    const schoolId = await resolveNotificationSchoolId(req, body);
+    const recipientIds = await resolveCombinedRecipientIds(body, schoolId);
     return res.json({ recipientCount: recipientIds.length });
   } catch (error) {
     console.error("Error previewing notification recipients:", error);
@@ -320,13 +376,18 @@ router.post("/send-combined", async (req: any, res) => {
       return res.status(400).json({ message: "subject and content are required" });
     }
 
-    const recipientIds = await resolveCombinedRecipientIds({
-      includeAll,
-      userIds,
-      roles,
-      locationIds,
-      classIds,
-    });
+    const schoolId = await resolveNotificationSchoolId(req, req.body);
+    const recipientIds = await resolveCombinedRecipientIds(
+      {
+        includeAll,
+        userIds,
+        roles,
+        locationIds,
+        classIds,
+        schoolId: schoolId ?? undefined,
+      },
+      schoolId,
+    );
     if (recipientIds.length === 0) {
       return res.status(400).json({ message: "No recipients match the selected targeting" });
     }
@@ -424,13 +485,39 @@ router.delete("/:id", async (req, res) => {
 
 router.post("/broadcast", async (req: any, res) => {
   try {
-    const { targetRole, locationId, locationIds, title, message, scheduledFor } = req.body || {};
+    const { targetRole, locationId, locationIds, title, message, scheduledFor, schoolId: bodySchoolId } = req.body || {};
     if (!title || !message) return res.status(400).json({ message: "title and message are required" });
-    const allUsers = await storage.getAllUsers();
-    let recipients = allUsers;
-    if (targetRole) recipients = recipients.filter((u: any) => u.role === targetRole);
+    const schoolId = await resolveNotificationSchoolId(req, { schoolId: bodySchoolId });
+
+    let recipientIds: number[] = [];
+    if (targetRole && schoolId) {
+      recipientIds = await getUserIdsWithLabelsAtSchool(
+        schoolId,
+        [targetRole],
+        { includeLegacyUsersRoleFallback: true },
+      );
+    } else if (targetRole) {
+      const allUsers = await storage.getAllUsers();
+      recipientIds = allUsers
+        .filter((u: any) => String(u.role || '').toLowerCase() === String(targetRole).toLowerCase())
+        .map((u: any) => u.id);
+    } else if (schoolId) {
+      const { getDb } = await import('../db');
+      const { userRoles } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const db = await getDb();
+      const rows = await db
+        .select({ userId: userRoles.userId })
+        .from(userRoles)
+        .where(eq(userRoles.schoolId, schoolId));
+      recipientIds = [...new Set(rows.map((r) => r.userId))];
+    } else {
+      recipientIds = (await storage.getAllUsers()).map((u: any) => u.id);
+    }
+
     const requestedLocationIds = (locationIds || (locationId ? [locationId] : [])) as number[];
     if (requestedLocationIds.length > 0) {
+      const roleKey = String(targetRole || '').toLowerCase();
       const classes = await storage.getAllClasses();
       const classIds = new Set(
         classes.filter((c: any) => requestedLocationIds.includes(Number(c.locationId))).map((c: any) => c.id)
@@ -443,9 +530,19 @@ router.post("/broadcast", async (req: any, res) => {
         const child = await storage.getChildById(Number((e as any).childId));
         if (child?.parentId) parentIds.add(Number(child.parentId));
       }
-      recipients = recipients.filter((u: any) => u.role !== "parent" || parentIds.has(Number(u.id)));
+      if (!targetRole || roleKey === 'parent') {
+        recipientIds = recipientIds.filter((uid) => parentIds.has(Number(uid)));
+      } else {
+        const locationUserIds = new Set<number>();
+        for (const locId of requestedLocationIds) {
+          const links = await storage.getUserLocationsByLocationId(locId);
+          for (const link of links) {
+            locationUserIds.add(Number(link.userId));
+          }
+        }
+        recipientIds = recipientIds.filter((uid) => locationUserIds.has(Number(uid)));
+      }
     }
-    const recipientIds = recipients.map((u: any) => u.id);
 
     let sentCount = 0;
     for (const uid of recipientIds) {
@@ -819,8 +916,12 @@ async function processNotification(notification: any): Promise<void> {
   }
 }
 
-async function resolveNotificationRecipients(notification: any): Promise<number[]> {
+async function resolveNotificationRecipients(
+  notification: any,
+  schoolId?: number | null,
+): Promise<number[]> {
   let recipients: number[] = [];
+  const targetRoles: string[] = notification.targetData?.roles || [];
   
   switch (notification.targetType) {
     case "individual":
@@ -828,10 +929,23 @@ async function resolveNotificationRecipients(notification: any): Promise<number[
       break;
       
     case "role":
-      const allUsers = await storage.getAllUsers();
-      let roleUsers = allUsers.filter(u => 
-        notification.targetData.roles?.includes(u.role)
-      );
+      if (schoolId && targetRoles.length > 0) {
+        for (const role of targetRoles) {
+          const ids = await getUserIdsWithLabelsAtSchool(schoolId, [role], {
+            includeLegacyUsersRoleFallback: true,
+          });
+          recipients.push(...ids);
+        }
+        recipients = [...new Set(recipients)];
+      } else {
+        const allUsers = await storage.getAllUsers();
+        let roleUsers = allUsers.filter((u) =>
+          targetRoles.some(
+            (r: string) => String(u.role || '').toLowerCase() === String(r).toLowerCase(),
+          ),
+        );
+        recipients = roleUsers.map((u) => u.id);
+      }
       
       if (notification.targetData.locationIds && notification.targetData.locationIds.length > 0) {
         const locationUserIds: number[] = [];
@@ -839,10 +953,8 @@ async function resolveNotificationRecipients(notification: any): Promise<number[
           const userLocations = await storage.getUserLocationsByLocationId(locationId);
           locationUserIds.push(...userLocations.map(ul => ul.userId));
         }
-        roleUsers = roleUsers.filter(u => locationUserIds.includes(u.id));
+        recipients = recipients.filter((id) => locationUserIds.includes(id));
       }
-      
-      recipients = roleUsers.map(u => u.id);
       break;
       
     case "location":

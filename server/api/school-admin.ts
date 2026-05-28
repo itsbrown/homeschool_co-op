@@ -17,6 +17,17 @@ import { clearPermissionCache } from '../middleware/locationPermissions';
 import rateLimit from 'express-rate-limit';
 import { getDb } from '../db';
 import { ensureSchoolRegistrationCode } from '../lib/school-registration-code';
+import {
+  buildAvailableLabelOptions,
+  getLabelRowsForUserAtSchool,
+  resolvePrimaryLabelForList,
+  resolveStaffMemberFromParam,
+  type UserLabelRow,
+} from '../lib/user-labels';
+import {
+  assertAdminCanViewUserProfile,
+  deriveCapabilitiesFromLabels,
+} from '../lib/user-profile-capabilities';
 
 // Rate limiter for permission updates - prevent bulk abuse
 const permissionUpdateLimiter = rateLimit({
@@ -395,6 +406,86 @@ function transformUserRoleStaffToFrontend(
     userId: user.id, // Legacy field for backward compatibility
     hasPendingInvitation,
   };
+}
+
+/** Build staff list/detail payload for a user at a school (canonical users.id). */
+async function buildStaffMemberResponseForUser(
+  userId: number,
+  schoolId: number,
+): Promise<Record<string, unknown> | null> {
+  const user = await storage.getUser(userId);
+  if (!user) return null;
+
+  const allClasses = await storage.getAllClasses();
+  const assignedClasses = allClasses.filter(
+    (cls) => cls.instructorId === user.id && cls.schoolId === schoolId,
+  );
+
+  const pendingInvitationsMap = await storage.getPendingRoleInvitationsByEmails([
+    user.email,
+  ]);
+  const hasPendingInvitation = pendingInvitationsMap.get(user.email) || false;
+
+  const schoolLocations = await storage.getLocationsBySchoolId(schoolId);
+  const schoolLocationIds = schoolLocations.map((loc) => loc.id);
+  const userLocations = await storage.getUserLocationsByUserId(user.id);
+  const schoolUserLocations = userLocations.filter((ul) =>
+    schoolLocationIds.includes(ul.locationId),
+  );
+  const userLocationId =
+    schoolUserLocations.length > 0 ? schoolUserLocations[0].locationId : null;
+
+  const db = await getDb();
+  const roleRecords = await db
+    .select()
+    .from(userRoles)
+    .where(and(eq(userRoles.userId, user.id), eq(userRoles.schoolId, schoolId)));
+  const roleRecord = roleRecords[0];
+
+  const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
+  const staffRecord = schoolStaffRecords.find((s) => s.userId === user.id);
+
+  if (roleRecord) {
+    return transformUserRoleStaffToFrontend(
+      roleRecord,
+      user,
+      assignedClasses,
+      hasPendingInvitation,
+      staffRecord,
+      userLocationId,
+    );
+  }
+
+  if (staffRecord) {
+    const nameParts = user.name
+      ? user.name.split(' ')
+      : [user.firstName || '', user.lastName || ''];
+    return {
+      id: user.id,
+      roleId: null,
+      staffId: staffRecord.id,
+      name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+      firstName: user.firstName || nameParts[0] || '',
+      lastName: user.lastName || nameParts.slice(1).join(' ') || '',
+      email: user.email,
+      phone: user.phone || '',
+      role: staffRecord.position || 'Staff',
+      department: staffRecord.department || '',
+      status: staffRecord.isActive ? 'Active' : 'Inactive',
+      isActive: staffRecord.isActive,
+      joinDate: staffRecord.startDate
+        ? new Date(staffRecord.startDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      avatar: user.avatar || '',
+      subjects: [],
+      classIds: assignedClasses.map((c) => c.id.toString()),
+      locationId: userLocationId,
+      userId: user.id,
+      hasPendingInvitation,
+    };
+  }
+
+  return null;
 }
 
 // Test route to verify router is working
@@ -1531,99 +1622,30 @@ router.get("/staff", supabaseAuth, async (req: any, res: any) => {
   }
 });
 
-// Get single staff member by ID (using school_staff.id as sent by UsersPage)
+// Get single staff member — :id is canonical users.id (fallback: school_staff.id, user_roles.id)
 router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    const staffId = parseInt(req.params.id, 10);
-    console.log(`🔍 Looking for staff member with school_staff ID: ${staffId}`);
-    
-    if (isNaN(staffId)) {
+    const paramId = parseInt(req.params.id, 10);
+    if (isNaN(paramId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Get staff record from school_staff table (this is what UsersPage sends)
-    const staffRecord = await storage.getSchoolStaffById(staffId);
-    
-    if (!staffRecord) {
+    const resolved = await resolveStaffMemberFromParam(paramId, schoolId);
+    if (!resolved?.user) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    // Verify staff belongs to authenticated school
-    if (staffRecord.schoolId !== schoolId) {
-      return res.status(403).json({ message: 'Access denied to this staff member' });
+    const staffMember = await buildStaffMemberResponseForUser(resolved.userId, schoolId);
+    if (!staffMember) {
+      return res.status(404).json({ message: "Staff member not found" });
     }
 
-    // Get user details using the userId from the staff record
-    const user = await storage.getUser(staffRecord.userId);
-    if (!user) {
-      console.error(`❌ User not found for staff record ${staffId}`);
-      return res.status(404).json({ message: "User details not found for staff member" });
-    }
-
-    // Get classes assigned to this staff member
-    const allClasses = await storage.getAllClasses();
-    const assignedClasses = allClasses.filter(cls => 
-      cls.instructorId === user.id && cls.schoolId === schoolId
+    console.log(
+      `✅ Found staff member: ${staffMember.name} (resolved via ${resolved.resolvedVia})`,
     );
-
-    // Check if user has a pending invitation
-    const pendingInvitationsMap = await storage.getPendingRoleInvitationsByEmails([user.email]);
-    const hasPendingInvitation = pendingInvitationsMap.get(user.email) || false;
-
-    // Fetch locationId from user_locations (source of truth)
-    const schoolLocations = await storage.getLocationsBySchoolId(schoolId);
-    const schoolLocationIds = schoolLocations.map(loc => loc.id);
-    const userLocations = await storage.getUserLocationsByUserId(user.id);
-    const schoolUserLocations = userLocations.filter(ul => schoolLocationIds.includes(ul.locationId));
-    const userLocationId = schoolUserLocations.length > 0 ? schoolUserLocations[0].locationId : null;
-
-    // Get user's role record for this school to pass to transform function
-    const db = await getDb();
-    const roleRecords = await db
-      .select()
-      .from(userRoles)
-      .where(and(
-        eq(userRoles.userId, user.id),
-        eq(userRoles.schoolId, schoolId)
-      ));
-    const roleRecord = roleRecords[0];
-
-    // Build staff member response using existing transform function if role record exists,
-    // otherwise build response directly from staff record
-    let staffMember;
-    if (roleRecord) {
-      staffMember = transformUserRoleStaffToFrontend(roleRecord, user, assignedClasses, hasPendingInvitation, staffRecord, userLocationId);
-    } else {
-      // Fallback: build response directly from staff record and user (when no user_roles record exists)
-      // Match the transform function's contract exactly: id = user.id, roleId/staffId included
-      const nameParts = user.name ? user.name.split(' ') : [user.firstName || '', user.lastName || ''];
-      staffMember = {
-        id: user.id, // User ID - the actual user identifier (consistent with transform function)
-        roleId: null, // No user_roles record exists
-        staffId: staffRecord.id, // school_staff.id for staff record reference
-        name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-        firstName: user.firstName || nameParts[0] || '',
-        lastName: user.lastName || nameParts.slice(1).join(' ') || '',
-        email: user.email,
-        phone: user.phone || '',
-        role: staffRecord.position || 'Staff',
-        department: staffRecord.department || '',
-        status: staffRecord.isActive ? 'Active' : 'Inactive',
-        isActive: staffRecord.isActive,
-        joinDate: staffRecord.startDate ? new Date(staffRecord.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        avatar: user.avatar || '',
-        subjects: [],
-        classIds: assignedClasses.map(c => c.id.toString()),
-        locationId: userLocationId,
-        userId: user.id, // Legacy field for backward compatibility
-        hasPendingInvitation,
-      };
-    }
-    
-    console.log(`✅ Found staff member: ${staffMember.name}, locationId: ${userLocationId}`);
     res.json(staffMember);
   } catch (error) {
     console.error("Error fetching staff member:", error);
@@ -1631,49 +1653,28 @@ router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
   }
 });
 
-// Get classes assigned to a specific staff member (now using user_roles.id)
+// Get classes assigned to a specific staff member (:id = users.id)
 router.get("/staff/:id/classes", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    const roleId = parseInt(req.params.id, 10);
-    console.log(`🎓 Getting classes for staff member with role ID ${roleId}`);
-    
-    if (isNaN(roleId)) {
+    const paramId = parseInt(req.params.id, 10);
+    if (isNaN(paramId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Get role record from user_roles
-    const db = await getDb();
-    const roleRecords = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.id, roleId));
-    
-    const roleRecord = roleRecords[0];
-    if (!roleRecord) {
+    const resolved = await resolveStaffMemberFromParam(paramId, schoolId);
+    if (!resolved?.user) {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    // Verify role belongs to authenticated school
-    if (roleRecord.schoolId !== schoolId) {
-      return res.status(403).json({ message: 'Access denied to this staff member' });
-    }
-
-    // Get user details
-    const user = await storage.getUser(roleRecord.userId);
-    if (!user) {
-      return res.status(404).json({ message: "User details not found" });
-    }
-
-    // Get all classes and filter by instructorId for this school
     const allClasses = await storage.getAllClasses();
-    const assignedClasses = allClasses.filter(cls => 
-      cls.instructorId === user.id && cls.schoolId === schoolId
+    const assignedClasses = allClasses.filter(
+      (cls) => cls.instructorId === resolved.userId && cls.schoolId === schoolId,
     );
 
-    console.log(`✅ Found ${assignedClasses.length} classes for ${user.name}`);
+    console.log(`✅ Found ${assignedClasses.length} classes for ${resolved.user!.name}`);
     res.json(assignedClasses);
   } catch (error) {
     console.error("Error fetching staff classes:", error);
@@ -1681,43 +1682,26 @@ router.get("/staff/:id/classes", supabaseAuth, async (req: any, res) => {
   }
 });
 
-// Assign staff member to a class (now using user_roles.id)
+// Assign staff member to a class (:id = users.id)
 router.post("/staff/:id/assign-class", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    const roleId = parseInt(req.params.id, 10);
+    const paramId = parseInt(req.params.id, 10);
     const { classId } = req.body;
     
-    console.log(`🎯 Assigning staff with role ID ${roleId} to class ${classId}`);
-    
-    if (isNaN(roleId) || !classId) {
+    if (isNaN(paramId) || !classId) {
       return res.status(400).json({ message: "Invalid staff ID or class ID" });
     }
 
-    // Get role record from user_roles
-    const db = await getDb();
-    const roleRecords = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.id, roleId));
-    
-    const roleRecord = roleRecords[0];
-    if (!roleRecord) {
+    const resolved = await resolveStaffMemberFromParam(paramId, schoolId);
+    if (!resolved?.user) {
       return res.status(404).json({ message: "Staff member not found" });
     }
+    const user = resolved.user;
 
-    // Verify role belongs to authenticated school
-    if (roleRecord.schoolId !== schoolId) {
-      return res.status(403).json({ message: 'Access denied to this staff member' });
-    }
-
-    // Get user details
-    const user = await storage.getUser(roleRecord.userId);
-    if (!user) {
-      return res.status(404).json({ message: "User details not found" });
-    }
+    console.log(`🎯 Assigning user ${user.id} to class ${classId}`);
 
     // Update the class to assign this instructor
     const updatedClass = await storage.updateClass(classId, {
@@ -1735,7 +1719,7 @@ router.post("/staff/:id/assign-class", supabaseAuth, async (req: any, res) => {
       message: `${user.name} assigned to class successfully`,
       class: updatedClass,
       staffMember: {
-        id: roleId,
+        id: user.id,
         name: user.name
       }
     });
@@ -1745,36 +1729,22 @@ router.post("/staff/:id/assign-class", supabaseAuth, async (req: any, res) => {
   }
 });
 
-// Unassign staff member from a class (now using user_roles.id)
+// Unassign staff member from a class (:id = users.id)
 router.delete("/staff/:id/unassign-class/:classId", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    const roleId = parseInt(req.params.id, 10);
+    const paramId = parseInt(req.params.id, 10);
     const classId = parseInt(req.params.classId, 10);
     
-    console.log(`🎯 Unassigning staff with role ID ${roleId} from class ${classId}`);
-    
-    if (isNaN(roleId) || isNaN(classId)) {
+    if (isNaN(paramId) || isNaN(classId)) {
       return res.status(400).json({ message: "Invalid staff ID or class ID" });
     }
 
-    // Get role record from user_roles
-    const db = await getDb();
-    const roleRecords = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.id, roleId));
-    
-    const roleRecord = roleRecords[0];
-    if (!roleRecord) {
+    const resolved = await resolveStaffMemberFromParam(paramId, schoolId);
+    if (!resolved?.user) {
       return res.status(404).json({ message: "Staff member not found" });
-    }
-
-    // Verify role belongs to authenticated school
-    if (roleRecord.schoolId !== schoolId) {
-      return res.status(403).json({ message: 'Access denied to this staff member' });
     }
 
     // Update the class to remove instructor assignment
@@ -1799,39 +1769,22 @@ router.delete("/staff/:id/unassign-class/:classId", supabaseAuth, async (req: an
   }
 });
 
-// Resend invite to individual staff member (now using user_roles.id)
+// Resend invite to individual staff member (:id = users.id)
 router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    const roleId = parseInt(req.params.id, 10);
-    if (isNaN(roleId)) {
+    const paramId = parseInt(req.params.id, 10);
+    if (isNaN(paramId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Get role record from user_roles
-    const db = await getDb();
-    const roleRecords = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.id, roleId));
-    
-    const roleRecord = roleRecords[0];
-    if (!roleRecord) {
+    const resolved = await resolveStaffMemberFromParam(paramId, schoolId);
+    if (!resolved?.user) {
       return res.status(404).json({ message: "Staff member not found" });
     }
-
-    // Verify role belongs to authenticated school
-    if (roleRecord.schoolId !== schoolId) {
-      return res.status(403).json({ message: 'Access denied to this staff member' });
-    }
-
-    // Get user details
-    const user = await storage.getUser(roleRecord.userId);
-    if (!user) {
-      return res.status(404).json({ message: "User details not found" });
-    }
+    const user = resolved.user;
 
     // Check if invitation exists
     const allInvitations = await storage.getRoleInvitations();
@@ -1982,16 +1935,46 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
   }
 });
 
-// Update staff member (now using user_roles.id)
+// Update staff member (:id = users.id)
 router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    const roleId = parseInt(req.params.id, 10);
-    if (isNaN(roleId)) {
+    const paramId = parseInt(req.params.id, 10);
+    if (isNaN(paramId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
+
+    const resolved = await resolveStaffMemberFromParam(paramId, schoolId);
+    if (!resolved?.user) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    const db = await getDb();
+    let roleRecord = resolved.roleRecord
+      ? (
+          await db
+            .select()
+            .from(userRoles)
+            .where(eq(userRoles.id, resolved.roleRecord!.roleId))
+            .limit(1)
+        )[0]
+      : (
+          await db
+            .select()
+            .from(userRoles)
+            .where(
+              and(eq(userRoles.userId, resolved.userId), eq(userRoles.schoolId, schoolId)),
+            )
+            .limit(1)
+        )[0];
+
+    if (!roleRecord) {
+      return res.status(404).json({ message: "Staff role not found for this school" });
+    }
+    const roleId = roleRecord.id;
+    const user = resolved.user;
 
     const { name, email, role, locationId: rawLocationId } = req.body;
     
@@ -2009,30 +1992,7 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
       locationId = isNaN(parsed) ? null : parsed;
     }
 
-    console.log(`🔄 Updating staff member with role ID ${roleId}:`, { name, email, phone, role, locationId, rawLocationId });
-
-    // Get role record from user_roles
-    const db = await getDb();
-    const roleRecords = await db
-      .select()
-      .from(userRoles)
-      .where(eq(userRoles.id, roleId));
-    
-    const roleRecord = roleRecords[0];
-    if (!roleRecord) {
-      return res.status(404).json({ message: "Staff member not found" });
-    }
-
-    // Verify role belongs to authenticated school
-    if (roleRecord.schoolId !== schoolId) {
-      return res.status(403).json({ message: 'Access denied to this staff member' });
-    }
-
-    // Get user details
-    const user = await storage.getUser(roleRecord.userId);
-    if (!user) {
-      return res.status(404).json({ message: "User details not found" });
-    }
+    console.log(`🔄 Updating staff user ${user.id} (role ${roleId}):`, { name, email, phone, role, locationId });
 
     // Update user record if name, email, or phone changed
     if (name || email || phone) {
@@ -2158,41 +2118,43 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
   }
 });
 
-// Delete staff member (now deletes user_roles entry)
+// Delete staff member at school (:id = users.id; removes user_roles row)
 router.delete("/staff/:id", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    const roleId = parseInt(req.params.id, 10);
-    console.log(`🗑️ Attempting to delete staff member with role ID: ${roleId}`);
-    
-    if (isNaN(roleId)) {
+    const paramId = parseInt(req.params.id, 10);
+    if (isNaN(paramId)) {
       return res.status(400).json({ message: "Invalid staff ID format" });
     }
 
-    // Get role record from user_roles
+    const resolved = await resolveStaffMemberFromParam(paramId, schoolId);
+    if (!resolved?.user) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
     const db = await getDb();
     const roleRecords = await db
       .select()
       .from(userRoles)
-      .where(eq(userRoles.id, roleId));
-    
-    const roleRecord = roleRecords[0];
+      .where(
+        and(eq(userRoles.userId, resolved.userId), eq(userRoles.schoolId, schoolId)),
+      );
+    const roleRecord = resolved.roleRecord
+      ? roleRecords.find((r) => r.id === resolved.roleRecord!.roleId) ?? roleRecords[0]
+      : roleRecords[0];
+
     if (!roleRecord) {
-      return res.status(404).json({ message: "Staff member not found" });
+      return res.status(404).json({ message: "Staff role not found for this school" });
     }
 
-    // Verify role belongs to authenticated school
-    if (roleRecord.schoolId !== schoolId) {
-      return res.status(403).json({ message: 'Access denied to this staff member' });
-    }
-
-    // Get user details before deleting
-    const user = await storage.getUser(roleRecord.userId);
+    const roleId = roleRecord.id;
+    const user = resolved.user;
     const staffName = user?.name || 'Unknown';
 
-    // Delete the user_roles entry (removes the staff role from user)
+    console.log(`🗑️ Removing staff role ${roleId} for user ${resolved.userId}`);
+
     await db.delete(userRoles).where(eq(userRoles.id, roleId));
     
     console.log(`✅ Successfully removed staff role from ${staffName}`);
@@ -3113,10 +3075,12 @@ router.get("/knowledge-bases", supabaseAuth, async (req: any, res) => {
 });
 
 // Get all enrollments for school admin
-router.get('/enrollments', supabaseAuth, async (req: any, res) => {
+router.get('/enrollments', supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
-    const schoolId = await getSchoolIdFromRequest(req, res);
-    if (schoolId === null) return;
+    const schoolId = Number(req.schoolId);
+    if (!Number.isFinite(schoolId) || schoolId <= 0) {
+      return res.status(400).json({ message: 'Invalid school context' });
+    }
 
     // Allow explicit status filter via query param (e.g., ?includeCancelled=true or ?status=cancelled)
     const includeCancelled = req.query.includeCancelled === 'true';
@@ -3162,6 +3126,8 @@ router.get('/enrollments', supabaseAuth, async (req: any, res) => {
         metadata: enrollment.metadata || {},
         compPercentage: enrollment.compPercentage || null,
         compAmountCents: enrollment.compAmountCents || null,
+        parentId: enrollment.parentId ?? null,
+        parentEmail: enrollment.parentEmail ?? null,
         cancelledAt: enrollment.cancelledAt,
         cancellationReason: enrollment.cancellationReason,
       };
@@ -4029,11 +3995,28 @@ router.get("/locations/overview", supabaseAuth, requireSchoolContext, async (req
       })
     );
 
+    const locationsWithActivation = await Promise.all(
+      locationOverview.map(async (loc) => {
+        const full = await storage.getLocationById(loc.id);
+        const { getLocationActivationProgress } = await import(
+          '../services/location-activation-service.js'
+        );
+        const progress = await getLocationActivationProgress(loc.id);
+        return {
+          ...loc,
+          activationThreshold: full?.activationThreshold ?? null,
+          activationStatus: full?.activationStatus ?? null,
+          eligibleStudentCount: progress?.eligibleStudentCount ?? 0,
+          chargeScheduledAt: full?.chargeScheduledAt ?? null,
+        };
+      }),
+    );
+
     res.json({
-      locations: locationOverview,
-      totalLocations: locationOverview.length,
-      totalStudents: locationOverview.reduce((sum, loc) => sum + loc.totalStudents, 0),
-      totalStaff: locationOverview.reduce((sum, loc) => sum + loc.staffCount, 0)
+      locations: locationsWithActivation,
+      totalLocations: locationsWithActivation.length,
+      totalStudents: locationsWithActivation.reduce((sum, loc) => sum + loc.totalStudents, 0),
+      totalStaff: locationsWithActivation.reduce((sum, loc) => sum + loc.staffCount, 0)
     });
 
   } catch (error) {
@@ -4041,6 +4024,86 @@ router.get("/locations/overview", supabaseAuth, requireSchoolContext, async (req
     res.status(500).json({ message: "Failed to generate location overview" });
   }
 });
+
+router.post(
+  '/locations/:locationId/activate-early',
+  supabaseAuth,
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const locationId = parseInt(req.params.locationId, 10);
+      const actorId = req.user?.id;
+      if (!actorId || isNaN(locationId)) {
+        return res.status(400).json({ message: 'Invalid request' });
+      }
+      const { reason } = req.body ?? {};
+      const { adminActivateEarly } = await import('../services/location-activation-service.js');
+      const result = await adminActivateEarly(
+        locationId,
+        actorId,
+        typeof reason === 'string' ? reason : 'Admin early activation',
+      );
+      if (!result.ok) {
+        return res.status(400).json({ message: result.message });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('activate-early error:', error);
+      res.status(500).json({ message: 'Failed to activate location' });
+    }
+  },
+);
+
+router.post(
+  '/locations/:locationId/cancel-collection',
+  supabaseAuth,
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const locationId = parseInt(req.params.locationId, 10);
+      const actorId = req.user?.id;
+      if (!actorId || isNaN(locationId)) {
+        return res.status(400).json({ message: 'Invalid request' });
+      }
+      const { reason } = req.body ?? {};
+      const { cancelLocationCollection } = await import('../services/location-activation-service.js');
+      await cancelLocationCollection(
+        locationId,
+        actorId,
+        typeof reason === 'string' ? reason : 'Admin closed collection',
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error('cancel-collection error:', error);
+      res.status(500).json({ message: 'Failed to cancel collection' });
+    }
+  },
+);
+
+router.get(
+  '/locations/:locationId/activation-progress',
+  supabaseAuth,
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const locationId = parseInt(req.params.locationId, 10);
+      if (isNaN(locationId)) {
+        return res.status(400).json({ message: 'Invalid location ID' });
+      }
+      const { getLocationActivationProgress } = await import(
+        '../services/location-activation-service.js'
+      );
+      const progress = await getLocationActivationProgress(locationId);
+      if (!progress) {
+        return res.status(404).json({ message: 'Location not found' });
+      }
+      res.json(progress);
+    } catch (error) {
+      console.error('activation-progress error:', error);
+      res.status(500).json({ message: 'Failed to load activation progress' });
+    }
+  },
+);
 
 router.get("/user-locations/my-permissions", supabaseAuth, async (req: any, res) => {
   try {
@@ -5512,61 +5575,54 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
       staffByUserId.set(staffRecord.userId, staffRecord);
     }
     
-    // Batch-fetch user_roles for all users (source of truth per asa-auth-patterns)
-    const userRolesMap = new Map<number, any[]>();
-    await Promise.all(
-      dbUsers.map(async (user: any) => {
-        try {
-          const roles = await storage.getUserRolesByUserId(user.id);
-          if (roles.length > 0) {
-            userRolesMap.set(user.id, roles);
-          }
-        } catch (e) {
-          // Fallback to legacy role if user_roles lookup fails
-        }
-      })
-    );
+    // Batch-fetch user_roles at this school (additive labels)
+    const schoolRoleRows = await db
+      .select()
+      .from(userRoles)
+      .where(eq(userRoles.schoolId, schoolIdNum));
+    const userRolesMap = new Map<number, UserLabelRow[]>();
+    for (const r of schoolRoleRows) {
+      const row: UserLabelRow = {
+        role: r.role,
+        roleId: r.id,
+        schoolId: r.schoolId,
+        isPrimary: r.isPrimary,
+      };
+      const existing = userRolesMap.get(r.userId) || [];
+      existing.push(row);
+      userRolesMap.set(r.userId, existing);
+    }
+
+    function buildLabelsPayload(userId: number, user: any) {
+      const labelRows = userRolesMap.get(userId) || [];
+      const labels = labelRows.map((r) => r.role);
+      const primaryLabel = resolvePrimaryLabelForList(labelRows, user);
+      const legacyRole =
+        labels.length === 0 && user.role ? user.role : null;
+      return {
+        labels,
+        primaryLabel,
+        legacyRole,
+        /** @deprecated Use primaryLabel / labels — kept for older clients */
+        role: primaryLabel || legacyRole || '',
+      };
+    }
     
     // Track which user IDs we've already processed
     const processedUserIds = new Set<number>();
 
-    // Determine the display role for a user using the multi-role hierarchy:
-    // 1. user_roles table (isPrimary=true) — source of truth
-    // 2. users.activeRole — currently selected role
-    // 3. users.role — legacy fallback
-    function resolveDisplayRole(user: any): string {
-      // user_roles table is the source of truth (asa-auth-patterns)
-      const roles = userRolesMap.get(user.id);
-      if (roles && roles.length > 0) {
-        const primaryRole = roles.find((r: any) => r.isPrimary);
-        if (primaryRole) return primaryRole.role;
-        return roles[0].role;
-      }
-      // activeRole is always set from user_roles values by the app — safe to trust
-      if (user.activeRole && (systemRoles as readonly string[]).includes(user.activeRole)) {
-        return user.activeRole;
-      }
-      // users.role is a legacy free-text field — only trust it if it's a recognized
-      // system role name. Custom position names like "Mentor" (capital M) are not
-      // system roles and should not drive routing decisions.
-      if (user.role && (systemRoles as readonly string[]).includes(user.role)) {
-        return user.role;
-      }
-      return 'parent';
-    }
-
-    // Map users from dbUsers — use user_roles as source of truth for role display
+    // Map users from dbUsers — additive labels from user_roles at this school
     const usersFromDb = dbUsers.map((user: any) => {
       processedUserIds.add(user.id);
       const staffRecord = staffByUserId.get(user.id);
-      const displayRole = resolveDisplayRole(user);
+      const labelPayload = buildLabelsPayload(user.id, user);
       
       const baseUser = {
         id: user.id,
         email: user.email,
         firstName: user.firstName || user.name?.split(' ')[0] || '',
         lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
-        role: displayRole,
+        ...labelPayload,
         phone: user.phone || '',
         isActive: user.isActive !== false,
         createdAt: user.createdAt,
@@ -5578,6 +5634,7 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
       if (staffRecord) {
         return {
           ...baseUser,
+          staffRecordId: staffRecord.id,
           staffId: staffRecord.id,
           isActive: staffRecord.isActive,
           createdAt: staffRecord.startDate || user.createdAt,
@@ -5608,6 +5665,9 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
               firstName: staffAny.firstName || 'Unknown',
               lastName: staffAny.lastName || 'Staff',
               role: 'staff',
+              labels: ['staff'],
+              primaryLabel: 'staff',
+              legacyRole: null,
               phone: '',
               isActive: staffRecord.isActive,
               createdAt: staffRecord.startDate,
@@ -5617,26 +5677,25 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
             };
           }
           
-          let userRole = 'staff';
-          try {
-            const roles = await storage.getUserRolesByUserId(staffRecord.userId);
-            if (roles.length > 0) {
-              const primaryRole = roles.find((r: any) => r.isPrimary);
-              userRole = primaryRole ? primaryRole.role : roles[0].role;
-            } else {
-              userRole = (user as any).activeRole || (user as any).role || 'staff';
-            }
-          } catch (e) {
-            userRole = (user as any).activeRole || (user as any).role || 'staff';
-          }
+          const labelRows = await getLabelRowsForUserAtSchool(staffRecord.userId, schoolIdNum);
+          const labels = labelRows.map((r) => r.role);
+          const primaryLabel = resolvePrimaryLabelForList(labelRows, user as any);
+          const legacyRole =
+            labels.length === 0
+              ? (user as any).activeRole || (user as any).role || 'staff'
+              : null;
           
           return {
             id: staffRecord.userId,
+            staffRecordId: staffRecord.id,
             staffId: staffRecord.id,
             email: user.email,
             firstName: user.name?.split(' ')[0] || '',
             lastName: user.name?.split(' ').slice(1).join(' ') || '',
-            role: userRole,
+            labels,
+            primaryLabel,
+            legacyRole,
+            role: primaryLabel || legacyRole || '',
             phone: user.phone || '',
             isActive: staffRecord.isActive,
             createdAt: staffRecord.startDate,
@@ -5658,6 +5717,84 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
       message: 'Error fetching users',
       error: err.message 
     });
+  }
+});
+
+// Label options for Users filter and notification targeting
+router.get('/users/label-options', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolIdNum = Number(req.schoolId);
+    const positions = await storage.getStaffPositionsBySchoolId(schoolIdNum);
+    const customTitles = positions.map((p) => p.title);
+    const options = buildAvailableLabelOptions(customTitles);
+    return res.status(200).json(options);
+  } catch (error) {
+    console.error('Error fetching label options:', error);
+    return res.status(500).json({ message: 'Error fetching label options' });
+  }
+});
+
+// Unified user profile metadata (sections loaded by tab on the client)
+router.get('/users/:userId/profile', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  try {
+    const schoolIdNum = Number(req.schoolId);
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
+
+    const adminEmail = req.user?.email;
+    if (!adminEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const access = await assertAdminCanViewUserProfile(
+      adminEmail,
+      userId,
+      schoolIdNum,
+      req.user?.allRoles ?? [],
+    );
+    if (!access.allowed) {
+      const msg = access.reason || 'Access denied';
+      const status = msg.includes('not found') ? 404 : 403;
+      return res.status(status).json({ message: msg });
+    }
+
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const labelRows = await getLabelRowsForUserAtSchool(userId, schoolIdNum);
+    const labels = labelRows.map((r) => ({
+      role: r.role,
+      roleId: r.roleId,
+      isPrimary: r.isPrimary,
+    }));
+    const labelStrings = labelRows.map((r) => r.role);
+    const capabilities = deriveCapabilitiesFromLabels(labelStrings);
+
+    const staffMember = await buildStaffMemberResponseForUser(userId, schoolIdNum);
+
+    return res.status(200).json({
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName || user.name?.split(' ')[0] || '',
+        lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
+        phone: user.phone || '',
+        isActive: user.isActive,
+        memberId: (user as any).memberId || null,
+      },
+      labels,
+      capabilities,
+      sections: {
+        staff: staffMember || undefined,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return res.status(500).json({ message: 'Error fetching user profile' });
   }
 });
 

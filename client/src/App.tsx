@@ -107,6 +107,16 @@ const UsersPage = lazy(() => import("./pages/schools/UsersPage"));
 const ParentProfilePage = lazy(() => import("./pages/schools/ParentProfilePage"));
 const EducatorProfilePage = lazy(() => import("./pages/schools/EducatorProfilePage"));
 const StaffProfilePage = lazy(() => import("./pages/schools/StaffProfilePage"));
+const UserProfilePage = lazy(() => import("./pages/schools/UserProfilePage"));
+const LegacyParentProfileRedirect = lazy(() =>
+  import("./pages/schools/LegacyProfileRedirects").then((m) => ({ default: m.LegacyParentProfileRedirect })),
+);
+const LegacyEducatorProfileRedirect = lazy(() =>
+  import("./pages/schools/LegacyProfileRedirects").then((m) => ({ default: m.LegacyEducatorProfileRedirect })),
+);
+const LegacyStaffProfileRedirect = lazy(() =>
+  import("./pages/schools/LegacyProfileRedirects").then((m) => ({ default: m.LegacyStaffProfileRedirect })),
+);
 const AdminProfilePage = lazy(() => import("./pages/schools/AdminProfilePage"));
 const ClassesPage = lazy(() => import("./pages/ClassesPage"));
 const CalendarPage = lazy(() => import("./pages/CalendarPage"));
@@ -778,9 +788,10 @@ function Router() {
       </Route>
       <Route path="/schools/contact-import" component={SchoolContactImportPage} />
       <Route path="/schools/users" component={UsersPage} />
-      <Route path="/schools/parents/:parentId" component={ParentProfilePage} />
-      <Route path="/schools/educators/:educatorId" component={EducatorProfilePage} />
-      <Route path="/schools/staff/:staffId" component={StaffProfilePage} />
+      <Route path="/schools/users/:userId" component={UserProfilePage} />
+      <Route path="/schools/parents/:parentId" component={LegacyParentProfileRedirect} />
+      <Route path="/schools/educators/:educatorId" component={LegacyEducatorProfileRedirect} />
+      <Route path="/schools/staff/:staffId" component={LegacyStaffProfileRedirect} />
       <Route path="/schools/admins/:adminId" component={AdminProfilePage} />
       <Route path="/schools/settings" component={SchoolSettingsPage} />
 
