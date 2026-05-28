@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-05-28 (Replit Playwright OS deps)
+
+- `replit.nix` + `.replit` Nix packages for Chromium/Playwright (`libglib`, nss, mesa, etc.). Runbook: `docs/APP_KNOWLEDGE/runbooks/replit-e2e-playwright.md`.
+
 ## 2026-05-28 (parent full-journey E2E — biweekly schedule fix)
 
 - E2E seed sessions use **2030-01-01 → 2030-06-01**; Playwright webServer sets `TEST_CHECKOUT_ANCHOR_ISO=2029-12-01` so biweekly creates installment 2+ (short “today + 3mo” sessions collapsed to pay-in-full).

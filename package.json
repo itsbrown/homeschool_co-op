@@ -21,6 +21,8 @@
     "test:e2e:checkout-membership": "node scripts/run-playwright.mjs test e2e/checkout-membership-order-summary.spec.ts",
     "test:e2e:authenticated": "node scripts/run-playwright.mjs test e2e/authenticated/",
     "playwright:install": "node scripts/run-playwright.mjs install chromium",
+    "playwright:install:deps": "node scripts/run-playwright.mjs install-deps chromium",
+    "playwright:install:replit": "npm run playwright:install",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {

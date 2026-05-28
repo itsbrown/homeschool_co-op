@@ -4,7 +4,8 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["jq"]
+# Playwright Chromium needs glib/nss/X11 stack (see replit.nix). Restart shell after pull.
+packages = ["jq", "glib", "nss", "nspr", "dbus", "atk", "cups", "mesa", "libdrm", "alsa-lib", "libxkbcommon", "pango", "cairo", "fontconfig", "freetype", "gdk-pixbuf"]
 
 [deployment]
 deploymentTarget = "vm"
