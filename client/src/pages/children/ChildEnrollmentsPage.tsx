@@ -80,17 +80,35 @@ export default function ChildEnrollmentsPage() {
     enabled: !!childId,
   });
 
-  // Same source as cart hydration (includes checkoutExcluded / payment-plan flags)
-  const { data: enrollments = [], isLoading: enrollmentsLoading } = useQuery<Enrollment[]>({
-    queryKey: ['/api/parent/enrollments', childId],
+  const childEnrollmentsQuery = useQuery<Enrollment[]>({
+    queryKey: [`/api/children/${childId}/enrollments`],
+    enabled: !!childId,
+  });
+
+  const parentEnrollmentsQuery = useQuery<any[]>({
+    queryKey: ['/api/parent/enrollments'],
     enabled: !!childId,
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/parent/enrollments');
       const rows = await response.json();
-      const list = Array.isArray(rows) ? rows : [];
-      return list.filter((e: { childId?: number }) => String(e.childId) === String(childId));
+      return Array.isArray(rows) ? rows : [];
     },
   });
+
+  const enrollmentsLoading =
+    childEnrollmentsQuery.isLoading || parentEnrollmentsQuery.isLoading;
+
+  // Child endpoint is authoritative for which rows exist; parent endpoint adds cart flags.
+  const enrollments = useMemo(() => {
+    const childRows = childEnrollmentsQuery.data ?? [];
+    const parentById = new Map(
+      (parentEnrollmentsQuery.data ?? []).map((row) => [row.id, row]),
+    );
+    return childRows.map((row) => {
+      const parentRow = parentById.get((row as any).id);
+      return parentRow ? { ...row, ...parentRow } : row;
+    });
+  }, [childEnrollmentsQuery.data, parentEnrollmentsQuery.data]);
 
   // Fetch marketplace classes to get class details
   const { data: marketplaceClasses = [] } = useQuery({

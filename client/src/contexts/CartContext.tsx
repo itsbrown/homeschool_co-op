@@ -1257,7 +1257,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         if (!res.ok) return null;
         const snapshot = await res.json();
-        const owed = snapshot?.totals?.membershipTotal ?? 0;
+        const owed =
+          snapshot?.totals?.membershipTotal ??
+          snapshot?.membership?.discountedAmount ??
+          0;
         if (snapshot?.membership?.alreadyPaid || owed <= 0) return null;
         const schoolId = snapshot?.membership?.schoolId;
         if (schoolId == null) return null;

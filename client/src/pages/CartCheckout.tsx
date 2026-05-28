@@ -824,7 +824,9 @@ export default function CartCheckout() {
       const authData: AuthoritativeDataType = {
         itemsTotal: snapshot.totals.itemsTotal,
         membershipTotal: snapshot.totals.membershipTotal ?? 0,
-        membershipAmount: snapshot.membership.alreadyPaid ? 0 : snapshot.membership.discountedAmount,
+        membershipAmount: snapshot.membership.alreadyPaid
+          ? 0
+          : (snapshot.totals.membershipTotal ?? snapshot.membership.discountedAmount ?? 0),
         membershipFeeAmount: snapshot.membership.amount ?? 0,
         membershipAlreadyPaid: snapshot.membership.alreadyPaid,
         membershipRequired: snapshot.membership.required,
@@ -923,8 +925,10 @@ export default function CartCheckout() {
       // Use authoritative data from snapshot (now guaranteed to exist)
       const useAuthData = currentAuthData !== null;
       const itemsTotal = useAuthData ? currentAuthData.itemsTotal : cart.total;
-      const membershipAmount = useAuthData 
-        ? currentAuthData.membershipAmount 
+      const membershipAmount = useAuthData
+        ? (currentAuthData.membershipTotal ??
+          currentAuthData.membershipAmount ??
+          0)
         : (cart.membership?.amount || 0);
       const membershipAlreadyPaid = useAuthData ? currentAuthData.membershipAlreadyPaid : false;
       const discounts = useAuthData 
@@ -944,14 +948,14 @@ export default function CartCheckout() {
         if (membershipAlreadyPaid) {
           // Already paid - don't send membership at all
           membershipPayload = null;
-        } else if (currentAuthData.membershipRequired && currentAuthData.membershipSchoolId) {
-          // Membership required and not paid - ALWAYS send payload using authoritative data
-          // This handles the case where cart.membership is null (discounted to $0 on load)
-          // We use authoritative values because cart.membership may be stale or missing
+        } else if (
+          currentAuthData.membershipSchoolId != null &&
+          (membershipAmount > 0 || currentAuthData.membershipRequired)
+        ) {
           membershipPayload = {
             schoolId: currentAuthData.membershipSchoolId,
             schoolName: currentAuthData.membershipSchoolName || cart.membership?.schoolName || 'School',
-            amount: membershipAmount, // Use authoritative amount (may be 0 for discounted)
+            amount: membershipAmount,
             year: currentAuthData.membershipYear,
           };
         } else if (cart.membership) {

@@ -1420,8 +1420,10 @@ export async function calculateCartSnapshot(
     membership: {
       // CRITICAL: 'required' indicates whether client MUST include membership in payment
       required:
-        membershipTotal > 0 ||
-        (membershipRequired && membershipFeeAmount > 0 && !alreadyPaid),
+        !alreadyPaid &&
+        (membershipTotal > 0 ||
+          membershipFeeAmount > 0 ||
+          (membershipRequired && membershipFeeAmount > 0)),
       amount: membershipFeeAmount,
       discountedAmount: discountedMembershipAmount,
       alreadyPaid,
