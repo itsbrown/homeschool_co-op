@@ -58,8 +58,9 @@ waitlist        → enrolled           (spot opens up)
 
 ### User-Initiated (Pre-Payment)
 - Endpoint: `DELETE /api/enrollments/:id/unenroll`
-- Only allowed for `pending_payment` status
-- Directly deletes the enrollment record
+- Only allowed for `pending_payment` status; verifies enrollment belongs to authenticated parent's children
+- Deletes pending `scheduled_payments` for the enrollment, then deletes `program_enrollments` (FK-safe)
+- `CombinedStorage.deleteProgramEnrollment` must not fall back to mem-only delete when Postgres fails (would show success but list still reads from DB)
 - Used when removing items from cart
 
 ### Admin-Initiated

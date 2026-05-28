@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-05-28 (parent unenroll persistence)
+
+- **Unenroll toast but row remains:** `DELETE /api/enrollments/:id/unenroll` now deletes pending `scheduled_payments` before removing `program_enrollments` (FK). `CombinedStorage.deleteProgramEnrollment` no longer treats mem-only delete as success when Postgres delete fails; mem cache is cleared after DB delete.
+- **Parent UI:** Child enrollments page invalidates `/api/parent/enrollments` and awaits cart refresh after unenroll.
+
 ## 2026-05-28 (sessions location column backfill)
 
 - **Enrollment Sessions list/create regression:** Older environments without `sessions.location_id` fail once location-scoped sessions code is deployed (appears as "no sessions" + create error). `server/init-db.ts` now always runs `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location_id REFERENCES locations(id)` during startup.

@@ -9,13 +9,16 @@
 import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
 
 function enrollmentBalanceCents(e: any): number {
-  if (typeof e?.effectiveBalance === 'number') {
-    return e.effectiveBalance;
-  }
-  return Math.max(
+  const fromFormula = Math.max(
     0,
     (e?.totalCost || 0) - (e?.totalPaid || 0) - (e?.compAmountCents ?? 0),
   );
+  if (typeof e?.effectiveBalance === 'number') {
+    // Prefer the higher of stored effective_balance and computed owed — stale zeros
+    // hide payable session rows from the cart while duplicate enrollment still blocks re-add.
+    return Math.max(fromFormula, Math.max(0, e.effectiveBalance));
+  }
+  return fromFormula;
 }
 
 /** Normalize API/DB field naming for cart grouping. */

@@ -8,6 +8,16 @@ import { getChildrenForAuthenticatedParent } from "../lib/parent-auth-scope";
 
 const router = express.Router();
 
+/** Remove pending-payment enrollment rows and dependent scheduled installments (FK-safe). */
+async function deletePendingPaymentProgramEnrollment(enrollmentId: number): Promise<void> {
+  await storage.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
+  await storage.deleteProgramEnrollment(enrollmentId);
+  const stillPresent = await storage.getProgramEnrollmentById(enrollmentId);
+  if (stillPresent) {
+    throw new Error(`Enrollment ${enrollmentId} was not removed from storage`);
+  }
+}
+
 // Create enrollment (compatibility endpoint used by integration tests)
 router.post('/', async (req: any, res) => {
   try {
@@ -212,7 +222,7 @@ router.get('/child/:childId', async (req, res) => {
 });
 
 // Unenroll endpoint - specifically for pending_payment enrollments
-router.delete('/:enrollmentId/unenroll', async (req, res) => {
+router.delete('/:enrollmentId/unenroll', async (req: any, res) => {
   try {
     const enrollmentId = parseInt(req.params.enrollmentId);
     
@@ -220,12 +230,29 @@ router.delete('/:enrollmentId/unenroll', async (req, res) => {
       return res.status(400).json({ message: 'Invalid enrollment ID' });
     }
 
-    console.log(`📝 UNENROLLMENT REQUEST: Enrollment ${enrollmentId}`);
+    const userEmail = req.auth?.email || req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    console.log(`📝 UNENROLLMENT REQUEST: Enrollment ${enrollmentId} from ${userEmail}`);
 
     // Get the enrollment to verify it exists and check status
     const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
     if (!enrollment) {
       return res.status(404).json({ message: 'Enrollment not found' });
+    }
+
+    const userChildren = await getChildrenForAuthenticatedParent(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
+    const userChildIds = userChildren.map((child: { id: number }) => child.id);
+    if (!userChildIds.includes(enrollment.childId)) {
+      console.error(
+        `🚨 SECURITY: User ${userEmail} attempted to unenroll enrollment ${enrollmentId} for child ${enrollment.childId}`,
+      );
+      return res.status(403).json({ message: 'Unauthorized: enrollment does not belong to your children' });
     }
 
     // Only allow unenrollment if payment is pending (not yet paid)
@@ -235,8 +262,7 @@ router.delete('/:enrollmentId/unenroll', async (req, res) => {
       });
     }
 
-    // Delete the enrollment
-    await storage.deleteProgramEnrollment(enrollmentId);
+    await deletePendingPaymentProgramEnrollment(enrollmentId);
 
     console.log(`✅ Successfully unenrolled from class: ${enrollment.className}`);
     
@@ -380,6 +406,11 @@ router.post('/cancel-multiple', async (req: any, res) => {
       // Collect all IDs to delete
       const idsToDelete = enrollmentsToCancel.map(e => e.id);
       
+      // Clear pending installments first (FK on scheduled_payments.enrollment_id)
+      for (const id of idsToDelete) {
+        await storage.deletePendingScheduledPaymentsByEnrollmentId(id);
+      }
+
       // Execute SINGLE delete operation within transaction (truly atomic)
       await db.transaction(async (tx: any) => {
         // Delete all enrollments in a SINGLE query (atomic operation)

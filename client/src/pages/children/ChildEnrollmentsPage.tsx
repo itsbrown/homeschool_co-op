@@ -111,13 +111,15 @@ export default function ChildEnrollmentsPage() {
 
   const unenrollMutation = useMutation({
     mutationFn: async (enrollmentId: number) => {
-      return apiRequest("DELETE", `/api/enrollments/${enrollmentId}/unenroll`);
+      const response = await apiRequest("DELETE", `/api/enrollments/${enrollmentId}/unenroll`);
+      return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/children/${childId}/enrollments`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: [`/api/children/${childId}/enrollments`] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] });
       // Refresh cart to remove unenrolled items
-      refreshCart();
+      await refreshCart();
       toast({
         title: "Success",
         description: "Successfully unenrolled from the class",

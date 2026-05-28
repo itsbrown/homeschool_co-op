@@ -5,7 +5,7 @@ import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 import { storage } from "../storage";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { getDb } from "../db";
-import { eq, and, inArray, notInArray, sql } from "drizzle-orm";
+import { eq, and, inArray, notInArray, sql, or, isNull } from "drizzle-orm";
 import {
   getChildrenForAuthenticatedParent,
   parentAuthCriteriaFromRequest,
@@ -28,6 +28,33 @@ const sessionEnrollSchema = z.object({
   sessionIds: z.array(z.number()).min(1, "Select at least one session"),
   variant: z.enum(["half_day", "full_day"]),
 });
+
+/** Explain why a child+session+schedule type cannot be enrolled again (cart may hide some statuses). */
+function describeExistingSessionEnrollment(row: {
+  status?: string | null;
+  variantId?: string | null;
+}): string {
+  const status = String(row.status ?? "").toLowerCase();
+  if (status === "waitlist") {
+    return "already on the waitlist for this session (check Payments or contact the school)";
+  }
+  if (status === "location_wishlist") {
+    return "already on the campus waitlist for this session";
+  }
+  if (status === "pending_payment" || status === "pending_admin_approval") {
+    const schedule =
+      row.variantId === "half_day"
+        ? "Half Day"
+        : row.variantId === "full_day"
+          ? "Full Day"
+          : "this schedule";
+    return `already reserved (${schedule}) — open your cart or Payments; it may not show if a payment plan is in progress`;
+  }
+  if (status === "enrolled") {
+    return "already enrolled for this session";
+  }
+  return `already has an enrollment for this session (${status || "active"})`;
+}
 
 router.post("/", supabaseAuth, async (req: any, res) => {
   try {
@@ -136,20 +163,36 @@ router.post("/", supabaseAuth, async (req: any, res) => {
           continue;
         }
 
+        // Match child + session + schedule type (half vs full). Capacity checks already
+        // scope by variantId; duplicate prevention must do the same or families see
+        // "already in cart" while the visible cart line is a different schedule type.
         const duplicateRows = await db
-          .select({ id: programEnrollments.id })
+          .select({
+            id: programEnrollments.id,
+            status: programEnrollments.status,
+            variantId: programEnrollments.variantId,
+            dayType: programEnrollments.dayType,
+          })
           .from(programEnrollments)
           .where(
             and(
               eq(programEnrollments.childId, childId),
               eq(programEnrollments.sessionId, session.id),
-              notInArray(programEnrollments.status, ["cancelled"])
-            )
+              or(
+                eq(programEnrollments.variantId, variant),
+                and(
+                  isNull(programEnrollments.variantId),
+                  eq(programEnrollments.dayType, variant),
+                ),
+              ),
+              notInArray(programEnrollments.status, ["cancelled"]),
+            ),
           )
           .limit(1);
 
         if (duplicateRows.length > 0) {
-          skipped.push(`${child.firstName} - ${session.name} (already enrolled or in cart)`);
+          const reason = describeExistingSessionEnrollment(duplicateRows[0]);
+          skipped.push(`${child.firstName} - ${session.name} (${reason})`);
           continue;
         }
 

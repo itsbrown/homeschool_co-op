@@ -92,7 +92,11 @@ export default function SessionEnrollmentPage() {
         sessionStorage.setItem("postSessionEnrollmentCheckout", "1");
         toast({
           title: `${count} enrollment(s) added to cart`,
-          description: skippedCount > 0 ? `${skippedCount} skipped (already enrolled or no pricing)` : undefined,
+          description:
+            skippedCount > 0
+              ? data.skipped?.join("; ") ||
+                `${skippedCount} skipped (already enrolled or no pricing)`
+              : undefined,
         });
         setLocation("/cart");
       } else {

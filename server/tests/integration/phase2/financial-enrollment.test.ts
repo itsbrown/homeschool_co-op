@@ -1014,6 +1014,76 @@ describeIntegration('Integration: Financial & Enrollment Features (Phase 2)', ()
         expect(deleted).toBeUndefined();
       });
 
+      it('should unenroll pending_payment when scheduled installments exist', async () => {
+        const parent = await testDb.createTestUser({
+          email: 'parent-sched@test.com',
+          username: 'testparentsched',
+          name: 'Test Parent Sched',
+          role: 'parent',
+        });
+
+        const admin = await testDb.createTestUser({
+          email: 'admin-sched@test.com',
+          username: 'testadminsched',
+          name: 'Test Admin Sched',
+          role: 'schoolAdmin',
+        });
+
+        const school = await testDb.createTestSchool(admin.id);
+        const child = await testDb.createTestChild(parent.id, {
+          firstName: 'Bob',
+          lastName: 'Sched',
+          gradeLevel: '6th',
+          schoolId: school.id,
+        });
+
+        const classItem = await testDb.createTestClass(school.id, admin.id, {
+          title: 'Science 101',
+          price: 12000,
+        });
+
+        const enrollment = await storage.createProgramEnrollment({
+          schoolId: school.id,
+          classType: 'school_class',
+          classId: classItem.id,
+          childId: child.id,
+          childName: `${child.firstName} ${child.lastName}`,
+          className: classItem.title,
+          parentId: parent.id,
+          parentEmail: parent.email,
+          totalCost: 12000,
+          totalPaid: 0,
+          remainingBalance: 12000,
+          paymentStatus: 'pending',
+          status: 'pending_payment',
+        });
+
+        await storage.createScheduledPayment({
+          schoolId: school.id,
+          enrollmentId: enrollment.id,
+          parentId: parent.id,
+          parentEmail: parent.email,
+          amount: 6000,
+          scheduledDate: new Date('2026-09-01T00:00:00.000Z'),
+          frequency: 'monthly',
+          installmentNumber: 1,
+          totalInstallments: 2,
+          status: 'pending',
+          metadata: {},
+        } as any);
+
+        const response = await request(app)
+          .delete(`/api/enrollments/${enrollment.id}/unenroll`);
+
+        expect(response.status).toBe(200);
+
+        const deleted = await storage.getProgramEnrollmentById(enrollment.id);
+        expect(deleted).toBeUndefined();
+
+        const installments = await storage.getScheduledPaymentsByEnrollmentId(enrollment.id);
+        expect(installments.filter((p: { status: string }) => p.status === 'pending')).toHaveLength(0);
+      });
+
       it('should prevent unenrollment after payment completed', async () => {
         const parent = await testDb.createTestUser({
           email: 'parent@test.com',

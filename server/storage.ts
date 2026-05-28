@@ -5786,20 +5786,14 @@ export class MemStorage implements IStorage {
     }
 
     async deleteProgramEnrollment(id: number): Promise<void> {
-      try {
-        if (this.dbStorage && typeof this.dbStorage.deleteProgramEnrollment === 'function') {
-          return await this.dbStorage.deleteProgramEnrollment(id);
-        } else {
-          console.log('💾 DB storage unavailable, using memStorage fallback for deleteProgramEnrollment');
-          return await this.memStorage.deleteProgramEnrollment(id);
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-          throw error;
-        }
-        console.log('❌ Error deleting program enrollment from database, falling back to memStorage:', error);
-        return await this.memStorage.deleteProgramEnrollment(id);
+      if (this.dbStorage && typeof this.dbStorage.deleteProgramEnrollment === 'function') {
+        await this.dbStorage.deleteProgramEnrollment(id);
+        // Keep mem cache in sync so reads never resurrect a DB-deleted row (or vice versa).
+        await this.memStorage.deleteProgramEnrollment(id);
+        return;
       }
+      console.log('💾 DB storage unavailable, using memStorage fallback for deleteProgramEnrollment');
+      await this.memStorage.deleteProgramEnrollment(id);
     }
 
     async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
