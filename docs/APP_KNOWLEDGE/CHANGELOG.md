@@ -1,5 +1,14 @@
 # App knowledge changelog
 
+## 2026-05-28 (checkout auto-pay + save card)
+
+- **Root cause:** E2E passed via `/api/test/sync-parent-stripe-for-e2e` only; production checkout PI had no `setup_future_usage`, and `PATCH /api/user/auto-pay` returned 400 without `stripe_default_payment_method_id`.
+- **Fix:** Biweekly checkout PIs use `setup_future_usage: 'off_session'`; `POST /api/user/sync-checkout-payment-method` + webhook vault card from succeeded PI; `CartSuccess` syncs before enabling auto-pay.
+
+## 2026-05-28 (parent payments overview clarity)
+
+- **Payments → Overview:** **Total left to pay** = enrollment balances due now + all upcoming scheduled installments (fixes $0 “Outstanding” when on biweekly plans). Helper: `client/src/utils/paymentOverviewTotals.ts`.
+
 ## 2026-05-28 (single member-id for cart membership)
 
 - **Product rule:** `users.member_id` (non-empty) means annual membership is paid; no membership line in cart/checkout.

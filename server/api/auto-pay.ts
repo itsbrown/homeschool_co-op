@@ -183,6 +183,48 @@ router.get('/auto-pay-status', supabaseAuth, async (req: any, res) => {
 
 const toggleSchema = z.object({ enabled: z.boolean() });
 
+// POST /api/user/sync-checkout-payment-method — vault card from succeeded checkout PI
+router.post('/sync-checkout-payment-method', supabaseAuth, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    const userEmail = req.user?.email;
+    if (!userId || !userEmail) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const paymentIntentId = String(req.body?.paymentIntentId ?? '').trim();
+    if (!paymentIntentId) {
+      return res.status(400).json({ error: 'paymentIntentId is required' });
+    }
+
+    const enableAutoPay = req.body?.enableAutoPay === true;
+    const { syncParentPaymentMethodFromPaymentIntent } = await import(
+      '../lib/sync-checkout-payment-method.js'
+    );
+    const result = await syncParentPaymentMethodFromPaymentIntent(
+      userEmail,
+      paymentIntentId,
+      { enableAutoPay },
+    );
+
+    if (!result.ok) {
+      const status =
+        result.reason === 'payment_intent_not_found' ? 404 : 400;
+      return res.status(status).json({ error: result.message, reason: result.reason });
+    }
+
+    return res.json({
+      success: true,
+      customerId: result.customerId,
+      paymentMethodId: result.paymentMethodId,
+      autoPayEnabled: result.autoPayEnabled,
+    });
+  } catch (err: any) {
+    console.error('[AutoPay] sync-checkout-payment-method:', err);
+    return res.status(500).json({ error: 'Failed to sync payment method after checkout' });
+  }
+});
+
 // PATCH /api/user/auto-pay — enable or disable auto-pay
 router.patch('/auto-pay', supabaseAuth, async (req: any, res) => {
   try {

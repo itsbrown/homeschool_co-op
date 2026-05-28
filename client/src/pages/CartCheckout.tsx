@@ -123,7 +123,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
     // Save payment plan before payment for success page
     localStorage.setItem('selectedPaymentPlan', selectedPaymentPlan);
 
-    // Save pending auto-pay preference for first-time users (applied on success page after card is saved)
+    // Persist for success page + next payment-intent refresh (vault + enable auto-pay)
     if (!hasPaymentMethod) {
       localStorage.setItem('pendingAutoPay', pendingAutoPayEnabled ? 'true' : 'false');
     }
@@ -200,7 +200,14 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
             </div>
             <Switch
               checked={hasPaymentMethod ? autoPayEnabled : pendingAutoPayEnabled}
-              onCheckedChange={hasPaymentMethod ? (checked) => toggleAutoPay(checked) : setPendingAutoPayEnabled}
+              onCheckedChange={
+                hasPaymentMethod
+                  ? (checked) => toggleAutoPay(checked)
+                  : (checked) => {
+                      setPendingAutoPayEnabled(checked);
+                      localStorage.setItem('pendingAutoPay', checked ? 'true' : 'false');
+                    }
+              }
               disabled={togglingAutoPay}
               aria-label="Enable automatic payments"
             />
@@ -1054,6 +1061,11 @@ export default function CartCheckout() {
           promoCode: useAuthData ? currentAuthData.appliedPromoCode : (cart.appliedPromoCode?.code || null),
           // Volunteer credits to apply (in cents)
           creditsToApply: creditsToApply,
+          savePaymentMethodForAutoPay:
+            checkoutPlan.paymentPlan === 'biweekly' ||
+            localStorage.getItem('pendingAutoPay') === 'true',
+          enableAutoPayAfterCheckout:
+            localStorage.getItem('pendingAutoPay') === 'true',
           // Optional trust signal — only present on payment-plan / frequency
           // toggles. The server verifies it against its in-memory snapshot
           // cache and falls back to strict validation on any mismatch.

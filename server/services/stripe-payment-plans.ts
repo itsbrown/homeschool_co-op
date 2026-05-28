@@ -48,6 +48,10 @@ export interface PaymentPlanData {
   originalAmountCents?: number;
   /** Parent user id for credit consumption on webhook success. */
   creditUserId?: number;
+  /** Vault card on first checkout PI (biweekly / parent opted into auto-pay). */
+  savePaymentMethodForAutoPay?: boolean;
+  /** After success, set users.auto_pay_enabled when card is synced. */
+  enableAutoPayAfterCheckout?: boolean;
 }
 
 export interface PaymentPhase {
@@ -213,8 +217,15 @@ export class StripePaymentPlanService {
         installmentNumber: '1',
         totalInstallments: phases.length.toString(),
         createdBy: 'asa_payment_system',
-        version: 'v2_stripe_simplified'
+        version: 'v2_stripe_simplified',
       };
+
+      if (data.savePaymentMethodForAutoPay) {
+        paymentMetadata.savePaymentMethodForAutoPay = 'true';
+      }
+      if (data.enableAutoPayAfterCheckout) {
+        paymentMetadata.enableAutoPayAfterCheckout = 'true';
+      }
 
       if (appliedCredits > 0) {
         paymentMetadata.creditsAppliedCents = String(appliedCredits);
@@ -254,6 +265,10 @@ export class StripePaymentPlanService {
         });
       }
       
+      const saveCardForFutureInstallments =
+        data.paymentPlan === 'biweekly' ||
+        paymentMetadata.savePaymentMethodForAutoPay === 'true';
+
       paymentIntent = await stripe.paymentIntents.create({
         amount: firstPhase.amount,
         currency: 'usd',
@@ -261,8 +276,11 @@ export class StripePaymentPlanService {
         description: `ASA Learning Platform - ${data.paymentPlan} payment (${firstPhase.description})`,
         metadata: paymentMetadata,
         automatic_payment_methods: {
-          enabled: true
-        }
+          enabled: true,
+        },
+        ...(saveCardForFutureInstallments
+          ? { setup_future_usage: 'off_session' as const }
+          : {}),
       });
     }
 

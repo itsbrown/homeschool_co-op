@@ -134,18 +134,49 @@ export default function CartSuccess() {
           // Refresh all payment/membership caches so "Pay now" state converges immediately.
           await refreshPostPaymentState(queryClient);
 
-          const pendingAutoPay = localStorage.getItem('pendingAutoPay');
-          if (pendingAutoPay === 'true') {
-            try {
-              const autoPayRes = await apiRequest('PATCH', '/api/user/auto-pay', { enabled: true });
-              if (autoPayRes.ok) {
-                await queryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
-              }
-            } catch (autoPayErr) {
-              console.error('Failed to enable auto-pay after checkout:', autoPayErr);
-            } finally {
+          const pendingAutoPay = localStorage.getItem('pendingAutoPay') === 'true';
+          const selectedPaymentPlan =
+            localStorage.getItem('selectedPaymentPlan') || 'full';
+          const shouldSyncCard =
+            pendingAutoPay || selectedPaymentPlan === 'biweekly';
+          try {
+            if (!shouldSyncCard) {
               localStorage.removeItem('pendingAutoPay');
             }
+            const syncRes = shouldSyncCard
+              ? await apiRequest('POST', '/api/user/sync-checkout-payment-method', {
+                  paymentIntentId: paymentIntent,
+                  enableAutoPay: pendingAutoPay,
+                })
+              : null;
+            if (syncRes?.ok) {
+              await queryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
+              await queryClient.invalidateQueries({ queryKey: ['/api/user/payment-methods'] });
+              await queryClient.invalidateQueries({ queryKey: ['/api/user/payment-method'] });
+              if (pendingAutoPay) {
+                toast({
+                  title: 'Auto-pay enabled',
+                  description: 'Your card is saved and future installments will charge automatically.',
+                  duration: 6000,
+                });
+              }
+            } else if (syncRes) {
+              const errBody = await syncRes.json().catch(() => ({}));
+              console.error('Failed to sync card after checkout:', errBody);
+              if (pendingAutoPay) {
+                toast({
+                  title: 'Auto-pay not activated',
+                  description:
+                    'Payment succeeded, but we could not save your card. Add a card under Payment Methods and turn on Auto Pay.',
+                  variant: 'destructive',
+                  duration: 8000,
+                });
+              }
+            }
+          } catch (syncErr) {
+            console.error('Failed to sync payment method after checkout:', syncErr);
+          } finally {
+            localStorage.removeItem('pendingAutoPay');
           }
           
           console.log('✅ Cart cleared and queries invalidated');

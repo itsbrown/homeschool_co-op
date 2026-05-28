@@ -84,6 +84,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       paymentFrequency: rawPaymentFrequency = 'one_time',
       membership,
       creditsToApply,
+      savePaymentMethodForAutoPay: bodySavePaymentMethod,
+      enableAutoPayAfterCheckout: bodyEnableAutoPayAfterCheckout,
     } = req.body;
 
     const checkoutPlan = normalizeCheckoutPaymentPlanRequest(
@@ -708,6 +710,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       // NOTE: CombinedStorage has all IStorage methods needed but doesn't formally implement the interface
       // See server/storage.ts TODO comment for full context on storage interface alignment
       const paymentPlanService = new StripePaymentPlanService(storage as any);
+      const savePaymentMethodForAutoPay =
+        bodySavePaymentMethod === true || paymentPlan === 'biweekly';
+      const enableAutoPayAfterCheckout = bodyEnableAutoPayAfterCheckout === true;
+
       const paymentPlanPayload: PaymentPlanData = {
         parentEmail: userEmail,
         enrollmentIds,
@@ -715,6 +721,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         paymentPlan: paymentPlan as 'deposit' | 'split' | 'biweekly' | 'full',
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
         membership: serverMembership,
+        savePaymentMethodForAutoPay,
+        enableAutoPayAfterCheckout,
         ...(appliedVolunteerCreditsCents > 0
           ? {
               creditsAppliedCents: appliedVolunteerCreditsCents,

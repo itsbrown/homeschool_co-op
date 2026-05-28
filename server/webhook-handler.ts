@@ -625,6 +625,33 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 paymentIntent,
               );
             }
+
+            const shouldVaultCheckoutCard =
+              paymentIntent.metadata?.savePaymentMethodForAutoPay === 'true' ||
+              paymentIntent.metadata?.paymentPlan === 'biweekly';
+            if (shouldVaultCheckoutCard) {
+              try {
+                const { syncParentPaymentMethodFromPaymentIntent } = await import(
+                  './lib/sync-checkout-payment-method.js'
+                );
+                const syncResult = await syncParentPaymentMethodFromPaymentIntent(
+                  parentEmail,
+                  paymentIntent.id,
+                  {
+                    enableAutoPay:
+                      paymentIntent.metadata?.enableAutoPayAfterCheckout === 'true',
+                  },
+                );
+                if (!syncResult.ok) {
+                  console.warn(
+                    '[webhook] checkout payment method sync:',
+                    syncResult.message,
+                  );
+                }
+              } catch (syncErr) {
+                console.error('[webhook] checkout payment method sync failed:', syncErr);
+              }
+            }
             
             console.log('✅ Balance payment processed via webhook for payment type:', paymentType);
           } else {

@@ -51,6 +51,10 @@ import { useParentCredits } from "@/hooks/useParentCredits";
 import { computeCreditCoverageFifo } from "@/utils/creditInstallmentCoverage";
 import { filterEnrollmentsToCartLineItems } from "@/utils/parentEnrollmentLineItems";
 import { computeManualPayDisplay, getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
+import {
+  computeNetTotalRemainingCents,
+  computePaymentOverviewTotals,
+} from "@/utils/paymentOverviewTotals";
 
 interface Payment {
   id: string;
@@ -748,6 +752,63 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
     
     return stats;
   }, [payments, outstandingBalances]);
+
+  const upcomingForOverview = React.useMemo(() => {
+    const pendingFromHistory = (payments || [])
+      .filter((p: Payment) => p.status === "pending" && p.dueDate)
+      .map((p: Payment) => ({
+        amount: p.amount,
+        dueDate: p.dueDate,
+        status: p.status,
+      }));
+
+    const fromStripe = (scheduledPayments || []).map((sp: {
+      amount: number;
+      dueDate: Date;
+      status?: string;
+    }) => ({
+      amount: sp.amount,
+      dueDate: sp.dueDate,
+      status: sp.status ?? "pending",
+    }));
+
+    const fromDb = (dbScheduledPayments || []).map((sp: {
+      amount: number;
+      dueDate: Date;
+      status?: string;
+      overdue?: boolean;
+      isCheckoutDue?: boolean;
+    }) => ({
+      amount: sp.amount,
+      dueDate: sp.dueDate,
+      status: sp.status,
+      overdue: sp.overdue,
+      isCheckoutDue: sp.isCheckoutDue,
+    }));
+
+    return [...pendingFromHistory, ...fromStripe, ...fromDb];
+  }, [payments, scheduledPayments, dbScheduledPayments]);
+
+  const paymentOverview = React.useMemo(() => {
+    const enrollmentOutstanding = outstandingBalances.reduce(
+      (total: number, enrollment: { effectiveBalance?: number }) =>
+        total + getEnrollmentEffectiveBalance(enrollment),
+      0,
+    );
+    return computePaymentOverviewTotals({
+      enrollmentOutstandingCents: enrollmentOutstanding,
+      upcomingPayments: upcomingForOverview,
+      paidSoFarCents: paymentStats.totalPaid || 0,
+    });
+  }, [outstandingBalances, upcomingForOverview, paymentStats.totalPaid]);
+
+  const netTotalRemainingCents = React.useMemo(
+    () => computeNetTotalRemainingCents(paymentOverview, totalAvailableCents),
+    [paymentOverview, totalAvailableCents],
+  );
+
+  const overviewLoading =
+    isLoading || isLoadingEnrollments || isLoadingScheduled || isLoadingDbScheduled;
   
   // Format currency amount
   const formatCurrency = (amount: number) => {
@@ -818,54 +879,129 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
         
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Total left to pay</CardTitle>
+              <CardDescription>
+                Everything still owed — due now plus remaining installments on your payment plan
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {overviewLoading ? (
+                <p className="text-sm text-muted-foreground">Loading your balance…</p>
+              ) : (
+                <>
+                  <div
+                    className="text-3xl font-bold text-orange-600"
+                    data-testid="overview-total-remaining"
+                  >
+                    {formatCurrency(paymentOverview.totalRemainingCents)}
+                  </div>
+                  {totalAvailableCents > 0 &&
+                    netTotalRemainingCents < paymentOverview.totalRemainingCents && (
+                      <p className="text-sm text-emerald-800">
+                        After your {formatCurrency(totalAvailableCents)} in credits:{" "}
+                        <span className="font-semibold">
+                          {formatCurrency(netTotalRemainingCents)}
+                        </span>{" "}
+                        estimated to pay
+                      </p>
+                    )}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                    {paymentOverview.dueNowCents > 0 && (
+                      <span data-testid="overview-due-now-line">
+                        <span className="font-medium text-foreground">Due now:</span>{" "}
+                        {formatCurrency(paymentOverview.dueNowCents)}
+                      </span>
+                    )}
+                    {paymentOverview.planRemainingCents > 0 && (
+                      <span data-testid="overview-plan-remaining-line">
+                        <span className="font-medium text-foreground">On your plan:</span>{" "}
+                        {formatCurrency(paymentOverview.planRemainingCents)}
+                        {paymentOverview.upcomingInstallmentCount > 0 &&
+                          ` (${paymentOverview.upcomingInstallmentCount} payment${
+                            paymentOverview.upcomingInstallmentCount === 1 ? "" : "s"
+                          } left)`}
+                      </span>
+                    )}
+                    {paymentOverview.totalRemainingCents === 0 && (
+                      <span>You&apos;re all caught up — no tuition or installments remaining.</span>
+                    )}
+                  </div>
+                  {paymentOverview.totalRemainingCents > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActivePaymentTab("upcoming")}
+                    >
+                      View upcoming payments
+                    </Button>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total Paid</CardTitle>
+                <CardTitle className="text-sm font-medium">Paid so far</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(paymentStats.totalPaid || 0)}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {paymentStats.successfulCount || 0} successful payments
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Outstanding Balance</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-orange-600">
-                  {isLoadingEnrollments ? "Loading..." : formatCurrency(paymentStats.totalOutstanding || 0)}
+                <div className="text-2xl font-bold" data-testid="overview-paid-so-far">
+                  {overviewLoading ? "…" : formatCurrency(paymentOverview.paidSoFarCents)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {paymentStats.outstandingCount || 0} unpaid enrollments
+                  {paymentStats.successfulCount || 0} successful payment
+                  {(paymentStats.successfulCount || 0) === 1 ? "" : "s"}
                 </p>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
+                <CardTitle className="text-sm font-medium">Due now</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(paymentStats.totalPending || 0)}</div>
+                <div
+                  className="text-2xl font-bold text-orange-600"
+                  data-testid="overview-due-now"
+                >
+                  {overviewLoading ? "…" : formatCurrency(paymentOverview.dueNowCents)}
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {paymentStats.pending || 0} pending payments
+                  {paymentStats.outstandingCount > 0
+                    ? `${paymentStats.outstandingCount} enrollment balance${
+                        paymentStats.outstandingCount === 1 ? "" : "s"
+                      }`
+                    : "Overdue or failed installments"}
                 </p>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Payment Status</CardTitle>
+                <CardTitle className="text-sm font-medium">Next payment</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{isLoading ? "Loading..." : paymentStats.total}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Total payments
-                </p>
+                {overviewLoading ? (
+                  <div className="text-2xl font-bold">…</div>
+                ) : paymentOverview.nextPayment ? (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="overview-next-amount">
+                      {formatCurrency(paymentOverview.nextPayment.amountCents)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1" data-testid="overview-next-date">
+                      Due {formatDate(paymentOverview.nextPayment.dueDate)}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold text-muted-foreground">—</div>
+                    <p className="text-xs text-muted-foreground mt-1">No upcoming installments</p>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
