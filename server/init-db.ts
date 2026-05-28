@@ -2418,6 +2418,12 @@ async function runMigrations() {
     await db.execute(sql`
       CREATE INDEX IF NOT EXISTS idx_sessions_school_id ON sessions(school_id);
     `);
+    // Backfill for environments created before location-scoped sessions shipped.
+    // Without this column, /api/admin/sessions list/create can fail at runtime.
+    await db.execute(sql`
+      ALTER TABLE sessions
+      ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES locations(id);
+    `);
     console.log('✅ Migration completed: sessions table created');
 
     // Add session_id column to classes table

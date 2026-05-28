@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-05-28 (sessions location column backfill)
+
+- **Enrollment Sessions list/create regression:** Older environments without `sessions.location_id` fail once location-scoped sessions code is deployed (appears as "no sessions" + create error). `server/init-db.ts` now always runs `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location_id REFERENCES locations(id)` during startup.
+- **Ops note:** If users report missing sessions after deploy, confirm backend restart so startup migration executes.
+
 ## 2026-05-28 (credit ledger)
 
 - **Credits not deducted / reusable after refresh:** Webhook consumes credits before `scheduled_payments.completed` early-exit; throws if ledger incomplete (Stripe retry). Parent Pay Now (card + credits) reserves `credit_holds`. Checkout idempotency via `Checkout {pi_id}` logs. See `docs/CREDIT_LEDGER_REPAIR.md`.

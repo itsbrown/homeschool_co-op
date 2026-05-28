@@ -52,6 +52,7 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 | Locations on wrong school | `users.school_id` ≠ admin school | Use `resolve-school-id`; fix data with SQL |
 | POST /api/locations 400 | `code` validated before derive | Derive code before `insertLocationSchema.parse` |
 | associate-school 500 on Replit | Self-HTTP or wrong storage | `associate-parent-school.ts` direct storage |
+| Enrollment Sessions page shows no data and create fails | `sessions.location_id` missing in older DBs while API/schema expect it | Ensure startup migration runs `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location_id ...` (`server/init-db.ts`) |
 
 ## Key files
 
