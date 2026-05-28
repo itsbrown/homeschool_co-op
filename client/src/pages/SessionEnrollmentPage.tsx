@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCart } from "@/contexts/CartContext";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
+import { formatScheduleTimeRange } from "@/utils/formatScheduleTime";
 import { ArrowLeft, ArrowRight, Check, Calendar, Clock, DollarSign, User, ShoppingCart, Sun, Sunrise, Loader2, AlertCircle } from "lucide-react";
 import type { EnrollmentSession as Session } from "@shared/schema";
 
@@ -335,7 +336,10 @@ export default function SessionEnrollmentPage() {
                     </div>
                     {selectedSessions[0]?.halfDayStartTime && (
                       <p className="text-xs text-muted-foreground mt-3">
-                        {selectedSessions[0].halfDayStartTime} – {selectedSessions[0].halfDayEndTime}
+                        {formatScheduleTimeRange(
+                          selectedSessions[0].halfDayStartTime,
+                          selectedSessions[0].halfDayEndTime,
+                        )}
                       </p>
                     )}
                   </div>
@@ -359,7 +363,10 @@ export default function SessionEnrollmentPage() {
                     </div>
                     {selectedSessions[0]?.fullDayStartTime && (
                       <p className="text-xs text-muted-foreground mt-3">
-                        {selectedSessions[0].fullDayStartTime} – {selectedSessions[0].fullDayEndTime}
+                        {formatScheduleTimeRange(
+                          selectedSessions[0].fullDayStartTime,
+                          selectedSessions[0].fullDayEndTime,
+                        )}
                       </p>
                     )}
                   </div>

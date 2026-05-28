@@ -349,7 +349,7 @@ export default function CartCheckout() {
     const owed =
       a.membershipTotal ??
       a.membershipAmount ??
-      (a.membershipRequired && a.membershipFeeAmount > 0 ? a.membershipFeeAmount : 0);
+      (!a.membershipAlreadyPaid && a.membershipFeeAmount > 0 ? a.membershipFeeAmount : 0);
     return owed > 0 ? owed : 0;
   }, [cart.membership?.amount, authoritativeData]);
 
@@ -360,7 +360,7 @@ export default function CartCheckout() {
     const owed =
       a.membershipTotal ??
       a.membershipAmount ??
-      (a.membershipRequired && a.membershipFeeAmount > 0 ? a.membershipFeeAmount : 0);
+      (!a.membershipAlreadyPaid && a.membershipFeeAmount > 0 ? a.membershipFeeAmount : 0);
     if (owed > 0) {
       return {
         schoolId: a.membershipSchoolId,

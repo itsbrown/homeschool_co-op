@@ -5,6 +5,10 @@ import { storage } from '../storage';
 import { jwtCheck } from '../middleware/auth0-auth';
 import { createChildLinkedToParent } from '../lib/parent-child-registration';
 import { getChildrenForAuthenticatedParent, resolveParentDbUser } from '../lib/parent-auth-scope';
+import {
+  ensurePendingMembershipEnrollmentForCheckout,
+  isMembershipFullyPaidForCheckout,
+} from '../utils/cart-pricing';
 import { enrollmentMatchesParent, emailsMatch } from '@shared/parent-identity';
 
 const router = Router();
@@ -338,6 +342,26 @@ router.get('/memberships', jwtCheck, async (req: any, res) => {
     }
 
     // Get all membership enrollments for this parent
+    if (user.schoolId) {
+      const school = await storage.getSchool(user.schoolId);
+      const fee = school?.membershipFeeAmount ?? 0;
+      if (fee > 0) {
+        const currentYear = new Date().getFullYear();
+        const existing = await storage.getMembershipEnrollmentsByParentId(user.id);
+        const alreadyPaid = existing.some((m) =>
+          isMembershipFullyPaidForCheckout(m, user.schoolId!, currentYear),
+        );
+        if (!alreadyPaid) {
+          await ensurePendingMembershipEnrollmentForCheckout(
+            user.id,
+            user.schoolId,
+            fee,
+            currentYear,
+          );
+        }
+      }
+    }
+
     const memberships = await storage.getMembershipEnrollmentsByParentId(user.id);
     console.log(`🎫 Found ${memberships.length} membership enrollments for parent ${userEmail}`);
 

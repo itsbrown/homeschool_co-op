@@ -360,6 +360,9 @@ router.post('/register', async (req, res) => {
     if (schoolId && (role === 'parent' || !role)) {
       try {
         console.log(`🎫 Auto-creating membership enrollment for parent ${email} at school ${schoolId}`);
+
+        const schoolForMembership = await storage.getSchool(schoolId);
+        const membershipFeeCents = schoolForMembership?.membershipFeeAmount ?? 0;
         
         // Get database connection
         const db = await getDb();
@@ -371,9 +374,9 @@ router.post('/register', async (req, res) => {
           status: 'pending_payment',
           membershipTier: 'basic',
           membershipYear: new Date().getFullYear(),
-          amount: 0, // Will be set when school configures fee amount
+          amount: membershipFeeCents,
           amountPaid: 0,
-          remainingBalance: 0
+          remainingBalance: membershipFeeCents,
         }).returning();
         
         console.log(`✅ Membership enrollment auto-created (ID: ${newMembership.id}) for parent ${email}`);

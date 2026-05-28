@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-05-28 (membership placeholder row at checkout)
+
+- **Root cause:** Registration created `membership_enrollments` with `amount=0` / `remainingBalance=0`; checkout found that pending row and charged **$0** instead of `schools.membership_fee_amount`.
+- **Fix:** `isPlaceholderMembershipEnrollmentRow` + use school fee in `resolveMembershipOwedForCheckout`; cart snapshot fallback when fee configured; registration seeds row with school fee; **`ensurePendingMembershipEnrollmentForCheckout`** creates/upgrades rows when missing (checkout + `GET /api/parent/memberships`).
+
 ## 2026-05-28 (E2E CI headless shell deps)
 
 - **`.github/workflows/e2e.yml`:** install `chromium-headless-shell` system libs (`libglib-2.0`, etc.) — `playwright install chromium --with-deps` alone left CI failing with `libglib-2.0.so.0` on `parent-full-journey`.

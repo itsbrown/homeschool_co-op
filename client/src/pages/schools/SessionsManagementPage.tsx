@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { formatScheduleTimeRange } from "@/utils/formatScheduleTime";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Plus, Edit, Trash2, Calendar, Clock, Users, DollarSign } from "lucide-react";
 import type { EnrollmentSession as Session } from "@shared/schema";
@@ -302,7 +303,11 @@ export default function SessionsManagementPage() {
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium">Half Day:</span>
-                        <span>{s.halfDayStartTime || "—"} – {s.halfDayEndTime || "—"}</span>
+                        <span>
+                          {s.halfDayStartTime && s.halfDayEndTime
+                            ? formatScheduleTimeRange(s.halfDayStartTime, s.halfDayEndTime)
+                            : "—"}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2 pl-6">
                         <DollarSign className="h-3 w-3 text-muted-foreground" />
@@ -319,7 +324,11 @@ export default function SessionsManagementPage() {
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium">Full Day:</span>
-                        <span>{s.fullDayStartTime || "—"} – {s.fullDayEndTime || "—"}</span>
+                        <span>
+                          {s.fullDayStartTime && s.fullDayEndTime
+                            ? formatScheduleTimeRange(s.fullDayStartTime, s.fullDayEndTime)
+                            : "—"}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2 pl-6">
                         <DollarSign className="h-3 w-3 text-muted-foreground" />

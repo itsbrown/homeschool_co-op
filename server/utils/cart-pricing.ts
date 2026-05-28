@@ -299,6 +299,83 @@ export function findUnpaidMembershipRow<T extends MembershipRowForBalance>(
 }
 
 /**
+ * Registration auto-creates pending rows with amount/remainingBalance 0 before the
+ * school fee is copied onto the row. Treat as "no priced row" so checkout uses
+ * schools.membership_fee_amount — not $0 owed.
+ */
+export function isPlaceholderMembershipEnrollmentRow(
+  row: MembershipRowForBalance | null | undefined,
+): boolean {
+  if (!row || isActiveMembership(row.status ?? null)) return false;
+  if ((row.amount ?? 0) > 0) return false;
+  if ((row.amountPaid ?? 0) > 0) return false;
+  if (typeof row.remainingBalance === 'number' && row.remainingBalance > 0) {
+    return false;
+  }
+  return computeUnpaidMembershipRemainingCents(row) <= 0;
+}
+
+async function resolveDiscountedMembershipFeeOwed(
+  schoolId: number,
+  userId: number,
+  membershipFeeAmount: number,
+): Promise<number> {
+  if (membershipFeeAmount <= 0) return 0;
+  try {
+    const { calculateMembershipDiscount } = await import('./membership');
+    const discountResult = await calculateMembershipDiscount(
+      schoolId,
+      userId,
+      membershipFeeAmount,
+    );
+    return discountResult.finalAmount;
+  } catch {
+    return membershipFeeAmount;
+  }
+}
+
+/** Create or upgrade a pending membership row so parent APIs and checkout stay in sync. */
+export async function ensurePendingMembershipEnrollmentForCheckout(
+  userId: number,
+  schoolId: number,
+  membershipFeeAmount: number,
+  currentYear: number,
+): Promise<void> {
+  if (membershipFeeAmount <= 0) return;
+
+  const rows = await storage.getMembershipEnrollmentsByParentId(userId);
+  const forSchool = rows.filter(
+    (m) =>
+      Number(m.schoolId) === Number(schoolId) &&
+      (m.membershipYear === currentYear || m.membershipYear === currentYear + 1),
+  );
+
+  const placeholder = forSchool.find((m) => isPlaceholderMembershipEnrollmentRow(m));
+  if (placeholder?.id != null) {
+    await storage.updateMembershipEnrollment(placeholder.id, {
+      amount: membershipFeeAmount,
+      amountPaid: 0,
+      remainingBalance: membershipFeeAmount,
+      status: 'pending_payment',
+    });
+    return;
+  }
+
+  if (forSchool.length > 0) return;
+
+  await storage.createMembershipEnrollment({
+    parentUserId: userId,
+    schoolId,
+    status: 'pending_payment',
+    membershipTier: 'basic',
+    membershipYear: currentYear,
+    amount: membershipFeeAmount,
+    amountPaid: 0,
+    remainingBalance: membershipFeeAmount,
+  });
+}
+
+/**
  * Compute the remaining balance (in cents) of an unpaid membership row.
  * Prefers the row's `remainingBalance` column; falls back to
  * `amount - amountPaid`. Anomalies (overpayment, NULL paid info, NaN) clamp
@@ -348,6 +425,21 @@ export async function resolveMembershipOwedForCheckout(
   const membershipRequired = school.membershipRequired ?? false;
   const membershipFeeAmount = school.membershipFeeAmount || 0;
   const currentYear = new Date().getFullYear();
+
+  const alreadyPaidBeforeEnsure =
+    (await storage.getMembershipEnrollmentsByParentId(userId))?.some((m) =>
+      isMembershipFullyPaidForCheckout(m, schoolId, currentYear),
+    ) ?? false;
+
+  if (!alreadyPaidBeforeEnsure && membershipFeeAmount > 0) {
+    await ensurePendingMembershipEnrollmentForCheckout(
+      userId,
+      schoolId,
+      membershipFeeAmount,
+      currentYear,
+    );
+  }
+
   const existingMemberships = await storage.getMembershipEnrollmentsByParentId(userId);
 
   const alreadyPaid =
@@ -361,26 +453,18 @@ export async function resolveMembershipOwedForCheckout(
 
   let owedCents = 0;
   if (!alreadyPaid) {
-    if (unpaidMembershipRow) {
+    if (
+      unpaidMembershipRow &&
+      !isPlaceholderMembershipEnrollmentRow(unpaidMembershipRow)
+    ) {
       owedCents = computeUnpaidMembershipRemainingCents(unpaidMembershipRow);
     } else if (membershipFeeAmount > 0) {
-      try {
-        const { calculateMembershipDiscount } = await import('./membership');
-        const discountResult = await calculateMembershipDiscount(
-          schoolId,
-          userId,
-          membershipFeeAmount,
-        );
-        owedCents = discountResult.finalAmount;
-      } catch {
-        owedCents = membershipFeeAmount;
-      }
+      owedCents = await resolveDiscountedMembershipFeeOwed(
+        schoolId,
+        userId,
+        membershipFeeAmount,
+      );
     }
-  }
-
-  // Schools with membershipRequired must collect the fee when configured.
-  if (membershipRequired && membershipFeeAmount > 0 && !alreadyPaid && owedCents <= 0) {
-    owedCents = membershipFeeAmount;
   }
 
   return {
@@ -1336,12 +1420,7 @@ export async function calculateCartSnapshot(
   // Calculate totals
   const itemsTotal = pricing.total;
   let membershipTotal = alreadyPaid ? 0 : discountedMembershipAmount;
-  if (
-    !alreadyPaid &&
-    membershipRequired &&
-    membershipFeeAmount > 0 &&
-    membershipTotal <= 0
-  ) {
+  if (!alreadyPaid && membershipFeeAmount > 0 && membershipTotal <= 0) {
     membershipTotal = membershipFeeAmount;
   }
   const grandTotal = itemsTotal + membershipTotal;

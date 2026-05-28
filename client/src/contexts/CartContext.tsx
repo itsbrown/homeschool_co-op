@@ -1257,11 +1257,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         if (!res.ok) return null;
         const snapshot = await res.json();
+        if (snapshot?.membership?.alreadyPaid) return null;
         const owed =
           snapshot?.totals?.membershipTotal ??
           snapshot?.membership?.discountedAmount ??
-          0;
-        if (snapshot?.membership?.alreadyPaid || owed <= 0) return null;
+          (snapshot?.membership?.amount > 0 && !snapshot?.membership?.alreadyPaid
+            ? snapshot.membership.amount
+            : 0);
+        if (owed <= 0) return null;
         const schoolId = snapshot?.membership?.schoolId;
         if (schoolId == null) return null;
         return {

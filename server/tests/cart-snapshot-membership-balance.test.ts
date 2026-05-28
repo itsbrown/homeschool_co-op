@@ -7,6 +7,7 @@ import {
   findUnpaidMembershipRow,
   computeUnpaidMembershipRemainingCents,
   isMembershipFullyPaidForCheckout,
+  isPlaceholderMembershipEnrollmentRow,
   type MembershipRowForBalance,
 } from '../utils/cart-pricing';
 
@@ -191,5 +192,24 @@ describe('membership-balance source — end-to-end property simulation (task #21
     // Mirror useUnpaidEnrollments → outstandingBalanceCents = remainingBalance.
     const uiOutstandingBalanceCents = row.remainingBalance;
     expect(simulateMembershipLine([row], FULL_FEE)).toBe(uiOutstandingBalanceCents);
+  });
+
+  it('Property 6: placeholder pending row (registration) uses school fee, not $0', () => {
+    const placeholder = makeRow({
+      amount: 0,
+      amountPaid: 0,
+      remainingBalance: 0,
+      status: 'pending_payment',
+    });
+    expect(isPlaceholderMembershipEnrollmentRow(placeholder)).toBe(true);
+    expect(computeUnpaidMembershipRemainingCents(placeholder)).toBe(0);
+    expect(findUnpaidMembershipRow([placeholder], SCHOOL_ID, CURRENT_YEAR)).toBe(placeholder);
+    // Checkout must not treat this as "paid" — server uses school fee when placeholder.
+    expect(simulateMembershipLine([placeholder], FULL_FEE)).toBe(0);
+  });
+
+  it('Property 5b row is not a placeholder (amount > 0)', () => {
+    const row = makeRow({ amount: 10000, amountPaid: null, remainingBalance: null });
+    expect(isPlaceholderMembershipEnrollmentRow(row)).toBe(false);
   });
 });
