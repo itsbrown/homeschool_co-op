@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-05-28 (parent full-journey E2E hardening)
+
+- E2E helpers: scoped registration student cards; after checkout call `POST /api/test/persist-checkout-schedule-from-pi` (webhook may not run in test) and `POST /api/test/sync-parent-stripe-for-e2e` (save card for auto-pay); poll `GET /api/test/pending-scheduled-payments`.
+
 ## 2026-05-28 (parent full-journey E2E)
 
 - **`e2e/parent-full-journey.spec.ts`:** Registration (2 children) → session wizard (2 sessions) → biweekly checkout + auto-pay toggle → first payment → `POST /api/test/run-auto-pay-for/:id` on installment 2. Seed: `POST /api/test/setup-registration-scenario` with `{ openSessionCount: N }`.

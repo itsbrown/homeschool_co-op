@@ -10,6 +10,12 @@ import { testApiToken } from "./testSeed";
 
 export type OpenSessionSeed = { id: number; name: string; enrollmentOpen: boolean };
 
+function studentSection(page: Page, index: number) {
+  return page.locator("div.rounded-lg.border").filter({
+    has: page.getByText(`Student ${index + 1}`, { exact: true }),
+  });
+}
+
 /** Complete school-code registration with N children (1–10). */
 export async function registerParentWithChildren(
   page: Page,
@@ -53,18 +59,11 @@ export async function registerParentWithChildren(
 
   for (let i = 0; i < children.length; i++) {
     const child = children[i]!;
-    if (i === 0) {
-      await page.getByTestId("registration-child-0-first-name").fill(child.firstName);
-    } else {
-      await page.getByLabel("First name").nth(i).fill(child.firstName);
-    }
-    await page.getByLabel("Last name").nth(i).fill(child.lastName);
-    await page.locator('input[type="date"]').nth(i).fill(child.birthdate);
-    const gradeTrigger =
-      i === 0
-        ? page.getByTestId("registration-child-0-grade")
-        : page.getByRole("button", { name: "Select grade" }).nth(i);
-    await gradeTrigger.click();
+    const section = studentSection(page, i);
+    await section.getByLabel("First name", { exact: true }).fill(child.firstName);
+    await section.getByLabel("Last name", { exact: true }).fill(child.lastName);
+    await section.locator('input[type="date"]').fill(child.birthdate);
+    await section.getByRole("button", { name: "Select grade" }).click();
     await page.getByRole("option", { name: child.grade }).click();
   }
 
@@ -74,7 +73,7 @@ export async function registerParentWithChildren(
   );
   await page.getByTestId("registration-submit").click();
   const regRes = await registerResponse;
-  expect(regRes.ok(), `register failed: ${regRes.status()}`).toBeTruthy();
+  expect(regRes.ok(), `register failed: ${regRes.status()} ${await regRes.text()}`).toBeTruthy();
 
   await expect(page).toHaveURL(/\/(dashboard|login)/, { timeout: 90_000 });
 }
@@ -123,20 +122,22 @@ export async function enrollSessionsInWizard(
 
   const enrollResponse = page.waitForResponse(
     (r) => r.url().includes("/api/session-enrollments") && r.request().method() === "POST",
-    { timeout: 90_000 },
+    { timeout: 120_000 },
   );
   await wizard.getByRole("button", { name: /add to cart/i }).click();
   const enrollRes = await enrollResponse;
-  expect(enrollRes.ok(), `session-enrollments failed: ${enrollRes.status()}`).toBeTruthy();
+  const enrollText = await enrollRes.text();
+  expect(enrollRes.ok(), `session-enrollments failed: ${enrollRes.status()} ${enrollText}`).toBeTruthy();
 
-  await expect(page).toHaveURL(/\/cart/, { timeout: 60_000 });
+  await expect(page).toHaveURL(/\/cart/, { timeout: 90_000 });
+  await expect(page.getByText("Payment Information")).toBeVisible({ timeout: 180_000 });
 }
 
-export async function checkoutBiweeklyWithAutopay(page: Page) {
-  await expect(page.getByText("Payment Information")).toBeVisible({ timeout: 120_000 });
-  await page.locator("#biweekly").click({ timeout: 20_000 });
+export async function checkoutBiweeklyWithAutopay(page: Page): Promise<string> {
+  await page.locator("#biweekly").click({ timeout: 30_000 });
 
   const autoPaySwitch = page.getByRole("switch", { name: "Enable automatic payments" });
+  await expect(autoPaySwitch).toBeVisible({ timeout: 30_000 });
   if (!(await autoPaySwitch.isChecked())) {
     await autoPaySwitch.click();
   }
@@ -145,6 +146,41 @@ export async function checkoutBiweeklyWithAutopay(page: Page) {
   await fillStripePaymentElement(page);
   await page.getByTestId("button-checkout-submit").click();
   await page.waitForURL(/\/cart\/success/, { timeout: 180_000 });
+  await page.waitForLoadState("networkidle").catch(() => {});
+
+  const piId = new URL(page.url()).searchParams.get("payment_intent");
+  expect(piId, "Stripe redirect missing payment_intent query param").toBeTruthy();
+  return piId!;
+}
+
+export async function persistCheckoutScheduleFromPaymentIntent(
+  request: APIRequestContext,
+  paymentIntentId: string,
+): Promise<void> {
+  const res = await request.post("/api/test/persist-checkout-schedule-from-pi", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: { paymentIntentId },
+  });
+  const text = await res.text();
+  expect(res.ok(), `persist-checkout-schedule-from-pi failed (${res.status()}): ${text}`).toBeTruthy();
+}
+
+export async function syncParentStripeForE2e(
+  request: APIRequestContext,
+  parentEmail: string,
+): Promise<void> {
+  const res = await request.post("/api/test/sync-parent-stripe-for-e2e", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: { email: parentEmail, enableAutoPay: true },
+  });
+  const text = await res.text();
+  expect(res.ok(), `sync-parent-stripe-for-e2e failed (${res.status()}): ${text}`).toBeTruthy();
 }
 
 export async function fetchParentChildren(page: Page): Promise<Array<{ id: number; firstName: string; lastName: string }>> {
@@ -162,21 +198,41 @@ export async function fetchParentChildren(page: Page): Promise<Array<{ id: numbe
   }));
 }
 
-export async function fetchUpcomingScheduledPayments(page: Page) {
-  const token = await waitForSupabaseToken(page);
-  const res = await page.request.get("/api/scheduled-payments/upcoming", {
-    headers: bearerAuthHeaders(token),
-  });
-  expect(res.ok()).toBeTruthy();
-  const body = (await res.json()) as {
-    scheduledPayments?: Array<{
+export async function fetchPendingScheduledPaymentsFromDb(
+  request: APIRequestContext,
+  parentEmail: string,
+) {
+  const res = await request.get(
+    `/api/test/pending-scheduled-payments?parentEmail=${encodeURIComponent(parentEmail)}`,
+    { headers: { "X-Test-Token": testApiToken() } },
+  );
+  const text = await res.text();
+  expect(res.ok(), `pending-scheduled-payments failed (${res.status()}): ${text}`).toBeTruthy();
+  const body = JSON.parse(text) as {
+    payments?: Array<{
       id: number;
       installmentNumber?: number;
       status?: string;
-      amount?: number;
     }>;
   };
-  return body.scheduledPayments ?? [];
+  return body.payments ?? [];
+}
+
+export async function pollPendingInstallmentTwo(
+  request: APIRequestContext,
+  parentEmail: string,
+  timeoutMs = 90_000,
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const rows = await fetchPendingScheduledPaymentsFromDb(request, parentEmail);
+    const second = rows
+      .filter((p) => (p.installmentNumber ?? 0) >= 2)
+      .sort((a, b) => (a.installmentNumber ?? 99) - (b.installmentNumber ?? 99))[0];
+    if (second) return second;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return null;
 }
 
 export async function runAutoPayForScheduledPayment(

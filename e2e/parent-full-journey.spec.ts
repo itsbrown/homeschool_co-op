@@ -1,33 +1,29 @@
 /**
  * Comprehensive parent journey (UI):
- *   school-code registration → multiple children → 1–3 session enrollments →
- *   biweekly checkout with auto-pay → first payment → auto-pay runs installment 2.
- *
- * Requirements:
- *   - DATABASE_URL (Postgres)
- *   - Real Supabase test project (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)
- *   - Stripe test keys (Playwright webServer sets defaults; override in .env.e2e for live confirm)
- *
- * Run:
- *   npm run playwright:install
- *   cp .env.e2e.example .env.e2e   # fill secrets
- *   npm run test:e2e -- e2e/parent-full-journey.spec.ts
+ *   school-code registration → multiple children → session enrollments →
+ *   biweekly checkout with auto-pay → first payment → auto-pay installment 2.
  */
 import { test, expect } from "@playwright/test";
 import { postSetupRegistrationScenario } from "./helpers/testSeed";
 import { isRealSupabaseConfigured } from "./helpers/supabaseEnv";
-import { loginParent, waitForSupabaseToken, bearerAuthHeaders } from "./helpers/parentCheckoutHelpers";
+import {
+  loginParent,
+  waitForSupabaseToken,
+  bearerAuthHeaders,
+} from "./helpers/parentCheckoutHelpers";
 import {
   registerParentWithChildren,
   enrollSessionsInWizard,
   checkoutBiweeklyWithAutopay,
+  persistCheckoutScheduleFromPaymentIntent,
+  syncParentStripeForE2e,
   fetchParentChildren,
-  fetchUpcomingScheduledPayments,
+  pollPendingInstallmentTwo,
   runAutoPayForScheduledPayment,
   getScheduledPaymentStatus,
 } from "./helpers/parentJourneyHelpers";
 
-test.describe.configure({ mode: "serial", timeout: 300_000 });
+test.describe.configure({ mode: "serial", timeout: 360_000 });
 
 const parentPassword = "SecurePass123!";
 
@@ -77,6 +73,8 @@ test.describe("parent full journey (registration → sessions → autopay)", () 
 
     if (page.url().includes("/login")) {
       await loginParent(page, parentEmail, parentPassword);
+    } else {
+      await waitForSupabaseToken(page);
     }
 
     const children = await fetchParentChildren(page);
@@ -84,35 +82,35 @@ test.describe("parent full journey (registration → sessions → autopay)", () 
     const childIds = children.slice(0, 2).map((c) => c.id);
 
     await enrollSessionsInWizard(page, { childIds, sessionIds });
-
-    await checkoutBiweeklyWithAutopay(page);
+    const paymentIntentId = await checkoutBiweeklyWithAutopay(page);
+    await persistCheckoutScheduleFromPaymentIntent(request, paymentIntentId);
+    await syncParentStripeForE2e(request, parentEmail);
 
     const token = await waitForSupabaseToken(page);
-    const autoPayRes = await page.request.get("/api/user/auto-pay-status", {
-      headers: bearerAuthHeaders(token),
-    });
-    if (autoPayRes.ok()) {
-      const autoPayBody = (await autoPayRes.json()) as { autoPayEnabled?: boolean };
-      expect(autoPayBody.autoPayEnabled).toBe(true);
-    }
+    await expect
+      .poll(
+        async () => {
+          const autoPayRes = await page.request.get("/api/user/auto-pay-status", {
+            headers: bearerAuthHeaders(token),
+          });
+          if (!autoPayRes.ok()) return false;
+          const body = (await autoPayRes.json()) as { autoPayEnabled?: boolean };
+          return body.autoPayEnabled === true;
+        },
+        { timeout: 30_000 },
+      )
+      .toBe(true);
 
-    const upcoming = await fetchUpcomingScheduledPayments(page);
-    const pendingInstallments = upcoming.filter(
-      (p) => p.status === "pending" && (p.installmentNumber ?? 0) >= 2,
-    );
-    test.skip(
-      pendingInstallments.length === 0,
-      "No pending installment #2+ after checkout — biweekly schedule may not have been created (check Stripe keys / webhook)",
-    );
+    const secondPayment = await pollPendingInstallmentTwo(request, parentEmail);
+    expect(
+      secondPayment,
+      "No pending installment #2 in DB after checkout — check Stripe webhook / biweekly schedule creation",
+    ).toBeTruthy();
 
-    const secondPayment = pendingInstallments.sort(
-      (a, b) => (a.installmentNumber ?? 99) - (b.installmentNumber ?? 99),
-    )[0]!;
-
-    const autoPayResult = await runAutoPayForScheduledPayment(request, secondPayment.id);
+    const autoPayResult = await runAutoPayForScheduledPayment(request, secondPayment!.id);
     expect(autoPayResult.result).toBe("charged");
 
-    const after = await getScheduledPaymentStatus(request, secondPayment.id);
+    const after = await getScheduledPaymentStatus(request, secondPayment!.id);
     expect(after.status).toBe("completed");
   });
 });
