@@ -3,6 +3,12 @@ import { getDb } from '../db';
 import { userRoles, isActiveMembership } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import type { Discount, SchoolClass } from '@shared/schema';
+import {
+  ensurePendingMembershipEnrollmentForCheckout,
+  isPlaceholderMembershipEnrollmentRow,
+} from '../lib/ensure-pending-membership-enrollment';
+
+export { isPlaceholderMembershipEnrollmentRow, ensurePendingMembershipEnrollmentForCheckout };
 
 export interface CartItem {
   id: string;
@@ -298,23 +304,6 @@ export function findUnpaidMembershipRow<T extends MembershipRowForBalance>(
   );
 }
 
-/**
- * Registration auto-creates pending rows with amount/remainingBalance 0 before the
- * school fee is copied onto the row. Treat as "no priced row" so checkout uses
- * schools.membership_fee_amount — not $0 owed.
- */
-export function isPlaceholderMembershipEnrollmentRow(
-  row: MembershipRowForBalance | null | undefined,
-): boolean {
-  if (!row || isActiveMembership(row.status ?? null)) return false;
-  if ((row.amount ?? 0) > 0) return false;
-  if ((row.amountPaid ?? 0) > 0) return false;
-  if (typeof row.remainingBalance === 'number' && row.remainingBalance > 0) {
-    return false;
-  }
-  return computeUnpaidMembershipRemainingCents(row) <= 0;
-}
-
 async function resolveDiscountedMembershipFeeOwed(
   schoolId: number,
   userId: number,
@@ -332,47 +321,6 @@ async function resolveDiscountedMembershipFeeOwed(
   } catch {
     return membershipFeeAmount;
   }
-}
-
-/** Create or upgrade a pending membership row so parent APIs and checkout stay in sync. */
-export async function ensurePendingMembershipEnrollmentForCheckout(
-  userId: number,
-  schoolId: number,
-  membershipFeeAmount: number,
-  currentYear: number,
-): Promise<void> {
-  if (membershipFeeAmount <= 0) return;
-
-  const rows = await storage.getMembershipEnrollmentsByParentId(userId);
-  const forSchool = rows.filter(
-    (m) =>
-      Number(m.schoolId) === Number(schoolId) &&
-      (m.membershipYear === currentYear || m.membershipYear === currentYear + 1),
-  );
-
-  const placeholder = forSchool.find((m) => isPlaceholderMembershipEnrollmentRow(m));
-  if (placeholder?.id != null) {
-    await storage.updateMembershipEnrollment(placeholder.id, {
-      amount: membershipFeeAmount,
-      amountPaid: 0,
-      remainingBalance: membershipFeeAmount,
-      status: 'pending_payment',
-    });
-    return;
-  }
-
-  if (forSchool.length > 0) return;
-
-  await storage.createMembershipEnrollment({
-    parentUserId: userId,
-    schoolId,
-    status: 'pending_payment',
-    membershipTier: 'basic',
-    membershipYear: currentYear,
-    amount: membershipFeeAmount,
-    amountPaid: 0,
-    remainingBalance: membershipFeeAmount,
-  });
 }
 
 /**
@@ -415,6 +363,13 @@ export function isMembershipFullyPaidForCheckout(
   return true;
 }
 
+/** Non-empty `users.member_id` means annual membership is satisfied for checkout. */
+export function parentHasMemberIdForCheckout(
+  memberId: string | null | undefined,
+): boolean {
+  return typeof memberId === 'string' && memberId.trim() !== '';
+}
+
 export async function resolveMembershipOwedForCheckout(
   userId: number,
   schoolId: number,
@@ -426,18 +381,35 @@ export async function resolveMembershipOwedForCheckout(
   const membershipFeeAmount = school.membershipFeeAmount || 0;
   const currentYear = new Date().getFullYear();
 
+  const user = await storage.getUser(userId);
+  if (parentHasMemberIdForCheckout(user?.memberId)) {
+    return {
+      schoolId,
+      schoolName: school.name || 'School',
+      membershipRequired,
+      membershipFeeAmount,
+      owedCents: 0,
+      alreadyPaid: true,
+      year: currentYear,
+    };
+  }
+
   const alreadyPaidBeforeEnsure =
     (await storage.getMembershipEnrollmentsByParentId(userId))?.some((m) =>
       isMembershipFullyPaidForCheckout(m, schoolId, currentYear),
     ) ?? false;
 
   if (!alreadyPaidBeforeEnsure && membershipFeeAmount > 0) {
-    await ensurePendingMembershipEnrollmentForCheckout(
-      userId,
-      schoolId,
-      membershipFeeAmount,
-      currentYear,
-    );
+    try {
+      await ensurePendingMembershipEnrollmentForCheckout(
+        userId,
+        schoolId,
+        membershipFeeAmount,
+        currentYear,
+      );
+    } catch (ensureErr) {
+      console.error('⚠️ ensurePendingMembershipEnrollmentForCheckout failed:', ensureErr);
+    }
   }
 
   const existingMemberships = await storage.getMembershipEnrollmentsByParentId(userId);

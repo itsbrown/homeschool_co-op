@@ -6,9 +6,11 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { trackAddToCart, trackRemoveFromCart, trackViewCart } from '@/lib/analytics';
 import { filterEnrollmentsToCartLineItems } from '@/utils/parentEnrollmentLineItems';
-import { getMembershipOutstandingBalance } from '@/utils/parentBalance';
 import { isViteFlagTrue } from '@/lib/viteEnv';
-import { isActiveMembership } from '@shared/schema';
+import {
+  fetchParentMemberId,
+  PARENT_MEMBER_ID_QUERY_KEY,
+} from '@/lib/parent-member-id';
 
 // Helper function to get user-specific cart storage key
 // This prevents cross-account data leakage by namespacing localStorage per user
@@ -1281,11 +1283,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [],
   );
 
-  // Returns membership owed for cart hydration / add-to-cart. Uses cart snapshot when
-  // items exist (same school + enrollment-status rules as checkout). Does NOT treat
-  // users.memberId alone as "already paid" — only active membership_enrollments rows.
+  // Returns membership owed for cart hydration / add-to-cart. Cart snapshot when items
+  // exist; otherwise one cached `GET /api/parent/member-id` (users.member_id is source of truth).
   const fetchMembershipForCart = useCallback(
-    async (userEmail: string, cartItems: CartItem[] = []): Promise<MembershipFee | null> => {
+    async (_userEmail: string, cartItems: CartItem[] = []): Promise<MembershipFee | null> => {
       const TIMEOUT_MS = 5000;
 
       const fetchWithTimeout = async (): Promise<MembershipFee | null> => {
@@ -1302,91 +1303,30 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
 
-          const token = await getAccessToken();
-          const [membershipsResponse, schoolResponse] = await Promise.all([
-            fetch('/api/parent/memberships', {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-            }),
-            fetch(`/api/school-parents/school/${encodeURIComponent(userEmail)}`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-            }),
-          ]);
+          const memberIdData = await queryClient.fetchQuery({
+            queryKey: [...PARENT_MEMBER_ID_QUERY_KEY],
+            queryFn: fetchParentMemberId,
+            staleTime: 60_000,
+          });
 
-          type MembershipApiRow = {
-            schoolId?: number | null;
-            schoolName?: string | null;
-            membershipYear?: number | null;
-            remainingBalance?: number | null;
-            status?: string | null;
-            amount?: number | null;
-            amountPaid?: number | null;
-            membershipFeeAmount?: number | null;
-          };
-
-          let membershipRows: MembershipApiRow[] = [];
-          if (membershipsResponse.ok) {
-            const parsed = await membershipsResponse.json();
-            membershipRows = Array.isArray(parsed) ? parsed : [];
+          if (memberIdData.hasMembership) {
+            console.log('🎫 CartContext: member ID on file — skipping membership line');
+            return null;
           }
 
-          let totalOutstandingCents = 0;
-          let primaryForLabel: { row: MembershipApiRow; balance: number } | null = null;
-          for (const m of membershipRows) {
-            const balance = getMembershipOutstandingBalance(m);
-            if (balance <= 0) continue;
-            totalOutstandingCents += balance;
-            if (!primaryForLabel || balance > primaryForLabel.balance) {
-              primaryForLabel = { row: m, balance };
-            }
-          }
-
-          const p = primaryForLabel?.row;
+          const owed =
+            memberIdData.membershipOwedCents > 0
+              ? memberIdData.membershipOwedCents
+              : memberIdData.membershipFeeAmount;
           if (
-            totalOutstandingCents > 0 &&
-            p &&
-            p.schoolId != null &&
-            p.schoolName &&
-            p.membershipYear != null
+            owed > 0 &&
+            memberIdData.schoolId != null &&
+            memberIdData.schoolName
           ) {
             return {
-              schoolId: p.schoolId,
-              schoolName: p.schoolName,
-              amount: totalOutstandingCents,
-              year: p.membershipYear,
-            };
-          }
-
-          const schoolResult = schoolResponse.ok ? await schoolResponse.json() : null;
-          const school = schoolResult?.school;
-          const targetSchoolId = school?.id ?? null;
-          const fee =
-            school?.membershipFeeAmount ??
-            membershipRows.find((m) => m.schoolId === targetSchoolId)?.membershipFeeAmount ??
-            0;
-
-          if (targetSchoolId != null) {
-            const hasActiveEnrollment = membershipRows.some(
-              (m) =>
-                Number(m.schoolId) === Number(targetSchoolId) &&
-                isActiveMembership(m.status ?? null),
-            );
-            if (hasActiveEnrollment) {
-              console.log('🎫 CartContext: active membership enrollment — skipping auto-add');
-              return null;
-            }
-          }
-
-          if (schoolResult?.success && school && fee > 0) {
-            return {
-              schoolId: school.id,
-              schoolName: school.name,
-              amount: fee,
+              schoolId: memberIdData.schoolId,
+              schoolName: memberIdData.schoolName,
+              amount: owed,
               year: new Date().getFullYear(),
             };
           }
@@ -1411,7 +1351,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return Promise.race([fetchWithTimeout(), timeoutPromise]);
     },
-    [getAccessToken, fetchMembershipFromCartSnapshot],
+    [fetchMembershipFromCartSnapshot],
   );
 
   // Use TanStack Query to fetch enrollments with proper caching

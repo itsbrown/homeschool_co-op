@@ -8,6 +8,7 @@ import {
   computeUnpaidMembershipRemainingCents,
   isMembershipFullyPaidForCheckout,
   isPlaceholderMembershipEnrollmentRow,
+  parentHasMemberIdForCheckout,
   type MembershipRowForBalance,
 } from '../utils/cart-pricing';
 
@@ -30,6 +31,19 @@ function makeRow(
     ...overrides,
   };
 }
+
+describe('parentHasMemberIdForCheckout', () => {
+  it('treats non-empty memberId as paid for checkout', () => {
+    expect(parentHasMemberIdForCheckout('ASA-2025-X7K9M2')).toBe(true);
+  });
+
+  it('treats null, empty, and whitespace-only as unpaid', () => {
+    expect(parentHasMemberIdForCheckout(null)).toBe(false);
+    expect(parentHasMemberIdForCheckout('')).toBe(false);
+    expect(parentHasMemberIdForCheckout('   ')).toBe(false);
+    expect(parentHasMemberIdForCheckout(undefined)).toBe(false);
+  });
+});
 
 describe('findUnpaidMembershipRow (task #212)', () => {
   it('Property 2: returns null for first-time enrollment (no membership rows)', () => {

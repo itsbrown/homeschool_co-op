@@ -1,9 +1,16 @@
 # App knowledge changelog
 
+## 2026-05-28 (single member-id for cart membership)
+
+- **Product rule:** `users.member_id` (non-empty) means annual membership is paid; no membership line in cart/checkout.
+- **`GET /api/parent/member-id`** returns school fee, `membershipOwedCents` (from `resolveMembershipOwedForCheckout`), and `membershipStatus` for dashboard — one call shared via `PARENT_MEMBER_ID_QUERY_KEY` (`client/src/lib/parent-member-id.ts`).
+- **Cart hydration:** `CartContext.fetchMembershipForCart` uses cart snapshot when items exist, else cached member-id — **no** `/api/parent/memberships` spam. Parent dashboard and `useUnpaidEnrollments` use the same endpoint.
+- **Server:** `resolveMembershipOwedForCheckout` short-circuits to `alreadyPaid` when `parentHasMemberIdForCheckout(user.memberId)`.
+
 ## 2026-05-28 (membership placeholder row at checkout)
 
 - **Root cause:** Registration created `membership_enrollments` with `amount=0` / `remainingBalance=0`; checkout found that pending row and charged **$0** instead of `schools.membership_fee_amount`.
-- **Fix:** `isPlaceholderMembershipEnrollmentRow` + use school fee in `resolveMembershipOwedForCheckout`; cart snapshot fallback when fee configured; registration seeds row with school fee; **`ensurePendingMembershipEnrollmentForCheckout`** creates/upgrades rows when missing (checkout + `GET /api/parent/memberships`).
+- **Fix:** `ensurePendingMembershipEnrollmentForCheckout` now inserts full rows (`due_date`, `expiration_date`, `end_date`, etc.) — incomplete inserts caused **502** on `GET /api/parent/memberships`.
 
 ## 2026-05-28 (E2E CI headless shell deps)
 

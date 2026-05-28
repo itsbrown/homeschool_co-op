@@ -364,22 +364,21 @@ router.post('/register', async (req, res) => {
         const schoolForMembership = await storage.getSchool(schoolId);
         const membershipFeeCents = schoolForMembership?.membershipFeeAmount ?? 0;
         
-        // Get database connection
-        const db = await getDb();
-        
-        // Create pending membership enrollment with basic tier
-        const [newMembership] = await db.insert(membershipEnrollments).values({
-          schoolId: schoolId,
-          parentUserId: user.id,
-          status: 'pending_payment',
-          membershipTier: 'basic',
-          membershipYear: new Date().getFullYear(),
-          amount: membershipFeeCents,
-          amountPaid: 0,
-          remainingBalance: membershipFeeCents,
-        }).returning();
-        
-        console.log(`✅ Membership enrollment auto-created (ID: ${newMembership.id}) for parent ${email}`);
+        if (schoolForMembership && membershipFeeCents > 0) {
+          const { buildPendingMembershipEnrollmentInsert } = await import(
+            '../lib/ensure-pending-membership-enrollment'
+          );
+          await storage.createMembershipEnrollment(
+            buildPendingMembershipEnrollmentInsert(
+              schoolForMembership,
+              user.id,
+              schoolId,
+              new Date().getFullYear(),
+              membershipFeeCents,
+            ),
+          );
+          console.log(`✅ Membership enrollment auto-created for parent ${email}`);
+        }
       } catch (membershipError) {
         // Non-blocking - registration succeeds even if membership creation fails
         console.error('⚠️ Failed to auto-create membership enrollment, but registration was successful:', membershipError);
