@@ -227,6 +227,39 @@ export async function deriveSchoolIdFromCart(items: CartItem[], options?: { stri
 }
 
 /**
+ * School for checkout pricing/membership: prefer the school that owns cart
+ * classes (via enrollment/class lookup), not only users.school_id — parents
+ * can be associated with a different tenant than the class they are buying.
+ */
+export async function resolveCheckoutSchoolId(
+  user: { schoolId?: number | null },
+  cartItems: CartItem[],
+): Promise<SchoolIdResult> {
+  if (cartItems.length > 0) {
+    const fromCart = (await deriveSchoolIdFromCart(cartItems, {
+      strict: true,
+    })) as SchoolIdResult;
+    if (fromCart.schoolId) {
+      if (user.schoolId && Number(user.schoolId) !== Number(fromCart.schoolId)) {
+        console.warn(
+          `🏫 Checkout school: using cart schoolId ${fromCart.schoolId} (user.schoolId=${user.schoolId})`,
+        );
+      }
+      return fromCart;
+    }
+    if (fromCart.error) return fromCart;
+  }
+  if (user.schoolId) {
+    return { schoolId: user.schoolId };
+  }
+  return {
+    schoolId: null,
+    error: 'SCHOOL_NOT_FOUND',
+    errorMessage: 'Unable to determine school for this cart.',
+  };
+}
+
+/**
  * Minimal structural shape of a membership row needed by the membership
  * balance helpers below. Captures the columns we read from
  * `membership_enrollments` and tolerates rows arriving from any storage
@@ -300,8 +333,7 @@ export async function resolveMembershipOwedForCheckout(
     (m: any) =>
       (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) &&
       Number(m.schoolId) === Number(schoolId) &&
-      (isActiveMembership(m.status) ||
-        (m.remainingBalance !== undefined && m.remainingBalance <= 0)),
+      isActiveMembership(m.status),
   );
   const alreadyPaid = !!activeMembership;
 
@@ -1262,7 +1294,7 @@ export async function calculateCartSnapshot(
   const school = await storage.getSchool(schoolId);
   const membershipRequired = membershipResolved?.membershipRequired ?? school?.membershipRequired ?? false;
   const membershipFeeAmount = membershipResolved?.membershipFeeAmount ?? school?.membershipFeeAmount ?? 0;
-  const alreadyPaid = membershipResolved?.alreadyPaid ?? true;
+  const alreadyPaid = membershipResolved?.alreadyPaid ?? false;
   const discountedMembershipAmount = membershipResolved?.owedCents ?? 0;
   const currentYear = membershipResolved?.year ?? new Date().getFullYear();
 

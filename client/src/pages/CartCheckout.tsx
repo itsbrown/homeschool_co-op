@@ -48,6 +48,7 @@ type FreeEnrollmentReason =
 type AuthoritativeDataType = {
   itemsTotal: number;
   membershipAmount: number;
+  membershipTotal: number;
   membershipAlreadyPaid: boolean;
   membershipRequired: boolean;
   membershipSchoolId: number | null;
@@ -343,25 +344,20 @@ export default function CartCheckout() {
     const fromCart = cart.membership?.amount ?? 0;
     if (fromCart > 0) return fromCart;
     const a = authoritativeData;
-    if (a?.membershipRequired && !a.membershipAlreadyPaid && (a.membershipAmount ?? 0) > 0) {
-      return a.membershipAmount;
-    }
-    return 0;
+    if (!a || a.membershipAlreadyPaid) return 0;
+    const owed = a.membershipTotal ?? a.membershipAmount ?? 0;
+    return owed > 0 ? owed : 0;
   }, [cart.membership?.amount, authoritativeData]);
 
   const membershipForOrderSummary = useMemo((): MembershipFee | null => {
     if (cart.membership) return cart.membership;
     const a = authoritativeData;
-    if (
-      a?.membershipRequired &&
-      !a.membershipAlreadyPaid &&
-      (a.membershipAmount ?? 0) > 0 &&
-      a.membershipSchoolId != null
-    ) {
+    const owed = a?.membershipTotal ?? a?.membershipAmount ?? 0;
+    if (a && !a.membershipAlreadyPaid && owed > 0 && a.membershipSchoolId != null) {
       return {
         schoolId: a.membershipSchoolId,
         schoolName: a.membershipSchoolName,
-        amount: a.membershipAmount,
+        amount: owed,
         year: a.membershipYear,
       };
     }
@@ -600,6 +596,21 @@ export default function CartCheckout() {
       }
     };
   }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.membership, cart.total, effectiveMembershipCents, actualPayableAmount, hasCheckoutConflict]); // Re-run when cart or loading status changes
+
+  // Load authoritative snapshot (including membership) as soon as the cart is ready,
+  // not only inside create-payment-intent — so the order summary shows membership.
+  useEffect(() => {
+    if (!isAuthenticated || !cartHydrated || cartLoading || cart.items.length === 0) {
+      return;
+    }
+    if (authoritativeData?.membershipTotal != null && authoritativeData.membershipTotal > 0) {
+      return;
+    }
+    if (authoritativeData?.membershipAlreadyPaid) {
+      return;
+    }
+    void fetchCartSnapshot();
+  }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, authoritativeData?.membershipTotal, authoritativeData?.membershipAlreadyPaid]);
   
   // Separate effect to handle discount changes - recreate payment intent when cart total changes
   useEffect(() => {
@@ -791,16 +802,19 @@ export default function CartCheckout() {
       console.log('📸 Cart snapshot received:', {
         snapshotId: snapshot.snapshotId,
         serverTotal: snapshot.totals.grandTotal,
+        membershipTotal: snapshot.totals.membershipTotal,
         clientTotal: cart.total + (cart.membership?.amount || 0),
         membershipRequired: snapshot.membership.required,
         membershipAmount: snapshot.membership.discountedAmount,
         membershipAlreadyPaid: snapshot.membership.alreadyPaid,
+        membershipSchoolId: snapshot.membership.schoolId,
         availableCredits: snapshot.credits.available
       });
 
       // Build authoritative data object
       const authData: AuthoritativeDataType = {
         itemsTotal: snapshot.totals.itemsTotal,
+        membershipTotal: snapshot.totals.membershipTotal ?? 0,
         membershipAmount: snapshot.membership.alreadyPaid ? 0 : snapshot.membership.discountedAmount,
         membershipAlreadyPaid: snapshot.membership.alreadyPaid,
         membershipRequired: snapshot.membership.required,
@@ -821,16 +835,16 @@ export default function CartCheckout() {
       // Store authoritative data in state for UI components
       setAuthoritativeData(authData);
 
+      const owedMembership = authData.membershipTotal ?? authData.membershipAmount ?? 0;
       if (
-        authData.membershipRequired &&
         !authData.membershipAlreadyPaid &&
-        authData.membershipAmount > 0 &&
+        owedMembership > 0 &&
         authData.membershipSchoolId != null
       ) {
         setMembership({
           schoolId: authData.membershipSchoolId,
           schoolName: authData.membershipSchoolName,
-          amount: authData.membershipAmount,
+          amount: owedMembership,
           year: authData.membershipYear,
         });
       }

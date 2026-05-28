@@ -54,6 +54,7 @@ interface SessionFormData {
   halfDayCapacity: string;
   fullDayCapacity: string;
   sortOrder: string;
+  locationId: string;
 }
 
 const emptyForm: SessionFormData = {
@@ -74,6 +75,7 @@ const emptyForm: SessionFormData = {
   halfDayCapacity: "",
   fullDayCapacity: "",
   sortOrder: "0",
+  locationId: "",
 };
 
 function sessionToForm(s: Session): SessionFormData {
@@ -95,6 +97,7 @@ function sessionToForm(s: Session): SessionFormData {
     halfDayCapacity: s.halfDayCapacity != null ? String(s.halfDayCapacity) : "",
     fullDayCapacity: s.fullDayCapacity != null ? String(s.fullDayCapacity) : "",
     sortOrder: String(s.sortOrder),
+    locationId: s.locationId != null ? String(s.locationId) : "",
   };
 }
 
@@ -117,6 +120,7 @@ function formToPayload(f: SessionFormData) {
     halfDayCapacity: f.halfDayCapacity ? parseInt(f.halfDayCapacity) : null,
     fullDayCapacity: f.fullDayCapacity ? parseInt(f.fullDayCapacity) : null,
     sortOrder: parseInt(f.sortOrder) || 0,
+    locationId: f.locationId ? parseInt(f.locationId, 10) : null,
   };
 }
 
@@ -129,6 +133,15 @@ export default function SessionsManagementPage() {
 
   const { data: sessionsList = [], isLoading } = useQuery<Session[]>({
     queryKey: ["/api/admin/sessions"],
+  });
+
+  const { data: schoolLocations = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["/api/locations"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/locations");
+      if (!res.ok) return [];
+      return res.json();
+    },
   });
 
   const createMutation = useMutation({
@@ -342,6 +355,25 @@ export default function SessionsManagementPage() {
               <div className="space-y-2 md:col-span-2">
                 <Label>Session Name *</Label>
                 <Input placeholder="e.g. Spring 2026" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <div className="space-y-2">
+                  <Label>Campus (optional)</Label>
+                  <Select
+                    value={form.locationId || "all"}
+                    onValueChange={(v) => setForm({ ...form, locationId: v === "all" ? "" : v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All campuses (legacy)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All campuses (school-wide)</SelectItem>
+                      {schoolLocations.map((loc) => (
+                        <SelectItem key={loc.id} value={String(loc.id)}>
+                          {loc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Description</Label>
