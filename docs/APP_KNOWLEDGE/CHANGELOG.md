@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-05-28 (parent full-journey E2E)
+
+- **`e2e/parent-full-journey.spec.ts`:** Registration (2 children) → session wizard (2 sessions) → biweekly checkout + auto-pay toggle → first payment → `POST /api/test/run-auto-pay-for/:id` on installment 2. Seed: `POST /api/test/setup-registration-scenario` with `{ openSessionCount: N }`.
+- **`CartSuccess`:** Applies `localStorage.pendingAutoPay` via `PATCH /api/user/auto-pay` after successful redirect (was written at checkout but never consumed).
+
 ## 2026-05-28 (ghost session enroll + membership legacy rows)
 
 - **Fall blocked but not listed:** Session enroll now replaces stale `pending_payment` duplicates (zero paid) instead of only skipping — clears hidden reservations like enrollment #15.

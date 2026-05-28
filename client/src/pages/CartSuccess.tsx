@@ -133,6 +133,20 @@ export default function CartSuccess() {
           
           // Refresh all payment/membership caches so "Pay now" state converges immediately.
           await refreshPostPaymentState(queryClient);
+
+          const pendingAutoPay = localStorage.getItem('pendingAutoPay');
+          if (pendingAutoPay === 'true') {
+            try {
+              const autoPayRes = await apiRequest('PATCH', '/api/user/auto-pay', { enabled: true });
+              if (autoPayRes.ok) {
+                await queryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
+              }
+            } catch (autoPayErr) {
+              console.error('Failed to enable auto-pay after checkout:', autoPayErr);
+            } finally {
+              localStorage.removeItem('pendingAutoPay');
+            }
+          }
           
           console.log('✅ Cart cleared and queries invalidated');
           

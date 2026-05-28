@@ -655,10 +655,40 @@ router.post('/setup-registration-scenario', async (req: Request, res: Response) 
       password: await bcrypt.hash(seed.adminPassword, 10),
     });
 
+    const openSessionCount = Math.min(Math.max(Number(req.body?.openSessionCount ?? 0), 0), 5);
+    const openSessions: { id: number; name: string; enrollmentOpen: boolean }[] = [];
+    if (openSessionCount > 0) {
+      await storage.updateSchool(seed.registrationSchool.id, { sessionModeEnabled: true });
+      const today = new Date();
+      const start = today.toISOString().slice(0, 10);
+      const endDate = new Date(today);
+      endDate.setMonth(endDate.getMonth() + 3);
+      const end = endDate.toISOString().slice(0, 10);
+      for (let i = 0; i < openSessionCount; i++) {
+        const [row] = await db
+          .insert(sessions)
+          .values({
+            schoolId: seed.registrationSchool.id,
+            name: `E2E Reg Session ${i + 1} ${seed.registrationCode}`,
+            description: 'Playwright parent journey',
+            startDate: start,
+            endDate: end,
+            status: 'upcoming',
+            enrollmentOpen: true,
+            halfDayPrice: 15000,
+            fullDayPrice: 25000,
+            sortOrder: i,
+          })
+          .returning();
+        openSessions.push({ id: row.id, name: row.name, enrollmentOpen: row.enrollmentOpen });
+      }
+    }
+
     res.json({
       success: true,
       data: {
         registrationCode: seed.registrationCode,
+        openSessions,
         school: {
           id: seed.registrationSchool.id,
           name: seed.registrationSchool.name,

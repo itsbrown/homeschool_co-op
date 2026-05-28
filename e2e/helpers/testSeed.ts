@@ -79,6 +79,7 @@ export type SetupRegistrationScenarioResponse = {
   success: boolean;
   data?: {
     registrationCode: string;
+    openSessions?: { id: number; name: string; enrollmentOpen: boolean }[];
     school: { id: number; name: string; registrationCode: string };
     wrongSchool: { id: number; name: string };
     admin: {
@@ -96,13 +97,14 @@ export type SetupRegistrationScenarioResponse = {
 
 export async function postSetupRegistrationScenario(
   request: APIRequestContext,
+  body: { openSessionCount?: number } = {},
 ): Promise<{ response: APIResponse; json: SetupRegistrationScenarioResponse | null }> {
   const response = await request.post("/api/test/setup-registration-scenario", {
     headers: {
       "X-Test-Token": testApiToken(),
       "Content-Type": "application/json",
     },
-    data: {},
+    data: body,
   });
   let json: SetupRegistrationScenarioResponse | null = null;
   try {
