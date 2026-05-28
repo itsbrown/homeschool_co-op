@@ -659,11 +659,9 @@ router.post('/setup-registration-scenario', async (req: Request, res: Response) 
     const openSessions: { id: number; name: string; enrollmentOpen: boolean }[] = [];
     if (openSessionCount > 0) {
       await storage.updateSchool(seed.registrationSchool.id, { sessionModeEnabled: true });
-      const today = new Date();
-      const start = today.toISOString().slice(0, 10);
-      const endDate = new Date(today);
-      endDate.setMonth(endDate.getMonth() + 3);
-      const end = endDate.toISOString().slice(0, 10);
+      // Fixed window matches TEST_CHECKOUT_ANCHOR_ISO (2029-12-01) so biweekly yields 2+ installments.
+      const start = '2030-01-01';
+      const end = '2030-06-01';
       for (let i = 0; i < openSessionCount; i++) {
         const [row] = await db
           .insert(sessions)
@@ -2304,6 +2302,34 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
  *
  * Returns: { result: 'charged' | 'skipped' | 'failed' }
  */
+router.get('/latest-payment-intent-for-parent', async (req: Request, res: Response) => {
+  try {
+    const parentEmail = String(req.query.parentEmail ?? '').trim();
+    if (!parentEmail) {
+      return res.status(400).json({ error: 'parentEmail query param required' });
+    }
+    const payments = await storage.getPaymentsByParentEmail(parentEmail);
+    const succeeded = payments
+      .filter(
+        (p) =>
+          p.stripePaymentIntentId &&
+          (p.status === 'completed' || p.status === 'succeeded'),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.paymentDate ?? 0).getTime() - new Date(a.paymentDate ?? 0).getTime(),
+      );
+    const paymentIntentId = succeeded[0]?.stripePaymentIntentId ?? null;
+    return res.json({ success: true, paymentIntentId });
+  } catch (error) {
+    console.error('[Test] latest-payment-intent-for-parent:', error);
+    return res.status(500).json({
+      error: 'Failed to resolve payment intent',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 router.post('/run-auto-pay-for/:scheduledPaymentId', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.scheduledPaymentId);
@@ -2312,8 +2338,14 @@ router.post('/run-auto-pay-for/:scheduledPaymentId', async (req: Request, res: R
     const sp = await storage.getScheduledPaymentById(id);
     if (!sp) return res.status(404).json({ error: `Scheduled payment ${id} not found` });
 
+    const parent = sp.parentId ? await storage.getUser(sp.parentId) : null;
     const result = await processOneScheduledPayment(sp);
-    return res.json({ success: true, result });
+    return res.json({
+      success: true,
+      result,
+      parentAutoPayEnabled: parent?.autoPayEnabled ?? false,
+      hasSavedCard: Boolean(parent?.stripeDefaultPaymentMethodId),
+    });
   } catch (error) {
     console.error('[Test] Error running auto-pay for payment:', error);
     return res.status(500).json({
@@ -2754,7 +2786,15 @@ router.post('/persist-checkout-schedule-from-pi', async (req: Request, res: Resp
     const rows = await planService.persistRemainingScheduledPaymentsAfterFirstCheckoutPayment(
       paymentIntent,
     );
-    return res.json({ success: true, scheduledPaymentCount: rows.length, paymentIntentId });
+    const meta = paymentIntent.metadata as Record<string, string | undefined>;
+    return res.json({
+      success: true,
+      scheduledPaymentCount: rows.length,
+      paymentIntentId,
+      totalInstallments: meta.totalInstallments ?? null,
+      installmentNumber: meta.installmentNumber ?? null,
+      paymentPlan: meta.paymentPlan ?? null,
+    });
   } catch (error) {
     console.error('[Test] persist-checkout-schedule-from-pi:', error);
     return res.status(500).json({

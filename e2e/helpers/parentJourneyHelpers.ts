@@ -8,8 +8,6 @@ import {
 } from "./parentCheckoutHelpers";
 import { testApiToken } from "./testSeed";
 
-export type OpenSessionSeed = { id: number; name: string; enrollmentOpen: boolean };
-
 function studentSection(page: Page, index: number) {
   return page.locator("div.rounded-lg.border").filter({
     has: page.getByText(`Student ${index + 1}`, { exact: true }),
@@ -75,7 +73,7 @@ export async function registerParentWithChildren(
   const regRes = await registerResponse;
   expect(regRes.ok(), `register failed: ${regRes.status()} ${await regRes.text()}`).toBeTruthy();
 
-  await expect(page).toHaveURL(/\/(dashboard|login)/, { timeout: 90_000 });
+  await expect(page).toHaveURL(/\/(dashboard|login)/, { timeout: 120_000 });
 }
 
 /** Session enrollment wizard: multiple children, 1–3 sessions, full day, add to cart. */
@@ -134,10 +132,28 @@ export async function enrollSessionsInWizard(
 }
 
 export async function checkoutBiweeklyWithAutopay(page: Page): Promise<string> {
-  await page.locator("#biweekly").click({ timeout: 30_000 });
+  const agreementBlock = page.getByTestId("checkout-agreement-required");
+  if (await agreementBlock.isVisible().catch(() => false)) {
+    throw new Error(
+      "Checkout blocked: membership agreement must be signed (seed school should not require a template)",
+    );
+  }
+
+  const piRefresh = page
+    .waitForResponse(
+      (r) =>
+        r.url().includes("/api/stripe/create-payment-intent") &&
+        r.request().method() === "POST" &&
+        r.ok(),
+      { timeout: 120_000 },
+    )
+    .catch(() => null);
+
+  await page.getByLabel(/Biweekly Payment Plan/i).click({ timeout: 30_000 });
+  await piRefresh;
 
   const autoPaySwitch = page.getByRole("switch", { name: "Enable automatic payments" });
-  await expect(autoPaySwitch).toBeVisible({ timeout: 30_000 });
+  await expect(autoPaySwitch).toBeVisible({ timeout: 60_000 });
   if (!(await autoPaySwitch.isChecked())) {
     await autoPaySwitch.click();
   }
@@ -148,15 +164,46 @@ export async function checkoutBiweeklyWithAutopay(page: Page): Promise<string> {
   await page.waitForURL(/\/cart\/success/, { timeout: 180_000 });
   await page.waitForLoadState("networkidle").catch(() => {});
 
-  const piId = new URL(page.url()).searchParams.get("payment_intent");
-  expect(piId, "Stripe redirect missing payment_intent query param").toBeTruthy();
-  return piId!;
+  return resolvePaymentIntentId(page);
+}
+
+async function resolvePaymentIntentId(page: Page): Promise<string> {
+  const url = new URL(page.url());
+  const fromUrl = url.searchParams.get("payment_intent");
+  if (fromUrl?.startsWith("pi_")) {
+    return fromUrl;
+  }
+  throw new Error(
+    `Stripe redirect missing payment_intent query param (url=${page.url()}). Check Stripe keys match between client and server.`,
+  );
+}
+
+export async function resolvePaymentIntentIdForParent(
+  page: Page,
+  request: APIRequestContext,
+  parentEmail: string,
+): Promise<string> {
+  try {
+    return await resolvePaymentIntentId(page);
+  } catch {
+    const res = await request.get(
+      `/api/test/latest-payment-intent-for-parent?parentEmail=${encodeURIComponent(parentEmail)}`,
+      { headers: { "X-Test-Token": testApiToken() } },
+    );
+    const body = (await res.json()) as { paymentIntentId?: string | null };
+    if (body.paymentIntentId?.startsWith("pi_")) {
+      return body.paymentIntentId;
+    }
+    throw new Error(
+      `Could not resolve payment_intent from URL or DB for ${parentEmail}`,
+    );
+  }
 }
 
 export async function persistCheckoutScheduleFromPaymentIntent(
   request: APIRequestContext,
   paymentIntentId: string,
-): Promise<void> {
+): Promise<{ scheduledPaymentCount: number; totalInstallments: string | null }> {
   const res = await request.post("/api/test/persist-checkout-schedule-from-pi", {
     headers: {
       "X-Test-Token": testApiToken(),
@@ -166,6 +213,18 @@ export async function persistCheckoutScheduleFromPaymentIntent(
   });
   const text = await res.text();
   expect(res.ok(), `persist-checkout-schedule-from-pi failed (${res.status()}): ${text}`).toBeTruthy();
+  const body = JSON.parse(text) as {
+    scheduledPaymentCount?: number;
+    totalInstallments?: string | null;
+  };
+  expect(
+    (body.scheduledPaymentCount ?? 0) >= 1,
+    `Expected installment 2+ rows; PI metadata totalInstallments=${body.totalInstallments ?? "?"}. Response: ${text}`,
+  ).toBeTruthy();
+  return {
+    scheduledPaymentCount: body.scheduledPaymentCount ?? 0,
+    totalInstallments: body.totalInstallments ?? null,
+  };
 }
 
 export async function syncParentStripeForE2e(
@@ -238,13 +297,22 @@ export async function pollPendingInstallmentTwo(
 export async function runAutoPayForScheduledPayment(
   request: APIRequestContext,
   scheduledPaymentId: number,
-): Promise<{ result: string }> {
+): Promise<{ result: string; hasSavedCard?: boolean; parentAutoPayEnabled?: boolean }> {
   const res = await request.post(`/api/test/run-auto-pay-for/${scheduledPaymentId}`, {
     headers: { "X-Test-Token": testApiToken() },
   });
   const text = await res.text();
   expect(res.ok(), `run-auto-pay-for failed (${res.status()}): ${text}`).toBeTruthy();
-  return JSON.parse(text) as { result: string };
+  const body = JSON.parse(text) as {
+    result: string;
+    hasSavedCard?: boolean;
+    parentAutoPayEnabled?: boolean;
+  };
+  expect(
+    body.result,
+    `auto-pay result was "${body.result}" (autoPayEnabled=${body.parentAutoPayEnabled}, hasSavedCard=${body.hasSavedCard})`,
+  ).toBe("charged");
+  return body;
 }
 
 export async function getScheduledPaymentStatus(

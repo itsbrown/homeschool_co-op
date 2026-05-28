@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-05-28 (parent full-journey E2E — biweekly schedule fix)
+
+- E2E seed sessions use **2030-01-01 → 2030-06-01**; Playwright webServer sets `TEST_CHECKOUT_ANCHOR_ISO=2029-12-01` so biweekly creates installment 2+ (short “today + 3mo” sessions collapsed to pay-in-full).
+- Checkout waits for `create-payment-intent` after selecting biweekly; persist step asserts `scheduledPaymentCount >= 1`.
+
 ## 2026-05-28 (parent full-journey E2E hardening)
 
 - E2E helpers: scoped registration student cards; after checkout call `POST /api/test/persist-checkout-schedule-from-pi` (webhook may not run in test) and `POST /api/test/sync-parent-stripe-for-e2e` (save card for auto-pay); poll `GET /api/test/pending-scheduled-payments`.

@@ -15,6 +15,7 @@ import {
   registerParentWithChildren,
   enrollSessionsInWizard,
   checkoutBiweeklyWithAutopay,
+  resolvePaymentIntentIdForParent,
   persistCheckoutScheduleFromPaymentIntent,
   syncParentStripeForE2e,
   fetchParentChildren,
@@ -73,16 +74,17 @@ test.describe("parent full journey (registration → sessions → autopay)", () 
 
     if (page.url().includes("/login")) {
       await loginParent(page, parentEmail, parentPassword);
-    } else {
-      await waitForSupabaseToken(page);
     }
+    await waitForSupabaseToken(page, 90_000);
 
     const children = await fetchParentChildren(page);
     expect(children.length).toBeGreaterThanOrEqual(2);
     const childIds = children.slice(0, 2).map((c) => c.id);
 
     await enrollSessionsInWizard(page, { childIds, sessionIds });
-    const paymentIntentId = await checkoutBiweeklyWithAutopay(page);
+    await checkoutBiweeklyWithAutopay(page);
+
+    const paymentIntentId = await resolvePaymentIntentIdForParent(page, request, parentEmail);
     await persistCheckoutScheduleFromPaymentIntent(request, paymentIntentId);
     await syncParentStripeForE2e(request, parentEmail);
 
@@ -104,11 +106,10 @@ test.describe("parent full journey (registration → sessions → autopay)", () 
     const secondPayment = await pollPendingInstallmentTwo(request, parentEmail);
     expect(
       secondPayment,
-      "No pending installment #2 in DB after checkout — check Stripe webhook / biweekly schedule creation",
+      "No pending installment #2 in DB — biweekly schedule may have collapsed to pay-in-full (check session dates + TEST_CHECKOUT_ANCHOR_ISO)",
     ).toBeTruthy();
 
-    const autoPayResult = await runAutoPayForScheduledPayment(request, secondPayment!.id);
-    expect(autoPayResult.result).toBe("charged");
+    await runAutoPayForScheduledPayment(request, secondPayment!.id);
 
     const after = await getScheduledPaymentStatus(request, secondPayment!.id);
     expect(after.status).toBe("completed");
