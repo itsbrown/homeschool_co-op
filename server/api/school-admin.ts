@@ -28,6 +28,7 @@ import {
   assertAdminCanViewUserProfile,
   deriveCapabilitiesFromLabels,
 } from '../lib/user-profile-capabilities';
+import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
 
 // Rate limiter for permission updates - prevent bulk abuse
 const permissionUpdateLimiter = rateLimit({
@@ -129,41 +130,26 @@ async function getSchoolIdFromRequest(req: any, res: any): Promise<number | null
   if (req.schoolId) {
     return Number(req.schoolId);
   }
-  
-  // Otherwise, extract from database (fallback for routes not using middleware)
+
   const userEmail = req.user?.email;
   if (!userEmail) {
     res.status(400).json({ message: "User email not found in request" });
     return null;
   }
-  
+
   try {
     const user = await storage.getUserByEmail(userEmail);
     if (!user) {
       res.status(400).json({ message: "User not found in database" });
       return null;
     }
-    
-    // Prioritize activeRoleId (always current after role switches)
-    // over users.schoolId which may be stale.
-    if (user.activeRoleId) {
-      const db = await getDb();
-      const activeRoles = await db
-        .select()
-        .from(userRoles)
-        .where(eq(userRoles.id, user.activeRoleId))
-        .limit(1);
-      
-      if (activeRoles.length > 0 && activeRoles[0].schoolId) {
-        return activeRoles[0].schoolId;
-      }
+
+    // Same priority as requireSchoolContext: schools.admin_id before stale users.school_id / activeRoleId
+    const schoolId = await resolveSchoolIdForUser(user);
+    if (schoolId != null) {
+      return schoolId;
     }
 
-    // Fall back to legacy schoolId field
-    if (user.schoolId !== null && user.schoolId !== undefined && user.schoolId > 0) {
-      return user.schoolId;
-    }
-    
     res.status(400).json({ message: "School ID not found in database" });
     return null;
   } catch (error) {

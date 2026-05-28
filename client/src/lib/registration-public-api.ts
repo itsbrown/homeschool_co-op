@@ -34,3 +34,54 @@ export async function fetchPublicRegistrationJson<T>(path: string): Promise<T> {
   }
   return response.json() as Promise<T>;
 }
+
+export type PublicRegistrationLocation = {
+  id: number;
+  name: string;
+  activationStatus?: string | null;
+  activationThreshold?: number | null;
+  eligibleStudentCount?: number;
+};
+
+/** True when the server predates `?code=` support on the public locations route. */
+function isLegacyPublicLocationsError(message: string): boolean {
+  return (
+    message.includes("School ID is required") ||
+    message.includes("Registration code or school ID is required")
+  );
+}
+
+/**
+ * Load campuses for parent registration. Prefer `?code=` (matches the URL);
+ * fall back to `?schoolId=` when the server has not been deployed yet.
+ */
+export async function fetchPublicRegistrationLocations(opts: {
+  code?: string;
+  schoolId?: number;
+}): Promise<PublicRegistrationLocation[]> {
+  const { code, schoolId } = opts;
+
+  if (code) {
+    try {
+      return await fetchPublicRegistrationJson<PublicRegistrationLocation[]>(
+        `${PUBLIC_REGISTRATION_LOCATIONS_PATH}?code=${encodeURIComponent(code)}`,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (schoolId && isLegacyPublicLocationsError(message)) {
+        return fetchPublicRegistrationJson<PublicRegistrationLocation[]>(
+          `${PUBLIC_REGISTRATION_LOCATIONS_PATH}?schoolId=${schoolId}`,
+        );
+      }
+      throw err;
+    }
+  }
+
+  if (schoolId) {
+    return fetchPublicRegistrationJson<PublicRegistrationLocation[]>(
+      `${PUBLIC_REGISTRATION_LOCATIONS_PATH}?schoolId=${schoolId}`,
+    );
+  }
+
+  return [];
+}

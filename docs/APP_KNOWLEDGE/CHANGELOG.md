@@ -1,8 +1,13 @@
 # App knowledge changelog
 
+## 2026-05-28 (school-admin my-school context)
+
+- **`getSchoolIdFromRequest`** (`server/api/school-admin.ts`) now uses `resolveSchoolIdForUser` (same as `requireSchoolContext`), so `GET /api/school-admin/my-school` returns the `schools.admin_id` school when `users.school_id` is stale.
+
 ## 2026-05-28 (public registration locations by code)
 
 - **`GET /api/public/registration/locations?code=`** resolves the school from the registration link (preferred over `schoolId`). `RegistrationLandingPage` loads campuses from the URL code immediately.
+- **Client fallback:** `fetchPublicRegistrationLocations` retries with `?schoolId=` when the server still returns legacy “School ID is required” (undeployed Replit). Deploy `0ad57713+` for the canonical fix.
 - **`ensureLocationsTable`:** backfills legacy `activation_status`, adds `sessions.location_id` / `program_enrollments.location_id` if missing; eligible-student count errors no longer fail the whole public list.
 
 ## 2026-05-28 (Replit Nix env repair)
