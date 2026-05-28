@@ -6,6 +6,7 @@ import { jest } from '@jest/globals';
 import {
   findUnpaidMembershipRow,
   computeUnpaidMembershipRemainingCents,
+  isMembershipFullyPaidForCheckout,
   type MembershipRowForBalance,
 } from '../utils/cart-pricing';
 
@@ -118,6 +119,16 @@ describe('computeUnpaidMembershipRemainingCents (task #212)', () => {
       expect.any(Object),
     );
     warnSpy.mockRestore();
+  });
+
+  it('legacy enrolled row with amount but no payment columns is not treated as fully paid', () => {
+    const row = makeRow({
+      amount: FULL_FEE,
+      amountPaid: null,
+      remainingBalance: null,
+      status: 'enrolled',
+    });
+    expect(isMembershipFullyPaidForCheckout(row, SCHOOL_ID, CURRENT_YEAR)).toBe(false);
   });
 
   it('Property 5b: NULL amountPaid AND NULL remainingBalance clamps to 0 with WARN — does NOT fall back to full fee', () => {

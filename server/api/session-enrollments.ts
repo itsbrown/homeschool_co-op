@@ -194,9 +194,29 @@ router.post("/", supabaseAuth, async (req: any, res) => {
           .limit(1);
 
         if (duplicateRows.length > 0) {
-          const reason = describeExistingSessionEnrollment(duplicateRows[0]);
-          skipped.push(`${child.firstName} - ${session.name} (${reason})`);
-          continue;
+          const existing = duplicateRows[0];
+          const [fullRow] = await db
+            .select()
+            .from(programEnrollments)
+            .where(eq(programEnrollments.id, existing.id))
+            .limit(1);
+
+          const canReplaceStalePending =
+            fullRow &&
+            fullRow.status === "pending_payment" &&
+            (fullRow.totalPaid ?? 0) <= 0;
+
+          if (canReplaceStalePending) {
+            await storage.deletePendingScheduledPaymentsByEnrollmentId(fullRow.id);
+            await storage.deleteProgramEnrollment(fullRow.id);
+            console.log(
+              `♻️ Replaced stale pending_payment enrollment ${fullRow.id} (${session.name} / ${child.firstName}) before re-enrolling`,
+            );
+          } else {
+            const reason = describeExistingSessionEnrollment(existing);
+            skipped.push(`${child.firstName} - ${session.name} (${reason})`);
+            continue;
+          }
         }
 
         let enrollmentStatus = "pending_payment";

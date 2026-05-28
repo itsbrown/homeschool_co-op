@@ -317,6 +317,27 @@ export type CheckoutMembershipResolution = {
   year: number;
 };
 
+/** Active membership row with no outstanding cents — ignores legacy enrolled rows that never recorded payment columns. */
+export function isMembershipFullyPaidForCheckout(
+  m: MembershipRowForBalance,
+  schoolId: number,
+  currentYear: number,
+): boolean {
+  if (Number(m.schoolId) !== Number(schoolId)) return false;
+  if (m.membershipYear !== currentYear && m.membershipYear !== currentYear + 1) return false;
+  if (!isActiveMembership(m.status ?? null)) return false;
+  const owed = computeUnpaidMembershipRemainingCents(m);
+  if (owed > 0) return false;
+  if (
+    (m.amount ?? 0) > 0 &&
+    m.amountPaid == null &&
+    m.remainingBalance == null
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export async function resolveMembershipOwedForCheckout(
   userId: number,
   schoolId: number,
@@ -329,14 +350,10 @@ export async function resolveMembershipOwedForCheckout(
   const currentYear = new Date().getFullYear();
   const existingMemberships = await storage.getMembershipEnrollmentsByParentId(userId);
 
-  const activeMembership = existingMemberships?.find(
-    (m: any) =>
-      (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) &&
-      Number(m.schoolId) === Number(schoolId) &&
-      isActiveMembership(m.status) &&
-      computeUnpaidMembershipRemainingCents(m) <= 0,
-  );
-  const alreadyPaid = !!activeMembership;
+  const alreadyPaid =
+    existingMemberships?.some((m) =>
+      isMembershipFullyPaidForCheckout(m, schoolId, currentYear),
+    ) ?? false;
 
   const unpaidMembershipRow = !alreadyPaid
     ? findUnpaidMembershipRow(existingMemberships, schoolId, currentYear)

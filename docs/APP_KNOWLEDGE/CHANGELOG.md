@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-05-28 (ghost session enroll + membership legacy rows)
+
+- **Fall blocked but not listed:** Session enroll now replaces stale `pending_payment` duplicates (zero paid) instead of only skipping — clears hidden reservations like enrollment #15.
+- **Membership fee missing:** `enrolled` membership rows with `amount` but no `amountPaid`/`remainingBalance` are no longer treated as fully paid (was charging $0 owed).
+
 ## 2026-05-28 (membership fee when school fee configured)
 
 - Checkout included membership in payment intent only when `membershipRequired` was true; now uses `membershipTotal > 0` from cart snapshot so schools with a fee but optional flag still show/charge $125.
