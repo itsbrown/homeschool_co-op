@@ -91,9 +91,9 @@ async function runMigrations() {
     await db.execute(sql`
       ALTER TABLE program_enrollments 
       ADD CONSTRAINT program_enrollments_status_check 
-      CHECK (status IN ('pending_payment', 'pending_admin_approval', 'enrolled', 'waitlist', 'cancelled', 'completed', 'withdrawn', 'failed'));
+      CHECK (status IN ('pending_payment', 'pending_admin_approval', 'enrolled', 'waitlist', 'location_wishlist', 'cancelled', 'completed', 'withdrawn', 'failed'));
     `);
-    console.log('✅ Migration completed: status constraint now allows pending_payment, pending_admin_approval, waitlist, and cancelled statuses');
+    console.log('✅ Migration completed: status constraint now allows pending_payment, pending_admin_approval, waitlist, location_wishlist, and cancelled statuses');
     
     // Add "Free After Threshold" discount configuration columns to schools table
     console.log('Running migration: Adding free_after_threshold columns to schools table...');
@@ -704,7 +704,7 @@ async function runMigrations() {
     await db.execute(sql`
       ALTER TABLE program_enrollments 
       ADD CONSTRAINT program_enrollments_status_check 
-      CHECK (status IN ('pending_payment', 'pending_admin_approval', 'enrolled', 'waitlist', 'cancelled', 'completed', 'withdrawn', 'failed'));
+      CHECK (status IN ('pending_payment', 'pending_admin_approval', 'enrolled', 'waitlist', 'location_wishlist', 'cancelled', 'completed', 'withdrawn', 'failed'));
     `);
     await db.execute(sql`
       ALTER TABLE school_class_enrollments 
@@ -1877,6 +1877,98 @@ async function runMigrations() {
     const errorMessage = sessionError instanceof Error ? sessionError.message : String(sessionError);
     if (!errorMessage.includes('Database connection not available')) {
       console.log('Assessment sessions migration note:', errorMessage);
+    }
+  }
+
+  // Curriculum progress tables (multi-subject)
+  try {
+    const db = await getDb();
+    console.log('Running migration: Creating progress_subjects table...');
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS progress_subjects (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        key TEXT NOT NULL,
+        label TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (school_id, key)
+      );
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS progress_tracks (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        subject_id INTEGER NOT NULL REFERENCES progress_subjects(id) ON DELETE CASCADE,
+        parent_track_id INTEGER REFERENCES progress_tracks(id),
+        name TEXT NOT NULL,
+        track_kind TEXT NOT NULL DEFAULT 'book_series',
+        total_lessons INTEGER,
+        total_units INTEGER,
+        metadata JSONB DEFAULT '{}',
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS student_progress_current (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+        progress_track_id INTEGER NOT NULL REFERENCES progress_tracks(id) ON DELETE CASCADE,
+        lesson_number INTEGER,
+        unit_label TEXT,
+        topics_summary TEXT,
+        notes TEXT,
+        source TEXT NOT NULL DEFAULT 'manual',
+        recorded_by INTEGER REFERENCES users(id),
+        recorded_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (child_id, progress_track_id)
+      );
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS student_progress_log (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        session_id INTEGER NOT NULL REFERENCES sessions(id),
+        child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+        progress_track_id INTEGER NOT NULL REFERENCES progress_tracks(id),
+        location_id INTEGER REFERENCES locations(id),
+        event_date DATE NOT NULL,
+        lesson_number INTEGER,
+        unit_label TEXT,
+        topics_covered JSONB,
+        topics_summary TEXT,
+        notes TEXT,
+        source TEXT NOT NULL DEFAULT 'manual',
+        recorded_by INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS child_progress_insights (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+        child_id INTEGER NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+        summary TEXT,
+        next_steps JSONB DEFAULT '[]',
+        generated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        model TEXT
+      );
+    `);
+    await db.execute(sql`
+      ALTER TABLE curriculum_books ADD COLUMN IF NOT EXISTS progress_track_id INTEGER REFERENCES progress_tracks(id);
+    `);
+    console.log('✅ Migration completed: curriculum progress tables created');
+  } catch (progressErr) {
+    const msg = progressErr instanceof Error ? progressErr.message : String(progressErr);
+    if (!msg.includes('Database connection not available')) {
+      console.log('Progress tables migration note:', msg);
     }
   }
   

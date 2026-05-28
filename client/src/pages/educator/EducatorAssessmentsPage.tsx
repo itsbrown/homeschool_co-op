@@ -36,6 +36,7 @@ import {
 import AssessmentBulkUpload from '@/components/educator/AssessmentBulkUpload';
 import { Upload, BookMarked } from 'lucide-react';
 import LexileTab from '@/components/lexile/LexileTab';
+import ProgressLogTab from '@/components/educator/ProgressLogTab';
 
 interface AssessmentType {
   id: number;
@@ -178,14 +179,18 @@ export default function EducatorAssessmentsPage() {
   };
 
   const handleSubmit = () => {
+    const score =
+      assessmentForm.scoreValue ||
+      (assessmentForm.scoreNumeric != null && assessmentForm.scoreNumeric !== ''
+        ? String(assessmentForm.scoreNumeric)
+        : '');
     const data = {
       childId: parseInt(assessmentForm.childId),
       assessmentTypeId: parseInt(assessmentForm.assessmentTypeId),
       curriculumBookId: assessmentForm.curriculumBookId ? parseInt(assessmentForm.curriculumBookId) : null,
-      lessonNumber: assessmentForm.lessonNumber ? parseInt(assessmentForm.lessonNumber) : null,
-      scoreValue: assessmentForm.scoreValue || null,
-      scoreNumeric: assessmentForm.scoreNumeric ? parseFloat(assessmentForm.scoreNumeric) : null,
-      assessmentDate: assessmentForm.assessmentDate,
+      lesson: assessmentForm.lessonNumber ? parseInt(assessmentForm.lessonNumber) : null,
+      score: score || '0',
+      assessmentDate: new Date(assessmentForm.assessmentDate).toISOString(),
       notes: assessmentForm.notes || null,
     };
     createAssessmentMutation.mutate(data);
@@ -264,6 +269,10 @@ export default function EducatorAssessmentsPage() {
             <TabsTrigger value="lexile" className="flex items-center gap-2" data-testid="tab-lexile">
               <BookMarked className="h-4 w-4" />
               Lexile
+            </TabsTrigger>
+            <TabsTrigger value="progress" className="flex items-center gap-2" data-testid="tab-progress">
+              <ClipboardCheck className="h-4 w-4" />
+              Progress
             </TabsTrigger>
           </TabsList>
 
@@ -384,13 +393,14 @@ export default function EducatorAssessmentsPage() {
                             <p className="font-medium">{getChildName(assessment.childId)}</p>
                             <p className="text-sm text-muted-foreground">
                               {getAssessmentTypeName(assessment.assessmentTypeId)}
-                              {assessment.lessonNumber && ` • Lesson ${assessment.lessonNumber}`}
+                              {(assessment as any).lesson != null && ` • Lesson ${(assessment as any).lesson}`}
+                              {(assessment as any).lessonNumber != null && ` • Lesson ${(assessment as any).lessonNumber}`}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
                           <Badge variant="outline" className="text-lg font-mono">
-                            {assessment.scoreValue || assessment.scoreNumeric || '—'}
+                            {(assessment as any).score || (assessment as any).scoreValue || (assessment as any).scoreNumeric || '—'}
                           </Badge>
                           <p className="text-xs text-muted-foreground mt-1">
                             {format(new Date(assessment.assessmentDate), 'MMM d, yyyy')}
@@ -410,6 +420,10 @@ export default function EducatorAssessmentsPage() {
 
           <TabsContent value="lexile" className="mt-4">
             <LexileTab />
+          </TabsContent>
+
+          <TabsContent value="progress" className="mt-4">
+            <ProgressLogTab />
           </TabsContent>
         </Tabs>
 

@@ -39,6 +39,12 @@ import financialReportsRouter, {
 import retentionRouter from "./api/retention";
 import scheduleBuilderRouter from "./api/schedule-builder";
 import scheduleAiRouter from "./api/schedule-ai";
+import assessmentsRouter from "./api/assessments";
+import lexileRouter from "./api/lexile";
+import lexileAiRouter from "./api/lexile-ai";
+import assessmentUploadRouter from "./api/assessment-upload";
+import progressRouter from "./api/progress";
+import progressInsightsRouter from "./api/progress-insights";
 
 async function ensureAdminRoles(): Promise<void> {
   try {
@@ -206,6 +212,12 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/unified-uploads", unifiedUploadsRouter);
   app.use("/api/schedule-builder", scheduleBuilderRouter);
   app.use("/api/schedule-ai", scheduleAiRouter);
+  app.use("/api/assessments", assessmentsRouter);
+  app.use("/api/lexile", lexileRouter);
+  app.use("/api/lexile", lexileAiRouter);
+  app.use("/api/assessment-upload", assessmentUploadRouter);
+  app.use("/api/progress", progressRouter);
+  app.use("/api/progress/insights", progressInsightsRouter);
 
   // Register object storage routes for serving uploaded files
   registerObjectStorageRoutes(app);
