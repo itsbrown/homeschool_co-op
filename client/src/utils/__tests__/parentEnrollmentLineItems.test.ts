@@ -26,7 +26,7 @@ describe('filterEnrollmentsToCartLineItems', () => {
     expect(out[0].id).toBe(2);
   });
 
-  it('drops group when a fully paid enrollment exists in the group', () => {
+  it('drops group when latest enrollment is fully paid', () => {
     const enrollments = [
       {
         id: 1,
@@ -48,6 +48,32 @@ describe('filterEnrollmentsToCartLineItems', () => {
     ];
     const out = filterEnrollmentsToCartLineItems(enrollments);
     expect(out).toHaveLength(0);
+  });
+
+  it('keeps latest pending_payment when an older enrolled row exists in the group', () => {
+    const enrollments = [
+      {
+        id: 1,
+        classId: 10,
+        childId: 5,
+        enrollmentDate: '2024-01-01',
+        status: 'enrolled',
+        paymentStatus: 'completed',
+        effectiveBalance: 0,
+      },
+      {
+        id: 2,
+        classId: 10,
+        childId: 5,
+        enrollmentDate: '2025-06-01',
+        status: 'pending_payment',
+        effectiveBalance: 150000,
+        totalCost: 150000,
+      },
+    ];
+    const out = filterEnrollmentsToCartLineItems(enrollments);
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe(2);
   });
 
   it('keeps separate lines per session for the same child', () => {

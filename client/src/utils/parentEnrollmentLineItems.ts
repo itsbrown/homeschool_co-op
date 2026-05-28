@@ -21,6 +21,17 @@ function enrollmentBalanceCents(e: any): number {
   return fromFormula;
 }
 
+function enrollmentTuitionOwedCents(e: any): boolean {
+  if (enrollmentBalanceCents(e) > 0) return true;
+  return (
+    e?.status === 'pending_payment' &&
+    Math.max(
+      0,
+      (e?.totalCost || 0) - (e?.totalPaid || 0) - (e?.compAmountCents ?? 0),
+    ) > 0
+  );
+}
+
 /** Normalize API/DB field naming for cart grouping. */
 function sessionEnrollmentFields(enrollment: any) {
   return {
@@ -88,7 +99,6 @@ export function filterEnrollmentsToCartLineItems(
 
     const latestEnrollment = enrollmentList[0];
     const getBalance = enrollmentBalanceCents;
-    const hasBalance = getBalance(latestEnrollment) > 0;
 
     const hasFullyPaidEnrollment = enrollmentList.some(
       (e) =>
@@ -103,8 +113,12 @@ export function filterEnrollmentsToCartLineItems(
         getBalance(latestEnrollment) === 0);
 
     const isWaitlisted = latestEnrollment.status === 'waitlist';
+    // Do not hide a newer pending_payment row because an older enrolled row exists
+    // in the same group (orphan pending after re-enroll / data drift).
     const shouldSkip =
-      hasFullyPaidEnrollment || latestIsPaid || isWaitlisted;
+      isWaitlisted ||
+      latestIsPaid ||
+      (hasFullyPaidEnrollment && latestEnrollment.status !== 'pending_payment');
 
     if (
       latestEnrollment.checkoutExcluded === true ||
@@ -114,13 +128,7 @@ export function filterEnrollmentsToCartLineItems(
       continue;
     }
 
-    if (
-      !isWaitlisted &&
-      !shouldSkip &&
-      (hasBalance ||
-        (latestEnrollment.status === 'pending_payment' &&
-          getBalance(latestEnrollment) > 0))
-    ) {
+    if (!shouldSkip && enrollmentTuitionOwedCents(latestEnrollment)) {
       lineItems.push(latestEnrollment);
     }
   }

@@ -1285,6 +1285,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const fetchWithTimeout = async (): Promise<MembershipFee | null> => {
         try {
           if (cartItems.length > 0) {
+            // Snapshot is authoritative for checkout — do not race it against a short timeout.
             const fromSnapshot = await fetchMembershipFromCartSnapshot(cartItems);
             if (fromSnapshot) {
               console.log('🎫 CartContext: membership from cart snapshot:', {
@@ -1390,6 +1391,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return null;
         }
       };
+
+      if (cartItems.length > 0) {
+        return fetchWithTimeout();
+      }
 
       const timeoutPromise = new Promise<null>((resolve) => {
         setTimeout(() => {
@@ -1688,13 +1693,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         getAccessToken,
         state.cart.appliedPromoCode?.code || null
       );
+      let membership = state.cart.membership;
+      if (!membership) {
+        membership = await fetchMembershipForCart(user?.email ?? '', state.cart.items);
+      }
       dispatch({
         type: 'LOAD_CART',
         payload: {
           items: state.cart.items,
           ...serverPricing,
           appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
-          membership: state.cart.membership,
+          membership,
         },
       });
     } catch (error) {
@@ -1707,20 +1716,24 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           state.cart.appliedPromoCode,
           userRolesList
         );
+        let membership = state.cart.membership;
+        if (!membership && user?.email) {
+          membership = await fetchMembershipForCart(user.email, state.cart.items);
+        }
         dispatch({
           type: 'LOAD_CART',
           payload: {
             items: state.cart.items,
             ...fallbackTotals,
             appliedPromoCode: state.cart.appliedPromoCode,
-            membership: state.cart.membership,
+            membership,
           },
         });
       } catch (fallbackError) {
         console.error('Client-side fallback also failed:', fallbackError);
       }
     }
-  }, [state.cart.items, state.cart.appliedPromoCode, getAccessToken, userRolesList]);
+  }, [state.cart.items, state.cart.appliedPromoCode, getAccessToken, userRolesList, user?.email, fetchMembershipForCart]);
 
   // When parent role resolves, force cart re-hydration from API (not cached hash)
   useEffect(() => {

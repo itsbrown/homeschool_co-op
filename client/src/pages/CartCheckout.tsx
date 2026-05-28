@@ -49,6 +49,7 @@ type AuthoritativeDataType = {
   itemsTotal: number;
   membershipAmount: number;
   membershipTotal: number;
+  membershipFeeAmount: number;
   membershipAlreadyPaid: boolean;
   membershipRequired: boolean;
   membershipSchoolId: number | null;
@@ -345,15 +346,22 @@ export default function CartCheckout() {
     if (fromCart > 0) return fromCart;
     const a = authoritativeData;
     if (!a || a.membershipAlreadyPaid) return 0;
-    const owed = a.membershipTotal ?? a.membershipAmount ?? 0;
+    const owed =
+      a.membershipTotal ??
+      a.membershipAmount ??
+      (a.membershipRequired && a.membershipFeeAmount > 0 ? a.membershipFeeAmount : 0);
     return owed > 0 ? owed : 0;
   }, [cart.membership?.amount, authoritativeData]);
 
   const membershipForOrderSummary = useMemo((): MembershipFee | null => {
     if (cart.membership) return cart.membership;
     const a = authoritativeData;
-    const owed = a?.membershipTotal ?? a?.membershipAmount ?? 0;
-    if (a && !a.membershipAlreadyPaid && owed > 0 && a.membershipSchoolId != null) {
+    if (!a || a.membershipAlreadyPaid || a.membershipSchoolId == null) return null;
+    const owed =
+      a.membershipTotal ??
+      a.membershipAmount ??
+      (a.membershipRequired && a.membershipFeeAmount > 0 ? a.membershipFeeAmount : 0);
+    if (owed > 0) {
       return {
         schoolId: a.membershipSchoolId,
         schoolName: a.membershipSchoolName,
@@ -745,6 +753,7 @@ export default function CartCheckout() {
             childId: item.childId,
             childName: item.childName,
             variantId: item.variantId,
+            sessionId: item.sessionId,
             // Include enrollment data for existing enrollments with partial payments
             enrollmentId: item.enrollmentId,
             remainingBalance: item.remainingBalance
@@ -816,6 +825,7 @@ export default function CartCheckout() {
         itemsTotal: snapshot.totals.itemsTotal,
         membershipTotal: snapshot.totals.membershipTotal ?? 0,
         membershipAmount: snapshot.membership.alreadyPaid ? 0 : snapshot.membership.discountedAmount,
+        membershipFeeAmount: snapshot.membership.amount ?? 0,
         membershipAlreadyPaid: snapshot.membership.alreadyPaid,
         membershipRequired: snapshot.membership.required,
         membershipSchoolId: snapshot.membership.schoolId || null,

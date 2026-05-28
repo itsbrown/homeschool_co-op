@@ -333,7 +333,8 @@ export async function resolveMembershipOwedForCheckout(
     (m: any) =>
       (m.membershipYear === currentYear || m.membershipYear === currentYear + 1) &&
       Number(m.schoolId) === Number(schoolId) &&
-      isActiveMembership(m.status),
+      isActiveMembership(m.status) &&
+      computeUnpaidMembershipRemainingCents(m) <= 0,
   );
   const alreadyPaid = !!activeMembership;
 
@@ -1317,7 +1318,15 @@ export async function calculateCartSnapshot(
   
   // Calculate totals
   const itemsTotal = pricing.total;
-  const membershipTotal = alreadyPaid ? 0 : discountedMembershipAmount;
+  let membershipTotal = alreadyPaid ? 0 : discountedMembershipAmount;
+  if (
+    !alreadyPaid &&
+    membershipRequired &&
+    membershipFeeAmount > 0 &&
+    membershipTotal <= 0
+  ) {
+    membershipTotal = membershipFeeAmount;
+  }
   const grandTotal = itemsTotal + membershipTotal;
   
   // Calculate applied credits (capped at available and grand total)

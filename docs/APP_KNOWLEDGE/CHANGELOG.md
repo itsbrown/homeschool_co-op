@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-05-28 (cart membership + session line visibility)
+
+- **Missing $125 membership at checkout:** Treat `enrolled` membership rows as paid only when remaining balance is zero; cart snapshot defensively sets `membershipTotal` when school requires a fee; CartContext uses snapshot without a short timeout race; checkout order summary falls back to `membership.required` + school fee amount.
+- **Session row dropped quote→cart:** Cart line filter no longer hides the latest `pending_payment` row when an older `enrolled` row exists in the same child+session group.
+
 ## 2026-05-28 (parent unenroll persistence)
 
 - **Unenroll toast but row remains:** `DELETE /api/enrollments/:id/unenroll` now deletes pending `scheduled_payments` before removing `program_enrollments` (FK). `CombinedStorage.deleteProgramEnrollment` no longer treats mem-only delete as success when Postgres delete fails; mem cache is cleared after DB delete.
