@@ -60,8 +60,9 @@ export default function CartSuccess() {
             }
           }
 
-          // Get payment plan info for display
+          // Capture before cart cleanup removes these keys (used for autopay card sync below)
           const selectedPaymentPlan = localStorage.getItem('selectedPaymentPlan') || 'full';
+          const pendingAutoPay = localStorage.getItem('pendingAutoPay') === 'true';
           console.log(`💳 Payment plan: ${selectedPaymentPlan}`);
           
           // CRITICAL: Confirm enrollments in database (update status from pending_payment to enrolled)
@@ -121,6 +122,7 @@ export default function CartSuccess() {
           localStorage.removeItem('asa_cart');
           localStorage.removeItem('selectedPaymentPlan');
           sessionStorage.removeItem('cart_backup');
+          // pendingAutoPay cleared in autopay sync finally block
           
           // Clear cart in context - skip enrollment cancellation since payment already succeeded
           // Await to ensure cart clears properly, but don't fail if it errors
@@ -134,9 +136,6 @@ export default function CartSuccess() {
           // Refresh all payment/membership caches so "Pay now" state converges immediately.
           await refreshPostPaymentState(queryClient);
 
-          const pendingAutoPay = localStorage.getItem('pendingAutoPay') === 'true';
-          const selectedPaymentPlan =
-            localStorage.getItem('selectedPaymentPlan') || 'full';
           const shouldSyncCard =
             pendingAutoPay || selectedPaymentPlan === 'biweekly';
           try {
