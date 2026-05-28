@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-05-28 (mount auto-pay API routes)
+
+- **`server/api/auto-pay.ts`** was never mounted — `/api/user/payment-methods`, `/api/user/auto-pay-status`, and `/api/user/sync-checkout-payment-method` returned SPA HTML (404). Wired in `server/index.ts`, `server/routes.ts`, and `server/app-init.ts`.
+
 ## 2026-05-28 (checkout auto-pay + save card)
 
 - **Root cause:** E2E passed via `/api/test/sync-parent-stripe-for-e2e` only; production checkout PI had no `setup_future_usage`, and `PATCH /api/user/auto-pay` returned 400 without `stripe_default_payment_method_id`.

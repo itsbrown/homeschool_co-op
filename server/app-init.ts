@@ -28,6 +28,7 @@ import adminRefundsRouter from "./api/admin-refunds";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
+import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import errorTelemetryRouter from "./api/error-telemetry";
 import { errorNotificationService } from "./services/error-notification";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
@@ -208,6 +209,8 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/payment-import", paymentImport);
   app.use("/api/account-import", accountImport);
   app.use("/api/user", userRolesRouter);
+  app.use("/api/user", autoPayRouter);
+  app.use("/api/admin/users", adminPaymentMethodsRouter);
   app.use("/api/telemetry/errors", errorTelemetryRouter);
   app.use("/api/unified-uploads", unifiedUploadsRouter);
   app.use("/api/schedule-builder", scheduleBuilderRouter);

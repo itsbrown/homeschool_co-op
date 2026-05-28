@@ -31,6 +31,7 @@ import { FINANCIAL_ADMIN_ROLES } from "./lib/auth-roles";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
+import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import cartRouter from "./api/cart";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
@@ -158,6 +159,8 @@ app.use("/api/payment-import", paymentImport);
 app.use("/api/account-import", accountImport);
 app.use("/api/daily-flows", dailyFlowsRoutes);
 app.use("/api/user", userRolesRouter); // Multi-role management endpoints
+app.use("/api/user", autoPayRouter); // Payment methods + auto-pay (same /api/user prefix)
+app.use("/api/admin/users", adminPaymentMethodsRouter);
 // Cart pricing (snapshot / calculate / validate). Each route applies supabaseAuth.
 // Must be registered on the Express app — otherwise /api/cart/* falls through to Vite
 // and returns HTML, which breaks checkout with "Unexpected token '<'" JSON errors.

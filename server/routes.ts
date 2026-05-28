@@ -35,6 +35,7 @@ import educatorRouter from "./api/educator";
 import roleInvitationsRouter from "./api/role-invitations";
 import parentRouter from "./api/parent";
 import creditsRouter from "./api/credits";
+import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import { handleEnrollmentMessage } from "./api/enrollment-assistant";
 import migrationRouter from "./routes/migration";
 import marketingLinksRouter from "./api/marketing-links";
@@ -2651,6 +2652,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/educator", educatorRouter);
   app.use("/api/parent", parentRouter);
   app.use("/api/credits", creditsRouter);
+  app.use("/api/user", autoPayRouter);
+  app.use("/api/admin/users", adminPaymentMethodsRouter);
   app.use("/api/custom-forms", customFormsRouter);
   
   // School Admin Child Management endpoints (with JWT auth for school admins)
