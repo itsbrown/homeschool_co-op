@@ -31,10 +31,12 @@ const sessionEnrollSchema = z.object({
 
 /** Explain why a child+session+schedule type cannot be enrolled again (cart may hide some statuses). */
 function describeExistingSessionEnrollment(row: {
+  id?: number;
   status?: string | null;
   variantId?: string | null;
 }): string {
   const status = String(row.status ?? "").toLowerCase();
+  const idHint = row.id != null ? ` (enrollment #${row.id})` : "";
   if (status === "waitlist") {
     return "already on the waitlist for this session (check Payments or contact the school)";
   }
@@ -48,7 +50,7 @@ function describeExistingSessionEnrollment(row: {
         : row.variantId === "full_day"
           ? "Full Day"
           : "this schedule";
-    return `already reserved (${schedule}) — open your cart or Payments; it may not show if a payment plan is in progress`;
+    return `already reserved${idHint} (${schedule}) — My Children → this child's Enrollments → Unenroll, or open Payments if it is on a payment plan`;
   }
   if (status === "enrolled") {
     return "already enrolled for this session";
@@ -172,6 +174,7 @@ router.post("/", supabaseAuth, async (req: any, res) => {
             status: programEnrollments.status,
             variantId: programEnrollments.variantId,
             dayType: programEnrollments.dayType,
+            paymentPlan: programEnrollments.paymentPlan,
           })
           .from(programEnrollments)
           .where(

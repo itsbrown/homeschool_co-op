@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-05-28 (child enrollments vs cart parity)
+
+- Child Enrollments page loads `/api/parent/enrollments` (same as cart) so payment-plan–excluded `pending_payment` rows appear with an amber “Not in cart” badge; session enroll skip messages include enrollment id for Unenroll.
+
 ## 2026-05-28 (cart membership + session line visibility)
 
 - **Missing $125 membership at checkout:** Treat `enrolled` membership rows as paid only when remaining balance is zero; cart snapshot defensively sets `membershipTotal` when school requires a fee; CartContext uses snapshot without a short timeout race; checkout order summary falls back to `membership.required` + school fee amount.

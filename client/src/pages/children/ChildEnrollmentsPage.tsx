@@ -80,10 +80,16 @@ export default function ChildEnrollmentsPage() {
     enabled: !!childId,
   });
 
-  // Fetch enrollments for this child
+  // Same source as cart hydration (includes checkoutExcluded / payment-plan flags)
   const { data: enrollments = [], isLoading: enrollmentsLoading } = useQuery<Enrollment[]>({
-    queryKey: [`/api/children/${childId}/enrollments`],
+    queryKey: ['/api/parent/enrollments', childId],
     enabled: !!childId,
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/parent/enrollments');
+      const rows = await response.json();
+      const list = Array.isArray(rows) ? rows : [];
+      return list.filter((e: { childId?: number }) => String(e.childId) === String(childId));
+    },
   });
 
   // Fetch marketplace classes to get class details
@@ -324,9 +330,17 @@ export default function ChildEnrollmentsPage() {
                     <CardHeader className="p-4 sm:p-6">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
                         <CardTitle className="text-base sm:text-lg">{details.className}</CardTitle>
-                        <Badge className={`${getStatusColor(enrollment.status)} self-start sm:self-auto text-xs`}>
-                          {enrollment.status.replace('_', ' ').charAt(0).toUpperCase() + enrollment.status.replace('_', ' ').slice(1)}
-                        </Badge>
+                        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+                          <Badge className={`${getStatusColor(enrollment.status)} text-xs`}>
+                            {enrollment.status.replace('_', ' ').charAt(0).toUpperCase() + enrollment.status.replace('_', ' ').slice(1)}
+                          </Badge>
+                          {(enrollment as any).checkoutExcluded &&
+                            enrollment.status === 'pending_payment' && (
+                              <Badge variant="outline" className="text-xs border-amber-300 text-amber-800 bg-amber-50">
+                                Not in cart — Unenroll or use Payments
+                              </Badge>
+                            )}
+                        </div>
                       </div>
                       <CardDescription className="text-sm line-clamp-3 sm:line-clamp-none">{details.description}</CardDescription>
                     </CardHeader>
