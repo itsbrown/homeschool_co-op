@@ -361,6 +361,11 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       
       // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
       startScheduledPaymentReminderJob();
+
+      const { startLocationActivationScheduler } = await import(
+        './services/location-activation-scheduler.js'
+      );
+      startLocationActivationScheduler();
       
       // Load notifications and notification recipients from JSON into database.
       // In local fallback mode, DB may be unavailable; do not crash server startup.
@@ -384,11 +389,15 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
             const { stopEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
             const { stopScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
             const { stopCreditExpirationJob } = await import('./services/creditExpirationService.js');
+            const { stopLocationActivationScheduler } = await import(
+              './services/location-activation-scheduler.js'
+            );
             backup.stopAutomaticBackups();
             MembershipSvc.stopMembershipStatusJob();
             stopEnrollmentReminderScheduler();
             stopScheduledPaymentReminderJob();
             stopCreditExpirationJob();
+            stopLocationActivationScheduler();
           } catch (err) {
             console.warn('⚠️ Error while stopping background intervals:', (err as Error).message);
           }

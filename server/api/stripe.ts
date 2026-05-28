@@ -6,7 +6,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
-import { resolveMembershipOwedForCheckout } from '../utils/cart-pricing';
+import { resolveMembershipOwedForCheckout, resolveCheckoutSchoolId, type CartItem } from '../utils/cart-pricing';
 import { calculateCanonicalAmounts } from '../services/canonical-amount-calculator';
 import { enrollmentOutstandingCentsForCheckout } from '../lib/checkout-enrollment-balance';
 import { findProgramEnrollmentForCartItem } from '../lib/cart-checkout-enrollment-match';
@@ -321,6 +321,14 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             });
           }
           
+          if (enrollment.status === 'location_wishlist') {
+            return res.status(400).json({
+              message:
+                'This enrollment is on a campus waitlist and cannot be checked out yet. You will be charged when the campus opens.',
+              error: 'LOCATION_WISHLIST_CHECKOUT_BLOCKED',
+            });
+          }
+
           console.log(`✅ Found existing pending enrollment ${enrollment.id} for child ${item.childId}`);
           // Payment plan is stored on the PaymentIntent and committed to enrollments
           // only after the first installment succeeds (webhook).
@@ -407,7 +415,20 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       );
 
       let checkoutSchoolId: number | null = parent.schoolId ?? null;
-      if (!checkoutSchoolId) {
+      if (hasItems) {
+        const cartItemsForSchool: CartItem[] = items.map((item: any) => ({
+          id: item.id || (item.enrollmentId ? `enrollment-${item.enrollmentId}` : `${item.classId}-${item.childId}`),
+          classId: item.classId ?? item.marketplaceClassId,
+          childId: item.childId,
+          childName: item.childName || '',
+          variantId: item.variantId,
+          enrollmentId: item.enrollmentId,
+        }));
+        const schoolResult = await resolveCheckoutSchoolId(parent, cartItemsForSchool);
+        if (schoolResult.schoolId) {
+          checkoutSchoolId = schoolResult.schoolId;
+        }
+      } else if (!checkoutSchoolId) {
         const firstWithSchool = enrollmentsForAmount.find((e: any) => e?.schoolId);
         if (firstWithSchool?.schoolId) {
           checkoutSchoolId = firstWithSchool.schoolId;

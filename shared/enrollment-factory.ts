@@ -115,7 +115,7 @@ export interface EnrollmentPaymentDetails {
  * Enrollment status options
  */
 export interface EnrollmentStatusDetails {
-  status?: "pending_payment" | "enrolled" | "waitlist" | "cancelled" | "completed" | "withdrawn" | "failed";
+  status?: "pending_payment" | "enrolled" | "waitlist" | "location_wishlist" | "cancelled" | "completed" | "withdrawn" | "failed";
   waitlistPosition?: number | null;
 }
 
@@ -314,7 +314,7 @@ export interface SimpleEnrollmentParams {
   programId?: number | null;
   marketplaceClassId?: number | null;
   variantId?: string | null;
-  status?: "pending_payment" | "enrolled" | "waitlist" | "cancelled" | "completed" | "withdrawn" | "failed";
+  status?: "pending_payment" | "enrolled" | "waitlist" | "location_wishlist" | "cancelled" | "completed" | "withdrawn" | "failed";
   waitlistPosition?: number | null;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
@@ -328,6 +328,7 @@ export interface SimpleEnrollmentParams {
   enrolledHalfDayPrice?: number | null;
   enrolledFullDayPrice?: number | null;
   familyPlanId?: number | null;
+  locationId?: number | null;
 }
 
 /**
@@ -405,5 +406,6 @@ export function createEnrollmentDataSimple(params: SimpleEnrollmentParams): Inse
     enrolledHalfDayPrice: params.enrolledHalfDayPrice ?? null,
     enrolledFullDayPrice: params.enrolledFullDayPrice ?? null,
     familyPlanId: params.familyPlanId ?? null,
+    locationId: params.locationId ?? null,
   };
 }

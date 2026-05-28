@@ -520,9 +520,19 @@ export default function RegistrationLandingPage() {
                                   : "Could not load locations"}
                               </SelectItem>
                             ) : locations.length > 0 ? (
-                              locations.map((location: { id: number; name: string }) => (
+                              locations.map((location: {
+                                id: number;
+                                name: string;
+                                activationStatus?: string | null;
+                                activationThreshold?: number | null;
+                                eligibleStudentCount?: number;
+                              }) => (
                                 <SelectItem key={location.id} value={location.id.toString()}>
                                   {location.name}
+                                  {location.activationThreshold != null &&
+                                  location.activationStatus === "collecting"
+                                    ? ` (opening soon — ${location.eligibleStudentCount ?? 0}/${location.activationThreshold} students)`
+                                    : ""}
                                 </SelectItem>
                               ))
                             ) : (

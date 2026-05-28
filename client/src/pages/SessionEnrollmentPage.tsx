@@ -71,12 +71,24 @@ export default function SessionEnrollmentPage() {
     onSuccess: async (data) => {
       const count = data.enrollments?.length || 0;
       const skippedCount = data.skipped?.length || 0;
+      const isWishlist = data.enrollments?.some((e: { status?: string }) => e.status === "location_wishlist");
 
       if (count > 0) {
-        // Rebuild cart before navigation so /cart checkout does not briefly see an empty cart
-        // and redirect to /payments (CartCheckout empty-cart guard).
-        await refreshCart();
         await queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
+        if (isWishlist) {
+          toast({
+            title: `${count} waitlist signup(s) recorded`,
+            description:
+              data.requiresPaymentMethod
+                ? "Save a payment method on your account to count toward opening this campus."
+                : "You will be notified before any charge when the campus opens.",
+          });
+          if (data.requiresPaymentMethod) {
+            setLocation("/payments");
+          }
+          return;
+        }
+        await refreshCart();
         sessionStorage.setItem("postSessionEnrollmentCheckout", "1");
         toast({
           title: `${count} enrollment(s) added to cart`,

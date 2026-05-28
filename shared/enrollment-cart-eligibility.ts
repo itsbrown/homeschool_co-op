@@ -169,6 +169,13 @@ export function enrollmentShouldExcludeFromCart(
   },
   scheduledPayments?: ScheduledPaymentRow[] | null,
 ): boolean {
+  const paid = Number(enrollment.totalPaid ?? 0);
+  const status = String(enrollment.status ?? "").toLowerCase();
+
+  if (status === "location_wishlist") {
+    return true;
+  }
+
   if (enrollment.checkoutExcluded === true || enrollment.managedByPaymentPlan === true) {
     return true;
   }
@@ -185,10 +192,23 @@ export function enrollmentShouldExcludeFromCart(
     const onInstallmentSchedule =
       enrollmentIdsOnActiveInstallmentSchedules(scheduledPayments);
     if (onInstallmentSchedule.has(enrollmentId)) {
-      return true;
+      // Pre-first-payment enrollments can carry stale scheduled rows from abandoned checkouts.
+      // Keep these cart-eligible so families can complete the first payment instead of hitting
+      // a "payment due goes nowhere" dead-end on the dashboard.
+      const isPreFirstPayment =
+        paid <= 0 &&
+        (status === "pending_payment" || status === "pending_admin_approval");
+      if (!isPreFirstPayment) {
+        return true;
+      }
     }
     if (enrollmentHasActivePaymentSchedule(enrollmentId, scheduledPayments)) {
-      return true;
+      const isPreFirstPayment =
+        paid <= 0 &&
+        (status === "pending_payment" || status === "pending_admin_approval");
+      if (!isPreFirstPayment) {
+        return true;
+      }
     }
   }
 
@@ -199,9 +219,6 @@ export function enrollmentShouldExcludeFromCart(
   if (!isInstallmentPlan) {
     return false;
   }
-
-  const paid = Number(enrollment.totalPaid ?? 0);
-  const status = String(enrollment.status ?? "").toLowerCase();
 
   if (isStripeManagedPaymentSystem(enrollment) && paid > 0) {
     return true;

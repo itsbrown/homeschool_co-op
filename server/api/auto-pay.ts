@@ -154,6 +154,12 @@ router.patch('/payment-methods/:pmId/default', supabaseAuth, async (req: any, re
     }
 
     await storage.updateUser(userId, { stripeDefaultPaymentMethodId: pmId });
+    try {
+      const { recheckLocationsForParent } = await import('../services/location-activation-service.js');
+      await recheckLocationsForParent(userId);
+    } catch (hookErr) {
+      console.warn('[AutoPay] Location activation recheck after PM save:', hookErr);
+    }
     return res.json({ success: true, defaultPaymentMethodId: pmId });
   } catch (err: any) {
     console.error('[AutoPay] Error setting default payment method:', err);

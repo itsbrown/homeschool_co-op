@@ -8,8 +8,11 @@ import { getDb } from "../db";
 import { eq, and, asc, desc, inArray } from "drizzle-orm";
 import {
   parentAuthCriteriaFromRequest,
+  resolveParentDbUser,
   resolveSchoolIdsForParentSessions,
 } from "../lib/parent-auth-scope";
+import { getLocationCore } from "../lib/location-db";
+import { isLocationCollectingWishlist } from "@shared/location-activation";
 
 const router = Router();
 
@@ -69,12 +72,36 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
       return res.json([]);
     }
 
+    const parent = await resolveParentDbUser(storage, criteria);
+    const parentLocationId = parent?.locationId ?? null;
+
     const db = await getDb();
-    const result = await db
+    const allForSchool = await db
       .select()
       .from(sessions)
-      .where(and(inArray(sessions.schoolId, schoolIds), eq(sessions.enrollmentOpen, true)))
+      .where(inArray(sessions.schoolId, schoolIds))
       .orderBy(asc(sessions.startDate), desc(sessions.sortOrder));
+
+    const result = [];
+    for (const session of allForSchool) {
+      if (session.locationId != null && parentLocationId != null) {
+        if (session.locationId !== parentLocationId) continue;
+      } else if (session.locationId != null && parentLocationId == null) {
+        continue;
+      }
+
+      if (session.enrollmentOpen) {
+        result.push(session);
+        continue;
+      }
+
+      if (session.locationId != null) {
+        const loc = await getLocationCore(session.locationId);
+        if (isLocationCollectingWishlist(loc)) {
+          result.push(session);
+        }
+      }
+    }
 
     res.json(result);
   } catch (error) {
