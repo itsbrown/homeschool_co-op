@@ -1,26 +1,14 @@
 [
   {
-    "firstName": "Cart",
-    "lastName": "Child",
-    "birthdate": "2010-01-01",
+    "firstName": "Sam",
+    "lastName": "Student",
+    "birthdate": "2015-03-01T00:00:00.000Z",
     "gradeLevel": "5th",
     "parentId": 2,
-    "parentEmail": "cart-parent@test.com",
+    "parentEmail": "bw_sess_parent_1i7tyw5c@test.com",
     "schoolId": 1,
     "id": 1,
-    "createdAt": "2025-11-17T03:34:31.632Z",
-    "updatedAt": "2025-11-17T03:34:31.632Z"
-  },
-  {
-    "firstName": "Cart2",
-    "lastName": "Child2",
-    "birthdate": "2010-01-01",
-    "gradeLevel": "5th",
-    "parentId": 3,
-    "parentEmail": "cart-parent2@test.com",
-    "schoolId": 1,
-    "id": 2,
-    "createdAt": "2025-11-17T03:34:31.751Z",
-    "updatedAt": "2025-11-17T03:34:31.751Z"
+    "createdAt": "2026-05-20T20:16:29.414Z",
+    "updatedAt": "2026-05-20T20:16:29.414Z"
   }
 ]
