@@ -28,6 +28,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 | [architecture.md](./architecture.md) | Stack, tenancy, storage, auth |
 | [domains/registration-and-locations.md](./domains/registration-and-locations.md) | School code signup, locations, school_id |
 | [domains/ci-and-testing.md](./domains/ci-and-testing.md) | GitHub Actions, production-path, local commands |
+| [domains/student-progress-assessments.md](./domains/student-progress-assessments.md) | F-14 assessments, Lexile, progress tracking audit |
 | [runbooks/merge-replit-prod.md](./runbooks/merge-replit-prod.md) | Merge → Replit → prod SQL |
 | [CHANGELOG.md](./CHANGELOG.md) | Knowledge updates by date |
 
