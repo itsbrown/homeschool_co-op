@@ -5,9 +5,9 @@
 - **`GET /api/public/registration/locations?code=`** resolves the school from the registration link (preferred over `schoolId`). `RegistrationLandingPage` loads campuses from the URL code immediately.
 - **`ensureLocationsTable`:** backfills legacy `activation_status`, adds `sessions.location_id` / `program_enrollments.location_id` if missing; eligible-student count errors no longer fail the whole public list.
 
-## 2026-05-28 (Replit Playwright OS deps)
+## 2026-05-28 (Replit Nix env repair)
 
-- `replit.nix` + `.replit` Nix packages for Chromium/Playwright (`libglib`, nss, mesa, etc.). Runbook: `docs/APP_KNOWLEDGE/runbooks/replit-e2e-playwright.md`.
+- Reverted Playwright Nix experiment: removed `replit.nix`, restored `.replit` `[nix].packages = ["jq"]` only (extra names like `alsa-lib` / `libdrm` broke Replit stable-24_05). E2E on Replit not supported; use GitHub Actions. Runbook: `docs/APP_KNOWLEDGE/runbooks/replit-e2e-playwright.md`.
 
 ## 2026-05-28 (parent full-journey E2E — biweekly schedule fix)
 
