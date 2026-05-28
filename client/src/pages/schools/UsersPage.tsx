@@ -444,7 +444,7 @@ export default function UsersPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter((u: any) => getUserLabels(u).some((l) => ['educator', 'teacher'].includes(normalizeLabel(l))).length}
+              {users.filter((u: any) => getUserLabels(u).some((l) => ['educator', 'teacher'].includes(normalizeLabel(l)))).length}
             </div>
           </CardContent>
         </Card>
