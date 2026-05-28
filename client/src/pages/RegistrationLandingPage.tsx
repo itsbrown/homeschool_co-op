@@ -115,14 +115,33 @@ export default function RegistrationLandingPage() {
     isError: locationsError,
     error: locationsErrorDetail,
   } = useQuery({
-    queryKey: [PUBLIC_REGISTRATION_LOCATIONS_PATH, school?.id],
+    queryKey: [PUBLIC_REGISTRATION_LOCATIONS_PATH, code, school?.id],
     queryFn: async () => {
+      if (code) {
+        return fetchPublicRegistrationJson<
+          {
+            id: number;
+            name: string;
+            activationStatus?: string | null;
+            activationThreshold?: number | null;
+            eligibleStudentCount?: number;
+          }[]
+        >(
+          `${PUBLIC_REGISTRATION_LOCATIONS_PATH}?code=${encodeURIComponent(code)}`,
+        );
+      }
       if (!school?.id) return [];
-      return fetchPublicRegistrationJson<{ id: number; name: string }[]>(
-        `${PUBLIC_REGISTRATION_LOCATIONS_PATH}?schoolId=${school.id}`,
-      );
+      return fetchPublicRegistrationJson<
+        {
+          id: number;
+          name: string;
+          activationStatus?: string | null;
+          activationThreshold?: number | null;
+          eligibleStudentCount?: number;
+        }[]
+      >(`${PUBLIC_REGISTRATION_LOCATIONS_PATH}?schoolId=${school.id}`);
     },
-    enabled: !!school?.id,
+    enabled: !!code || !!school?.id,
     retry: 1,
   });
 

@@ -36,14 +36,14 @@ try {
   }
 
   const locations = await sql`
-    SELECT id, school_id, name, code, is_active
+    SELECT id, school_id, name, code, is_active, activation_status, activation_threshold
     FROM locations
     ORDER BY school_id, id
   `;
   console.log('\n=== Locations (all rows) ===');
   for (const l of locations) {
     console.log(
-      `  id=${l.id} school_id=${l.school_id} active=${l.is_active} ${l.name} (${l.code})`,
+      `  id=${l.id} school_id=${l.school_id} active=${l.is_active} status=${l.activation_status ?? '(null)'} threshold=${l.activation_threshold ?? '(null)'} ${l.name} (${l.code})`,
     );
   }
 

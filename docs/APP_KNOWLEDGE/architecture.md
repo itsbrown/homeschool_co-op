@@ -35,7 +35,7 @@ High-level map for agents. See [SYSTEM_DOCUMENTATION.md](../SYSTEM_DOCUMENTATION
 ## Registration / locations (critical path)
 
 ```
-Public: GET /api/public/registration/locations?code=...
+Public: GET /api/public/registration/locations?code=REGCODE (or legacy ?schoolId=)
         GET /api/schools/validate-code
 Auth:   POST register (Supabase) → associate parent → school
 Admin:  POST /api/locations (school from resolve-school-id + body schoolId)

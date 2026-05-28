@@ -26,6 +26,17 @@ describeProductionPath('production-path: public registration locations', () => {
     expect(names).not.toContain('Orphan Campus');
   });
 
+  it('resolves campuses by registration code (same school as schoolId lookup)', async () => {
+    const seed = await seedRegistrationScenario();
+    const res = await http.get(PUBLIC_REGISTRATION_LOCATIONS_PATH, {
+      code: seed.registrationCode,
+    });
+
+    expect(res.status).toBe(200);
+    const names = (res.body as { name: string }[]).map((l) => l.name).sort();
+    expect(names).toEqual(['Brighton', 'Greece']);
+  });
+
   it('returns empty array when school has no locations (no Main Campus auto-seed)', async () => {
     const testDb = new TestDatabase();
     const admin = await testDb.createTestUser({ role: 'schoolAdmin' });

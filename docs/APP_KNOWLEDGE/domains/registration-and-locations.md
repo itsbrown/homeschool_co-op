@@ -17,7 +17,7 @@ Parents register with a **school registration code**, pick a location when offer
 ## Flow (happy path)
 
 1. Parent opens registration URL with code.
-2. `GET /api/public/registration/locations` — locations for code’s school (raw Postgres in public path where needed).
+2. `GET /api/public/registration/locations?code=REGCODE` (preferred) or `?schoolId=` — active campuses for that school (raw Postgres). Parent registration page passes the URL code so campuses cannot drift from a stale client `schoolId`.
 3. `GET /api/schools/validate-code` — school metadata.
 4. Supabase signup → app user row → associate parent with school (direct storage, not self-HTTP).
 5. Admin: Location Management uses resolved admin school; create/list locations for that school.
@@ -50,6 +50,8 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 | `relation "users" does not exist` in CI | `drizzle-kit push` failed (`role` enum missing) | `scripts/ci-db-push.mjs`; export `roleEnum` in schema |
 | Tests pass but Replit fails | Mem/file storage fallback | Fix `DATABASE_URL`; verify Postgres |
 | Locations on wrong school | `users.school_id` ≠ admin school | Use `resolve-school-id`; fix data with SQL |
+| Registration dropdown empty, admin sees campuses | Locations `school_id` ≠ registration-code school | `node scripts/diagnose-location-school-alignment.mjs CODE`; align with `server/scripts/align-locations-to-registration-school.sql` |
+| “No campuses configured” with valid code | Zero `is_active` rows for that school | Add campuses in Location Management for the school that owns the code |
 | POST /api/locations 400 | `code` validated before derive | Derive code before `insertLocationSchema.parse` |
 | associate-school 500 on Replit | Self-HTTP or wrong storage | `associate-parent-school.ts` direct storage |
 | Enrollment Sessions page shows no data and create fails | `sessions.location_id` missing in older DBs while API/schema expect it | Ensure startup migration runs `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location_id ...` (`server/init-db.ts`) |

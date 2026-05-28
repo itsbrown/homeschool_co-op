@@ -115,6 +115,16 @@ export async function ensureLocationsTable(): Promise<void> {
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS collection_deadline timestamp;
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS activation_notice_hours integer NOT NULL DEFAULT 72;
   `);
+  await pg.unsafe(`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location_id integer REFERENCES locations(id);
+    ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS location_id integer REFERENCES locations(id);
+  `);
+  await pg.unsafe(`
+    UPDATE locations
+    SET activation_status = 'activated'
+    WHERE activation_threshold IS NULL
+      AND (activation_status IS NULL OR activation_status = '');
+  `);
 }
 
 export async function getLocationCore(id: number): Promise<Location | undefined> {
@@ -173,7 +183,9 @@ export async function countEligibleActivationStudents(
 export async function getPublicLocationsBySchoolId(
   schoolId: number,
 ): Promise<PublicLocationRow[]> {
-  const locations = await getLocationsBySchoolIdCore(schoolId);
+  const locations = (await getLocationsBySchoolIdCore(schoolId)).filter(
+    (row) => row.activationStatus !== 'cancelled',
+  );
   const result: PublicLocationRow[] = [];
   for (const row of locations) {
     const base: PublicLocationRow = {
@@ -187,7 +199,15 @@ export async function getPublicLocationsBySchoolId(
       row.activationThreshold > 0 &&
       (row.activationStatus === 'collecting' || row.activationStatus === 'notice_period')
     ) {
-      base.eligibleStudentCount = await countEligibleActivationStudents(row.id);
+      try {
+        base.eligibleStudentCount = await countEligibleActivationStudents(row.id);
+      } catch (error) {
+        console.warn(
+          `[locations] eligibleStudentCount unavailable for location ${row.id}:`,
+          error instanceof Error ? error.message : error,
+        );
+        base.eligibleStudentCount = 0;
+      }
     }
     result.push(base);
   }

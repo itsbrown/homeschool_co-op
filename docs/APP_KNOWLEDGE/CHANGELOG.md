@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-05-28 (public registration locations by code)
+
+- **`GET /api/public/registration/locations?code=`** resolves the school from the registration link (preferred over `schoolId`). `RegistrationLandingPage` loads campuses from the URL code immediately.
+- **`ensureLocationsTable`:** backfills legacy `activation_status`, adds `sessions.location_id` / `program_enrollments.location_id` if missing; eligible-student count errors no longer fail the whole public list.
+
 ## 2026-05-28 (Replit Playwright OS deps)
 
 - `replit.nix` + `.replit` Nix packages for Chromium/Playwright (`libglib`, nss, mesa, etc.). Runbook: `docs/APP_KNOWLEDGE/runbooks/replit-e2e-playwright.md`.
