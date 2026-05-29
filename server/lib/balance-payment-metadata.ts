@@ -27,6 +27,46 @@ export function enrollmentPoolCentsForBalanceIntent(
   return totalChargedCents - reserved;
 }
 
+/**
+ * Cart membership total (metadata.membershipAmount) vs the membership share of *this*
+ * PaymentIntent. On biweekly/ deposit plans, PI.amount is one installment while
+ * metadata.membershipAmount is the full annual fee — reserving the full fee zeroes out
+ * the class pool on installment 1 (Heather Jacks / $139.58 of $1675 case).
+ */
+export function membershipCentsForThisPaymentIntent(
+  paymentIntentAmountCents: number,
+  metadata: Record<string, string | undefined> | null | undefined,
+): { cartMembershipTotalCents: number; membershipPortionThisPaymentCents: number } {
+  const cartMembershipTotalCents = parseMetadataMembershipAmountCents(metadata);
+  if (cartMembershipTotalCents <= 0) {
+    return { cartMembershipTotalCents: 0, membershipPortionThisPaymentCents: 0 };
+  }
+  if (!Number.isInteger(paymentIntentAmountCents) || paymentIntentAmountCents <= 0) {
+    return { cartMembershipTotalCents, membershipPortionThisPaymentCents: 0 };
+  }
+
+  const totalAmount = parseInt(String(metadata?.totalAmount ?? '0'), 10);
+  if (!Number.isInteger(totalAmount) || totalAmount <= 0) {
+    const portion = Math.min(cartMembershipTotalCents, paymentIntentAmountCents);
+    return { cartMembershipTotalCents, membershipPortionThisPaymentCents: portion };
+  }
+
+  const portion = Math.min(
+    paymentIntentAmountCents,
+    Math.round(paymentIntentAmountCents * (cartMembershipTotalCents / totalAmount)),
+  );
+  return { cartMembershipTotalCents, membershipPortionThisPaymentCents: portion };
+}
+
+/** Membership cents to subtract before allocating the class pool for a PI. */
+export function membershipCentsReservedForPaymentIntent(
+  paymentIntentAmountCents: number,
+  metadata: Record<string, string | undefined> | null | undefined,
+): number {
+  return membershipCentsForThisPaymentIntent(paymentIntentAmountCents, metadata)
+    .membershipPortionThisPaymentCents;
+}
+
 /** Parse volunteer-credit fields set server-side on cart / balance PaymentIntents. */
 export function parseBalanceIntentCredits(
   metadata: Record<string, string | undefined> | null | undefined

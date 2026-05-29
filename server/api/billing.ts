@@ -23,8 +23,8 @@ import {
 } from '../services/idempotency-helper';
 import {
   enrollmentPoolCentsForBalanceIntent,
+  membershipCentsReservedForPaymentIntent,
   parseBalanceIntentCredits,
-  parseMetadataMembershipAmountCents,
   totalCentsForBalanceAllocation,
 } from '../lib/balance-payment-metadata';
 
@@ -205,8 +205,9 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       throw new Error('Payment intent amount must be a positive integer in cents');
     }
     
-    const membershipCents = parseMetadataMembershipAmountCents(
-      paymentIntent.metadata as Record<string, string | undefined>
+    const membershipCents = membershipCentsReservedForPaymentIntent(
+      currentPaymentAmount,
+      paymentIntent.metadata as Record<string, string | undefined>,
     );
     const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(
       paymentIntent.metadata as Record<string, string | undefined>

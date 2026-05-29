@@ -651,7 +651,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       return {
         id: enrollment.id,
         classId: enrollment.classId || enrollment.marketplaceClassId,
-        className: classInfo?.title || 'Unknown Class',
+        className: classInfo?.title || enrollment.className || 'Unknown Class',
         classDescription: classInfo?.description,
         categoryName: classInfo?.categoryName || classInfo?.category || null,
         childId: enrollment.childId,

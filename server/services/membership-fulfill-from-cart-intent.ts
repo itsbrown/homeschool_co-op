@@ -4,6 +4,7 @@ import { getDb } from '../db';
 import { storage } from '../storage';
 import { users } from '../../shared/schema';
 import { generateMemberId } from '../utils/membership';
+import { membershipCentsForThisPaymentIntent } from '../lib/balance-payment-metadata';
 
 /**
  * Apply membership enrollment create/update when a cart PaymentIntent includes
@@ -13,15 +14,21 @@ import { generateMemberId } from '../utils/membership';
  * Shared by the verified Stripe webhook path and legacy direct-payment handler.
  */
 export async function applyMembershipFulfillmentFromCartPaymentIntent(
-  paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'customer' | 'metadata'>,
+  paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'customer' | 'metadata' | 'amount'>,
 ): Promise<void> {
   const md = paymentIntent.metadata || {};
   const hasMembership = md.hasMembership === 'true';
   const membershipSchoolId = md.membershipSchoolId ? parseInt(md.membershipSchoolId, 10) : null;
-  const membershipAmount = md.membershipAmount ? parseInt(md.membershipAmount, 10) : 0;
   const membershipYear = md.membershipYear ? parseInt(md.membershipYear, 10) : new Date().getFullYear();
   const parentUserId = md.membershipParentUserId ? parseInt(md.membershipParentUserId, 10) : null;
   const parentEmail = (md.parentEmail as string) || '';
+
+  const piAmount =
+    typeof paymentIntent.amount === 'number' && Number.isInteger(paymentIntent.amount)
+      ? paymentIntent.amount
+      : 0;
+  const { cartMembershipTotalCents, membershipPortionThisPaymentCents } =
+    membershipCentsForThisPaymentIntent(piAmount, md as Record<string, string | undefined>);
 
   const membershipDiscountId = md.membershipDiscountId ? parseInt(md.membershipDiscountId, 10) : null;
   const membershipDiscountName = (md.membershipDiscountName as string) || null;
@@ -32,14 +39,24 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
     ? parseInt(md.membershipDiscountAmount, 10)
     : 0;
 
-  if (!hasMembership || !parentUserId || !membershipSchoolId) {
+  if (!hasMembership || !parentUserId || !membershipSchoolId || cartMembershipTotalCents <= 0) {
+    return;
+  }
+
+  if (membershipPortionThisPaymentCents <= 0) {
+    console.log('🎫 Skipping membership fulfillment — no membership portion in this payment', {
+      paymentIntentId: paymentIntent.id,
+      piAmount,
+      cartMembershipTotalCents,
+    });
     return;
   }
 
   console.log('🎫 Processing membership payment:', {
     parentUserId,
     membershipSchoolId,
-    membershipAmount,
+    cartMembershipTotalCents,
+    membershipPortionThisPaymentCents,
     membershipYear,
   });
 
@@ -66,64 +83,65 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
     const expirationDate = new Date(startDate);
     expirationDate.setFullYear(expirationDate.getFullYear() + 1);
 
+    const applyMembershipPayment = (
+      priorPaid: number,
+    ): { amountPaid: number; remainingBalance: number; status: 'enrolled' | 'pending_payment' } => {
+      const amountPaid = priorPaid + membershipPortionThisPaymentCents;
+      const remainingBalance = Math.max(0, cartMembershipTotalCents - amountPaid);
+      return {
+        amountPaid,
+        remainingBalance,
+        status: remainingBalance <= 0 ? 'enrolled' : 'pending_payment',
+      };
+    };
+
+    const membershipNote = `Stripe payment via cart checkout (${paymentIntent.id})${
+      membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''
+    }`;
+
     if (existingEnrollment) {
-      if (existingEnrollment.status === 'pending_payment') {
-        await storage.updateMembershipEnrollment(existingEnrollment.id, {
-          status: 'enrolled',
-          amountPaid: membershipAmount,
-          remainingBalance: 0,
-          totalAmount: membershipAmount,
-          balanceDue: 0,
-          stripeCustomerId: (paymentIntent.customer as string) || null,
-          startDate,
-          renewalDate: expirationDate,
-          endDate: expirationDate,
-          expirationDate,
-          paymentMethod: 'other',
-          notes: `Stripe payment via cart checkout (${paymentIntent.id})${
-            membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''
-          }`,
-        });
+      const ledger = applyMembershipPayment(existingEnrollment.amountPaid ?? 0);
+      if (
+        existingEnrollment.status === 'enrolled' &&
+        ledger.remainingBalance <= 0 &&
+        (existingEnrollment.amountPaid ?? 0) >= cartMembershipTotalCents
+      ) {
         console.log(
-          `🎫 ✅ Updated existing pending_payment membership enrollment ${existingEnrollment.id} to enrolled for user ${parentUserId}`,
-        );
-      } else if (existingEnrollment.status === 'enrolled') {
-        console.log(
-          `🎫 Membership enrollment ${existingEnrollment.id} already enrolled for user ${parentUserId} - skipping (idempotent)`,
+          `🎫 Membership enrollment ${existingEnrollment.id} already fully paid for user ${parentUserId} - skipping (idempotent)`,
         );
       } else {
         await storage.updateMembershipEnrollment(existingEnrollment.id, {
-          status: 'enrolled',
-          amountPaid: membershipAmount,
-          remainingBalance: 0,
-          totalAmount: membershipAmount,
-          balanceDue: 0,
+          status: ledger.status,
+          amount: cartMembershipTotalCents,
+          amountPaid: ledger.amountPaid,
+          remainingBalance: ledger.remainingBalance,
+          totalAmount: cartMembershipTotalCents,
+          balanceDue: ledger.remainingBalance,
           stripeCustomerId: (paymentIntent.customer as string) || null,
           startDate,
           renewalDate: expirationDate,
           endDate: expirationDate,
           expirationDate,
           paymentMethod: 'other',
-          notes: `Stripe payment via cart checkout (${paymentIntent.id})${
-            membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''
-          }`,
+          notes: membershipNote,
         });
         console.log(
-          `🎫 ✅ Updated membership enrollment ${existingEnrollment.id} from ${existingEnrollment.status} to enrolled for user ${parentUserId}`,
+          `🎫 ✅ Updated membership enrollment ${existingEnrollment.id} for user ${parentUserId} (paid=${ledger.amountPaid}, balance=${ledger.remainingBalance})`,
         );
       }
     } else {
+      const ledger = applyMembershipPayment(0);
       await storage.createMembershipEnrollment({
         schoolId: membershipSchoolId,
         parentUserId,
         membershipYear,
         membershipTier: 'basic',
-        amount: membershipAmount,
-        amountPaid: membershipAmount,
-        remainingBalance: 0,
-        totalAmount: membershipAmount,
-        balanceDue: 0,
-        status: 'enrolled',
+        amount: cartMembershipTotalCents,
+        amountPaid: ledger.amountPaid,
+        remainingBalance: ledger.remainingBalance,
+        totalAmount: cartMembershipTotalCents,
+        balanceDue: ledger.remainingBalance,
+        status: ledger.status,
         stripeSubscriptionId: null,
         stripeCustomerId: typeof paymentIntent.customer === 'string' ? paymentIntent.customer : null,
         startDate,
@@ -133,9 +151,7 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
         expirationDate,
         gracePeriodEnd: null,
         paymentMethod: 'other',
-        notes: `Stripe payment via cart checkout (${paymentIntent.id})${
-          membershipDiscountName ? ` - Discount: ${membershipDiscountName}` : ''
-        }`,
+        notes: membershipNote,
       });
       console.log(`🎫 ✅ Created new membership enrollment for user ${parentUserId}`);
     }
@@ -165,9 +181,9 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
               programEnrollmentId: null,
               paymentId: null,
               classId: null,
-              originalAmount: membershipOriginalAmount || membershipAmount + membershipDiscountAmount,
+              originalAmount: membershipOriginalAmount || cartMembershipTotalCents + membershipDiscountAmount,
               discountAmount: membershipDiscountAmount,
-              finalAmount: membershipAmount,
+              finalAmount: cartMembershipTotalCents,
               applicationMethod: 'automatic',
               appliedBy: null,
             });

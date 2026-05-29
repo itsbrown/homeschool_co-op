@@ -10,6 +10,7 @@
 import { getStripeClient } from '../config/stripe';
 import { parseBalanceIntentCredits } from '../lib/balance-payment-metadata';
 import { fulfillBalancePaymentIntent } from '../lib/fulfill-balance-payment-intent';
+import { StripePaymentPlanService } from '../services/stripe-payment-plans';
 import { storage } from '../storage';
 
 async function main() {
@@ -63,6 +64,10 @@ async function main() {
     paymentHistoryId: existingPay?.id,
   });
   console.log('Fulfillment result:', result);
+
+  const planService = new StripePaymentPlanService(storage as any);
+  const scheduled = await planService.persistRemainingScheduledPaymentsAfterFirstCheckoutPayment(pi);
+  console.log('Scheduled payments created/existing:', scheduled.length);
 
   for (const id of enrollmentIds) {
     const after = await storage.getProgramEnrollmentById(id);

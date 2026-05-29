@@ -3,6 +3,8 @@ import {
   parseBalanceIntentCredits,
   totalCentsForBalanceAllocation,
   enrollmentPoolCentsForBalanceIntent,
+  membershipCentsForThisPaymentIntent,
+  membershipCentsReservedForPaymentIntent,
 } from '../lib/balance-payment-metadata';
 
 describe('balance-payment-metadata', () => {
@@ -47,5 +49,24 @@ describe('balance-payment-metadata', () => {
         originalAmountCents: 0,
       }),
     ).toBe(400661);
+  });
+
+  it('prorates membership reserve on biweekly installment 1 (class + membership cart)', () => {
+    const meta = {
+      hasMembership: 'true',
+      membershipAmount: '17500',
+      totalAmount: '167500',
+      installmentNumber: '1',
+      totalInstallments: '12',
+    };
+    const piAmount = 13958;
+    const { cartMembershipTotalCents, membershipPortionThisPaymentCents } =
+      membershipCentsForThisPaymentIntent(piAmount, meta);
+    expect(cartMembershipTotalCents).toBe(17500);
+    expect(membershipPortionThisPaymentCents).toBe(1458);
+    expect(membershipCentsReservedForPaymentIntent(piAmount, meta)).toBe(1458);
+    expect(enrollmentPoolCentsForBalanceIntent(piAmount, membershipPortionThisPaymentCents)).toBe(
+      12500,
+    );
   });
 });
