@@ -28,5 +28,8 @@ vite.config.ts.*
 .env
 .env.local
 
+# Prod DB connection string for agent/manual investigation — NEVER commit
+.env.prod
+
 # Jest integration DB probe (written by globalSetup)
 .jest-cache/

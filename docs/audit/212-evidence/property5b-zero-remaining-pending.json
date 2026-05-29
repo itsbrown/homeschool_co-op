@@ -1,0 +1,95 @@
+{
+  "seededRow": {
+    "id": 6,
+    "schoolId": 1,
+    "parentUserId": 999912,
+    "membershipYear": 2026,
+    "amount": 17500,
+    "amountPaid": 17500,
+    "remainingBalance": 0,
+    "totalAmount": 17500,
+    "balanceDue": 0,
+    "status": "pending_payment",
+    "dueDate": "2026-09-01T04:00:00.000Z",
+    "expirationDate": "2027-09-01T04:00:00.000Z",
+    "endDate": "2027-09-01T04:00:00.000Z",
+    "gracePeriodEnd": null,
+    "paymentMethod": null,
+    "notes": null,
+    "membershipTier": "basic",
+    "stripeSubscriptionId": null,
+    "stripeCustomerId": null,
+    "startDate": "2026-09-01T04:00:00.000Z",
+    "renewalDate": null,
+    "createdAt": "2026-05-28T22:18:59.834Z",
+    "updatedAt": "2026-05-28T22:18:59.834Z"
+  },
+  "snapshot": {
+    "snapshotId": "snap_3wxg2c_mpq2206e",
+    "generatedAt": 1780006741862,
+    "pricing": {
+      "subtotal": 0,
+      "discounts": {
+        "siblingDiscount": 0,
+        "freeAfterThree": 0,
+        "appliedDiscounts": [],
+        "totalDiscountAmount": 0,
+        "discountedChildIds": [],
+        "freeItemIds": []
+      },
+      "total": 0,
+      "itemPrices": [],
+      "schoolSettings": {
+        "freeAfterThresholdEnabled": false,
+        "freeAfterThreshold": 3,
+        "siblingDiscountRate": 0
+      }
+    },
+    "membership": {
+      "required": true,
+      "amount": 17500,
+      "discountedAmount": 0,
+      "alreadyPaid": false,
+      "schoolId": 1,
+      "schoolName": "Test Academy",
+      "year": 2026
+    },
+    "credits": {
+      "available": 0,
+      "applied": 0
+    },
+    "totals": {
+      "itemsTotal": 0,
+      "membershipTotal": 17500,
+      "grandTotal": 17500,
+      "payableAmount": 17500
+    },
+    "paymentPlans": [
+      {
+        "id": "full",
+        "name": "Pay in Full",
+        "description": "Complete payment now",
+        "amount": 17500,
+        "features": [
+          "No additional fees",
+          "No future payment worries"
+        ]
+      },
+      {
+        "id": "biweekly",
+        "name": "Biweekly Payment Plan",
+        "description": "First payment today, then automatic payments every 2 weeks; last payment at least 2 weeks before your latest class ends",
+        "amount": 4375,
+        "numberOfPayments": 4,
+        "totalAmount": 17500,
+        "finalPaymentAmount": 4375,
+        "features": [
+          "First payment due at checkout; remaining payments every 2 weeks",
+          "Payments end at least two weeks before the latest class end date in your cart"
+        ]
+      }
+    ],
+    "isFreeEnrollment": false,
+    "freeEnrollmentReason": null
+  }
+}
