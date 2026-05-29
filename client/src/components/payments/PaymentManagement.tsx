@@ -55,6 +55,7 @@ import {
   computeNetTotalRemainingCents,
   computePaymentOverviewTotals,
 } from "@/utils/paymentOverviewTotals";
+import { resolveUpcomingEnrollmentCoverageLabel } from "@/utils/enrollmentCoverageLabel";
 
 interface Payment {
   id: string;
@@ -1293,11 +1294,13 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                   const dbScheduledPaymentItems = (dbScheduledPayments || [])
                     .map((sp: any) => ({
                       id: sp.id,
-                      description: sp.description || `${sp.className} - ${sp.childName}`,
+                      description: sp.description || 'Scheduled payment',
                       amount: sp.amount,
                       dueDate: sp.dueDate,
                       status: sp.status || 'pending',
                       childName: sp.childName,
+                      enrollmentCount: sp.enrollmentCount,
+                      enrollmentCoverageLabel: sp.enrollmentCoverageLabel,
                       programName: sp.className,
                       source: 'database_scheduled',
                       installmentNumber: sp.installmentNumber,
@@ -1340,6 +1343,8 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                       )}
                       {allUpcomingPayments.map((payment: any) => {
                         const rowKey = `${payment.source}-${payment.id}`;
+                        const enrollmentCoverageLabel =
+                          resolveUpcomingEnrollmentCoverageLabel(payment);
                         const cov = creditCoverageMap.get(rowKey);
                         const isIncompleteCheckout =
                           payment.isCheckoutDue === true ||
@@ -1418,7 +1423,10 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                                   </>
                                 ) : (
                                   <>
-                                    Due: {formatDate(payment.dueDate!)} • {payment.childName}
+                                    Due: {formatDate(payment.dueDate!)}
+                                    {enrollmentCoverageLabel ? (
+                                      <> • {enrollmentCoverageLabel}</>
+                                    ) : null}
                                     {payment.installmentNumber && payment.totalInstallments ? (
                                       <span>
                                         {' '}

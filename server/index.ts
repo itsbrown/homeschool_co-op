@@ -33,6 +33,9 @@ import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
 import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import cartRouter from "./api/cart";
+import progressRouter from "./api/progress";
+import progressInsightsRouter from "./api/progress-insights";
+import locationEnrollmentsRouter from "./api/location-enrollments";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
 const currentEnv = process.env.NODE_ENV || 'development';
@@ -165,6 +168,9 @@ app.use("/api/admin/users", adminPaymentMethodsRouter);
 // Must be registered on the Express app — otherwise /api/cart/* falls through to Vite
 // and returns HTML, which breaks checkout with "Unexpected token '<'" JSON errors.
 app.use("/api/cart", cartRouter);
+app.use("/api/progress", progressRouter);
+app.use("/api/progress/insights", progressInsightsRouter);
+app.use("/api/location-enrollments", locationEnrollmentsRouter);
 
 // Test endpoints for development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {

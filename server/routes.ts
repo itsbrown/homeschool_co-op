@@ -2892,6 +2892,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Multi-location support routes (public registration locations: server/index.ts)
   const locationsRouter = (await import("./api/locations")).default;
   app.use("/api/locations", supabaseAuth, locationsRouter);
+  const locationEnrollmentsRouter = (await import("./api/location-enrollments")).default;
+  app.use("/api/location-enrollments", locationEnrollmentsRouter);
   
   const notificationsRouter = (await import("./api/notifications")).default;
   app.use("/api/notifications", supabaseAuth, notificationsRouter);

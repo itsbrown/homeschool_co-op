@@ -62,6 +62,7 @@ const ParentClassDetailsPage = lazy(() => import("@/pages/parents/ParentClassDet
 const MyDocumentsPage = lazy(() => import("@/pages/parent/MyDocumentsPage"));
 const DocumentDetailPage = lazy(() => import("@/pages/parent/DocumentDetailPage"));
 const MyAssessmentsPage = lazy(() => import("@/pages/parent/MyAssessmentsPage"));
+const ParentProgressPage = lazy(() => import("@/pages/parent/ParentProgressPage"));
 const SimpleClassesPage = lazy(() => import("./pages/SimpleClassesPage").then(m => ({ default: m.SimpleClassesPage })));
 const StaffInvitePage = lazy(() => import("./pages/schools/StaffInvitePage"));
 const StaffPositionsPage = lazy(() => import("./pages/schools/StaffPositionsPage"));
@@ -640,6 +641,7 @@ function Router() {
       <Route path="/parent/documents" component={MyDocumentsPage} />
       <Route path="/parent/documents/:id" component={DocumentDetailPage} />
       <Route path="/parent/assessments" component={MyAssessmentsPage} />
+      <Route path="/parent/progress" component={ParentProgressPage} />
       <Route path="/parent/weekly-schedule" component={WeeklySchedulePage} />
 
       {/* Educator routes - use ParentAppShell when activeRole is 'parent', EducatorAppShell otherwise */}

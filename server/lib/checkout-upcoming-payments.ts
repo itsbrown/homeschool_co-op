@@ -1,5 +1,6 @@
 import { storage } from '../storage';
 import { calculateCheckoutBiweeklySchedule } from './payment-calculator';
+import { formatEnrollmentCoverageLabel } from './enrollment-coverage-label';
 import { resolveEnrollmentIdsFromScheduledRow } from './scheduled-payment-intent-metadata';
 
 export type UpcomingPaymentRow = {
@@ -14,6 +15,8 @@ export type UpcomingPaymentRow = {
   enrollmentId?: number | null;
   className: string;
   childName: string;
+  enrollmentCount?: number;
+  enrollmentCoverageLabel?: string;
   retryCount?: number;
   failureReason?: string | null;
   overdue?: boolean;
@@ -106,10 +109,10 @@ export async function buildCheckoutFirstInstallmentDueRows(
     }
 
     const first = rows[0];
-    const childNames = [...new Set(rows.map((r: any) => r.childName).filter(Boolean))];
+    const enrollmentCount = rows.length;
     const classLabel =
-      rows.length > 1
-        ? `${rows.length} class enrollments`
+      enrollmentCount > 1
+        ? `${enrollmentCount} class enrollments`
         : (first.className ?? 'Class');
 
     out.push({
@@ -122,8 +125,10 @@ export async function buildCheckoutFirstInstallmentDueRows(
       installmentNumber: 0,
       totalInstallments: 0,
       enrollmentId: first.id,
+      enrollmentCount,
+      enrollmentCoverageLabel: formatEnrollmentCoverageLabel(enrollmentCount),
       className: classLabel,
-      childName: childNames.join(', '),
+      childName: '',
       retryCount: 0,
       failureReason: null,
       overdue: false,

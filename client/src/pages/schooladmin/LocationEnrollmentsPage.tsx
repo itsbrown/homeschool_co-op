@@ -20,7 +20,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
-import { format } from 'date-fns';
+import { safeFormatDate } from '@/utils/safeFormatDate';
+import { apiRequest } from '@/lib/queryClient';
 
 interface Location {
   id: number;
@@ -74,10 +75,30 @@ export default function LocationEnrollmentsPage() {
   const { 
     data: enrollmentData, 
     isLoading: enrollmentsLoading,
-    error: enrollmentsError 
+    error: enrollmentsError,
+    isError: enrollmentsIsError,
   } = useQuery<EnrollmentResponse>({
     queryKey: ['/api/location-enrollments', selectedLocationId, 'enrollments'],
     enabled: !!selectedLocationId,
+    queryFn: async () => {
+      const response = await apiRequest(
+        'GET',
+        `/api/location-enrollments/${selectedLocationId}/enrollments`,
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const message =
+          typeof body?.message === 'string'
+            ? body.message
+            : typeof body?.error === 'string'
+              ? body.error
+              : `Request failed (${response.status})`;
+        const err = new Error(message) as Error & { status?: number };
+        err.status = response.status;
+        throw err;
+      }
+      return response.json();
+    },
   });
 
   const filteredEnrollments = enrollmentData?.enrollments.filter((enrollment) => {
@@ -112,7 +133,7 @@ export default function LocationEnrollmentsPage() {
       e.parentName,
       e.parentEmail,
       e.parentPhone || '',
-      e.enrollmentDate ? format(new Date(e.enrollmentDate), 'yyyy-MM-dd') : ''
+      e.enrollmentDate ? safeFormatDate(e.enrollmentDate, 'yyyy-MM-dd', '') : ''
     ]);
 
     const csv = [headers, ...rows]
@@ -123,7 +144,7 @@ export default function LocationEnrollmentsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `enrollments-${enrollmentData?.location.code}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `enrollments-${enrollmentData?.location.code}-${safeFormatDate(new Date(), 'yyyy-MM-dd', 'export')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
 
@@ -239,13 +260,18 @@ export default function LocationEnrollmentsPage() {
                   <Skeleton className="h-12 w-full" />
                   <Skeleton className="h-12 w-full" />
                 </div>
-              ) : enrollmentsError ? (
+              ) : enrollmentsIsError ? (
                 <div className="text-center py-8">
                   <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-destructive" />
-                  <p className="text-destructive font-medium">Access Denied</p>
+                  <p className="text-destructive font-medium">
+                    {(enrollmentsError as Error & { status?: number })?.status === 403
+                      ? 'Access Denied'
+                      : 'Unable to load enrollments'}
+                  </p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    You do not have permission to view parent contacts at this location.
-                    Contact your administrator for access.
+                    {enrollmentsError instanceof Error
+                      ? enrollmentsError.message
+                      : 'Something went wrong loading enrollment data.'}
                   </p>
                 </div>
               ) : filteredEnrollments && filteredEnrollments.length > 0 ? (
@@ -300,7 +326,7 @@ export default function LocationEnrollmentsPage() {
                             {enrollment.enrollmentDate ? (
                               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
-                                {format(new Date(enrollment.enrollmentDate), 'MMM d, yyyy')}
+                                {safeFormatDate(enrollment.enrollmentDate, 'MMM d, yyyy')}
                               </div>
                             ) : '-'}
                           </TableCell>

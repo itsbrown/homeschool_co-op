@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { getDb } from '../db';
-import { userLocations, userSchoolPermissions, locations, users } from '@shared/schema';
+import { userLocations, userSchoolPermissions, locations, users, userRoles } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
+import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
+import { getSchoolCoreByAdminId } from '../lib/school-db';
 
 export type LocationPermission = 
   | 'canViewReports'
@@ -189,39 +191,63 @@ export function clearPermissionCache(userId?: number, locationId?: number, schoo
   }
 }
 
+const SCHOOL_ADMIN_ROLES = new Set(['schoolAdmin', 'director', 'admin', 'superAdmin']);
+
 async function isSchoolAdminForLocation(userId: number, locationId: number): Promise<boolean> {
   try {
     const db = await getDb();
-    
-    const userResult = await db.select({
-      role: users.role,
-      schoolId: users.schoolId,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
 
+    const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (userResult.length === 0) {
       return false;
     }
-
     const user = userResult[0];
-    const isSchoolAdmin = user.role === 'schoolAdmin' || user.role === 'admin';
-    
-    if (!isSchoolAdmin || !user.schoolId) {
-      return false;
-    }
 
-    const locationResult = await db.select({ schoolId: locations.schoolId })
+    const locationResult = await db
+      .select({ schoolId: locations.schoolId })
       .from(locations)
       .where(eq(locations.id, locationId))
       .limit(1);
 
-    if (locationResult.length === 0) {
+    if (locationResult.length === 0 || locationResult[0].schoolId == null) {
       return false;
     }
 
-    return locationResult[0].schoolId === user.schoolId;
+    const locationSchoolId = locationResult[0].schoolId;
+
+    if (SCHOOL_ADMIN_ROLES.has(user.role ?? '')) {
+      const resolved = await resolveSchoolIdForUser(user);
+      if (resolved === locationSchoolId) {
+        return true;
+      }
+    }
+
+    const activeRole = user.activeRole ?? user.role ?? '';
+    if (SCHOOL_ADMIN_ROLES.has(activeRole)) {
+      const resolved = await resolveSchoolIdForUser(user);
+      if (resolved === locationSchoolId) {
+        return true;
+      }
+    }
+
+    const adminSchool = await getSchoolCoreByAdminId(userId);
+    if (adminSchool?.id === locationSchoolId) {
+      return true;
+    }
+
+    const roleRows = await db
+      .select({ role: userRoles.role, schoolId: userRoles.schoolId, isActive: userRoles.isActive })
+      .from(userRoles)
+      .where(eq(userRoles.userId, userId));
+
+    for (const row of roleRows) {
+      if (!row.isActive || row.schoolId !== locationSchoolId) continue;
+      if (SCHOOL_ADMIN_ROLES.has(row.role ?? '')) {
+        return true;
+      }
+    }
+
+    return false;
   } catch (error) {
     console.error('Error checking school admin status for location:', error);
     return false;

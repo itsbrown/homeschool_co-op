@@ -1,5 +1,18 @@
 # App knowledge changelog
 
+## 2026-05-28 (parent documents + location enrollments fixes)
+
+- **My Documents** crashed with `RangeError: Invalid time value` when school docs/receipts had null or bad dates — use `safeFormatDate` helper.
+- **`/api/location-enrollments`** was never mounted on `server/index.ts` (404/HTML); school admins with `schools.admin_id` but `users.role=parent` were denied — mount router and broaden `isSchoolAdminForLocation` (admin_id, activeRole, user_roles).
+
+## 2026-05-28 (parent progress route)
+
+- **`/parent/progress`** returned SPA 404 — `ParentProgressPage` existed but was not registered in `App.tsx`. Wired route; mounted `/api/progress` and `/api/progress/insights` on `server/index.ts` (were only in `app-init.ts`).
+
+## 2026-05-28 (upcoming payments enrollment coverage label)
+
+- Cart/biweekly installments store `metadata.enrollmentIds` on `scheduled_payments`; upcoming API now returns `enrollmentCount` / `enrollmentCoverageLabel` (e.g. `3 Enrollments`) instead of repeating the first child name on every row. Parent **Upcoming Payments** subline uses that label.
+
 ## 2026-05-28 (mount auto-pay API routes)
 
 - **`server/api/auto-pay.ts`** was never mounted — `/api/user/payment-methods`, `/api/user/auto-pay-status`, and `/api/user/sync-checkout-payment-method` returned SPA HTML (404). Wired in `server/index.ts`, `server/routes.ts`, and `server/app-init.ts`.

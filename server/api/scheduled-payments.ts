@@ -15,6 +15,8 @@ import {
   buildCheckoutFirstInstallmentDueRows,
   filterScheduledPaymentsUntilFirstPaid,
 } from '../lib/checkout-upcoming-payments';
+import { formatEnrollmentCoverageLabel } from '../lib/enrollment-coverage-label';
+import { resolveEnrollmentIdsFromScheduledRow } from '../lib/scheduled-payment-intent-metadata';
 
 const router = Router();
 
@@ -44,6 +46,12 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
     );
 
     const mapScheduledRow = async (payment: (typeof afterFirstPaid)[0]) => {
+      const enrollmentIds = resolveEnrollmentIdsFromScheduledRow({
+        enrollmentId: payment.enrollmentId,
+        metadata: payment.metadata,
+      });
+      const enrollmentCount = enrollmentIds.length;
+
       let enrollmentDetails = null;
       if (payment.enrollmentId) {
         const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
@@ -73,6 +81,8 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
         installmentNumber: payment.installmentNumber,
         totalInstallments: payment.totalInstallments,
         enrollmentId: payment.enrollmentId,
+        enrollmentCount,
+        enrollmentCoverageLabel: formatEnrollmentCoverageLabel(enrollmentCount),
         className: enrollmentDetails?.className || 'Class',
         childName: enrollmentDetails?.childName || '',
         retryCount: payment.retryCount ?? 0,

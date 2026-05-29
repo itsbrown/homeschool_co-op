@@ -46,6 +46,7 @@ import lexileAiRouter from "./api/lexile-ai";
 import assessmentUploadRouter from "./api/assessment-upload";
 import progressRouter from "./api/progress";
 import progressInsightsRouter from "./api/progress-insights";
+import locationEnrollmentsRouter from "./api/location-enrollments";
 
 async function ensureAdminRoles(): Promise<void> {
   try {
@@ -221,6 +222,7 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/assessment-upload", assessmentUploadRouter);
   app.use("/api/progress", progressRouter);
   app.use("/api/progress/insights", progressInsightsRouter);
+  app.use("/api/location-enrollments", locationEnrollmentsRouter);
 
   // Register object storage routes for serving uploaded files
   registerObjectStorageRoutes(app);

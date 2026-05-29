@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, TrendingUp, BookOpen } from 'lucide-react';
-import { format } from 'date-fns';
+import { safeFormatDate } from '@/utils/safeFormatDate';
 import { Link } from 'wouter';
 
 function ProgressSummaryCard({ childId }: { childId: number }) {
@@ -141,7 +141,7 @@ export default function ParentProgressPage() {
                         <div key={entry.log.id} className="border-l-2 border-emerald-500 pl-3 py-1">
                           <p className="text-sm font-medium">{entry.subject.label} — {entry.track.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {format(new Date(entry.log.eventDate), 'MMM d, yyyy')}
+                            {safeFormatDate(entry.log.eventDate, 'MMM d, yyyy')}
                           </p>
                           <p className="text-sm">{entry.log.topicsSummary || JSON.stringify(entry.log.topicsCovered)}</p>
                         </div>
