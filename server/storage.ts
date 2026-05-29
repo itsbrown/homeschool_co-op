@@ -6195,18 +6195,11 @@ export class MemStorage implements IStorage {
 
       // Payment methods implementation - use memStorage since database is failing
       async createPayment(payment: InsertPayment): Promise<Payment> {
-        try {
-          // Prefer dbStorage, but fallback to fileStorage (memStorage instance) if unavailable
-          if (this.dbStorage && typeof this.dbStorage.createPayment === 'function') {
-            return await this.dbStorage.createPayment(payment);
-          } else {
-            console.log('💾 DB storage unavailable or method missing, using file storage fallback for createPayment');
-            return await this.fileStorage.createPayment(payment);
-          }
-        } catch (error) {
-          console.error('❌ Error creating payment, falling back to file storage:', error);
-          return await this.fileStorage.createPayment(payment);
+        if (this.dbStorage && typeof this.dbStorage.createPayment === 'function') {
+          return await this.dbStorage.createPayment(payment);
         }
+        console.log('💾 DB storage unavailable or method missing, using file storage fallback for createPayment');
+        return await this.fileStorage.createPayment(payment);
       }
 
       async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {

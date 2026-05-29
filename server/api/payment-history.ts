@@ -13,6 +13,9 @@ import {
   checkSchemaReady,
   type PaymentSource,
 } from '../services/PaymentProcessorService';
+import { canAdminManageEnrollmentSchool } from '../lib/admin-school-context';
+import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
+import { buildManualLegacyPaymentRow } from '../lib/manual-payment-ledger';
 
 const router = Router();
 
@@ -634,9 +637,9 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
         schoolId: targetEnrollment.schoolId
       });
       
-      // Verify enrollment belongs to admin's school
-      if (targetEnrollment.schoolId !== user.schoolId) {
-        console.log('📋 [STEP 4] ❌ School mismatch - enrollment schoolId:', targetEnrollment.schoolId, 'admin schoolId:', user.schoolId);
+      // Verify enrollment belongs to admin's permitted school(s)
+      if (!(await canAdminManageEnrollmentSchool(user, targetEnrollment))) {
+        console.log('📋 [STEP 4] ❌ School mismatch - enrollment schoolId:', targetEnrollment.schoolId, 'admin userId:', user.id);
         return res.status(403).json({
           success: false,
           error: 'Enrollment does not belong to your school'
@@ -706,33 +709,54 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       });
     }
 
+    const resolvedSchoolId =
+      targetEnrollment?.schoolId ??
+      (await resolveSchoolIdForUser(user)) ??
+      null;
+    if (!resolvedSchoolId || resolvedSchoolId <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot determine school for this payment. Select an enrollment or contact support.',
+      });
+    }
+
+    let matchingEnrollmentIds: number[] = [];
+    if (targetEnrollment) {
+      matchingEnrollmentIds = [targetEnrollment.id];
+    } else {
+      const allEnrollments = await storage.getAllEnrollments();
+      matchingEnrollmentIds = allEnrollments
+        .filter(
+          (e: any) =>
+            e.parentEmail === resolvedParentEmail &&
+            e.childName === resolvedChildName &&
+            e.className === resolvedClassName,
+        )
+        .map((e: any) => e.id);
+    }
+
+    const resolvedPaymentDate = paymentDate ? new Date(paymentDate) : new Date();
+    const resolvedDescription =
+      description || `Manual payment for ${resolvedChildName} - ${resolvedClassName}`;
+
     // Build payment data (but don't create yet - PaymentProcessor may handle it)
     const manualPaymentIntentId = `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const paymentData = {
+    const paymentData = buildManualLegacyPaymentRow({
       stripePaymentIntentId: manualPaymentIntentId,
       parentEmail: resolvedParentEmail,
+      parentId: parentUser.id,
+      schoolId: resolvedSchoolId,
       childName: resolvedChildName,
       className: resolvedClassName,
-      amount: amountInCents,
+      amountCents: amountInCents,
       currency,
-      status: 'completed' as const,
-      description: description || `Manual payment for ${resolvedChildName} - ${resolvedClassName}`,
-      schoolId: user.schoolId || 0,
-      parentId: user.id,
-      stripeChargeId: null,
-      stripeRefundId: null,
-      enrollmentIds: [] as number[],
-      originalPaymentId: null,
-      paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-      metadata: {
-        paymentMethod,
-        createdBy: userEmail,
-        createdByRole: 'schoolAdmin',
-        isManualPayment: true,
-        notes: notes || '',
-        originalPaymentDate: paymentDate || new Date().toISOString()
-      }
-    };
+      description: resolvedDescription,
+      paymentMethod,
+      enrollmentIds: matchingEnrollmentIds,
+      paymentDate: resolvedPaymentDate,
+      adminEmail: userEmail,
+      notes: notes || '',
+    });
     
     console.log('📋 [STEP 7] Payment data prepared:', {
       stripePaymentIntentId: manualPaymentIntentId,
@@ -757,17 +781,6 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
       console.log('📋 [STEP 8] Using PaymentProcessor path (modern)');
       try {
         if (parentUser) {
-          // Use direct enrollment ID if provided, otherwise fall back to text matching
-          let matchingEnrollmentIds: number[] = [];
-          if (targetEnrollment) {
-            matchingEnrollmentIds = [targetEnrollment.id];
-          } else {
-            const allEnrollments = await storage.getAllEnrollments();
-            matchingEnrollmentIds = allEnrollments
-              .filter((e: any) => e.parentEmail === resolvedParentEmail && e.childName === resolvedChildName && e.className === resolvedClassName)
-              .map((e: any) => e.id);
-          }
-          
           const idempotencyKey = generateIdempotencyKey('manual', undefined, parentUser.id, Date.now());
           
           console.log('💳 PaymentProcessor: Processing manual payment via unified service', {
@@ -795,8 +808,12 @@ router.post('/manual', supabaseAuth, async (req: any, res) => {
               allocations: result.allocations?.length,
             });
             usedPaymentProcessor = true;
-            // Get the payment record created by PaymentProcessor
+            // PaymentProcessor writes stripe_payment_history; admin UI reads `payments`.
             payment = await storage.getPaymentByStripeId(manualPaymentIntentId);
+            if (!payment) {
+              console.log('📋 [STEP 8] Mirroring manual payment to legacy payments table for admin UI');
+              payment = await storage.createPayment(paymentData);
+            }
           } else {
             console.error('❌ PaymentProcessor: Failed - falling back to legacy', { error: result.error });
           }

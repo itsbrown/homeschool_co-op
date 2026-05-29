@@ -10,6 +10,7 @@ import {
 } from '../lib/payment-settlement-display';
 import { computeCreditsSummaryTotals, getCreditRemainingCents } from '../utils/credit-summary';
 import { resolveEnrollmentEffectiveBalance } from '../lib/enrollment-effective-balance';
+import { isManualStripeLedgerRow } from '../lib/manual-payment-ledger';
 
 const router = Router();
 
@@ -455,6 +456,34 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // Get payment history from BOTH database AND Stripe (like the parent view does)
     // This ensures admin sees all the same payments the parent can see
     const dbPayments = await storage.getPaymentsByParentEmail(parent.email);
+
+    // Manual class payments with PAYMENT_PROCESSOR_ENABLED may exist only in stripe_payment_history.
+    const stripeLedgerRows = await storage.getStripePaymentHistoryByUserId(parent.id);
+    const dbPaymentIntentIds = new Set(
+      dbPayments.map((p: any) => p.stripePaymentIntentId).filter(Boolean),
+    );
+    const processorManualPayments = stripeLedgerRows
+      .filter((row) => row.status === 'succeeded' && isManualStripeLedgerRow(row as any))
+      .filter((row) => !dbPaymentIntentIds.has(row.paymentIntentId))
+      .map((row) => ({
+        id: row.id,
+        amount: row.amount,
+        currency: row.currency || 'usd',
+        status: 'completed' as const,
+        description: row.description?.trim() || 'Manual payment',
+        childName: '',
+        className: '',
+        schoolId: null as number | null,
+        parentId: parent.id,
+        parentEmail: parent.email,
+        stripePaymentIntentId: row.paymentIntentId,
+        enrollmentIds: [] as number[],
+        paymentMethod: row.paymentMethod || 'other',
+        paymentDate: row.stripeCreatedAt ?? row.createdAt,
+        createdAt: row.createdAt,
+        metadata: { source: 'stripe_payment_history', isManualPayment: true },
+      }));
+    const dbPaymentsWithProcessorManual = [...dbPayments, ...processorManualPayments];
     
     // Create a Set for filtered enrollment IDs (needed for scheduled payment filtering)
     const filteredEnrollmentIds = new Set(filteredEnrollments.map(e => e.id));
@@ -522,9 +551,11 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     console.log(`💳 Found ${dbPayments.length} DB payments, ${stripePaymentIntents.length} Stripe PaymentIntents`);
     
     // Find "Stripe-only" payments (in Stripe but not in database)
-    const dbPaymentIntentIds = new Set(dbPayments.map((p: any) => p.stripePaymentIntentId).filter(Boolean));
+    const dbPaymentIntentIdsForStripe = new Set(
+      dbPaymentsWithProcessorManual.map((p: any) => p.stripePaymentIntentId).filter(Boolean),
+    );
     const stripeOnlyPayments = stripePaymentIntents
-      .filter(intent => !dbPaymentIntentIds.has(intent.id) && intent.status === 'succeeded')
+      .filter(intent => !dbPaymentIntentIdsForStripe.has(intent.id) && intent.status === 'succeeded')
       .filter(intent => intent.amount && intent.amount > 0)
       .map(intent => ({
         id: -parseInt(intent.id.replace(/\D/g, '').slice(0, 8)) || -Date.now(), // Synthetic negative ID
@@ -546,7 +577,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     console.log(`🔍 Found ${stripeOnlyPayments.length} Stripe-only payments`);
     
     // Merge DB payments with Stripe-only payments
-    const allPaymentHistory = [...dbPayments, ...stripeOnlyPayments];
+    const allPaymentHistory = [...dbPaymentsWithProcessorManual, ...stripeOnlyPayments];
     
     // SIMPLIFIED PAYMENT FILTERING:
     // If admin has access to view this parent's profile (verified above via parentHasSchoolRelationship 
