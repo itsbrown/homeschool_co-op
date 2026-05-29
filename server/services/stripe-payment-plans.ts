@@ -2,7 +2,10 @@ import Stripe from 'stripe';
 import { IStorage } from '../storage';
 import { CurrencyUtils } from '../../shared/currency-utils';
 import { InsertScheduledPayment } from '@shared/schema';
-import { buildBiweeklyCheckoutPhases } from '../lib/biweekly-checkout-contract';
+import {
+  buildBiweeklyCheckoutPhases,
+  buildBiweeklyPhasesFromInstallmentMetadata,
+} from '../lib/biweekly-checkout-contract';
 import { checkoutAnchorDate } from '../lib/payment-calculator';
 import { calculatePaymentSchedule, PaymentFrequency } from '../lib/payment-calculator';
 import { getStripeClient } from '../config/stripe';
@@ -396,15 +399,39 @@ export class StripePaymentPlanService {
       programStartDate,
       programEndDate,
     );
-    if (phases.length <= 1) return [];
+
+    let effectivePhases = phases;
+    const metaInstallmentCount = parseInt(String(meta.totalInstallments ?? '1'), 10) || 1;
+    if (
+      metaInstallmentCount > 1 &&
+      effectivePhases.length !== metaInstallmentCount &&
+      (normalized.paymentPlan === 'biweekly' || meta.paymentPlan === 'biweekly')
+    ) {
+      console.warn(
+        `⚠️ Scheduled payment rebuild got ${effectivePhases.length} phases but PI metadata says ${metaInstallmentCount} — using metadata-aligned biweekly schedule`,
+        paymentIntent.id,
+      );
+      effectivePhases = buildBiweeklyPhasesFromInstallmentMetadata(
+        totalAmountCents,
+        metaInstallmentCount,
+        checkoutAnchorDate(),
+      ).map((phase) => ({
+        amount: phase.amount,
+        dueDate: phase.dueDate,
+        installmentNumber: phase.installmentNumber,
+        description: `Biweekly payment ${phase.installmentNumber} of ${metaInstallmentCount}`,
+      }));
+    }
+
+    if (effectivePhases.length <= 1) return [];
 
     const firstEnrollment = await this.storage.getEnrollmentById(enrollmentIds[0]);
     const schoolId = firstEnrollment?.schoolId || parentUser.schoolId;
     if (!schoolId) return [];
 
     const created: any[] = [];
-    for (let i = 1; i < phases.length; i++) {
-      const phase = phases[i];
+    for (let i = 1; i < effectivePhases.length; i++) {
+      const phase = effectivePhases[i];
       const row = await this.storage.createScheduledPayment({
         schoolId,
         enrollmentId: enrollmentIds[0],
@@ -415,7 +442,7 @@ export class StripePaymentPlanService {
         scheduledDate: phase.dueDate,
         frequency: 'one_time' as const,
         installmentNumber: phase.installmentNumber,
-        totalInstallments: phases.length,
+        totalInstallments: effectivePhases.length,
         status: 'pending' as const,
         stripePaymentIntentId: null,
         processedAt: null,
