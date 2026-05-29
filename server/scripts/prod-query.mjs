@@ -5,6 +5,7 @@
  * file (NEVER from the chat / committed env) so the secret stays on disk only.
  *
  * Usage:
+ *   node server/scripts/prod-query.mjs --check
  *   node server/scripts/prod-query.mjs "select count(*) from users"
  *   echo "select * from users limit 5" | node server/scripts/prod-query.mjs
  *
@@ -58,10 +59,62 @@ async function readStdin() {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+function hostOf(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '<unparseable>';
+  }
+}
+
+async function runCheck(client) {
+  const url = normalizeDatabaseUrl(loadProdUrl());
+  const [users] = await client.unsafe('SELECT COUNT(*)::int AS n FROM users');
+  const [heather] = await client.unsafe(
+    "SELECT COUNT(*)::int AS n FROM users WHERE email ILIKE '%hlcelso%'",
+  );
+  const [livePi] = await client.unsafe(
+    "SELECT COUNT(*)::int AS n FROM payments WHERE stripe_payment_intent_id = 'pi_3TcTZMGhVuNOnUs70e7vuFPT'",
+  );
+  console.log(
+    JSON.stringify(
+      {
+        host: hostOf(url),
+        database: 'connected',
+        users: users?.n ?? users?.count,
+        heatherRows: heather?.n ?? heather?.count,
+        heatherLivePiRows: livePi?.n ?? livePi?.count,
+        hint:
+          (heather?.n ?? heather?.count) === 0
+            ? 'Wrong DB — use Replit Deployment Secrets DATABASE_URL, not dev NEON_DATABASE_URL'
+            : 'Looks like production',
+      },
+      null,
+      2,
+    ),
+  );
+}
+
 async function main() {
-  const sql = (process.argv[2] ?? (await readStdin())).trim();
+  const arg = process.argv[2];
+  if (arg === '--check') {
+    const url = normalizeDatabaseUrl(loadProdUrl());
+    const client = postgres(url, {
+      prepare: false,
+      max: 1,
+      ssl: getPostgresJsSslOption(url),
+    });
+    try {
+      await runCheck(client);
+    } finally {
+      await client.end({ timeout: 5 });
+    }
+    return;
+  }
+
+  const sql = (arg ?? (await readStdin())).trim();
   if (!sql) {
-    console.error('No SQL provided (pass as arg or via stdin).');
+    console.error('No SQL provided (pass as arg, --check, or via stdin).');
     process.exit(2);
   }
 
