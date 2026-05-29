@@ -16,7 +16,6 @@ import {
   filterScheduledPaymentsUntilFirstPaid,
 } from '../lib/checkout-upcoming-payments';
 import { formatEnrollmentCoverageLabel } from '../lib/enrollment-coverage-label';
-import { resolveEnrollmentIdsFromScheduledRow } from '../lib/scheduled-payment-intent-metadata';
 
 const router = Router();
 

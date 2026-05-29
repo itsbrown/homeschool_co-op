@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-05-28 (autopay verification tooling)
+
+- Removed a build-breaking duplicate `resolveEnrollmentIdsFromScheduledRow` import in `server/api/scheduled-payments.ts` (was committed; `tsc` flagged `TS2300`, esbuild tolerated it).
+- Added `server/scripts/autopay-preflight.ts` — read-only config/data check (env gating, Stripe mode, due candidates, stuck rows, `email_log` health). Exits non-zero on blocking findings.
+- Added `server/scripts/autopay-smoke.ts` + `runbooks/autopay-smoke-test.md` — Stripe-CLI test-mode orchestrator for the full charge → webhook → reconciliation loop (hard-guarded against live keys / production; only touches `metadata.smokeTest` rows).
+
 ## 2026-05-28 (parent documents + location enrollments fixes)
 
 - **My Documents** crashed with `RangeError: Invalid time value` when school docs/receipts had null or bad dates — use `safeFormatDate` helper.
