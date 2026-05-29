@@ -2558,8 +2558,16 @@ router.post("/classes", supabaseAuth, requireSchoolContext, async (req: any, res
     const schoolId = req.schoolId;
     console.log('📝 Creating new class:', JSON.stringify(req.body, null, 2));
     
-    // Find instructor details from database if instructorName is provided
-    let instructorId = 1; // Default instructor ID
+    // Resolve instructor of record. Default to the authenticated school admin
+    // (a guaranteed-existing users.id) so the instructor_id FK never points at a
+    // missing seed row like id=1, which throws 23503 on shared/production DBs.
+    let instructorId = 1; // Last-resort default
+    try {
+      const authedUser = await storage.getUserByEmail(req.user.email);
+      if (authedUser?.id) instructorId = authedUser.id;
+    } catch (lookupErr) {
+      console.warn('⚠️ Could not resolve authenticated user for instructorId, using default:', lookupErr);
+    }
     if (req.body.instructorName) {
       const allStaff = await storage.getSchoolStaffBySchoolId(Number(schoolId));
       for (const staffRecord of allStaff) {
@@ -2622,7 +2630,10 @@ router.post("/classes", supabaseAuth, requireSchoolContext, async (req: any, res
     });
   } catch (error) {
     console.error("❌ Error creating class:", error);
-    return res.status(500).json({ message: "Server error while creating class" });
+    return res.status(500).json({
+      message: "Server error while creating class",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 
