@@ -4,24 +4,81 @@
  *
  * Usage:
  *   npx tsx server/scripts/reconcile-payment-intent-to-enrollments.ts pi_3TX0QiGhVuN0nUs71FpbivFk
+ *   npx tsx server/scripts/reconcile-payment-intent-to-enrollments.ts --from-json ./pi.json
  *
- * Requires DATABASE_URL and STRIPE_SECRET_KEY (or TESTING_STRIPE_SECRET_KEY).
+ * Live payments from the Replit *workspace* shell require a live key (dev connector is test mode):
+ *   STRIPE_SECRET_KEY=sk_live_... npx tsx server/scripts/reconcile-payment-intent-to-enrollments.ts pi_...
+ *
+ * Or use --from-json with Stripe Dashboard event export (no Stripe API call).
  */
+import { readFileSync } from 'fs';
+import type Stripe from 'stripe';
 import { getStripeClient } from '../config/stripe';
 import { parseBalanceIntentCredits } from '../lib/balance-payment-metadata';
 import { fulfillBalancePaymentIntent } from '../lib/fulfill-balance-payment-intent';
 import { StripePaymentPlanService } from '../services/stripe-payment-plans';
 import { storage } from '../storage';
 
-async function main() {
-  const piId = process.argv[2];
-  if (!piId?.startsWith('pi_')) {
-    console.error('Usage: npx tsx server/scripts/reconcile-payment-intent-to-enrollments.ts <payment_intent_id>');
-    process.exit(1);
+function usage(): never {
+  console.error(`Usage:
+  npx tsx server/scripts/reconcile-payment-intent-to-enrollments.ts <payment_intent_id>
+  npx tsx server/scripts/reconcile-payment-intent-to-enrollments.ts --from-json <path-to-pi.json>
+
+  JSON file: full PaymentIntent object, or Stripe event wrapper { "object": { ...pi } }.
+
+  Live PI from Replit workspace shell (test connector): set STRIPE_SECRET_KEY=sk_live_...`);
+  process.exit(1);
+}
+
+function loadPaymentIntentFromJson(path: string): Stripe.PaymentIntent {
+  const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  const pi = (raw.object && typeof raw.object === 'object' ? raw.object : raw) as Stripe.PaymentIntent;
+  if (!pi.id?.startsWith('pi_')) {
+    throw new Error('JSON must contain a PaymentIntent with id starting with pi_');
+  }
+  return pi;
+}
+
+async function loadPaymentIntent(args: string[]): Promise<Stripe.PaymentIntent> {
+  if (args[0] === '--from-json') {
+    const jsonPath = args[1];
+    if (!jsonPath) usage();
+    console.log('📄 Loading PaymentIntent from JSON (no Stripe API call):', jsonPath);
+    return loadPaymentIntentFromJson(jsonPath);
   }
 
-  const stripe = await getStripeClient();
-  const pi = await stripe.paymentIntents.retrieve(piId);
+  const piId = args[0];
+  if (!piId?.startsWith('pi_')) usage();
+
+  try {
+    const stripe = await getStripeClient();
+    return await stripe.paymentIntents.retrieve(piId);
+  } catch (err: unknown) {
+    const stripeErr = err as { code?: string; raw?: { headers?: Record<string, string> } };
+    if (stripeErr.code === 'resource_missing') {
+      const tier = stripeErr.raw?.headers?.['x-stripe-routing-context-priority-tier'] ?? '';
+      console.error(`
+❌ Stripe returned "No such payment_intent" for ${piId}.
+
+This usually means TEST vs LIVE mismatch:
+  • The payment is LIVE (dashboard.stripe.com, livemode: true)
+  • Replit workspace shell uses the DEVELOPMENT Stripe connector (test mode)
+
+Fix options:
+  1. Export the PI from Stripe Dashboard → run with --from-json (no API key needed)
+  2. STRIPE_SECRET_KEY=sk_live_... npx tsx server/scripts/reconcile-payment-intent-to-enrollments.ts ${piId}
+  3. Run on deployed production (REPLIT_DEPLOYMENT=1) or resend webhook from Stripe Dashboard
+
+Stripe routing tier: ${tier || 'unknown'}`);
+    }
+    throw err;
+  }
+}
+
+async function main() {
+  const pi = await loadPaymentIntent(process.argv.slice(2));
+  const piId = pi.id;
+
   if (pi.status !== 'succeeded') {
     console.error(`PaymentIntent ${piId} status is ${pi.status}, not succeeded`);
     process.exit(1);
