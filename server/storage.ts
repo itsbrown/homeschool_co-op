@@ -3316,8 +3316,10 @@ export class MemStorage implements IStorage {
   }
 
   async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
+    const normalized = normalizeEmailForLookup(parentEmail);
+    if (!normalized) return [];
     return Array.from(this.paymentsStore.values()).filter(
-      payment => payment.parentEmail === parentEmail
+      payment => normalizeEmailForLookup(payment.parentEmail) === normalized
     );
   }
 
@@ -6208,14 +6210,38 @@ export class MemStorage implements IStorage {
       }
 
       async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
-        return this.memStorage.getPaymentsByParentEmail(parentEmail);
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getPaymentsByParentEmail === 'function') {
+            return await this.dbStorage.getPaymentsByParentEmail(parentEmail);
+          }
+          console.log('💾 DB storage unavailable or method missing, using file storage fallback for getPaymentsByParentEmail');
+          return await this.fileStorage.getPaymentsByParentEmail(parentEmail);
+        } catch (error) {
+          console.error('❌ Error reading payments by parent email, falling back to file storage:', error);
+          return await this.fileStorage.getPaymentsByParentEmail(parentEmail);
+        }
       }
 
       async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
-        return this.memStorage.getPaymentByStripeId(stripePaymentIntentId);
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getPaymentByStripeId === 'function') {
+            return await this.dbStorage.getPaymentByStripeId(stripePaymentIntentId);
+          }
+          return await this.fileStorage.getPaymentByStripeId(stripePaymentIntentId);
+        } catch (error) {
+          console.error('❌ Error reading payment by Stripe id, falling back to file storage:', error);
+          return await this.fileStorage.getPaymentByStripeId(stripePaymentIntentId);
+        }
       }
 
       async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.updatePaymentStatus === 'function') {
+            return await this.dbStorage.updatePaymentStatus(id, status);
+          }
+        } catch (error) {
+          console.error('❌ Error updating payment status in DB, falling back to file storage:', error);
+        }
         // Map interface status values to internal implementation values
         let internalStatus: 'pending' | 'failed' | 'succeeded' | 'canceled';
         switch (status) {

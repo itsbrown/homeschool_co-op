@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-05-26 (CombinedStorage payment history reads)
+
+- **Admin/parent Payment History empty despite Postgres rows:** `CombinedStorage.getPaymentsByParentEmail` (and `getPaymentByStripeId` / `updatePaymentStatus`) read only `memStorage` while `createPayment` writes Postgres — profile Payments tab showed `[]` for all DB-backed parents (e.g. Lauren user 130). Fixed to delegate to `dbStorage` like `getAllPayments` / `getScheduledPaymentsByParentEmail`.
+
 Dated updates to this knowledge base (not product release notes).
 
 ## 2026-05-26
