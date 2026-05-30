@@ -281,6 +281,28 @@ export default function SchoolClassesPage() {
     },
   });
 
+  // Mutation for opening/closing enrollment (controls parent-facing visibility)
+  const toggleEnrollmentMutation = useMutation({
+    mutationFn: async ({ classId, enrollmentOpen }: { classId: number; enrollmentOpen: boolean }) => {
+      const response = await apiRequest("PATCH", `/api/school-admin/classes/${classId}`, { enrollmentOpen });
+      if (!response.ok) throw new Error("Failed to update enrollment status");
+      return response.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/classes-list'] });
+      toast({
+        title: variables.enrollmentOpen ? "Enrollment opened" : "Enrollment closed",
+        description: variables.enrollmentOpen
+          ? "This class is now visible to parents for registration."
+          : "This class is hidden from parents (still visible to admins).",
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update enrollment status. Please try again.", variant: "destructive" });
+    },
+  });
+
   // Mutation for unassigning instructor
   const unassignInstructorMutation = useMutation({
     mutationFn: async (classId: number) => {
@@ -807,7 +829,16 @@ export default function SchoolClassesPage() {
                                     aria-label={`Select ${cls.title}`}
                                   />
                                 </TableCell>
-                                {visibleColumns.className && <TableCell className="font-medium">{cls.title}</TableCell>}
+                                {visibleColumns.className && (
+                                  <TableCell className="font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <span>{cls.title}</span>
+                                      <Badge variant={cls.enrollmentOpen ? "default" : "outline"} className="shrink-0">
+                                        {cls.enrollmentOpen ? "Open" : "Closed"}
+                                      </Badge>
+                                    </div>
+                                  </TableCell>
+                                )}
                                 {visibleColumns.category && <TableCell>{cls.categoryName || cls.category || 'Not Specified'}</TableCell>}
                                 {visibleColumns.instructor && (
                                   <TableCell>
@@ -839,6 +870,12 @@ export default function SchoolClassesPage() {
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        onClick={() => toggleEnrollmentMutation.mutate({ classId: cls.id, enrollmentOpen: !cls.enrollmentOpen })}
+                                        className={cls.enrollmentOpen ? "text-orange-600" : "text-green-600"}
+                                      >
+                                        {cls.enrollmentOpen ? "Close enrollment (hide from parents)" : "Open enrollment (show to parents)"}
+                                      </DropdownMenuItem>
                                       <DropdownMenuItem>
                                         <Link href={`/schools/classes/${cls.id}`}>View Details</Link>
                                       </DropdownMenuItem>
@@ -906,7 +943,12 @@ export default function SchoolClassesPage() {
                         <CardHeader className="pb-3">
                           <div className="flex justify-between items-start gap-2">
                             <CardTitle className="text-lg leading-tight">{cls.title}</CardTitle>
-                            <Badge variant="secondary" className="shrink-0">{cls.status}</Badge>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <Badge variant={cls.enrollmentOpen ? "default" : "outline"}>
+                                {cls.enrollmentOpen ? "Open" : "Closed"}
+                              </Badge>
+                              <Badge variant="secondary">{cls.status}</Badge>
+                            </div>
                           </div>
                           <CardDescription>{cls.categoryName || cls.category || 'Not Specified'} • {cls.gradeLevel}</CardDescription>
                         </CardHeader>
@@ -953,6 +995,12 @@ export default function SchoolClassesPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => toggleEnrollmentMutation.mutate({ classId: cls.id, enrollmentOpen: !cls.enrollmentOpen })}
+                                className={cls.enrollmentOpen ? "text-orange-600" : "text-green-600"}
+                              >
+                                {cls.enrollmentOpen ? "Close enrollment" : "Open enrollment"}
+                              </DropdownMenuItem>
                               <DropdownMenuItem>
                                 <Link href={`/schools/classes/${cls.id}/edit`}>Edit Class</Link>
                               </DropdownMenuItem>

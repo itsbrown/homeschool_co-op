@@ -43,6 +43,7 @@ const classFormSchema = z.object({
   instructorName: z.string().optional(), // Legacy field - educators now managed via ClassEducatorAssignments
   status: z.string().min(1, "Please select a status"),
   isAdminOnly: z.boolean().default(false),
+  enrollmentOpen: z.boolean().default(false),
 });
 
 type ClassFormValues = z.infer<typeof classFormSchema>;
@@ -86,6 +87,7 @@ export default function SchoolClassCreationPage() {
       instructorName: "",
       status: "upcoming",
       isAdminOnly: false,
+      enrollmentOpen: false,
     },
   });
 
@@ -269,6 +271,7 @@ export default function SchoolClassCreationPage() {
         instructorName: instructorValue,
         status: classData.status || "upcoming",
         isAdminOnly: classData.isAdminOnly || false,
+        enrollmentOpen: classData.enrollmentOpen || false,
       });
       
       console.log('📍 Form reset with locationId:', targetLocationId, 'from classData.locationId:', classData.locationId, 'or location:', classData.location);
@@ -582,6 +585,27 @@ export default function SchoolClassCreationPage() {
                           <FormLabel className="text-base">Admin Only Class</FormLabel>
                           <FormDescription>
                             When enabled, this class will only be visible to administrators and will not appear in public class listings for parents and students.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="enrollmentOpen"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">Open for Enrollment</FormLabel>
+                          <FormDescription>
+                            When on, parents can see and register for this class. When off, it's closed and hidden from parents (still visible to you here). New classes start closed.
                           </FormDescription>
                         </div>
                         <FormControl>

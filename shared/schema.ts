@@ -1693,6 +1693,9 @@ export const classes = pgTable("classes", {
   totalDiscounted: integer("total_discounted").default(0), // in cents
   totalCollected: integer("total_collected").default(0), // in cents
   isAdminOnly: boolean("is_admin_only").default(false).notNull(),
+  // When false, the class is "closed for enrollment" and hidden from the parent
+  // catalog (still visible to admins). Mirrors the sessions.enrollmentOpen pattern.
+  enrollmentOpen: boolean("enrollment_open").default(false).notNull(),
   enrollmentCount: integer("enrollment_count").default(0).notNull(),
   
   // Marketplace specific fields (from original programs table)
@@ -1751,6 +1754,7 @@ export const insertClassSchema = createInsertSchema(classes)
     totalDiscounted: z.number().optional(),
     totalCollected: z.number().optional(),
     isAdminOnly: z.boolean().optional(),
+    enrollmentOpen: z.boolean().optional(),
     
     // Marketplace specific fields (optional)
     ageRange: z.string().optional(),
