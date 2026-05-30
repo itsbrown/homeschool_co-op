@@ -4104,6 +4104,56 @@ export class DatabaseStorage implements IStorage {
       .filter(Boolean);
   }
 
+  /** Max GREATEST(enrollment_date, program_start_date) per normalized parent email (qualifying statuses only). */
+  async getLastEnrollmentDateByParentEmails(
+    schoolId: number,
+    emails: string[],
+  ): Promise<Map<string, string>> {
+    const normalized = [
+      ...new Set(emails.map((e) => normalizeEmailForLookup(e)).filter(Boolean)),
+    ];
+    const result = new Map<string, string>();
+    if (normalized.length === 0) return result;
+
+    const db = await getDb();
+    const qualifyingStatuses = [
+      'pending_payment',
+      'pending_admin_approval',
+      'enrolled',
+      'completed',
+      'waitlist',
+    ];
+
+    const rows = await db
+      .select({
+        parentEmailKey: sql<string>`LOWER(TRIM(${programEnrollments.parentEmail}))`,
+        lastEnrollmentDate: sql<string>`MAX(GREATEST(
+          ${programEnrollments.enrollmentDate}::date,
+          COALESCE(${programEnrollments.programStartDate}, ${programEnrollments.enrollmentDate}::date)
+        ))::text`,
+      })
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.schoolId, schoolId),
+          inArray(programEnrollments.status, [...qualifyingStatuses]),
+          inArray(
+            sql`LOWER(TRIM(${programEnrollments.parentEmail}))`,
+            normalized,
+          ),
+        ),
+      )
+      .groupBy(sql`LOWER(TRIM(${programEnrollments.parentEmail}))`);
+
+    for (const row of rows) {
+      const key = normalizeEmailForLookup(row.parentEmailKey);
+      if (key && row.lastEnrollmentDate) {
+        result.set(key, row.lastEnrollmentDate);
+      }
+    }
+    return result;
+  }
+
   async getStripePaymentHistoryForSchool(schoolId: number, limit = 100): Promise<StripePaymentHistory[]> {
     const db = await getDb();
     const cap = Math.min(Math.max(limit, 1), 200);

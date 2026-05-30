@@ -320,14 +320,13 @@ router.get('/summary', async (req: any, res) => {
         .where(and(eq(refunds.schoolId, schoolId), eq(refunds.status, 'completed'))),
       db
         .select({
-          activePlans: sql<number>`COUNT(*)::integer`,
+          activePlans: sql<number>`COUNT(DISTINCT ${scheduledPayments.enrollmentId})::integer`,
         })
-        .from(programEnrollments)
+        .from(scheduledPayments)
         .where(
           and(
-            eq(programEnrollments.schoolId, schoolId),
-            not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-            sqlEnrollmentEffectiveBalancePositive(),
+            eq(scheduledPayments.schoolId, schoolId),
+            eq(scheduledPayments.status, 'pending'),
           ),
         ),
       db

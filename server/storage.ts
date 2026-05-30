@@ -283,6 +283,8 @@ export interface IStorage {
   >;
   getParentEmailsWithEnrollmentSince(schoolId: number, sinceDate: string): Promise<string[]>;
   getDistinctParentEmailsForSchool(schoolId: number): Promise<string[]>;
+  /** Max GREATEST(enrollment_date, program_start_date) per normalized parent email for qualifying enrollments. */
+  getLastEnrollmentDateByParentEmails(schoolId: number, emails: string[]): Promise<Map<string, string>>;
   getStripePaymentHistoryForSchool(schoolId: number, limit?: number): Promise<StripePaymentHistory[]>;
 
   // Membership Enrollment methods
@@ -1970,6 +1972,43 @@ export class MemStorage implements IStorage {
       }
     }
     return Array.from(emails);
+  }
+
+  async getLastEnrollmentDateByParentEmails(
+    schoolId: number,
+    emails: string[],
+  ): Promise<Map<string, string>> {
+    const qualifying = new Set([
+      'pending_payment',
+      'pending_admin_approval',
+      'enrolled',
+      'completed',
+      'waitlist',
+    ]);
+    const targets = new Set(
+      emails.map((e) => normalizeEmailForLookup(e)).filter(Boolean),
+    );
+    const result = new Map<string, string>();
+    if (targets.size === 0) return result;
+
+    for (const e of this.programEnrollmentsStore.values()) {
+      if (e.schoolId !== schoolId || !qualifying.has(e.status)) continue;
+      const key = normalizeEmailForLookup(e.parentEmail);
+      if (!key || !targets.has(key)) continue;
+
+      const enrollmentDay = e.enrollmentDate
+        ? new Date(e.enrollmentDate).toISOString().split('T')[0]
+        : null;
+      if (!enrollmentDay) continue;
+      const programDay = e.programStartDate ?? enrollmentDay;
+      const activityDay = enrollmentDay >= programDay ? enrollmentDay : programDay;
+
+      const prev = result.get(key);
+      if (!prev || activityDay > prev) {
+        result.set(key, activityDay);
+      }
+    }
+    return result;
   }
 
   async getStripePaymentHistoryForSchool(_schoolId: number, _limit?: number): Promise<StripePaymentHistory[]> {
@@ -5907,6 +5946,15 @@ export class MemStorage implements IStorage {
       } catch (error) {
         if (process.env.NODE_ENV === 'production') throw error;
         return this.memStorage.getDistinctParentEmailsForSchool(schoolId);
+      }
+    }
+
+    async getLastEnrollmentDateByParentEmails(schoolId: number, emails: string[]) {
+      try {
+        return await this.dbStorage.getLastEnrollmentDateByParentEmails(schoolId, emails);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return this.memStorage.getLastEnrollmentDateByParentEmails(schoolId, emails);
       }
     }
 

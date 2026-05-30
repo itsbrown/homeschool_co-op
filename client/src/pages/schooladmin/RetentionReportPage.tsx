@@ -586,6 +586,7 @@ export default function RetentionReportPage() {
                               <TableHead>Parent</TableHead>
                               <TableHead>Email</TableHead>
                               <TableHead>Phone</TableHead>
+                              <TableHead>Last enrollment</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -594,6 +595,7 @@ export default function RetentionReportPage() {
                                 <TableCell className="font-medium">{row.parentName}</TableCell>
                                 <TableCell className="text-sm">{row.parentEmail}</TableCell>
                                 <TableCell className="text-sm">{row.phone || '—'}</TableCell>
+                                <TableCell className="text-sm">{row.lastEnrollmentDate ?? '—'}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>

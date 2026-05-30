@@ -28,6 +28,16 @@ describe('enrollment-balance SQL regression guards', () => {
     expect(financialReportsSource).not.toMatch(/programEnrollments\.compAmountCents/);
   });
 
+  it('activePaymentPlans counts enrollments with pending scheduled payments', () => {
+    expect(financialReportsSource).toContain('activePaymentPlans');
+    expect(financialReportsSource).toMatch(
+      /COUNT\(DISTINCT \$\{scheduledPayments\.enrollmentId\}\)/,
+    );
+    expect(financialReportsSource).toMatch(
+      /eq\(scheduledPayments\.status, 'pending'\)/,
+    );
+  });
+
   it('enrollment-balance helpers use the canonical formula in SQL templates', () => {
     expect(enrollmentBalanceSource).toMatch(
       /sql`GREATEST\(0, \$\{programEnrollments\.totalCost\} - \$\{programEnrollments\.totalPaid\} - COALESCE\(comp_amount_cents, 0\)\)`/,

@@ -21,7 +21,7 @@ import financialReportsRouter from '../../api/financial-reports';
 import adminRouter from '../../api/admin';
 import { verifyAuth0Token, requireRole } from '../../middleware/auth0-auth';
 import { getDb } from '../../db';
-import { payments, programEnrollments } from '@shared/schema';
+import { payments, programEnrollments, membershipEnrollments } from '@shared/schema';
 import { and, eq } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { testDb } from '../helpers/testDatabase';
@@ -77,10 +77,33 @@ function buildFinancialReportsTestApp(mountFinancialReportsFirst: boolean) {
   return app;
 }
 
+async function seedMembershipOwedInDb(parentUserId: number, schoolId: number, amountCents: number) {
+  const db = await getDb();
+  const year = new Date().getFullYear();
+  await db.insert(membershipEnrollments).values({
+    schoolId,
+    parentUserId,
+    membershipYear: year,
+    amount: amountCents,
+    amountPaid: 0,
+    remainingBalance: amountCents,
+    totalAmount: amountCents,
+    balanceDue: amountCents,
+    status: 'pending_payment',
+    dueDate: new Date(year, 8, 1),
+    expirationDate: new Date(year + 1, 8, 1),
+    endDate: new Date(year + 1, 8, 1),
+    startDate: new Date(year, 8, 1),
+    membershipTier: 'basic',
+  });
+}
+
 describeWithDb('Integration: GET /api/admin/financial-reports/summary', () => {
   let app: express.Application;
   let schoolAdminEmail: string;
   let schoolId: number;
+  let parentId: number;
+  let enrollmentWithBalanceId: number;
 
   beforeAll(async () => {
     await testDb.cleanup();
@@ -117,6 +140,7 @@ describeWithDb('Integration: GET /api/admin/financial-reports/summary', () => {
       role: 'parent',
       schoolId: school.id,
     });
+    parentId = parent.id;
     const child = await testDb.createTestChild(parent.id, {
       firstName: 'Fin',
       lastName: 'Child',
@@ -129,7 +153,7 @@ describeWithDb('Integration: GET /api/admin/financial-reports/summary', () => {
       status: 'active',
     });
 
-    await storage.createProgramEnrollment({
+    const partialEnrollment = await storage.createProgramEnrollment({
       schoolId: school.id,
       classType: 'school_class',
       classId: klass.id,
@@ -144,6 +168,7 @@ describeWithDb('Integration: GET /api/admin/financial-reports/summary', () => {
       paymentStatus: 'partial_payment',
       status: 'enrolled',
     } as any);
+    enrollmentWithBalanceId = partialEnrollment.id;
 
     // Stripe-managed row: remaining_balance=0 but family still owes 45000
     await storage.createProgramEnrollment({
@@ -161,6 +186,8 @@ describeWithDb('Integration: GET /api/admin/financial-reports/summary', () => {
       paymentStatus: 'stripe_managed',
       status: 'enrolled',
     } as any);
+
+    await seedMembershipOwedInDb(parent.id, school.id, 2500);
 
     await storage.createPayment({
       schoolId: school.id,
@@ -183,9 +210,57 @@ describeWithDb('Integration: GET /api/admin/financial-reports/summary', () => {
     expect(res.body.summary).toBeDefined();
     expect(res.body.summary.totalPayments).toBeGreaterThanOrEqual(1);
     expect(res.body.summary.totalRevenueCents).toBeGreaterThanOrEqual(5000);
-    // 6000 (partial) + 45000 (stripe-managed remaining_balance=0)
-    expect(res.body.summary.outstandingBalanceCents).toBe(51000);
+    // 6000 (partial) + 45000 (stripe-managed remaining_balance=0) + 2500 membership
+    expect(res.body.summary.tuitionOutstandingCents).toBe(51000);
+    expect(res.body.summary.membershipOutstandingCents).toBe(2500);
+    expect(res.body.summary.outstandingBalanceCents).toBe(53500);
+    expect(res.body.summary.outstandingBalanceCents).toBe(
+      res.body.summary.tuitionOutstandingCents + res.body.summary.membershipOutstandingCents,
+    );
     expect(res.body.summary.totalEnrollments).toBe(2);
+    expect(res.body.summary.activePaymentPlans).toBe(0);
+  });
+
+  it('counts activePaymentPlans from pending scheduled payments, not enrollment balance', async () => {
+    await storage.createScheduledPayment({
+      schoolId,
+      enrollmentId: enrollmentWithBalanceId,
+      parentId,
+      parentEmail: (await storage.getUser(parentId))!.email,
+      amount: 3000,
+      scheduledDate: new Date('2026-06-15T00:00:00.000Z'),
+      frequency: 'monthly',
+      installmentNumber: 2,
+      totalInstallments: 4,
+      status: 'pending',
+      metadata: {},
+    } as any);
+
+    const res = await request(app)
+      .get('/api/admin/financial-reports/summary')
+      .set('x-test-user-email', schoolAdminEmail);
+
+    expect(res.status).toBe(200);
+    expect(res.body.summary.activePaymentPlans).toBe(1);
+  });
+
+  it('collections-overview totalOwedCents matches summary outstanding balance', async () => {
+    const [summaryRes, collectionsRes] = await Promise.all([
+      request(app)
+        .get('/api/admin/financial-reports/summary')
+        .set('x-test-user-email', schoolAdminEmail),
+      request(app)
+        .get('/api/admin/financial-reports/collections-overview')
+        .set('x-test-user-email', schoolAdminEmail),
+    ]);
+
+    expect(summaryRes.status).toBe(200);
+    expect(collectionsRes.status).toBe(200);
+    expect(collectionsRes.body.summary.totalOwedCents).toBe(summaryRes.body.summary.outstandingBalanceCents);
+    expect(collectionsRes.body.summary.totalTuitionOwedCents).toBe(summaryRes.body.summary.tuitionOutstandingCents);
+    expect(collectionsRes.body.summary.totalMembershipOwedCents).toBe(
+      summaryRes.body.summary.membershipOutstandingCents,
+    );
   });
 
   it('debug=1 includes diagnostics without error', async () => {
