@@ -44,6 +44,8 @@ router.get('/', async (req, res) => {
     const now = new Date();
     const hiddenCategoryIds = await storage.getHiddenCategoryIds();
     classes = classes.filter(c => {
+      // Closed for enrollment → hidden from the parent catalog (still visible to admins)
+      if (!c.enrollmentOpen) return false;
       if (c.isAdminOnly) return false;
       if (c.endDate && new Date(c.endDate) < now) return false;
       if (c.categoryId && hiddenCategoryIds.includes(c.categoryId)) return false;
