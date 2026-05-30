@@ -492,6 +492,7 @@ export interface IStorage {
   // Category methods
   getCategoryById(id: number): Promise<any>;
   getCategoriesBySchoolId(schoolId: number): Promise<any[]>;
+  getHiddenCategoryIds(): Promise<number[]>;
   createCategory(category: any): Promise<any>;
   updateCategory(id: number, category: any): Promise<any>;
   deleteCategory(id: number): Promise<void>;
@@ -4633,6 +4634,10 @@ export class MemStorage implements IStorage {
     return [];
   }
 
+  async getHiddenCategoryIds(): Promise<number[]> {
+    return [];
+  }
+
   async createCategory(category: any): Promise<any> {
     const id = Date.now();
     return { ...category, id };
@@ -6718,6 +6723,14 @@ export class MemStorage implements IStorage {
           return await this.dbStorage.getCategoriesBySchoolId(schoolId);
         } catch (error) {
           return this.memStorage.getCategoriesBySchoolId(schoolId);
+        }
+      }
+
+      async getHiddenCategoryIds(): Promise<number[]> {
+        try {
+          return await this.dbStorage.getHiddenCategoryIds();
+        } catch (error) {
+          return this.memStorage.getHiddenCategoryIds();
         }
       }
 
