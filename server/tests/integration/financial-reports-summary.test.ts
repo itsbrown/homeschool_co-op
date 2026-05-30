@@ -273,6 +273,31 @@ describeWithDb('Integration: GET /api/admin/financial-reports/summary', () => {
     expect(res.body.diagnostics.enrollmentsAtSchool).toBe(2);
   });
 
+  it('recent-transactions returns ledger rows including non-enum payment status', async () => {
+    const db = await getDb();
+    await db.execute(sql`
+      INSERT INTO payments (
+        school_id, parent_id, parent_email, amount, currency, status,
+        payment_method, enrollment_ids, metadata
+      ) VALUES (
+        ${schoolId}, ${parentId}, (SELECT email FROM users WHERE id = ${parentId}), 2500, 'usd', 'succeeded',
+        'card', '[]'::jsonb, '{}'::jsonb
+      )
+    `);
+
+    const res = await request(app)
+      .get('/api/admin/financial-reports/recent-transactions')
+      .set('x-test-user-email', schoolAdminEmail);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.transactions)).toBe(true);
+    expect(res.body.transactions.length).toBeGreaterThanOrEqual(2);
+    const succeededRow = res.body.transactions.find(
+      (tx: { amount: number; status: string }) => tx.amount === 2500 && tx.status === 'succeeded',
+    );
+    expect(succeededRow).toBeDefined();
+  });
+
   it('runs the same Drizzle aggregate queries as /summary (no effective_balance column)', async () => {
     const db = await getDb();
 

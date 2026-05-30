@@ -38,15 +38,20 @@ describe('enrollment-balance SQL regression guards', () => {
     );
   });
 
+  it('recent-transactions casts payment status to text (prod rows may use succeeded/card)', () => {
+    expect(financialReportsSource).toContain('${payments.status}::text');
+    expect(financialReportsSource).toContain('${payments.paymentMethod}::text');
+  });
+
   it('enrollment-balance helpers use the canonical formula in SQL templates', () => {
     expect(enrollmentBalanceSource).toMatch(
       /sql`GREATEST\(0, \$\{programEnrollments\.totalCost\} - \$\{programEnrollments\.totalPaid\} - COALESCE\(comp_amount_cents, 0\)\)`/,
     );
   });
 
-  it('Drizzle schema exposes totalCost/totalPaid but not compAmountCents', () => {
+  it('Drizzle schema exposes totalCost, totalPaid, and compAmountCents', () => {
     const columns = getTableColumns(programEnrollments);
-    expect(columns.compAmountCents).toBeUndefined();
+    expect(columns.compAmountCents).toBeDefined();
     expect(columns.totalCost).toBeDefined();
     expect(columns.totalPaid).toBeDefined();
   });

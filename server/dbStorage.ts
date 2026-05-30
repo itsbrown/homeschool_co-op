@@ -71,6 +71,7 @@ import {
   type StripePaymentHistory,
   type InsertStripePaymentHistory,
 } from '../shared/schema';
+import { sqlStripeHistoryUserAtSchool } from './lib/admin-school-context';
 
 /**
  * DatabaseStorage - Implements IStorage using PostgreSQL and Drizzle ORM
@@ -4157,27 +4158,12 @@ export class DatabaseStorage implements IStorage {
   async getStripePaymentHistoryForSchool(schoolId: number, limit = 100): Promise<StripePaymentHistory[]> {
     const db = await getDb();
     const cap = Math.min(Math.max(limit, 1), 200);
-    const rows = await db.execute(sql`
-      SELECT sph.*
-      FROM stripe_payment_history sph
-      WHERE (
-        EXISTS (SELECT 1 FROM users u WHERE u.id = sph.user_id AND u.school_id = ${schoolId})
-        OR EXISTS (
-          SELECT 1 FROM user_roles ur
-          WHERE ur.user_id = sph.user_id
-            AND ur.school_id = ${schoolId}
-            AND LOWER(TRIM(ur.role)) = 'parent'
-        )
-        OR EXISTS (
-          SELECT 1 FROM program_enrollments pe
-          INNER JOIN users u2 ON LOWER(TRIM(u2.email)) = LOWER(TRIM(pe.parent_email))
-          WHERE pe.school_id = ${schoolId} AND u2.id = sph.user_id
-        )
-      )
-      ORDER BY sph.stripe_created_at DESC
-      LIMIT ${cap}
-    `);
-    return rows.rows as StripePaymentHistory[];
+    return db
+      .select()
+      .from(stripePaymentHistory)
+      .where(sqlStripeHistoryUserAtSchool(schoolId, stripePaymentHistory.userId))
+      .orderBy(desc(stripePaymentHistory.stripeCreatedAt))
+      .limit(cap);
   }
 
   private mapPaymentReminderLogRow(row: Record<string, unknown>): PaymentReminderLog {
