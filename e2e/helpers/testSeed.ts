@@ -172,6 +172,41 @@ export async function postSetupSessionEnrollmentScenario(
   return { response, json };
 }
 
+export type SetupPublicFormScenarioResponse = {
+  success: boolean;
+  data?: {
+    school: { id: number; name: string };
+    publicForm: {
+      id: number;
+      slug: string;
+      title: string;
+      fieldIds: { fullName: number; email: number; resume: number; agree: number };
+    };
+    membersForm: { id: number; slug: string };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupPublicFormScenario(
+  request: APIRequestContext,
+): Promise<{ response: APIResponse; json: SetupPublicFormScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-public-form-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: {},
+  });
+  let json: SetupPublicFormScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupPublicFormScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export async function postSeedUpcomingScheduledPayment(
   request: APIRequestContext,
   body: { enrollmentId: number; amountCents?: number; paymentPlan?: string },

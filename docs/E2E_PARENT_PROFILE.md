@@ -1,5 +1,7 @@
 # Parent shell E2E (authenticated)
 
+**Full Playwright index:** [`docs/E2E_COMMANDS.md`](E2E_COMMANDS.md).
+
 These tests live under `e2e/authenticated/` and run in Playwright’s **`chromium-authenticated`** project. They assert that, for a real logged-in parent session, each major parent route loads and that **critical GET APIs return 2xx** (no silent HTML/SPA fallback for JSON routes).
 
 ## Prerequisites

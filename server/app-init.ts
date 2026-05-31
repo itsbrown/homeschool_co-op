@@ -144,6 +144,13 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
     createParentPath: true,
   }));
 
+  app.use('/api/custom-forms/forms/:formId/upload-attachment', fileUpload({
+    useTempFiles: false,
+    limits: { fileSize: 10 * 1024 * 1024 },
+    abortOnLimit: true,
+    createParentPath: true,
+  }));
+
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 

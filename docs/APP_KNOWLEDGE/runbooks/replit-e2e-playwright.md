@@ -23,6 +23,8 @@ npx playwright install --with-deps chromium chromium-headless-shell
 npm run playwright:install:deps
 ```
 
+Full command index: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md).
+
 ```bash
 npm run test:e2e -- e2e/parent-full-journey.spec.ts
 ```

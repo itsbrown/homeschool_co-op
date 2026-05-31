@@ -12,6 +12,7 @@ On any non-trivial task in this repo:
 1. Read the hub (and the relevant domain doc under `docs/APP_KNOWLEDGE/domains/`).
 2. Use the matching `.agents/skills/asa-*` skill for the area you edit.
 3. Before finishing, update knowledge if you learned invariants, pitfalls, CI/deploy truth, or new key files — plus a dated line in [docs/APP_KNOWLEDGE/CHANGELOG.md](docs/APP_KNOWLEDGE/CHANGELOG.md).
+4. **New Playwright spec:** add a catalog row (path, run command, prerequisites, seeds) to [docs/E2E_COMMANDS.md](docs/E2E_COMMANDS.md); cross-link from a runbook/domain doc when the spec verifies that workflow.
 
 Cross-project maintenance protocol: personal skill `maintain-app-knowledge` in `~/.cursor/skills/`.
 

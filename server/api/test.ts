@@ -3436,4 +3436,33 @@ router.post('/setup-reallocation-pair', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/test/setup-public-form-scenario
+ * Seeds public + members-only custom forms for Playwright public-access tests.
+ */
+router.post('/setup-public-form-scenario', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+    }
+
+    const { seedPublicFormScenario } = await import(
+      '../tests/helpers/seedPublicFormScenario'
+    );
+    const seed = await seedPublicFormScenario(new TestDatabase());
+
+    res.json({
+      success: true,
+      data: seed,
+    });
+  } catch (error) {
+    console.error('❌ setup-public-form-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup public form scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 export default router;

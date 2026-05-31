@@ -31,18 +31,20 @@ description: >-
 | You touched | Update |
 |-------------|--------|
 | Registration, locations, school_id | `domains/registration-and-locations.md` |
-| CI, Jest, Playwright, workflows | `domains/ci-and-testing.md` + `asa-testing-deployment` |
-| Payments, Stripe, cart | `asa-payment-patterns` + hub link if new pitfall |
+| CI, Jest, Playwright, workflows | `domains/ci-and-testing.md` + `asa-testing-deployment` + row in `docs/E2E_COMMANDS.md` for each new `e2e/*.spec.ts` |
+| Payments, Stripe, cart, prod balance audit | `domains/payments-and-billing.md` + `asa-payment-patterns` |
 | Credits | `asa-credit-system` |
 | Auth, API tenancy | `asa-auth-patterns` |
+| Form Builder, public forms, mentor app | `domains/custom-forms-public-access.md` |
 
 ## Maintenance workflow
 
 1. Read hub + relevant domain doc and `asa-*` skill.
 2. Complete the task.
 3. Edit domain doc / skill if conventions changed.
-4. Add a bullet to `docs/APP_KNOWLEDGE/CHANGELOG.md` (date + summary).
-5. End with **Knowledge update** (learned / updated / gaps).
+4. **New Playwright spec:** add testing links in [`docs/E2E_COMMANDS.md`](../../docs/E2E_COMMANDS.md) (catalog row: file path, `npm run test:e2e -- e2e/…`, prerequisites, seed endpoint); cross-link from runbook/domain doc when applicable.
+5. Add a bullet to `docs/APP_KNOWLEDGE/CHANGELOG.md` (date + summary).
+6. End with **Knowledge update** (learned / updated / gaps).
 
 ## Common pitfalls
 
@@ -69,6 +71,7 @@ description: >-
 - `docs/APP_KNOWLEDGE/README.md` — hub
 - `docs/APP_KNOWLEDGE/architecture.md` — system map
 - `docs/APP_KNOWLEDGE/domains/registration-and-locations.md` — registration lane
+- `docs/APP_KNOWLEDGE/domains/payments-and-billing.md` — ledgers, credits, prod corrections
 - `docs/APP_KNOWLEDGE/domains/ci-and-testing.md` — CI gates
 - `docs/APP_KNOWLEDGE/runbooks/merge-replit-prod.md` — ship checklist
 - `.cursor/rules/app-knowledge.mdc` — always-on reminder in Cursor
