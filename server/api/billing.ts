@@ -160,13 +160,7 @@ async function resolveSchoolIdForBalancePaymentIntent(
 }
 
 function getAuthoritativeRemainingBalanceCents(enrollment: any): number {
-  if (Number.isFinite(enrollment?.remainingBalance)) {
-    return Math.max(0, Math.round(Number(enrollment.remainingBalance)));
-  }
-
-  const totalCost = parseIntegerCents(enrollment?.totalCost) ?? 0;
-  const totalPaid = parseIntegerCents(enrollment?.totalPaid) ?? 0;
-  return Math.max(0, totalCost - totalPaid);
+  return resolveEnrollmentEffectiveBalance(enrollment);
 }
 
 function parseAdvisoryAmountCents(value: unknown): { parsed: number | null; malformed: boolean } {

@@ -1,5 +1,35 @@
 # App knowledge changelog
 
+## 2026-05-31 (Prod: classes.enrollment_open column missing — cart snapshot)
+
+- **Symptom:** `getClassById` failed with `column "enrollment_open" does not exist`; CombinedStorage fell back to empty memStorage during `/api/cart/snapshot` → checkout/pricing errors (seen in prod logs for parent 31 cart).
+- **Fix:** `ALTER TABLE classes ADD COLUMN IF NOT EXISTS enrollment_open BOOLEAN NOT NULL DEFAULT false` on prod; matching migration in `server/init-db.ts`.
+
+## 2026-05-31 (Kristel Reichert prod + iOS billing path)
+
+- **Prod (parent 16):** Membership **#124** → **\$175 paid / enrolled**; Andrew enr **289** (100% comp) → `payment_status = completed`; linked `cus_T60RuRly2qaTNk`. Remaining: Jackson enr **290** **\$556.25**.
+- **Code:** `getAuthoritativeRemainingBalanceCents` uses `resolveEnrollmentEffectiveBalance` (comp-aware); Billing pay flow skips \$0 enrollments; cart refresh hash includes comp/paymentStatus (Safari stale-cart fix).
+
+## 2026-05-31 (Batch balance reminder emails — collections template)
+
+- **Sent:** 26 families consolidated balance emails via `sendFamilyBalanceEmail` / `server/scripts/send-balance-reminders-batch.ts` (amount due + Sign In & Pay link).
+- **Excluded:** All **Fall 2026** registrants (`Fall 2026 - Full Day` / `Half Day`), explicit skips Corcoran/Ballou/Sartena/Pastorella, test accounts, admin ids **3/5**.
+- **Fall skip set (8 parents):** DiSano **25**, Corcoran **29**, Selvaggio **119**, Sartena **121**, Pastorella **135**, Spencer **144**, Ballou **145**, Jacks **146**.
+- **Non-blocking:** `email_log.created_at` + `payment_reminder_logs` memory fallback on prod schema drift; Brevo delivery succeeded.
+
+## 2026-05-31 (Batch membership paid — 15 families)
+
+- **Prod:** Marked 2026 membership **\$175 paid / \$0 remaining**, `status = enrolled` for membership rows **#85, #82, #86, #110, #111, #114, #116, #117, #121, #127, #141, #145, #147, #148, #398** (Frasier, Chappell, Torres, Lawrence, Lentz, Manza, Culotta, Spencer, Ragusa, **Alyssa** Hadley, Fuller, Erbland, Omar Hill, Green, Renee Zegarelli). Clark Hadley **#118** was already enrolled/paid — skipped.
+
+## 2026-05-31 (School documents: per-file public share links)
+
+- **Feature:** Admins can generate a **public, no-login download link** per document. New `school_documents.share_token` column (random `randomBytes(24).base64url`, partial-unique index `WHERE share_token IS NOT NULL`); NULL = not shared.
+- **Endpoints:** `POST /api/schools/documents/:id/share` (generate/return token, idempotent, school-scoped), `DELETE /api/schools/documents/:id/share` (revoke). Public, **unauthenticated** `GET /api/schools/documents/public/:token/download` streams the file only while published + not archived + not expired (generic 404 otherwise; no `document_views` recording).
+- **Schema fix:** Added `expiresAt`, `isArchived`, `shareToken` to `schoolDocuments` in `shared/schema.ts` (the first two columns already existed in the DB via `init-db` migrations but were missing from the Drizzle object — this also cleared pre-existing `isArchived` type errors in `server/api/schools.ts`). Migration added to `server/init-db.ts`.
+- **Storage:** `getSchoolDocumentByShareToken()` on `DatabaseStorage` + `CombinedStorage`; set/clear via `updateSchoolDocument`.
+- **UI:** Per-document Share dialog (generate / copy link / revoke) + green "Public link" badge in `DocumentManagementPage.tsx`. Absolute URL built client-side from `window.location.origin` + returned `sharePath`.
+- **Files:** `shared/schema.ts`, `server/init-db.ts`, `server/dbStorage.ts`, `server/storage.ts`, `server/api/schools/documents.ts`, `client/src/pages/schooladmin/DocumentManagementPage.tsx`.
+
 ## 2026-05-31 (Scheduled-payment webhook vs reconciliation double-apply — Shaley Beigel)
 
 - **Root cause:** `payment_intent.succeeded` scheduled path updated enrollments before inserting the `payments` row; stuck-processing reconciliation could backfill enrollment again when no row existed yet (only skipped `status === 'completed'` on payments).

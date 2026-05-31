@@ -2259,6 +2259,14 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: prorate_enabled column added to classes table');
 
+    // Per-class enrollment visibility toggle (feature/class-enrollment-open)
+    console.log('Running migration: Adding enrollment_open column to classes table...');
+    await db.execute(sql`
+      ALTER TABLE classes
+      ADD COLUMN IF NOT EXISTS enrollment_open BOOLEAN NOT NULL DEFAULT false;
+    `);
+    console.log('✅ Migration completed: enrollment_open column added to classes table');
+
     // Add proration tracking columns to program_enrollments table
     console.log('Running migration: Adding proration tracking columns to program_enrollments...');
     await db.execute(sql`
