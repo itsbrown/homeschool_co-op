@@ -108,10 +108,22 @@ async function resolvePaymentLabelsForEnrollment(enrollmentId: number): Promise<
   return { childName, className };
 }
 
+/** @internal Exported for reconciliation idempotency tests. */
+export function isWebhookScheduledPaymentCompletionSource(
+  completionSource: string | null | undefined,
+): boolean {
+  return completionSource === 'stripe_autopay' || completionSource === 'stripe_checkout';
+}
+
+/** @internal Exported for reconciliation idempotency tests. */
+export function paymentRowBlocksReconciliationBackfill(status: string | undefined): boolean {
+  return status === 'completed' || status === 'succeeded' || status === 'pending';
+}
+
 /**
  * When reconciliation marks a scheduled payment completed from Stripe truth but no `payments` row exists yet
  * (missed webhook), apply the same enrollment split and ledger row the webhook would have created.
- * Skips if a completed payment already exists for the PI (idempotent with webhook).
+ * Skips enrollment mutation if the webhook already completed the SP or any payments row exists for the PI.
  */
 async function applyReconciliationLedgerSideEffectsIfNeeded(scheduledPaymentId: number): Promise<void> {
   const db = await getDb();
@@ -121,7 +133,7 @@ async function applyReconciliationLedgerSideEffectsIfNeeded(scheduledPaymentId: 
   }
 
   const existing = await storage.getPaymentByStripeId(row.stripePaymentIntentId);
-  if (existing?.status === 'completed') {
+  if (paymentRowBlocksReconciliationBackfill(existing?.status)) {
     return;
   }
   if (existing) {
@@ -138,7 +150,7 @@ async function applyReconciliationLedgerSideEffectsIfNeeded(scheduledPaymentId: 
   }
 
   const racing = await storage.getPaymentByStripeId(row.stripePaymentIntentId);
-  if (racing?.status === 'completed') {
+  if (paymentRowBlocksReconciliationBackfill(racing?.status)) {
     return;
   }
   if (racing) {
@@ -148,7 +160,18 @@ async function applyReconciliationLedgerSideEffectsIfNeeded(scheduledPaymentId: 
     return;
   }
 
-  const enrollmentIds = resolveScheduledPaymentEnrollmentIds(row, pi.metadata as Record<string, string | undefined>);
+  const [freshRow] = await db
+    .select()
+    .from(scheduledPayments)
+    .where(eq(scheduledPayments.id, scheduledPaymentId));
+  const webhookAlreadyAppliedLedger =
+    freshRow?.status === 'completed' &&
+    isWebhookScheduledPaymentCompletionSource(freshRow.completionSource);
+
+  const enrollmentIds = resolveScheduledPaymentEnrollmentIds(
+    freshRow ?? row,
+    pi.metadata as Record<string, string | undefined>,
+  );
   if (enrollmentIds.length === 0) {
     console.error(`[autopay-reconciliation] no enrollment ids for scheduled payment ${scheduledPaymentId}`);
     return;
@@ -157,21 +180,27 @@ async function applyReconciliationLedgerSideEffectsIfNeeded(scheduledPaymentId: 
   const amountCents = typeof pi.amount === "number" ? pi.amount : 0;
   const shares = splitCentsEvenly(amountCents, enrollmentIds.length);
 
-  for (let i = 0; i < enrollmentIds.length; i++) {
-    const enrollmentId = enrollmentIds[i]!;
-    const shareCents = shares[i] ?? 0;
-    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
-    if (!enrollment) {
-      console.error(`[autopay-reconciliation] enrollment ${enrollmentId} not found (scheduled ${scheduledPaymentId})`);
-      continue;
+  if (!webhookAlreadyAppliedLedger) {
+    for (let i = 0; i < enrollmentIds.length; i++) {
+      const enrollmentId = enrollmentIds[i]!;
+      const shareCents = shares[i] ?? 0;
+      const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+      if (!enrollment) {
+        console.error(`[autopay-reconciliation] enrollment ${enrollmentId} not found (scheduled ${scheduledPaymentId})`);
+        continue;
+      }
+      const newPaid = (enrollment.totalPaid || 0) + shareCents;
+      const newBal = Math.max(0, (enrollment.totalCost || 0) - newPaid);
+      await storage.updateProgramEnrollment(enrollmentId, {
+        totalPaid: newPaid,
+        remainingBalance: newBal,
+        paymentStatus: newBal <= 0 ? 'completed' : 'partial_payment',
+      });
     }
-    const newPaid = (enrollment.totalPaid || 0) + shareCents;
-    const newBal = Math.max(0, (enrollment.totalCost || 0) - newPaid);
-    await storage.updateProgramEnrollment(enrollmentId, {
-      totalPaid: newPaid,
-      remainingBalance: newBal,
-      paymentStatus: newBal <= 0 ? 'completed' : 'partial_payment',
-    });
+  } else {
+    console.log(
+      `[autopay-reconciliation] scheduled payment ${scheduledPaymentId} already completed by webhook (${freshRow?.completionSource}); creating payments row only for PI ${row.stripePaymentIntentId}`,
+    );
   }
 
   const { childName, className } = await resolvePaymentLabelsForEnrollment(enrollmentIds[0]!);
