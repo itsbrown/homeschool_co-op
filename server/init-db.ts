@@ -2851,6 +2851,23 @@ async function runMigrations() {
     console.log('Migration note (non-blocking):', docLifecycleError.message);
   }
 
+  // Add public share token column to school_documents (per-file shareable public links)
+  console.log('Running migration: Adding share_token column to school_documents table...');
+  try {
+    await db.execute(sql`
+      ALTER TABLE school_documents
+      ADD COLUMN IF NOT EXISTS share_token TEXT;
+    `);
+    // Partial unique index: allows many NULLs but enforces uniqueness of active tokens.
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_school_documents_share_token
+      ON school_documents(share_token) WHERE share_token IS NOT NULL;
+    `);
+    console.log('✅ Migration completed: share_token column added to school_documents');
+  } catch (shareTokenError: any) {
+    console.log('Migration note (non-blocking):', shareTokenError.message);
+  }
+
   // Create document_views table for download tracking
   console.log('Running migration: Creating document_views table...');
   try {

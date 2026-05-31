@@ -169,9 +169,19 @@ School admins upload documents to `school_documents`. Each document has two visi
 | `visibleToAll` | If `true`, visible to every parent in the school without extra targeting |
 
 **Targeted (per-parent) visibility** is resolved through the `notifications` and `notification_recipients` tables:
-- When a document is published with specific recipients, `sendDocumentNotification()` in `server/api/schools/documents.ts` creates a `notification` record with `targetData: { documentId: <id>, ... }`
-- For each recipient, a `notification_recipients` row is created linking the notification to that parent's `userId`
-- The `documentId` key inside `notifications.target_data` (JSONB) is the authoritative link — no title matching is used
+- When a document is published with specific recipients, `sendBulkDocumentNotification()` in `server/api/schools/documents.ts` creates a `notification` record with `targetData` containing `documentIds: [<id>, ...]` (and, for single uploads, also a scalar `documentId` for backward compat)
+- For each recipient, two `notification_recipients` rows are created (`in_app` + `email`) linking the notification to that parent's `userId`
+- The `documentIds` array inside `notifications.target_data` (JSONB) is the authoritative link — no title matching is used. The admin parent-document query unions both the scalar `documentId` and the `documentIds` array (`jsonb_array_elements_text`).
+
+### Notification delivery (in-app + email)
+- Document notifications deliver via **both in-app and email** (`type: 'both'`). Email reuses the exported `sendNotificationEmails()` from `server/api/notifications.ts` (Brevo). Email failures are non-fatal and skip gracefully if `BREVO_API_KEY` is unset.
+- Triggered when a doc is published with targeting (upload toggle), on draft→published transition (`all_parents`), or via the bell button.
+- The parent's **own** document page (`GET /api/parent/school-documents` → `getPublishedSchoolDocuments`) shows **all** `isPublished` docs for their school regardless of targeting; per-parent targeting only filters the **admin** parent-profile documents tab.
+
+### Bulk upload
+- The admin Document Management page supports selecting **multiple files** (single `<input multiple>`). The frontend uploads each file via `POST /api/schools/documents/upload` (per-file validation + duplicate-name check), then sends **one joint notification** for the whole batch via `POST /api/schools/documents/notify-bulk` (`{ documentIds, targeting }`).
+- For bulk, each document's title is derived from its filename; description/category/visibility/expiry/notification settings apply to all files in the batch.
+- Videos are still **not** supported in the `documents` category (no video MIME types).
 
 ### Admin Endpoint: Parent Document List
 `GET /api/schools/parents/:parentId/documents` (in `server/api/schools.ts`)

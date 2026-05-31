@@ -268,13 +268,24 @@ router.get('/parents/:parentId/documents', supabaseAuth, requireRole(['schoolAdm
     // sendDocumentNotification stores documentId in targetData for all targeting types.
     // Use raw SQL to extract documentId from the JSONB targetData column — this is the
     // authoritative document-level linkage; no title matching is used.
+    // Reads both the scalar `documentId` (single uploads) and the `documentIds`
+    // JSONB array (bulk uploads / joint notifications). Both paths are unioned.
     const targetedDocRows = await database.execute(sql`
-      SELECT DISTINCT CAST(n.target_data->>'documentId' AS INTEGER) AS document_id
-      FROM notification_recipients nr
-      JOIN notifications n ON n.id = nr.notification_id
-      WHERE nr.recipient_id = ${parentId}
-        AND n.target_data->>'documentId' IS NOT NULL
-        AND CAST(n.target_data->>'documentId' AS INTEGER) > 0
+      SELECT DISTINCT document_id FROM (
+        SELECT CAST(n.target_data->>'documentId' AS INTEGER) AS document_id
+        FROM notification_recipients nr
+        JOIN notifications n ON n.id = nr.notification_id
+        WHERE nr.recipient_id = ${parentId}
+          AND n.target_data->>'documentId' IS NOT NULL
+        UNION ALL
+        SELECT CAST(elem AS INTEGER) AS document_id
+        FROM notification_recipients nr
+        JOIN notifications n ON n.id = nr.notification_id
+        CROSS JOIN LATERAL jsonb_array_elements_text(n.target_data->'documentIds') AS elem
+        WHERE nr.recipient_id = ${parentId}
+          AND jsonb_typeof(n.target_data->'documentIds') = 'array'
+      ) merged
+      WHERE document_id IS NOT NULL AND document_id > 0
     `);
 
     const targetedDocumentIds: number[] = (targetedDocRows.rows as any[])
