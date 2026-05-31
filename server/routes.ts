@@ -2669,10 +2669,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🗑️ Deleting child with ID:', childId);
 
       // First, get the child data before deleting
-      const child = await storage.getChild(childId);
+      const child = await storage.getChildById(childId);
       
       if (!child) {
         return res.status(404).json({ message: 'Child not found' });
+      }
+
+      const enrollments = await storage.getEnrollmentsByChildId(childId);
+      if (enrollments.length > 0) {
+        return res.status(400).json({
+          message: 'Cannot delete child with enrollments. Remove or transfer enrollments first.',
+          enrollmentCount: enrollments.length,
+        });
       }
 
       // Now delete the child record

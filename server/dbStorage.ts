@@ -73,6 +73,7 @@ import {
   type StripePaymentHistory,
   type InsertStripePaymentHistory,
 } from '../shared/schema';
+import { sqlStripeHistoryUserAtSchool } from './lib/admin-school-context';
 
 /**
  * DatabaseStorage - Implements IStorage using PostgreSQL and Drizzle ORM
@@ -497,6 +498,7 @@ export class DatabaseStorage implements IStorage {
         totalDiscounted: classes.totalDiscounted,
         totalCollected: classes.totalCollected,
         isAdminOnly: classes.isAdminOnly,
+        enrollmentOpen: classes.enrollmentOpen,
         enrollmentCount: classes.enrollmentCount,
         ageRange: classes.ageRange,
         scheduleType: classes.scheduleType,
@@ -725,6 +727,7 @@ export class DatabaseStorage implements IStorage {
         totalDiscounted: classes.totalDiscounted,
         totalCollected: classes.totalCollected,
         isAdminOnly: classes.isAdminOnly,
+        enrollmentOpen: classes.enrollmentOpen,
         enrollmentCount: classes.enrollmentCount,
         ageRange: classes.ageRange,
         scheduleType: classes.scheduleType,
@@ -812,6 +815,7 @@ export class DatabaseStorage implements IStorage {
         totalDiscounted: classes.totalDiscounted,
         totalCollected: classes.totalCollected,
         isAdminOnly: classes.isAdminOnly,
+        enrollmentOpen: classes.enrollmentOpen,
         enrollmentCount: classes.enrollmentCount,
         ageRange: classes.ageRange,
         scheduleType: classes.scheduleType,
@@ -2474,6 +2478,15 @@ export class DatabaseStorage implements IStorage {
       .from(categories)
       .where(and(eq(categories.schoolId, schoolId), eq(categories.isActive, true)))
       .orderBy(asc(categories.name));
+  }
+
+  async getHiddenCategoryIds(): Promise<number[]> {
+    const db = await getDb();
+    const rows = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(and(eq(categories.isPublic, false), eq(categories.isActive, true)));
+    return rows.map(r => r.id);
   }
 
   async getAllCategories(): Promise<Category[]> {
@@ -4180,30 +4193,65 @@ export class DatabaseStorage implements IStorage {
       .filter(Boolean);
   }
 
+  /** Max GREATEST(enrollment_date, program_start_date) per normalized parent email (qualifying statuses only). */
+  async getLastEnrollmentDateByParentEmails(
+    schoolId: number,
+    emails: string[],
+  ): Promise<Map<string, string>> {
+    const normalized = [
+      ...new Set(emails.map((e) => normalizeEmailForLookup(e)).filter(Boolean)),
+    ];
+    const result = new Map<string, string>();
+    if (normalized.length === 0) return result;
+
+    const db = await getDb();
+    const qualifyingStatuses = [
+      'pending_payment',
+      'pending_admin_approval',
+      'enrolled',
+      'completed',
+      'waitlist',
+    ];
+
+    const rows = await db
+      .select({
+        parentEmailKey: sql<string>`LOWER(TRIM(${programEnrollments.parentEmail}))`,
+        lastEnrollmentDate: sql<string>`MAX(GREATEST(
+          ${programEnrollments.enrollmentDate}::date,
+          COALESCE(${programEnrollments.programStartDate}, ${programEnrollments.enrollmentDate}::date)
+        ))::text`,
+      })
+      .from(programEnrollments)
+      .where(
+        and(
+          eq(programEnrollments.schoolId, schoolId),
+          inArray(programEnrollments.status, [...qualifyingStatuses]),
+          inArray(
+            sql`LOWER(TRIM(${programEnrollments.parentEmail}))`,
+            normalized,
+          ),
+        ),
+      )
+      .groupBy(sql`LOWER(TRIM(${programEnrollments.parentEmail}))`);
+
+    for (const row of rows) {
+      const key = normalizeEmailForLookup(row.parentEmailKey);
+      if (key && row.lastEnrollmentDate) {
+        result.set(key, row.lastEnrollmentDate);
+      }
+    }
+    return result;
+  }
+
   async getStripePaymentHistoryForSchool(schoolId: number, limit = 100): Promise<StripePaymentHistory[]> {
     const db = await getDb();
     const cap = Math.min(Math.max(limit, 1), 200);
-    const rows = await db.execute(sql`
-      SELECT sph.*
-      FROM stripe_payment_history sph
-      WHERE (
-        EXISTS (SELECT 1 FROM users u WHERE u.id = sph.user_id AND u.school_id = ${schoolId})
-        OR EXISTS (
-          SELECT 1 FROM user_roles ur
-          WHERE ur.user_id = sph.user_id
-            AND ur.school_id = ${schoolId}
-            AND LOWER(TRIM(ur.role)) = 'parent'
-        )
-        OR EXISTS (
-          SELECT 1 FROM program_enrollments pe
-          INNER JOIN users u2 ON LOWER(TRIM(u2.email)) = LOWER(TRIM(pe.parent_email))
-          WHERE pe.school_id = ${schoolId} AND u2.id = sph.user_id
-        )
-      )
-      ORDER BY sph.stripe_created_at DESC
-      LIMIT ${cap}
-    `);
-    return rows.rows as StripePaymentHistory[];
+    return db
+      .select()
+      .from(stripePaymentHistory)
+      .where(sqlStripeHistoryUserAtSchool(schoolId, stripePaymentHistory.userId))
+      .orderBy(desc(stripePaymentHistory.stripeCreatedAt))
+      .limit(cap);
   }
 
   private mapPaymentReminderLogRow(row: Record<string, unknown>): PaymentReminderLog {

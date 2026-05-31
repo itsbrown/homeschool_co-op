@@ -284,6 +284,8 @@ export interface IStorage {
   >;
   getParentEmailsWithEnrollmentSince(schoolId: number, sinceDate: string): Promise<string[]>;
   getDistinctParentEmailsForSchool(schoolId: number): Promise<string[]>;
+  /** Max GREATEST(enrollment_date, program_start_date) per normalized parent email for qualifying enrollments. */
+  getLastEnrollmentDateByParentEmails(schoolId: number, emails: string[]): Promise<Map<string, string>>;
   getStripePaymentHistoryForSchool(schoolId: number, limit?: number): Promise<StripePaymentHistory[]>;
 
   // Membership Enrollment methods
@@ -1981,6 +1983,43 @@ export class MemStorage implements IStorage {
     return Array.from(emails);
   }
 
+  async getLastEnrollmentDateByParentEmails(
+    schoolId: number,
+    emails: string[],
+  ): Promise<Map<string, string>> {
+    const qualifying = new Set([
+      'pending_payment',
+      'pending_admin_approval',
+      'enrolled',
+      'completed',
+      'waitlist',
+    ]);
+    const targets = new Set(
+      emails.map((e) => normalizeEmailForLookup(e)).filter(Boolean),
+    );
+    const result = new Map<string, string>();
+    if (targets.size === 0) return result;
+
+    for (const e of this.programEnrollmentsStore.values()) {
+      if (e.schoolId !== schoolId || !qualifying.has(e.status)) continue;
+      const key = normalizeEmailForLookup(e.parentEmail);
+      if (!key || !targets.has(key)) continue;
+
+      const enrollmentDay = e.enrollmentDate
+        ? new Date(e.enrollmentDate).toISOString().split('T')[0]
+        : null;
+      if (!enrollmentDay) continue;
+      const programDay = e.programStartDate ?? enrollmentDay;
+      const activityDay = enrollmentDay >= programDay ? enrollmentDay : programDay;
+
+      const prev = result.get(key);
+      if (!prev || activityDay > prev) {
+        result.set(key, activityDay);
+      }
+    }
+    return result;
+  }
+
   async getStripePaymentHistoryForSchool(_schoolId: number, _limit?: number): Promise<StripePaymentHistory[]> {
     return [];
   }
@@ -3326,8 +3365,10 @@ export class MemStorage implements IStorage {
   }
 
   async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
+    const normalized = normalizeEmailForLookup(parentEmail);
+    if (!normalized) return [];
     return Array.from(this.paymentsStore.values()).filter(
-      payment => payment.parentEmail === parentEmail
+      payment => normalizeEmailForLookup(payment.parentEmail) === normalized
     );
   }
 
@@ -5917,6 +5958,15 @@ export class MemStorage implements IStorage {
       }
     }
 
+    async getLastEnrollmentDateByParentEmails(schoolId: number, emails: string[]) {
+      try {
+        return await this.dbStorage.getLastEnrollmentDateByParentEmails(schoolId, emails);
+      } catch (error) {
+        if (process.env.NODE_ENV === 'production') throw error;
+        return this.memStorage.getLastEnrollmentDateByParentEmails(schoolId, emails);
+      }
+    }
+
     async getStripePaymentHistoryForSchool(schoolId: number, limit?: number) {
       try {
         return await this.dbStorage.getStripePaymentHistoryForSchool(schoolId, limit);
@@ -6207,29 +6257,46 @@ export class MemStorage implements IStorage {
 
       // Payment methods implementation - use memStorage since database is failing
       async createPayment(payment: InsertPayment): Promise<Payment> {
-        try {
-          // Prefer dbStorage, but fallback to fileStorage (memStorage instance) if unavailable
-          if (this.dbStorage && typeof this.dbStorage.createPayment === 'function') {
-            return await this.dbStorage.createPayment(payment);
-          } else {
-            console.log('💾 DB storage unavailable or method missing, using file storage fallback for createPayment');
-            return await this.fileStorage.createPayment(payment);
-          }
-        } catch (error) {
-          console.error('❌ Error creating payment, falling back to file storage:', error);
-          return await this.fileStorage.createPayment(payment);
+        if (this.dbStorage && typeof this.dbStorage.createPayment === 'function') {
+          return await this.dbStorage.createPayment(payment);
         }
+        console.log('💾 DB storage unavailable or method missing, using file storage fallback for createPayment');
+        return await this.fileStorage.createPayment(payment);
       }
 
       async getPaymentsByParentEmail(parentEmail: string): Promise<Payment[]> {
-        return this.memStorage.getPaymentsByParentEmail(parentEmail);
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getPaymentsByParentEmail === 'function') {
+            return await this.dbStorage.getPaymentsByParentEmail(parentEmail);
+          }
+          console.log('💾 DB storage unavailable or method missing, using file storage fallback for getPaymentsByParentEmail');
+          return await this.fileStorage.getPaymentsByParentEmail(parentEmail);
+        } catch (error) {
+          console.error('❌ Error reading payments by parent email, falling back to file storage:', error);
+          return await this.fileStorage.getPaymentsByParentEmail(parentEmail);
+        }
       }
 
       async getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined> {
-        return this.memStorage.getPaymentByStripeId(stripePaymentIntentId);
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getPaymentByStripeId === 'function') {
+            return await this.dbStorage.getPaymentByStripeId(stripePaymentIntentId);
+          }
+          return await this.fileStorage.getPaymentByStripeId(stripePaymentIntentId);
+        } catch (error) {
+          console.error('❌ Error reading payment by Stripe id, falling back to file storage:', error);
+          return await this.fileStorage.getPaymentByStripeId(stripePaymentIntentId);
+        }
       }
 
       async updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined> {
+        try {
+          if (this.dbStorage && typeof this.dbStorage.updatePaymentStatus === 'function') {
+            return await this.dbStorage.updatePaymentStatus(id, status);
+          }
+        } catch (error) {
+          console.error('❌ Error updating payment status in DB, falling back to file storage:', error);
+        }
         // Map interface status values to internal implementation values
         let internalStatus: 'pending' | 'failed' | 'succeeded' | 'canceled';
         switch (status) {

@@ -21,9 +21,10 @@ export type OutstandingBalanceRow = {
   status: string;
   reminderCount: number | null;
   lastReminderSentAt: string | Date | null;
-  type: 'scheduled' | 'unscheduled';
+  type: 'scheduled' | 'unscheduled' | 'membership';
   parent: { id: number; name: string; email: string; phone: string | null } | null;
   enrollment: { id: number; childName: string | null; className: string | null } | null;
+  membershipYear?: number | null;
   enrollmentRemainingBalance: number;
   isOverdue: boolean;
   daysOverdue: number;
@@ -122,6 +123,8 @@ export async function buildOutstandingBalanceRows(schoolId: number): Promise<{
   }>;
   summary: {
     totalOutstandingCents: number;
+    tuitionOutstandingCents: number;
+    membershipOutstandingCents: number;
     overdueAmountCents: number;
     totalPaymentsDue: number;
     overduePayments: number;
@@ -176,7 +179,29 @@ export async function buildOutstandingBalanceRows(schoolId: number): Promise<{
     pendingByEnrollment.set(payment.enrollmentId, list);
   }
 
-  const parentIds = owingEnrollments.map((e) => e.parentId);
+  const membershipRows = await db
+    .select({
+      id: membershipEnrollments.id,
+      parentUserId: membershipEnrollments.parentUserId,
+      membershipYear: membershipEnrollments.membershipYear,
+      balanceDue: membershipEnrollments.balanceDue,
+      remainingBalance: membershipEnrollments.remainingBalance,
+      status: membershipEnrollments.status,
+      dueDate: membershipEnrollments.dueDate,
+    })
+    .from(membershipEnrollments)
+    .where(
+      and(
+        eq(membershipEnrollments.schoolId, schoolId),
+        inArray(membershipEnrollments.status, [...MEMBERSHIP_OWED_STATUSES]),
+        sql`GREATEST(COALESCE(${membershipEnrollments.balanceDue}, 0), COALESCE(${membershipEnrollments.remainingBalance}, 0)) > 0`,
+      ),
+    );
+
+  const parentIds = [
+    ...owingEnrollments.map((e) => e.parentId),
+    ...membershipRows.map((m) => m.parentUserId),
+  ];
   const parentInfoMap = await loadParentInfo(parentIds);
 
   const validBalances: OutstandingBalanceRow[] = [];
@@ -244,6 +269,44 @@ export async function buildOutstandingBalanceRows(schoolId: number): Promise<{
     }
   }
 
+  for (const mem of membershipRows) {
+    const balanceDueCents = Math.max(Number(mem.balanceDue ?? 0), Number(mem.remainingBalance ?? 0));
+    if (balanceDueCents <= 0) continue;
+
+    const parentInfo = parentInfoMap.get(mem.parentUserId) ?? null;
+    const parentEmail = (parentInfo?.email || '').trim() || `parent-${mem.parentUserId}@unknown.local`;
+    const dueDate = mem.dueDate;
+    const isOverdue = dueDate ? new Date(dueDate) < now : false;
+    const daysOverdue = isOverdue && dueDate
+      ? Math.floor((now.getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    validBalances.push({
+      id: -1_000_000 - mem.id,
+      enrollmentId: 0,
+      parentId: mem.parentUserId,
+      parentEmail,
+      amount: balanceDueCents,
+      scheduledDate: dueDate,
+      installmentNumber: null,
+      totalInstallments: null,
+      status: mem.status,
+      reminderCount: null,
+      lastReminderSentAt: null,
+      type: 'membership',
+      parent: parentInfo,
+      enrollment: {
+        id: 0,
+        childName: null,
+        className: `Membership ${mem.membershipYear}`,
+      },
+      membershipYear: mem.membershipYear,
+      enrollmentRemainingBalance: balanceDueCents,
+      isOverdue,
+      daysOverdue,
+    });
+  }
+
   type FamilyBalance = {
     parent: OutstandingBalanceRow['parent'];
     parentEmail: string;
@@ -263,7 +326,6 @@ export async function buildOutstandingBalanceRows(schoolId: number): Promise<{
         payments: [],
       };
     }
-    acc[email].totalOutstandingCents += balance.amount;
     if (balance.isOverdue) {
       acc[email].overdueAmountCents += balance.amount;
     }
@@ -271,13 +333,36 @@ export async function buildOutstandingBalanceRows(schoolId: number): Promise<{
     return acc;
   }, {});
 
+  for (const family of Object.values(byParent)) {
+    const seenEnrollments = new Set<number>();
+    let totalOutstandingCents = 0;
+    for (const balance of family.payments) {
+      if (balance.type === 'membership') {
+        totalOutstandingCents += balance.amount;
+        continue;
+      }
+      if (seenEnrollments.has(balance.enrollmentId)) continue;
+      seenEnrollments.add(balance.enrollmentId);
+      totalOutstandingCents += balance.enrollmentRemainingBalance;
+    }
+    family.totalOutstandingCents = totalOutstandingCents;
+  }
+
   const tuitionByEnrollment = new Map<number, number>();
   for (const enr of owingEnrollments) {
     tuitionByEnrollment.set(enr.id, Number(enr.outstandingCents) || 0);
   }
 
+  const membershipOutstandingCents = membershipRows.reduce((sum, mem) => {
+    const cents = Math.max(Number(mem.balanceDue ?? 0), Number(mem.remainingBalance ?? 0));
+    return cents > 0 ? sum + cents : sum;
+  }, 0);
+  const tuitionOutstandingCents = [...tuitionByEnrollment.values()].reduce((s, v) => s + v, 0);
+
   const summary = {
-    totalOutstandingCents: [...tuitionByEnrollment.values()].reduce((s, v) => s + v, 0),
+    totalOutstandingCents: tuitionOutstandingCents + membershipOutstandingCents,
+    tuitionOutstandingCents,
+    membershipOutstandingCents,
     overdueAmountCents: validBalances.filter((b) => b.isOverdue).reduce((s, b) => s + b.amount, 0),
     totalPaymentsDue: validBalances.length,
     overduePayments: validBalances.filter((b) => b.isOverdue).length,

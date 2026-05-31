@@ -3,8 +3,8 @@ import { storage } from '../storage';
 import { splitCentsEvenly } from '../api/billing';
 import {
   enrollmentPoolCentsForBalanceIntent,
+  membershipCentsReservedForPaymentIntent,
   parseBalanceIntentCredits,
-  parseMetadataMembershipAmountCents,
   totalCentsForBalanceAllocation,
 } from './balance-payment-metadata';
 import type Stripe from 'stripe';
@@ -33,7 +33,7 @@ export async function applyClassPoolToEnrollments(
   }
 
   const meta = paymentIntent.metadata as Record<string, string | undefined>;
-  const membershipCents = parseMetadataMembershipAmountCents(meta);
+  const membershipCents = membershipCentsReservedForPaymentIntent(amountCents, meta);
   const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(meta);
   const totalCharged = totalCentsForBalanceAllocation({
     paymentIntentAmountCents: amountCents,

@@ -916,6 +916,7 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
       isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly,
+      enrollmentOpen: req.body.enrollmentOpen !== undefined ? req.body.enrollmentOpen : existingClass.enrollmentOpen,
       prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled
     };
 
@@ -1038,6 +1039,7 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
       isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly,
+      enrollmentOpen: req.body.enrollmentOpen !== undefined ? req.body.enrollmentOpen : existingClass.enrollmentOpen,
       prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled
     };
 
@@ -2614,6 +2616,8 @@ router.post("/classes", supabaseAuth, requireSchoolContext, async (req: any, res
       instructorName: req.body.instructorName,
       instructorId,
       isPublished: false,
+      // New classes default to closed for enrollment (admin opens when ready)
+      enrollmentOpen: req.body.enrollmentOpen === true,
     };
 
     console.log('💰 Extracted price from variants:', price);

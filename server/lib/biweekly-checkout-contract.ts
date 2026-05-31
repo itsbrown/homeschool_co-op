@@ -7,6 +7,7 @@ import {
   BIWEEKLY_CLASS_END_PAYMENT_BUFFER_DAYS,
   biweeklyInstallmentScheduleEndDate,
   calculateCheckoutBiweeklySchedule,
+  checkoutAnchorDate,
   type CheckoutBiweeklySchedule,
 } from './payment-calculator';
 
@@ -87,6 +88,40 @@ export function buildBiweeklyCheckoutPhases(
         : checkout.paymentAmount,
     installmentNumber: index + 1,
   }));
+}
+
+/**
+ * Rebuild biweekly phases from checkout PI metadata when enrollment program dates
+ * are missing at webhook time but metadata still says N installments (e.g. 12).
+ * Uses equal split + 14-day spacing from anchor — matches checkout amounts, not
+ * necessarily program-end-boundary dates from cart.
+ */
+export function buildBiweeklyPhasesFromInstallmentMetadata(
+  totalAmountCents: number,
+  totalInstallments: number,
+  anchorDate?: Date,
+): BiweeklyCheckoutPhase[] {
+  if (totalInstallments < 2) {
+    return [
+      {
+        dueDate: anchorDate ?? checkoutAnchorDate(),
+        amount: totalAmountCents,
+        installmentNumber: 1,
+      },
+    ];
+  }
+  const base = Math.floor(totalAmountCents / totalInstallments);
+  const remainder = totalAmountCents - base * totalInstallments;
+  const anchor = anchorDate ?? checkoutAnchorDate();
+  return Array.from({ length: totalInstallments }, (_, i) => {
+    const dueDate = new Date(anchor);
+    dueDate.setDate(dueDate.getDate() + i * 14);
+    return {
+      dueDate,
+      amount: i === totalInstallments - 1 ? base + remainder : base,
+      installmentNumber: i + 1,
+    };
+  });
 }
 
 export function assertAllDueDatesOnOrBeforeBiweeklyBoundary(

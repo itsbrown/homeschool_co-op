@@ -103,7 +103,7 @@ export default function AttendanceManagementPage() {
       const params = new URLSearchParams();
       if (sessionFilters.startDate) params.append('startDate', sessionFilters.startDate);
       if (sessionFilters.endDate) params.append('endDate', sessionFilters.endDate);
-      const res = await fetch(`/api/school-admin/attendance/summary?${params}`, { credentials: 'include' });
+      const res = await apiRequest('GET', `/api/school-admin/attendance/summary?${params}`);
       if (!res.ok) throw new Error('Failed to fetch summary');
       return res.json();
     },
@@ -114,7 +114,7 @@ export default function AttendanceManagementPage() {
     queryKey: ['/api/school-admin/attendance/sessions', sessionFilters],
     queryFn: async () => {
       const qs = buildQueryParams(sessionFilters);
-      const res = await fetch(`/api/school-admin/attendance/sessions?${qs}`, { credentials: 'include' });
+      const res = await apiRequest('GET', `/api/school-admin/attendance/sessions?${qs}`);
       if (!res.ok) throw new Error('Failed to fetch sessions');
       return res.json();
     },
@@ -125,7 +125,7 @@ export default function AttendanceManagementPage() {
     queryKey: ['/api/school-admin/attendance/records', recordFilters],
     queryFn: async () => {
       const qs = buildQueryParams(recordFilters);
-      const res = await fetch(`/api/school-admin/attendance/records?${qs}`, { credentials: 'include' });
+      const res = await apiRequest('GET', `/api/school-admin/attendance/records?${qs}`);
       if (!res.ok) throw new Error('Failed to fetch records');
       return res.json();
     },
@@ -171,7 +171,7 @@ export default function AttendanceManagementPage() {
   const handleExportCsv = async () => {
     try {
       const qs = buildQueryParams(recordFilters);
-      const res = await fetch(`/api/school-admin/attendance/export?${qs}`, { credentials: 'include' });
+      const res = await apiRequest('GET', `/api/school-admin/attendance/export?${qs}`);
       if (!res.ok) throw new Error('Export failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

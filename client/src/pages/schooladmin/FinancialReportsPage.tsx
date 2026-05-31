@@ -103,12 +103,15 @@ interface RevenueTrend {
 
 interface OutstandingBalance {
   id: number;
+  enrollmentId?: number;
   parentEmail: string;
   amount: number;
   scheduledDate: string | null;
   isOverdue: boolean;
   daysOverdue: number;
-  type?: string;
+  type?: 'scheduled' | 'unscheduled' | 'membership' | string;
+  enrollmentRemainingBalance?: number;
+  membershipYear?: number | null;
   parent: { id: number; name: string; email: string; phone: string | null } | null;
   enrollment: { id: number; childName: string | null; className: string | null } | null;
 }
@@ -528,11 +531,10 @@ export default function FinancialReportsPage() {
   const transactions = transactionsData?.transactions || [];
   const reminderHistory = reminderHistoryData || [];
 
-  // Group balances by parent email
+  // Group balances by parent email (family totals use enrollment-level tuition, not installment sums)
   const groupedBalances: GroupedBalance[] = balances.reduce((groups: GroupedBalance[], balance) => {
     const existing = groups.find(g => g.parentEmail === balance.parentEmail);
     if (existing) {
-      existing.totalAmount += balance.amount;
       existing.balanceCount += 1;
       if (balance.isOverdue && balance.daysOverdue > existing.oldestOverdue) {
         existing.oldestOverdue = balance.daysOverdue;
@@ -544,7 +546,7 @@ export default function FinancialReportsPage() {
         parentEmail: balance.parentEmail,
         parentName: balance.parent?.name || balance.parentEmail,
         parentPhone: balance.parent?.phone || null,
-        totalAmount: balance.amount,
+        totalAmount: 0,
         balanceCount: 1,
         oldestOverdue: balance.isOverdue ? balance.daysOverdue : 0,
         hasOverdue: balance.isOverdue,
@@ -553,6 +555,22 @@ export default function FinancialReportsPage() {
     }
     return groups;
   }, []);
+
+  for (const group of groupedBalances) {
+    const seenEnrollments = new Set<number>();
+    group.totalAmount = group.balances.reduce((sum, balance) => {
+      if (balance.type === 'membership') {
+        return sum + balance.amount;
+      }
+      const enrollmentId = balance.enrollmentId ?? balance.enrollment?.id;
+      if (enrollmentId != null && enrollmentId > 0) {
+        if (seenEnrollments.has(enrollmentId)) return sum;
+        seenEnrollments.add(enrollmentId);
+        return sum + (balance.enrollmentRemainingBalance ?? balance.amount);
+      }
+      return sum + balance.amount;
+    }, 0);
+  }
 
   const chartData = trends.map(t => ({
     month: t.month,
@@ -974,7 +992,7 @@ export default function FinancialReportsPage() {
                       <div>
                         <CardTitle>Outstanding Balances</CardTitle>
                         <CardDescription>
-                          Installments and unscheduled tuition
+                          Tuition installments, unscheduled tuition, and membership fees
                           {balancesSummary?.uniqueFamilies
                             ? ` · ${balancesSummary.uniqueFamilies} families · ${formatCurrency(balancesSummary.totalOutstandingCents ?? 0)}`
                             : ''}
@@ -1067,12 +1085,22 @@ export default function FinancialReportsPage() {
                                 {group.balances.map((balance) => (
                                   <div key={balance.id} className="flex items-center justify-between bg-gray-50 rounded p-2 text-sm">
                                     <div>
-                                      <span className="font-medium">{balance.enrollment?.childName}</span>
-                                      <span className="text-muted-foreground"> - {balance.enrollment?.className}</span>
+                                      {balance.type === 'membership' ? (
+                                        <span className="font-medium">{balance.enrollment?.className || 'Membership'}</span>
+                                      ) : (
+                                        <>
+                                          <span className="font-medium">{balance.enrollment?.childName}</span>
+                                          <span className="text-muted-foreground"> - {balance.enrollment?.className}</span>
+                                        </>
+                                      )}
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <span>{formatCurrency(balance.amount)}</span>
-                                      {balance.type === 'unscheduled' ? (
+                                      {balance.type === 'membership' ? (
+                                        <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+                                          Membership
+                                        </Badge>
+                                      ) : balance.type === 'unscheduled' ? (
                                         <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs">
                                           No Payment Plan
                                         </Badge>
@@ -1081,7 +1109,7 @@ export default function FinancialReportsPage() {
                                           Due {balance.scheduledDate ? format(new Date(balance.scheduledDate), 'MMM d') : '—'}
                                         </span>
                                       )}
-                                      {balance.type !== 'unscheduled' && (
+                                      {balance.type === 'scheduled' && (
                                         <Button
                                           variant="ghost"
                                           size="sm"
@@ -1127,11 +1155,30 @@ export default function FinancialReportsPage() {
                                 </TableCell>
                                 <TableCell>{balance.parent?.name || balance.parentEmail}</TableCell>
                                 <TableCell className="text-muted-foreground">{balance.parent?.phone || '-'}</TableCell>
-                                <TableCell>{balance.enrollment?.childName || 'N/A'}</TableCell>
-                                <TableCell>{balance.enrollment?.className || 'N/A'}</TableCell>
+                                <TableCell>
+                                  {balance.type === 'membership'
+                                    ? <span className="text-muted-foreground">—</span>
+                                    : (balance.enrollment?.childName || 'N/A')}
+                                </TableCell>
+                                <TableCell>
+                                  {balance.type === 'membership'
+                                    ? (balance.enrollment?.className || 'Membership')
+                                    : (balance.enrollment?.className || 'N/A')}
+                                </TableCell>
                                 <TableCell>{formatCurrency(balance.amount)}</TableCell>
                                 <TableCell>
-                                  {balance.type === 'unscheduled' ? (
+                                  {balance.type === 'membership' ? (
+                                    balance.isOverdue ? (
+                                      <Badge variant="destructive">
+                                        <AlertTriangle className="h-3 w-3 mr-1" />
+                                        Membership · {balance.daysOverdue} days overdue
+                                      </Badge>
+                                    ) : (
+                                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                                        Membership · {balance.status.replace('_', ' ')}
+                                      </Badge>
+                                    )
+                                  ) : balance.type === 'unscheduled' ? (
                                     <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
                                       No Payment Plan
                                     </Badge>
@@ -1148,17 +1195,7 @@ export default function FinancialReportsPage() {
                                   )}
                                 </TableCell>
                                 <TableCell>
-                                  {balance.type === 'unscheduled' ? (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 px-2"
-                                      title="No scheduled payment to remind about"
-                                      disabled
-                                    >
-                                      <Send className="h-4 w-4 opacity-30" />
-                                    </Button>
-                                  ) : (
+                                  {balance.type === 'scheduled' ? (
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -1172,6 +1209,20 @@ export default function FinancialReportsPage() {
                                       ) : (
                                         <Send className="h-4 w-4" />
                                       )}
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 px-2"
+                                      title={
+                                        balance.type === 'membership'
+                                          ? 'Membership fees are not reminded from this view'
+                                          : 'No scheduled payment to remind about'
+                                      }
+                                      disabled
+                                    >
+                                      <Send className="h-4 w-4 opacity-30" />
                                     </Button>
                                   )}
                                   {balance.parent?.id && (

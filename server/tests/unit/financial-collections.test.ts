@@ -29,6 +29,21 @@ describe('financial-collections regression guards', () => {
     expect(financialCollectionsSource).toContain('export async function fetchAutoPayHistoryRecords');
   });
 
+  it('rolls up family totals from enrollment remaining balance, not installment row amounts', () => {
+    expect(financialCollectionsSource).toContain('seenEnrollments');
+    expect(financialCollectionsSource).toContain('enrollmentRemainingBalance');
+    expect(financialCollectionsSource).not.toMatch(
+      /acc\[email\]\.totalOutstandingCents \+= balance\.amount/,
+    );
+  });
+
+  it('includes membership owed rows in outstanding balances', () => {
+    expect(financialCollectionsSource).toContain("type: 'membership'");
+    expect(financialCollectionsSource).toContain('MEMBERSHIP_OWED_STATUSES');
+    expect(financialCollectionsSource).toContain('membershipOutstandingCents');
+    expect(financialCollectionsSource).toContain('tuitionOutstandingCents');
+  });
+
   it('financial-reports does not call missing storage.getAutoPayHistory', () => {
     expect(financialReportsSource).not.toContain('getAutoPayHistory');
     expect(financialReportsSource).toContain('fetchAutoPayHistoryRecords');

@@ -221,16 +221,25 @@ async function buildLapsedFamiliesData(schoolId: number, lookbackDays: number) {
     ...enrollmentEmails.map((e) => normalizeEmailForLookup(e) || e),
   ]);
 
-  const rows: LapsedFamilyRow[] = [];
+  const lapsedEmails: string[] = [];
   for (const email of allEmails) {
-    if (activeSet.has(email)) continue;
+    if (!activeSet.has(email)) lapsedEmails.push(email);
+  }
+
+  const lastEnrollmentByEmail = await storage.getLastEnrollmentDateByParentEmails(
+    schoolId,
+    lapsedEmails,
+  );
+
+  const rows: LapsedFamilyRow[] = [];
+  for (const email of lapsedEmails) {
     const known = parentByEmail.get(email);
     rows.push({
       parentId: known?.id ?? null,
       parentEmail: email,
       parentName: known?.name ?? email,
       phone: known?.phone ?? null,
-      lastEnrollmentDate: null,
+      lastEnrollmentDate: lastEnrollmentByEmail.get(email) ?? null,
     });
   }
 
@@ -241,7 +250,7 @@ async function buildLapsedFamiliesData(schoolId: number, lookbackDays: number) {
     lookbackDays: cappedDays,
     sinceDate: sinceStr,
     dateFieldNote:
-      'Lapsed = no qualifying enrollment (pending_payment, pending_admin_approval, enrolled, completed, waitlist) with enrollment_date or program_start_date on/after the since date.',
+      'Lapsed = no qualifying enrollment (pending_payment, pending_admin_approval, enrolled, completed, waitlist) with enrollment_date or program_start_date on/after the since date. Last enrollment date is the most recent GREATEST(enrollment_date, program_start_date) among all qualifying enrollments for that family (any time, not limited to the lookback window).',
     summary: {
       totalKnownFamilies: allEmails.size,
       activeFamilies: activeSet.size,

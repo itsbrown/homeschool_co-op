@@ -320,14 +320,13 @@ router.get('/summary', async (req: any, res) => {
         .where(and(eq(refunds.schoolId, schoolId), eq(refunds.status, 'completed'))),
       db
         .select({
-          activePlans: sql<number>`COUNT(*)::integer`,
+          activePlans: sql<number>`COUNT(DISTINCT ${scheduledPayments.enrollmentId})::integer`,
         })
-        .from(programEnrollments)
+        .from(scheduledPayments)
         .where(
           and(
-            eq(programEnrollments.schoolId, schoolId),
-            not(inArray(programEnrollments.status, ['cancelled', 'waitlist', 'withdrawn', 'failed', 'completed'])),
-            sqlEnrollmentEffectiveBalancePositive(),
+            eq(scheduledPayments.schoolId, schoolId),
+            eq(scheduledPayments.status, 'pending'),
           ),
         ),
       db
@@ -772,16 +771,18 @@ router.get('/recent-transactions', async (req: any, res) => {
     const db = await getDb();
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
 
+    // Cast status/payment_method to text — production rows may use values outside Drizzle enums
+    // (e.g. status 'succeeded', payment_method 'card') which break typed column hydration.
     const recentPayments = await db
       .select({
         id: payments.id,
         type: sql<string>`'payment'`,
         amount: payments.amount,
-        status: payments.status,
+        status: sql<string>`${payments.status}::text`,
         createdAt: payments.createdAt,
         enrollmentIds: payments.enrollmentIds,
         stripePaymentIntentId: payments.stripePaymentIntentId,
-        paymentMethod: payments.paymentMethod,
+        paymentMethod: sql<string | null>`${payments.paymentMethod}::text`,
         childName: payments.childName,
         className: payments.className,
         parentEmail: payments.parentEmail,
@@ -796,7 +797,7 @@ router.get('/recent-transactions', async (req: any, res) => {
         id: refunds.id,
         type: sql<string>`'refund'`,
         amount: refunds.amount,
-        status: refunds.status,
+        status: sql<string>`${refunds.status}::text`,
         createdAt: refunds.createdAt,
         enrollmentId: refunds.enrollmentId,
         reason: refunds.reason,
@@ -850,17 +851,23 @@ router.get('/recent-transactions', async (req: any, res) => {
       }
     }
 
-    const stripeHistory = await storage.getStripePaymentHistoryForSchool(schoolId, limit * 2);
+    let stripeHistory: Awaited<ReturnType<typeof storage.getStripePaymentHistoryForSchool>> = [];
+    try {
+      stripeHistory = await storage.getStripePaymentHistoryForSchool(schoolId, limit * 2);
+    } catch (stripeHistoryErr) {
+      console.warn('recent-transactions: stripe_payment_history skipped:', errorMessage(stripeHistoryErr));
+    }
     for (const sph of stripeHistory) {
-      if (byIntent.has(sph.paymentIntentId)) continue;
-      byIntent.set(sph.paymentIntentId, {
+      const intentId = sph.paymentIntentId;
+      if (!intentId || byIntent.has(intentId)) continue;
+      byIntent.set(intentId, {
         id: `sph:${sph.id}`,
         type: 'payment',
         amount: sph.amount,
         status: sph.status === 'succeeded' ? 'succeeded' : sph.status,
         createdAt: sph.stripeCreatedAt,
         enrollmentId: null,
-        stripePaymentIntentId: sph.paymentIntentId,
+        stripePaymentIntentId: intentId,
         paymentMethod: sph.paymentMethod,
         childName: null,
         className: sph.description,
@@ -869,23 +876,29 @@ router.get('/recent-transactions', async (req: any, res) => {
       });
     }
 
-    const liveStripe = await fetchSucceededPaymentIntentsForSchool(schoolId, { maxParents: 100 });
-    for (const [, intent] of liveStripe) {
-      if (byIntent.has(intent.id)) continue;
-      byIntent.set(intent.id, {
-        id: `stripe:${intent.id}`,
-        type: 'payment',
-        amount: intent.amount,
-        status: 'succeeded',
-        createdAt: intent.created,
-        enrollmentId: null,
-        stripePaymentIntentId: intent.id,
-        paymentMethod: intent.paymentMethod,
-        childName: null,
-        className: intent.description,
-        parentEmail: intent.parentEmail,
-        source: 'stripe_live',
-      });
+    let liveStripeOrphans = 0;
+    try {
+      const liveStripe = await fetchSucceededPaymentIntentsForSchool(schoolId, { maxParents: 40 });
+      liveStripeOrphans = liveStripe.size;
+      for (const [, intent] of liveStripe) {
+        if (byIntent.has(intent.id)) continue;
+        byIntent.set(intent.id, {
+          id: `stripe:${intent.id}`,
+          type: 'payment',
+          amount: intent.amount,
+          status: 'succeeded',
+          createdAt: intent.created,
+          enrollmentId: null,
+          stripePaymentIntentId: intent.id,
+          paymentMethod: intent.paymentMethod,
+          childName: null,
+          className: intent.description,
+          parentEmail: intent.parentEmail,
+          source: 'stripe_live',
+        });
+      }
+    } catch (liveStripeErr) {
+      console.warn('recent-transactions: live Stripe enrichment skipped:', errorMessage(liveStripeErr));
     }
 
     const refundRows: TxRow[] = recentRefundsData.map((r) => ({
@@ -929,12 +942,16 @@ router.get('/recent-transactions', async (req: any, res) => {
       sources: {
         ledgerPayments: recentPayments.length,
         stripeHistoryRows: stripeHistory.length,
-        stripeLiveOrphans: liveStripe.size,
+        stripeLiveOrphans: liveStripeOrphans,
       },
     });
   } catch (error) {
     console.error('Error fetching recent transactions:', error);
-    res.status(500).json({ error: 'Failed to fetch recent transactions' });
+    const body: Record<string, unknown> = { error: 'Failed to fetch recent transactions' };
+    if (req.query.debug === '1') {
+      body.errorDetail = errorMessage(error);
+    }
+    res.status(500).json(body);
   }
 });
 

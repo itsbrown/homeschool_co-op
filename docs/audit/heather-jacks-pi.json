@@ -1,0 +1,27 @@
+{
+  "id": "pi_3TcTZMGhVuNOnUs70e7vuFPT",
+  "object": "payment_intent",
+  "amount": 13958,
+  "currency": "usd",
+  "customer": "cus_Ubgp0GTN9oVhEj",
+  "description": "ASA Learning Platform - biweekly payment (Biweekly payment 1 of 12)",
+  "livemode": true,
+  "metadata": {
+    "createdBy": "asa_payment_system",
+    "enrollmentIds": "[449]",
+    "hasMembership": "true",
+    "installmentNumber": "1",
+    "membershipAmount": "17500",
+    "membershipParentUserId": "146",
+    "membershipSchoolId": "2",
+    "membershipYear": "2026",
+    "parentEmail": "hlcelso@mail.naz.edu",
+    "paymentFrequency": "biweekly",
+    "paymentPlan": "biweekly",
+    "savePaymentMethodForAutoPay": "true",
+    "totalAmount": "167500",
+    "totalInstallments": "12",
+    "version": "v2_stripe_simplified"
+  },
+  "status": "succeeded"
+}

@@ -1,128 +1,41 @@
 # App knowledge changelog
 
-## 2026-05-28 (autopay verification tooling)
+## 2026-05-30 (Financial reports — recent transactions 500 fix)
 
-- Removed a build-breaking duplicate `resolveEnrollmentIdsFromScheduledRow` import in `server/api/scheduled-payments.ts` (was committed; `tsc` flagged `TS2300`, esbuild tolerated it).
-- Added `server/scripts/autopay-preflight.ts` — read-only config/data check (env gating, Stripe mode, due candidates, stuck rows, `email_log` health). Exits non-zero on blocking findings.
-- Added `server/scripts/autopay-smoke.ts` + `runbooks/autopay-smoke-test.md` — Stripe-CLI test-mode orchestrator for the full charge → webhook → reconciliation loop (hard-guarded against live keys / production; only touches `metadata.smokeTest` rows).
+- **Bug:** `GET /api/admin/financial-reports/recent-transactions` returned 500 while summary/revenue worked. Drizzle typed `payments.status` / `payment_method` hydration failed on production rows with values outside schema enums (e.g. `succeeded`, `card`).
+- **Fix:** Cast status and payment_method to `::text` in the ledger SELECT; wrap Stripe history + live Stripe enrichment in try/catch so ledger + refunds always return; use Drizzle select for `getStripePaymentHistoryForSchool` (typed rows, shared `sqlStripeHistoryUserAtSchool`).
 
-## 2026-05-28 (parent documents + location enrollments fixes)
+## 2026-05-30 (Financial reports — activePaymentPlans metric fix)
 
-- **My Documents** crashed with `RangeError: Invalid time value` when school docs/receipts had null or bad dates — use `safeFormatDate` helper.
-- **`/api/location-enrollments`** was never mounted on `server/index.ts` (404/HTML); school admins with `schools.admin_id` but `users.role=parent` were denied — mount router and broaden `isSchoolAdminForLocation` (admin_id, activeRole, user_roles).
+- **Bug:** `GET /api/admin/financial-reports/summary` `activePaymentPlans` counted enrollments with positive effective balance, not enrollments with pending `scheduled_payments`.
+- **Fix:** Count `COUNT(DISTINCT enrollment_id)` from `scheduled_payments` where `status = 'pending'` (same rule as `/payment-plans` `activePlans`). JSON key unchanged — UI label is "Active Payment Plans".
+- **Tests:** Integration asserts tuition + membership = outstanding, `activePaymentPlans` from pending SPs, collections `totalOwedCents` parity; unit regression guard on query source.
 
-## 2026-05-28 (parent progress route)
+## 2026-05-30 (Financial reports — outstanding balances rollup + membership)
 
-- **`/parent/progress`** returned SPA 404 — `ParentProgressPage` existed but was not registered in `App.tsx`. Wired route; mounted `/api/progress` and `/api/progress/insights` on `server/index.ts` (were only in `app-init.ts`).
+- **Outstanding Balances tab:** `buildOutstandingBalanceRows` family/`summary.totalOutstandingCents` roll up **enrollment-level tuition** (dedupe installments via `enrollmentRemainingBalance`), not sum of installment row `amount`. Membership owed rows (`type: 'membership'`, `MEMBERSHIP_OWED_STATUSES`) included so tab total aligns with summary card `outstandingBalanceCents` (tuition + membership).
+- **UI:** Group-by-parent totals use same enrollment dedupe; membership rows labeled separately; scheduled reminders only on `type: 'scheduled'`.
 
-## 2026-05-28 (upcoming payments enrollment coverage label)
+## 2026-05-30 (Lapsed families report — last enrollment date)
 
-- Cart/biweekly installments store `metadata.enrollmentIds` on `scheduled_payments`; upcoming API now returns `enrollmentCount` / `enrollmentCoverageLabel` (e.g. `3 Enrollments`) instead of repeating the first child name on every row. Parent **Upcoming Payments** subline uses that label.
+- **Fix:** `buildLapsedFamiliesData` (`server/api/retention.ts`) populates `lastEnrollmentDate` via batch `getLastEnrollmentDateByParentEmails` — max `GREATEST(enrollment_date, program_start_date)` over qualifying `program_enrollments` statuses, keyed with `normalizeEmailForLookup`.
+- **UI:** Lapsed families table shows Last enrollment column (`RetentionReportPage.tsx`); CSV export already included the field.
 
-## 2026-05-28 (mount auto-pay API routes)
+## 2026-05-29 (biweekly scheduled payments without program dates)
 
-- **`server/api/auto-pay.ts`** was never mounted — `/api/user/payment-methods`, `/api/user/auto-pay-status`, and `/api/user/sync-checkout-payment-method` returned SPA HTML (404). Wired in `server/index.ts`, `server/routes.ts`, and `server/app-init.ts`.
+- **Installments 2–12 missing when webhook/reconcile runs but enrollment lacks program dates:** `persistRemainingScheduledPaymentsAfterFirstCheckoutPayment` rebuilt phases via `buildPaymentPhases`, which falls back to legacy **4** biweekly payments when `program_start_date` / `program_end_date` are null — mismatch with PI metadata `totalInstallments: 12` would persist only 3 future rows (or 0 if fulfillment never ran). Added `buildBiweeklyPhasesFromInstallmentMetadata` fallback when rebuilt phase count ≠ metadata installment count.
 
-## 2026-05-28 (checkout auto-pay + save card)
+## 2026-05-26 (biweekly checkout + membership proration)
 
-- **Root cause:** E2E passed via `/api/test/sync-parent-stripe-for-e2e` only; production checkout PI had no `setup_future_usage`, and `PATCH /api/user/auto-pay` returned 400 without `stripe_default_payment_method_id`.
-- **Fix:** Biweekly checkout PIs use `setup_future_usage: 'off_session'`; `POST /api/user/sync-checkout-payment-method` + webhook vault card from succeeded PI; `CartSuccess` syncs before enabling auto-pay.
+- **Installment 1 applied $0 to class when cart includes membership:** PI metadata carried full `membershipAmount` ($175) while installment 1 was only $139.58 — class pool reserved entire payment, leaving enrollments at $0 paid. Fixed proportional membership reserve per PI; membership fulfillment accumulates partial paid across installments. Parent profile falls back to `enrollment.className` when `class_id` is null.
 
-## 2026-05-28 (parent payments overview clarity)
+## 2026-05-26 (manual payment admin visibility)
 
-- **Payments → Overview:** **Total left to pay** = enrollment balances due now + all upcoming scheduled installments (fixes $0 “Outstanding” when on biweekly plans). Helper: `client/src/utils/paymentOverviewTotals.ts`.
+- **Manual class payments missing from parent profile after entry:** With `PAYMENT_PROCESSOR_ENABLED=true`, `POST /api/payment-history/manual` wrote only `stripe_payment_history`; admin profile read `payments` only. Fixed dual-write to `payments` after processor success; parent profile merges orphan manual ledger rows; removed silent file fallback on Postgres `createPayment` failure (was invisible to profile reads).
 
-## 2026-05-28 (single member-id for cart membership)
+## 2026-05-26 (CombinedStorage payment history reads)
 
-- **Product rule:** `users.member_id` (non-empty) means annual membership is paid; no membership line in cart/checkout.
-- **`GET /api/parent/member-id`** returns school fee, `membershipOwedCents` (from `resolveMembershipOwedForCheckout`), and `membershipStatus` for dashboard — one call shared via `PARENT_MEMBER_ID_QUERY_KEY` (`client/src/lib/parent-member-id.ts`).
-- **Cart hydration:** `CartContext.fetchMembershipForCart` uses cart snapshot when items exist, else cached member-id — **no** `/api/parent/memberships` spam. Parent dashboard and `useUnpaidEnrollments` use the same endpoint.
-- **Server:** `resolveMembershipOwedForCheckout` short-circuits to `alreadyPaid` when `parentHasMemberIdForCheckout(user.memberId)`.
-
-## 2026-05-28 (membership placeholder row at checkout)
-
-- **Root cause:** Registration created `membership_enrollments` with `amount=0` / `remainingBalance=0`; checkout found that pending row and charged **$0** instead of `schools.membership_fee_amount`.
-- **Fix:** `ensurePendingMembershipEnrollmentForCheckout` now inserts full rows (`due_date`, `expiration_date`, `end_date`, etc.) — incomplete inserts caused **502** on `GET /api/parent/memberships`.
-
-## 2026-05-28 (E2E CI headless shell deps)
-
-- **`.github/workflows/e2e.yml`:** install `chromium-headless-shell` system libs (`libglib-2.0`, etc.) — `playwright install chromium --with-deps` alone left CI failing with `libglib-2.0.so.0` on `parent-full-journey`.
-
-## 2026-05-28 (school-admin my-school context)
-
-- **`getSchoolIdFromRequest`** (`server/api/school-admin.ts`) now uses `resolveSchoolIdForUser` (same as `requireSchoolContext`), so `GET /api/school-admin/my-school` returns the `schools.admin_id` school when `users.school_id` is stale.
-
-## 2026-05-28 (public registration locations by code)
-
-- **`GET /api/public/registration/locations?code=`** resolves the school from the registration link (preferred over `schoolId`). `RegistrationLandingPage` loads campuses from the URL code immediately.
-- **Client fallback:** `fetchPublicRegistrationLocations` retries with `?schoolId=` when the server still returns legacy “School ID is required” (undeployed Replit). Deploy `0ad57713+` for the canonical fix.
-- **`ensureLocationsTable`:** backfills legacy `activation_status`, adds `sessions.location_id` / `program_enrollments.location_id` if missing; eligible-student count errors no longer fail the whole public list.
-
-## 2026-05-28 (Replit Nix env repair)
-
-- Reverted Playwright Nix experiment: removed `replit.nix`, restored `.replit` `[nix].packages = ["jq"]` only (extra names like `alsa-lib` / `libdrm` broke Replit stable-24_05). E2E on Replit not supported; use GitHub Actions. Runbook: `docs/APP_KNOWLEDGE/runbooks/replit-e2e-playwright.md`.
-
-## 2026-05-28 (parent full-journey E2E — biweekly schedule fix)
-
-- E2E seed sessions use **2030-01-01 → 2030-06-01**; Playwright webServer sets `TEST_CHECKOUT_ANCHOR_ISO=2029-12-01` so biweekly creates installment 2+ (short “today + 3mo” sessions collapsed to pay-in-full).
-- Checkout waits for `create-payment-intent` after selecting biweekly; persist step asserts `scheduledPaymentCount >= 1`.
-
-## 2026-05-28 (parent full-journey E2E hardening)
-
-- E2E helpers: scoped registration student cards; after checkout call `POST /api/test/persist-checkout-schedule-from-pi` (webhook may not run in test) and `POST /api/test/sync-parent-stripe-for-e2e` (save card for auto-pay); poll `GET /api/test/pending-scheduled-payments`.
-
-## 2026-05-28 (parent full-journey E2E)
-
-- **`e2e/parent-full-journey.spec.ts`:** Registration (2 children) → session wizard (2 sessions) → biweekly checkout + auto-pay toggle → first payment → `POST /api/test/run-auto-pay-for/:id` on installment 2. Seed: `POST /api/test/setup-registration-scenario` with `{ openSessionCount: N }`.
-- **`CartSuccess`:** Applies `localStorage.pendingAutoPay` via `PATCH /api/user/auto-pay` after successful redirect (was written at checkout but never consumed).
-
-## 2026-05-28 (ghost session enroll + membership legacy rows)
-
-- **Fall blocked but not listed:** Session enroll now replaces stale `pending_payment` duplicates (zero paid) instead of only skipping — clears hidden reservations like enrollment #15.
-- **Membership fee missing:** `enrolled` membership rows with `amount` but no `amountPaid`/`remainingBalance` are no longer treated as fully paid (was charging $0 owed).
-
-## 2026-05-28 (membership fee when school fee configured)
-
-- Checkout included membership in payment intent only when `membershipRequired` was true; now uses `membershipTotal > 0` from cart snapshot so schools with a fee but optional flag still show/charge $125.
-
-## 2026-05-28 (child enrollments vs cart parity)
-
-- Child Enrollments page loads `/api/parent/enrollments` (same as cart) so payment-plan–excluded `pending_payment` rows appear with an amber “Not in cart” badge; session enroll skip messages include enrollment id for Unenroll.
-
-## 2026-05-28 (cart membership + session line visibility)
-
-- **Missing $125 membership at checkout:** Treat `enrolled` membership rows as paid only when remaining balance is zero; cart snapshot defensively sets `membershipTotal` when school requires a fee; CartContext uses snapshot without a short timeout race; checkout order summary falls back to `membership.required` + school fee amount.
-- **Session row dropped quote→cart:** Cart line filter no longer hides the latest `pending_payment` row when an older `enrolled` row exists in the same child+session group.
-
-## 2026-05-28 (parent unenroll persistence)
-
-- **Unenroll toast but row remains:** `DELETE /api/enrollments/:id/unenroll` now deletes pending `scheduled_payments` before removing `program_enrollments` (FK). `CombinedStorage.deleteProgramEnrollment` no longer treats mem-only delete as success when Postgres delete fails; mem cache is cleared after DB delete.
-- **Parent UI:** Child enrollments page invalidates `/api/parent/enrollments` and awaits cart refresh after unenroll.
-
-## 2026-05-28 (sessions location column backfill)
-
-- **Enrollment Sessions list/create regression:** Older environments without `sessions.location_id` fail once location-scoped sessions code is deployed (appears as "no sessions" + create error). `server/init-db.ts` now always runs `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location_id REFERENCES locations(id)` during startup.
-- **Ops note:** If users report missing sessions after deploy, confirm backend restart so startup migration executes.
-
-## 2026-05-28 (credit ledger)
-
-- **Credits not deducted / reusable after refresh:** Webhook consumes credits before `scheduled_payments.completed` early-exit; throws if ledger incomplete (Stripe retry). Parent Pay Now (card + credits) reserves `credit_holds`. Checkout idempotency via `Checkout {pi_id}` logs. See `docs/CREDIT_LEDGER_REPAIR.md`.
-- **Repair:** `npx tsx server/scripts/backfill-missing-credit-ledger.ts --dry-run|--apply`; school admin `GET /api/credits/admin/integrity-check`, `POST /api/credits/admin/repair-ledger`.
-
-## 2026-05-26 (multi-subject progress)
-
-- **F-14 + curriculum progress wired:** Drizzle tables, `assessment-progress-db` storage, routes in `app-init.ts` (`/api/assessments`, `/api/lexile`, `/api/progress`, `/api/progress/insights`).
-- **Educator:** Progress tab on assessments page, quick log on student detail; POST uses `score` / `lesson`.
-- **Parent:** `/parent/progress` hub; sidebar Progress entry; concierge `get_child_progress`.
-- **Admin:** Progress catalog tab on assessments management.
-- **Tests:** `progress-log-validation.test.ts`; integration smokes `assessments-api`, `progress-api` (require `TEST_DATABASE_URL`).
-
-## 2026-05-27
-
-- **School admin Classes page 500:** `GET /api/school-admin/classes` calls `storage.getHiddenCategoryIds()` but the method was dropped from `server/storage.ts` / `server/dbStorage.ts` during a May merge while the API call remained — restores method + `categories.isPublic` in Drizzle schema.
-- **Checkout abandon / false payment plan:** `POST /api/stripe/create-payment-intent` no longer writes `paymentPlan` or `initialPaymentIntentId` on enrollments before Stripe succeeds; those fields are set in `persistRemainingScheduledPaymentsAfterFirstCheckoutPayment` after installment 1. Dashboard and Payments → Upcoming treat `checkout_due` as **incomplete checkout** (amber), not overdue; no fake “installment 1 of N” until first payment succeeds — full schedule appears only after webhook creates `scheduled_payments` rows 2..N.
-- **Membership at checkout:** `resolveMembershipOwedForCheckout` in `server/utils/cart-pricing.ts` is used by cart snapshot and payment intent so annual membership is included when the school requires it, even if the client omits it. Cart checkout syncs membership from snapshot and gates pay on signed agreement (`/api/parent/agreements/check/:schoolId`).
-- **Checkout school for membership:** `resolveCheckoutSchoolId` prefers the school that owns cart classes/enrollments over `users.school_id` (snapshot, validate, Stripe intent). `alreadyPaid` only when `isActiveMembership` status — not `remainingBalance <= 0` on pending rows. Checkout loads `/api/cart/snapshot` on mount and uses `totals.membershipTotal` for the order summary line.
+- **Admin/parent Payment History empty despite Postgres rows:** `CombinedStorage.getPaymentsByParentEmail` (and `getPaymentByStripeId` / `updatePaymentStatus`) read only `memStorage` while `createPayment` writes Postgres — profile Payments tab showed `[]` for all DB-backed parents (e.g. Lauren user 130). Fixed to delegate to `dbStorage` like `getAllPayments` / `getScheduledPaymentsByParentEmail`.
 
 Dated updates to this knowledge base (not product release notes).
 

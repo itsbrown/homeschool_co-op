@@ -919,4 +919,121 @@ router.get('/payment-receipts', jwtCheck, async (req: any, res) => {
   }
 });
 
+// Get published, enrollment-open classes for the authenticated parent's school.
+// The parent "Programs & Classes" page is the single consumer of this endpoint;
+// it expects { items, total, page, limit, totalPages }. The server is the
+// source of truth for visibility — it filters out unpublished, expired,
+// admin-only, hidden-category, and enrollment-closed classes.
+router.get('/classes', jwtCheck, async (req: any, res) => {
+  try {
+    const userEmail = req.auth?.email || req.user?.email;
+    if (!userEmail) {
+      return res.status(401).json({ message: 'Authentication required', error: 'NO_USER_EMAIL' });
+    }
+
+    const user = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found', error: 'USER_NOT_FOUND' });
+    }
+
+    // Derive schoolId from enrollments if user.schoolId is null
+    let effectiveSchoolId = user.schoolId;
+    if (!effectiveSchoolId) {
+      const enrollments = await storage.getProgramEnrollmentsByParent(user.id);
+      if (enrollments.length > 0) {
+        effectiveSchoolId = enrollments[0].schoolId;
+        console.log(`📄 Derived schoolId ${effectiveSchoolId} from parent's enrollments`);
+      }
+    }
+
+    if (!effectiveSchoolId) {
+      return res.status(404).json({ message: 'School not found for this parent', error: 'NO_SCHOOL_ID' });
+    }
+
+    const allClasses = await storage.getClassesBySchoolId(String(effectiveSchoolId));
+    const hiddenCategoryIds = await storage.getHiddenCategoryIds();
+
+    const classesWithEnrichment = await Promise.all(allClasses.map(async (classItem: any) => {
+      const classEnrollmentCount = await storage.getEnrollmentCountForClass(classItem.id);
+
+      let variants = undefined;
+      if (classItem.schedule && typeof classItem.schedule === 'string') {
+        try {
+          const scheduleData = JSON.parse(classItem.schedule);
+          if (scheduleData && scheduleData.variants && Array.isArray(scheduleData.variants)) {
+            variants = scheduleData.variants;
+          }
+        } catch (e) {}
+      } else if (classItem.schedule && typeof classItem.schedule === 'object') {
+        if ((classItem.schedule as any).variants && Array.isArray((classItem.schedule as any).variants)) {
+          variants = (classItem.schedule as any).variants;
+        }
+      }
+
+      let locationName = null;
+      if (classItem.locationId) {
+        try {
+          const location = await storage.getLocationById(classItem.locationId);
+          if (location) locationName = location.name;
+        } catch (e) {}
+      }
+
+      let derivedInstructorName = null;
+      if (classItem.instructorId) {
+        try {
+          const instructor = await storage.getUser(classItem.instructorId);
+          if (instructor) {
+            derivedInstructorName = instructor.name
+              || (instructor.firstName && instructor.lastName ? `${instructor.firstName} ${instructor.lastName}` : null)
+              || instructor.email
+              || null;
+          }
+        } catch (e) {}
+      }
+
+      return {
+        ...classItem,
+        enrollmentCount: classEnrollmentCount,
+        capacity: classItem.capacity || 20,
+        enrolled: classEnrollmentCount,
+        variants: variants || undefined,
+        location: locationName || classItem.location || null,
+        categoryName: classItem.categoryName || classItem.category || null,
+        categoryId: classItem.categoryId || null,
+        categoryIsPublic: classItem.categoryId
+          ? !hiddenCategoryIds.includes(classItem.categoryId)
+          : true,
+        instructorName: derivedInstructorName || classItem.instructorName || null,
+      };
+    }));
+
+    // Visibility rules — kept identical to the public catalog (server/api/classes.ts).
+    // enrollmentOpen is the single visibility gate; we deliberately do NOT require
+    // status === 'published' (school-admin classes use statuses like 'upcoming'),
+    // matching the catalog so the parent page and catalog never diverge.
+    const now = new Date();
+    const filtered = classesWithEnrichment.filter((cls: any) => {
+      if (!cls.enrollmentOpen) return false;
+      if (cls.isAdminOnly) return false;
+      if (cls.endDate && new Date(cls.endDate) < now) return false;
+      if (cls.categoryId && !cls.categoryIsPublic) return false;
+      return true;
+    });
+
+    return res.json({
+      items: filtered,
+      total: filtered.length,
+      page: 1,
+      limit: filtered.length,
+      totalPages: 1
+    });
+  } catch (error) {
+    console.error('❌ Error fetching parent classes:', error);
+    return res.status(500).json({ message: 'Error fetching classes' });
+  }
+});
+
 export default router;
