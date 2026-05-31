@@ -21,7 +21,7 @@ School-admin **Form Builder** forms that applicants can open **without logging i
 | Template slug | `mentor-application-template` (`isTemplate: true`, inactive) |
 | Live slug (after clone/provision) | `mentor-application` |
 | Seed templates | `npx tsx server/scripts/seed-form-templates.ts` |
-| Provision live form | `npx tsx server/scripts/provision-public-mentor-form.ts` ([runbook](../runbooks/public-mentor-application-form.md)) |
+| Provision live form | `provision-public-mentor-form.ts --school-id 2` for ASA prod ([runbook](../runbooks/public-mentor-application-form.md)) |
 | Admin alternative | Form Builder → clone template → confirm **Active** + **Public** |
 
 Prod requires **deploy** of upload-attachment + `file_upload` UI before resume upload works in production.

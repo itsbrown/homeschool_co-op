@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-05-31 (Prod mentor form: ASA branding)
+
+- **Prod:** Live `mentor-application` on school **2** (American Seekers Academy, form id 13); deactivated mistaken copy on school 3 (Fin Reports fixture, form id 12).
+- **Code:** `seed-form-templates.ts` prefers ASA / non–Fin Reports schools for templates; runbook default `--school-id 2`.
+
 ## 2026-05-31 (Domain docs: custom forms + agent knowledge model)
 
 - **New:** [`domains/custom-forms-public-access.md`](domains/custom-forms-public-access.md) — public `/forms/:slug`, APIs, mentor template/provision, E2E, pitfalls; hub index entry.

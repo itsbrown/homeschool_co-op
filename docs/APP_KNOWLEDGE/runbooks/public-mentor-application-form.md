@@ -35,11 +35,11 @@ Confirms row: `slug = mentor-application-template`, `is_template = true`, `is_ac
 # Preview
 npx tsx server/scripts/provision-public-mentor-form.ts --dry-run
 
-# One school
-npx tsx server/scripts/provision-public-mentor-form.ts --school-id <ID>
+# One school (prod ASA = school id 2)
+npx tsx server/scripts/provision-public-mentor-form.ts --school-id 2
 
 # Prod
-node scripts/with-prod-env.mjs -- npx tsx server/scripts/provision-public-mentor-form.ts --school-id <ID>
+node scripts/with-prod-env.mjs -- npx tsx server/scripts/provision-public-mentor-form.ts --school-id 2
 ```
 
 Creates (or reactivates) per school:

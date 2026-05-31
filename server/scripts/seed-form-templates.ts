@@ -487,7 +487,15 @@ async function seedFormTemplates() {
     
     const adminUserId = adminUsers[0].id;
 
-    const [templateSchool] = await db.select({ id: schools.id }).from(schools).limit(1);
+    // Prefer American Seekers Academy over Fin Reports / E2E fixture schools.
+    const templateSchoolCandidates = await db
+      .select({ id: schools.id, name: schools.name })
+      .from(schools)
+      .orderBy(schools.id);
+    const templateSchool =
+      templateSchoolCandidates.find((s) => s.name === 'American Seekers Academy') ??
+      templateSchoolCandidates.find((s) => !/^Fin Reports School/i.test(s.name)) ??
+      templateSchoolCandidates[0];
     if (!templateSchool) {
       console.error('No school found. Create a school before seeding templates.');
       process.exit(1);
