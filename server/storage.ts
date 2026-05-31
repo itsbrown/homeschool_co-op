@@ -7414,6 +7414,10 @@ export class MemStorage implements IStorage {
         return this.dbStorage.getSchoolDocumentById(id);
       }
 
+      async getSchoolDocumentByShareToken(shareToken: string): Promise<SchoolDocument | undefined> {
+        return this.dbStorage.getSchoolDocumentByShareToken(shareToken);
+      }
+
       async getSchoolDocumentsBySchoolId(schoolId: number): Promise<SchoolDocument[]> {
         return this.dbStorage.getSchoolDocumentsBySchoolId(schoolId);
       }

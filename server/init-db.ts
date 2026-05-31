@@ -2376,6 +2376,14 @@ async function runMigrations() {
     `);
     console.log('✅ Migration completed: prorate_enabled column added to classes table');
 
+    // Per-class enrollment visibility toggle (feature/class-enrollment-open)
+    console.log('Running migration: Adding enrollment_open column to classes table...');
+    await db.execute(sql`
+      ALTER TABLE classes
+      ADD COLUMN IF NOT EXISTS enrollment_open BOOLEAN NOT NULL DEFAULT false;
+    `);
+    console.log('✅ Migration completed: enrollment_open column added to classes table');
+
     // Add proration tracking columns to program_enrollments table
     console.log('Running migration: Adding proration tracking columns to program_enrollments...');
     await db.execute(sql`
@@ -2972,6 +2980,23 @@ async function runMigrations() {
     console.log('✅ Migration completed: expires_at and is_archived columns added to school_documents');
   } catch (docLifecycleError: any) {
     console.log('Migration note (non-blocking):', docLifecycleError.message);
+  }
+
+  // Add public share token column to school_documents (per-file shareable public links)
+  console.log('Running migration: Adding share_token column to school_documents table...');
+  try {
+    await db.execute(sql`
+      ALTER TABLE school_documents
+      ADD COLUMN IF NOT EXISTS share_token TEXT;
+    `);
+    // Partial unique index: allows many NULLs but enforces uniqueness of active tokens.
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_school_documents_share_token
+      ON school_documents(share_token) WHERE share_token IS NOT NULL;
+    `);
+    console.log('✅ Migration completed: share_token column added to school_documents');
+  } catch (shareTokenError: any) {
+    console.log('Migration note (non-blocking):', shareTokenError.message);
   }
 
   // Create document_views table for download tracking

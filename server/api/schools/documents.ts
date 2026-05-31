@@ -1,11 +1,13 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import { randomBytes } from 'crypto';
 import { storage } from '../../storage';
 import { UploadedFile } from 'express-fileupload';
 import { supabaseAuth } from '../../middleware/supabase-auth';
 import { fileUploadService, DOCUMENT_ALLOWED_MIME_TYPES } from '../../services/fileUploadService';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import { sendNotificationEmails } from '../notifications';
 
 const router = express.Router();
 
@@ -159,60 +161,79 @@ function sanitizeFilename(filename: string): string {
   return sanitizedBase + sanitizedExt;
 }
 
-// Helper function to send document notification
-async function sendDocumentNotification(
-  document: any, 
-  targeting: any, 
+// Helper: send a single joint notification covering one or more documents.
+// Delivers in-app + email. For a single document it also stores the scalar
+// `documentId` in targetData for backward compatibility; the `documentIds`
+// array is the authoritative link for both single and bulk uploads.
+async function sendBulkDocumentNotification(
+  documents: any[],
+  targeting: any,
   senderId: number,
   schoolId: number
 ) {
   try {
+    if (!documents || documents.length === 0) {
+      return null;
+    }
+
     // Resolve recipients first — bail early if there are none
     const recipients = await resolveDocumentNotificationRecipients(targeting, schoolId);
-    console.log(`📧 Document notification: ${recipients.length} recipients to process`);
+    console.log(`📧 Document notification: ${recipients.length} recipients for ${documents.length} document(s)`);
 
     if (recipients.length === 0) {
       console.log('⚠️ No recipients resolved — skipping notification record creation');
       return null;
     }
 
-    const notificationSubject = `New Document: ${document.title}`;
-    const notificationContent = `A new document "${document.title}" has been published${document.description ? `: ${document.description}` : ''}. You can view it in your documents section.`;
+    const documentIds = documents.map((d) => d.id);
+    const isSingle = documents.length === 1;
 
-    let notificationData: any = {
+    const notificationSubject = isSingle
+      ? `New Document: ${documents[0].title}`
+      : `${documents.length} New Documents Published`;
+    const notificationContent = isSingle
+      ? `A new document "${documents[0].title}" has been published${documents[0].description ? `: ${documents[0].description}` : ''}. You can view it in your documents section.`
+      : `${documents.length} new documents have been published:\n${documents.map((d) => `• ${d.title}`).join('\n')}\n\nYou can view them in your documents section.`;
+
+    const notificationData: any = {
       senderId,
-      type: 'in_app' as const,
+      // Deliver via both in-app and email so parents are alerted even when not logged in.
+      type: 'both' as const,
       priority: 'normal' as const,
       subject: notificationSubject,
       content: notificationContent,
       status: 'pending' as const,
     };
 
+    // documentIds (array) drives visibility for both single and bulk;
+    // documentId (scalar) retained for single uploads for backward compat.
+    const baseTargetData: any = { schoolId, documentIds };
+    if (isSingle) baseTargetData.documentId = documentIds[0];
+
     switch (targeting.targetType) {
       case 'all_parents':
         notificationData.targetType = 'all_parents';
-        notificationData.targetData = { schoolId, documentId: document.id };
+        notificationData.targetData = { ...baseTargetData };
         break;
       case 'class_specific':
         notificationData.targetType = 'class_specific';
-        notificationData.targetData = { classIds: targeting.classIds, schoolId, documentId: document.id };
+        notificationData.targetData = { ...baseTargetData, classIds: targeting.classIds };
         break;
       case 'individual':
         notificationData.targetType = 'individual';
-        notificationData.targetData = { userIds: targeting.userIds, documentId: document.id };
+        notificationData.targetData = { ...baseTargetData, userIds: targeting.userIds };
         break;
       case 'role':
         notificationData.targetType = 'role';
-        notificationData.targetData = { 
-          roles: targeting.roles, 
+        notificationData.targetData = {
+          ...baseTargetData,
+          roles: targeting.roles,
           locationIds: targeting.locationIds,
-          schoolId,
-          documentId: document.id,
         };
         break;
       case 'location':
         notificationData.targetType = 'location';
-        notificationData.targetData = { locationIds: targeting.locationIds, schoolId, documentId: document.id };
+        notificationData.targetData = { ...baseTargetData, locationIds: targeting.locationIds };
         break;
       default:
         console.log('Unknown targeting type, skipping notification');
@@ -221,9 +242,9 @@ async function sendDocumentNotification(
 
     // Create the notification
     const notification = await storage.createNotification(notificationData);
-    console.log(`✅ Created document notification ID ${notification.id} for document: ${document.title}`);
+    console.log(`✅ Created document notification ID ${notification.id} for ${documents.length} document(s)`);
 
-    // Create recipient records for in-app notifications
+    // Create recipient records for both in-app and email delivery
     for (const recipientId of recipients) {
       await storage.createNotificationRecipient({
         notificationId: notification.id,
@@ -232,6 +253,20 @@ async function sendDocumentNotification(
         status: 'delivered' as const,
         deliveredAt: new Date(),
       });
+      await storage.createNotificationRecipient({
+        notificationId: notification.id,
+        recipientId,
+        deliveryType: 'email' as const,
+        status: 'pending' as const,
+      });
+    }
+
+    // Send emails via Brevo (per-recipient status is updated inside; failures are non-fatal
+    // and respect each user's email notification preference). Skips gracefully if Brevo is unset.
+    try {
+      await sendNotificationEmails(notification, recipients);
+    } catch (emailError) {
+      console.error('Error sending document notification emails:', emailError);
     }
 
     // Update notification status
@@ -239,8 +274,23 @@ async function sendDocumentNotification(
       status: 'sent',
     });
 
-    console.log(`✅ Document notification sent to ${recipients.length} recipients`);
+    console.log(`✅ Document notification sent to ${recipients.length} recipients (in-app + email)`);
     return notification;
+  } catch (error) {
+    console.error('Error sending document notification:', error);
+    return null;
+  }
+}
+
+// Helper function to send a notification for a single document
+async function sendDocumentNotification(
+  document: any,
+  targeting: any,
+  senderId: number,
+  schoolId: number
+) {
+  try {
+    return await sendBulkDocumentNotification([document], targeting, senderId, schoolId);
   } catch (error) {
     console.error('Error sending document notification:', error);
     return null;
@@ -556,6 +606,76 @@ router.get('/:id/download', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// PUBLIC download via share token — NO authentication. Anyone with the link can
+// download, but only while the document is shared, published, not archived, and not expired.
+// (3-segment path does not collide with the authenticated 2-segment /:id/download route.)
+router.get('/public/:token/download', async (req: any, res) => {
+  try {
+    const token = req.params.token;
+    if (!token || typeof token !== 'string') {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    const document = await storage.getSchoolDocumentByShareToken(token);
+
+    // Use a generic 404 for every "not available" case so we don't leak document state.
+    const isExpired = (document as any)?.expiresAt && new Date((document as any).expiresAt) < new Date();
+    if (
+      !document ||
+      !document.shareToken ||
+      !document.isPublished ||
+      (document as any).isArchived ||
+      isExpired
+    ) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    const isObjectStoragePath = document.filePath.startsWith('/objects/');
+
+    if (isObjectStoragePath) {
+      try {
+        const objectStorageService = new ObjectStorageService();
+        const objectFile = await objectStorageService.getObjectEntityFile(document.filePath);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(document.fileName)}"`);
+        await objectStorageService.downloadObject(objectFile, res, 0);
+        console.log(`📥 Public download via share token for document ${document.id}`);
+        return;
+      } catch (downloadError: any) {
+        console.error(`❌ Public download failed from object storage: ${document.filePath}`, downloadError);
+        if (downloadError.name === 'ObjectNotFoundError') {
+          return res.status(404).json({ success: false, message: 'Document file not found' });
+        }
+        return res.status(500).json({ success: false, message: 'Failed to retrieve document' });
+      }
+    }
+
+    // Legacy: stream from local filesystem
+    const relativePath = document.filePath.startsWith('/') ? document.filePath.substring(1) : document.filePath;
+    const absolutePath = path.join(process.cwd(), relativePath);
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ success: false, message: 'Document file not found' });
+    }
+    const stats = fs.statSync(absolutePath);
+    res.setHeader('Content-Type', document.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(document.fileName)}"`);
+    res.setHeader('Cache-Control', 'no-cache');
+    const fileStream = fs.createReadStream(absolutePath);
+    fileStream.pipe(res);
+    fileStream.on('error', (err: any) => {
+      console.error('Error streaming public file:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Error streaming file' });
+      }
+    });
+  } catch (error) {
+    console.error('Error in public document download:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Failed to download document' });
+    }
+  }
+});
+
 // Get download history for a document (admin only)
 router.get('/:id/views', supabaseAuth, async (req: any, res) => {
   try {
@@ -725,6 +845,145 @@ router.post('/:id/notify', supabaseAuth, async (req: any, res) => {
       success: false, 
       message: 'Failed to send notification' 
     });
+  }
+});
+
+// Send a single joint notification covering multiple documents (bulk upload)
+router.post('/notify-bulk', supabaseAuth, async (req: any, res) => {
+  try {
+    const { documentIds, targeting } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+
+    if (!Array.isArray(documentIds) || documentIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'documentIds (non-empty array) is required' });
+    }
+
+    if (!targeting || !targeting.targetType) {
+      return res.status(400).json({ success: false, message: 'Notification targeting is required' });
+    }
+
+    const user = await storage.getUser(userId);
+    if (!user || !user.schoolId) {
+      return res.status(400).json({ success: false, message: 'User is not associated with a school' });
+    }
+
+    // SECURITY: only include documents that belong to the admin's school
+    const documents: any[] = [];
+    for (const rawId of documentIds) {
+      const id = Number(rawId);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      const doc = await storage.getSchoolDocumentById(id);
+      if (doc && doc.schoolId === user.schoolId) {
+        documents.push(doc);
+      } else if (doc) {
+        console.log(`🚨 SECURITY: User ${userId} tried to notify for document ${id} from school ${doc.schoolId} but belongs to school ${user.schoolId}`);
+      }
+    }
+
+    if (documents.length === 0) {
+      return res.status(404).json({ success: false, message: 'No accessible documents found for the provided IDs' });
+    }
+
+    const notification = await sendBulkDocumentNotification(documents, targeting, userId, user.schoolId);
+
+    if (!notification) {
+      return res.json({
+        success: true,
+        message: 'No recipients matched the targeting criteria — notification not sent',
+        notificationId: null,
+        documentCount: documents.length,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Notification sent successfully',
+      notificationId: notification.id,
+      documentCount: documents.length,
+    });
+  } catch (error) {
+    console.error('Error sending bulk document notification:', error);
+    res.status(500).json({ success: false, message: 'Failed to send notification' });
+  }
+});
+
+// Build the relative public download path for a share token.
+function buildSharePath(token: string): string {
+  return `/api/schools/documents/public/${token}/download`;
+}
+
+// Enable public sharing for a document — generates a share token if none exists.
+// Returns the (relative) share path; the client builds the absolute URL.
+router.post('/:id/share', supabaseAuth, async (req: any, res) => {
+  try {
+    const documentId = parseInt(req.params.id);
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+
+    const document = await storage.getSchoolDocumentById(documentId);
+    if (!document) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    // SECURITY: admin must belong to the document's school
+    const user = await storage.getUser(userId);
+    if (!user || user.schoolId !== document.schoolId) {
+      console.log(`🚨 SECURITY: User ${userId} attempted to share document ${documentId} from school ${document.schoolId} but belongs to school ${user?.schoolId}`);
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    // Reuse the existing token if already shared; otherwise generate a new unguessable one.
+    let token = document.shareToken;
+    if (!token) {
+      token = randomBytes(24).toString('base64url');
+      await storage.updateSchoolDocument(documentId, { shareToken: token } as any);
+    }
+
+    res.json({
+      success: true,
+      shareToken: token,
+      sharePath: buildSharePath(token),
+      message: 'Public link enabled',
+    });
+  } catch (error) {
+    console.error('Error enabling document share link:', error);
+    res.status(500).json({ success: false, message: 'Failed to enable public link' });
+  }
+});
+
+// Disable public sharing for a document — clears the share token (revokes the link).
+router.delete('/:id/share', supabaseAuth, async (req: any, res) => {
+  try {
+    const documentId = parseInt(req.params.id);
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+
+    const document = await storage.getSchoolDocumentById(documentId);
+    if (!document) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    // SECURITY: admin must belong to the document's school
+    const user = await storage.getUser(userId);
+    if (!user || user.schoolId !== document.schoolId) {
+      console.log(`🚨 SECURITY: User ${userId} attempted to unshare document ${documentId} from school ${document.schoolId} but belongs to school ${user?.schoolId}`);
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    await storage.updateSchoolDocument(documentId, { shareToken: null } as any);
+
+    res.json({ success: true, message: 'Public link revoked' });
+  } catch (error) {
+    console.error('Error disabling document share link:', error);
+    res.status(500).json({ success: false, message: 'Failed to revoke public link' });
   }
 });
 

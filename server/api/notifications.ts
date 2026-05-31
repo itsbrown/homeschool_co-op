@@ -983,7 +983,7 @@ async function resolveNotificationRecipients(
   return [...new Set(recipients)].filter(id => id && id > 0);
 }
 
-async function sendNotificationEmails(notification: any, recipientIds: number[]): Promise<void> {
+export async function sendNotificationEmails(notification: any, recipientIds: number[]): Promise<void> {
   console.log(`📧 Sending notification emails for: ${notification.subject} to ${recipientIds.length} recipients`);
   
   if (process.env.NODE_ENV === "test") {

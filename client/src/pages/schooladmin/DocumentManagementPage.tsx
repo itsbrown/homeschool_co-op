@@ -203,7 +203,7 @@ export default function DocumentManagementPage() {
   
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadForm, setUploadForm] = useState({
     title: '',
     description: '',
@@ -269,34 +269,80 @@ export default function DocumentManagementPage() {
   };
 
   const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('document', file);
-      formData.append('title', uploadForm.title || file.name);
-      formData.append('description', uploadForm.description);
-      formData.append('category', uploadForm.category);
-      formData.append('isPublished', uploadForm.isPublished.toString());
-      formData.append('visibleToAll', uploadForm.visibleToAll.toString());
-      if (uploadForm.expiresAt) {
-        formData.append('expiresAt', uploadForm.expiresAt);
+    mutationFn: async (files: File[]) => {
+      const createdDocumentIds: number[] = [];
+      const errors: string[] = [];
+      const single = files.length === 1;
+
+      // Upload each file individually (reusing the per-file validation/dedupe on the
+      // backend). Notifications are NOT sent inline — a single joint notification is
+      // sent after all uploads succeed so parents get one alert for the whole batch.
+      for (const file of files) {
+        const baseName = file.name.replace(/\.[^/.]+$/, '');
+        const title = single ? (uploadForm.title || baseName) : baseName;
+
+        const formData = new FormData();
+        formData.append('document', file);
+        formData.append('title', title);
+        formData.append('description', uploadForm.description);
+        formData.append('category', uploadForm.category);
+        formData.append('isPublished', uploadForm.isPublished.toString());
+        formData.append('visibleToAll', uploadForm.visibleToAll.toString());
+        if (uploadForm.expiresAt) {
+          formData.append('expiresAt', uploadForm.expiresAt);
+        }
+
+        try {
+          const response = await apiRequest('POST', '/api/schools/documents/upload', formData);
+          const data = await response.json();
+          if (!response.ok) {
+            errors.push(`${file.name}: ${data.message || 'upload failed'}`);
+            continue;
+          }
+          if (data.document?.id) {
+            createdDocumentIds.push(data.document.id);
+          }
+        } catch (err) {
+          errors.push(`${file.name}: ${err instanceof Error ? err.message : 'upload failed'}`);
+        }
       }
 
+      // Send one joint notification covering every successfully uploaded document.
+      let notifiedCount = 0;
       const notificationData = buildNotificationTargetData();
-      if (notificationData) {
-        formData.append('notificationTargeting', JSON.stringify(notificationData));
+      if (notificationData && createdDocumentIds.length > 0) {
+        try {
+          const notifyResponse = await apiRequest('POST', '/api/schools/documents/notify-bulk', {
+            documentIds: createdDocumentIds,
+            targeting: notificationData,
+          });
+          if (notifyResponse.ok) {
+            notifiedCount = createdDocumentIds.length;
+          }
+        } catch {
+          // Notification failure is non-fatal — documents are still uploaded.
+        }
       }
 
-      const response = await apiRequest('POST', '/api/schools/documents/upload', formData);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to upload document');
-      }
-      return response.json();
+      return { createdCount: createdDocumentIds.length, errors, notifiedCount };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (result.createdCount === 0) {
+        toast({
+          title: "Upload failed",
+          description: result.errors.join('; ') || 'No documents were uploaded',
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const notifiedText = result.notifiedCount > 0 ? ' • parents notified' : '';
       toast({
-        title: "Success",
-        description: "Document uploaded successfully",
+        title: result.errors.length > 0 ? "Partially uploaded" : "Success",
+        description: result.errors.length > 0
+          ? `${result.createdCount} uploaded${notifiedText}. Issues: ${result.errors.join('; ')}`
+          : `${result.createdCount} document${result.createdCount !== 1 ? 's' : ''} uploaded${notifiedText}`,
+        variant: result.errors.length > 0 ? "default" : undefined,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/schools/documents'] });
       setIsUploadDialogOpen(false);
@@ -413,7 +459,7 @@ export default function DocumentManagementPage() {
   });
 
   const resetUploadForm = () => {
-    setSelectedFile(null);
+    setSelectedFiles([]);
     setUploadForm({
       title: '',
       description: '',
@@ -483,35 +529,45 @@ export default function DocumentManagementPage() {
   const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+
+    const validFiles: File[] = [];
+    const oversized: string[] = [];
+    for (const file of files) {
       if (file.size > MAX_FILE_SIZE_BYTES) {
-        toast({
-          title: "File too large",
-          description: `Maximum file size is ${MAX_FILE_SIZE_MB}MB. Your file is ${(file.size / (1024 * 1024)).toFixed(1)}MB.`,
-          variant: "destructive",
-        });
-        e.target.value = '';
-        return;
+        oversized.push(file.name);
+      } else {
+        validFiles.push(file);
       }
-      setSelectedFile(file);
-      if (!uploadForm.title) {
-        setUploadForm(prev => ({ ...prev, title: file.name.replace(/\.[^/.]+$/, '') }));
-      }
+    }
+
+    if (oversized.length > 0) {
+      toast({
+        title: oversized.length === files.length ? "File too large" : "Some files skipped",
+        description: `Maximum file size is ${MAX_FILE_SIZE_MB}MB. Skipped: ${oversized.join(', ')}`,
+        variant: "destructive",
+      });
+    }
+
+    setSelectedFiles(validFiles);
+    // Prefill the title from the file name only when a single file is selected.
+    if (validFiles.length === 1 && !uploadForm.title) {
+      setUploadForm(prev => ({ ...prev, title: validFiles[0].name.replace(/\.[^/.]+$/, '') }));
     }
   };
 
   const handleUpload = () => {
-    if (!selectedFile) {
+    if (selectedFiles.length === 0) {
       toast({
         title: "Error",
-        description: "Please select a file to upload",
+        description: "Please select at least one file to upload",
         variant: "destructive",
       });
       return;
     }
     setIsUploading(true);
-    uploadMutation.mutate(selectedFile, {
+    uploadMutation.mutate(selectedFiles, {
       onSettled: () => setIsUploading(false)
     });
   };
@@ -708,41 +764,61 @@ export default function DocumentManagementPage() {
         <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
           <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Upload Document</DialogTitle>
+              <DialogTitle>Upload Documents</DialogTitle>
               <DialogDescription>
-                Upload a document to share with parents. Supported formats: PDF, Word, and images.
+                Upload one or more files to share with parents. Supported formats: PDF, Word, and images.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="file">File</Label>
+                <Label htmlFor="file">Files</Label>
                 <Input
                   id="file"
                   type="file"
+                  multiple
                   ref={fileInputRef}
                   onChange={handleFileSelect}
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif"
                   data-testid="input-file-upload"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Maximum file size: {MAX_FILE_SIZE_MB}MB
+                  Maximum file size: {MAX_FILE_SIZE_MB}MB each. Select multiple files to upload in bulk.
                 </p>
-                {selectedFile && (
+                {selectedFiles.length === 1 && (
                   <p className="text-sm text-muted-foreground mt-1">
-                    Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
+                    Selected: {selectedFiles[0].name} ({formatFileSize(selectedFiles[0].size)})
                   </p>
                 )}
+                {selectedFiles.length > 1 && (
+                  <div className="mt-2 max-h-28 overflow-y-auto rounded-md border bg-muted/30 p-2 space-y-1">
+                    <p className="text-xs font-medium">{selectedFiles.length} files selected</p>
+                    {selectedFiles.map((f, i) => (
+                      <p key={`${f.name}-${i}`} className="text-xs text-muted-foreground truncate">
+                        {f.name} ({formatFileSize(f.size)})
+                      </p>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div>
-                <Label htmlFor="title">Title</Label>
-                <Input
-                  id="title"
-                  value={uploadForm.title}
-                  onChange={(e) => setUploadForm(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder="Document title"
-                  data-testid="input-document-title"
-                />
-              </div>
+              {selectedFiles.length > 1 ? (
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Each document's title will be taken from its file name. The settings below
+                    (description, category, visibility, expiry, notification) apply to all selected files.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="title">Title</Label>
+                  <Input
+                    id="title"
+                    value={uploadForm.title}
+                    onChange={(e) => setUploadForm(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="Document title"
+                    data-testid="input-document-title"
+                  />
+                </div>
+              )}
               <div>
                 <Label htmlFor="description">Description (optional)</Label>
                 <Textarea
@@ -819,7 +895,12 @@ export default function DocumentManagementPage() {
                   <div className="flex items-center justify-between border-t pt-4">
                     <div className="flex items-center gap-2">
                       <Bell className="h-4 w-4 text-muted-foreground" />
-                      <Label htmlFor="sendNotification">Notify parents</Label>
+                      <div>
+                        <Label htmlFor="sendNotification">Notify parents</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Sends an in-app notification and an email.
+                        </p>
+                      </div>
                     </div>
                     <Switch
                       id="sendNotification"
@@ -852,7 +933,7 @@ export default function DocumentManagementPage() {
               </Button>
               <Button 
                 onClick={handleUpload} 
-                disabled={!selectedFile || isUploading}
+                disabled={selectedFiles.length === 0 || isUploading}
                 data-testid="button-confirm-upload"
               >
                 {isUploading ? (
@@ -863,7 +944,7 @@ export default function DocumentManagementPage() {
                 ) : (
                   <>
                     <Upload className="h-4 w-4 mr-2" />
-                    Upload
+                    {selectedFiles.length > 1 ? `Upload ${selectedFiles.length} Files` : 'Upload'}
                   </>
                 )}
               </Button>

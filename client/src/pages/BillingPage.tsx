@@ -1205,10 +1205,20 @@ export default function BillingPage() {
   const handlePaySelected = async () => {
     console.log('🔄 Pay Selected button clicked');
 
-    // Allow payment if specific enrollments are selected OR if user wants to pay all enrollments
-    const enrollmentsToProcess = selectedEnrollments.length > 0 
-      ? selectedEnrollments 
-      : billingSummary?.enrollmentDetails?.map(d => d.enrollmentId) || [];
+    const owingEnrollmentIds =
+      billingSummary?.enrollmentDetails
+        ?.filter((d) => d.balance > 0)
+        .map((d) => d.enrollmentId) ?? [];
+
+    // Pay selected rows, or all enrollments with a positive balance (skip comped / paid rows).
+    const enrollmentsToProcess =
+      selectedEnrollments.length > 0
+        ? selectedEnrollments.filter((id) =>
+            billingSummary?.enrollmentDetails?.some(
+              (d) => d.enrollmentId === id && d.balance > 0,
+            ),
+          )
+        : owingEnrollmentIds;
 
     if (enrollmentsToProcess.length === 0) {
       console.log('❌ No enrollments available to process');
@@ -1235,11 +1245,6 @@ export default function BillingPage() {
         console.log('💳 Selected payment plan:', selectedPaymentPlan);
 
         console.log('📤 Sending payment request...');
-        
-        // Determine which enrollments to process
-        const enrollmentsToProcess = selectedEnrollments.length > 0 
-          ? selectedEnrollments 
-          : billingSummary?.enrollmentDetails?.map(d => d.enrollmentId) || [];
 
         // Build payment details with selected plan
         const paymentDetails = enrollmentsToProcess.map(enrollmentId => {
@@ -1682,7 +1687,17 @@ export default function BillingPage() {
                       }}
                     >
                       <PaymentForm 
-                        enrollmentIds={selectedEnrollments.length > 0 ? selectedEnrollments : billingSummary?.enrollmentDetails.map(d => d.enrollmentId) || []} 
+                        enrollmentIds={
+                          selectedEnrollments.length > 0
+                            ? selectedEnrollments.filter((id) =>
+                                billingSummary?.enrollmentDetails?.some(
+                                  (d) => d.enrollmentId === id && d.balance > 0,
+                                ),
+                              )
+                            : billingSummary?.enrollmentDetails
+                                .filter((d) => d.balance > 0)
+                                .map((d) => d.enrollmentId) ?? []
+                        } 
                         totalAmount={getPaymentPlanAmount()} 
                         navigate={navigate}
                         onPaymentSuccess={async (details) => {

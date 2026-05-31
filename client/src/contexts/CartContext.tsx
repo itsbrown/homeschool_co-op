@@ -1408,7 +1408,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const enrollmentHash = enrollments
       .map(
         (e) =>
-          `${e.id}:${e.status}:${e.remainingBalance}:${e.effectiveBalance ?? ''}:${e.checkoutExcluded === true ? 1 : 0}:${e.managedByPaymentPlan === true ? 1 : 0}`,
+          `${e.id}:${e.status}:${e.remainingBalance}:${e.effectiveBalance ?? ''}:${e.compAmountCents ?? ''}:${e.paymentStatus ?? ''}:${e.checkoutExcluded === true ? 1 : 0}:${e.managedByPaymentPlan === true ? 1 : 0}`,
       )
       .sort()
       .join('|');
