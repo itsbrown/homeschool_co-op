@@ -7,6 +7,10 @@ import { describeIntegration } from './helpers/integrationDb';
 import {
   reconcileStuckAutoPayProcessingAttempts,
 } from '../services/autopay-reconciliation';
+import {
+  isWebhookScheduledPaymentCompletionSource,
+  paymentRowBlocksReconciliationBackfill,
+} from '../services/scheduled-payment-reminders';
 import { storage } from '../storage';
 import { testDb } from './helpers/testDatabase';
 
@@ -264,6 +268,18 @@ describeIntegration('Webhook vs reconciliation ledger equivalence', () => {
     ).length;
 
     expect(countAfter).toBe(countBefore); // no second row was written
+  });
+
+  it('reconciliation guards skip double-apply when webhook already completed SP or payments row exists', () => {
+    expect(isWebhookScheduledPaymentCompletionSource('stripe_autopay')).toBe(true);
+    expect(isWebhookScheduledPaymentCompletionSource('stripe_checkout')).toBe(true);
+    expect(isWebhookScheduledPaymentCompletionSource(null)).toBe(false);
+    expect(isWebhookScheduledPaymentCompletionSource('recovery')).toBe(false);
+
+    expect(paymentRowBlocksReconciliationBackfill('completed')).toBe(true);
+    expect(paymentRowBlocksReconciliationBackfill('succeeded')).toBe(true);
+    expect(paymentRowBlocksReconciliationBackfill('pending')).toBe(true);
+    expect(paymentRowBlocksReconciliationBackfill('failed')).toBe(false);
   });
 
   it('reconciliation repository marks stuck processing rows as completed', async () => {

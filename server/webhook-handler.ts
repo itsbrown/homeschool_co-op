@@ -405,7 +405,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
               scheduledPayment,
               paymentIntent.metadata as Record<string, string | undefined>,
             );
-            console.log('💰 Updating enrollment balance for scheduled payment...', { enrollmentIds });
 
             const originalAmount =
               parseInt(String(paymentIntent.metadata.originalAmountCents || '0'), 10) ||
@@ -415,6 +414,64 @@ export const webhookHandler = async (req: Request, res: Response) => {
             const totalCents = Number.isInteger(totalPaymentAmount)
               ? totalPaymentAmount
               : Math.round(Number(totalPaymentAmount)) || paymentIntent.amount;
+
+            let childNameForPayment = 'Child';
+            let classNameForPayment = 'Class';
+            let payerLine = `Installment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`;
+            if (enrollmentIds.length === 1) {
+              const enrollmentForLabel = await storage.getProgramEnrollmentById(enrollmentIds[0]!);
+              if (enrollmentForLabel) {
+                payerLine = `${enrollmentForLabel.childName} - ${enrollmentForLabel.className}`;
+                childNameForPayment = enrollmentForLabel.childName || childNameForPayment;
+                classNameForPayment = enrollmentForLabel.className || classNameForPayment;
+              }
+            } else if (enrollmentIds.length > 1) {
+              const parts: string[] = [];
+              for (const eid of enrollmentIds) {
+                const e = await storage.getProgramEnrollmentById(eid);
+                if (e?.childName && e?.className) {
+                  parts.push(`${e.childName} - ${e.className}`);
+                }
+              }
+              payerLine = parts.length > 0 ? parts.join('; ') : payerLine;
+              childNameForPayment = 'Multiple children';
+              classNameForPayment = `${enrollmentIds.length} enrollments`;
+            }
+
+            const parentUser = await storage.getUserByEmail(parentEmail);
+            const schoolId = scheduledPayment.schoolId || parentUser?.schoolId || 1;
+
+            const payment = {
+              schoolId,
+              parentId: parentUser?.id ?? null,
+              parentEmail: parentEmail,
+              childName: childNameForPayment,
+              className: classNameForPayment,
+              description: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`,
+              amount: paymentIntent.amount,
+              currency: paymentIntent.currency || 'usd',
+              status: 'completed' as const,
+              stripePaymentIntentId: paymentIntent.id,
+              stripeChargeId: null as string | null,
+              stripeRefundId: null as string | null,
+              originalPaymentId: null as number | null,
+              enrollmentIds,
+              metadata: {
+                scheduledPaymentId: scheduledPaymentId,
+                installmentNumber: scheduledPayment.installmentNumber,
+                totalInstallments: scheduledPayment.totalInstallments,
+                enrollmentIds: JSON.stringify(enrollmentIds),
+              },
+              paymentDate: new Date()
+            };
+
+            // Persist payments row before enrollment mutation so reconciliation cannot double-apply.
+            if (!existingPayment) {
+              await storage.createPayment(payment);
+              console.log(`✅ Created payment history record for scheduled payment ${scheduledPaymentId}`);
+            }
+
+            console.log('💰 Updating enrollment balance for scheduled payment...', { enrollmentIds });
 
             if (enrollmentIds.length === 0) {
               console.error(`❌ Cannot process scheduled payment ${scheduledPaymentId}: no enrollment ids`);
@@ -447,61 +504,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 console.error(`❌ Error updating enrollments for scheduled payment ${scheduledPaymentId}:`, error);
               }
             }
-
-            // Create payment record for history in database
-            let childNameForPayment = 'Child';
-            let classNameForPayment = 'Class';
-            let payerLine = `Installment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`;
-            if (enrollmentIds.length === 1) {
-              const enrollmentForLabel = await storage.getProgramEnrollmentById(enrollmentIds[0]!);
-              if (enrollmentForLabel) {
-                payerLine = `${enrollmentForLabel.childName} - ${enrollmentForLabel.className}`;
-                childNameForPayment = enrollmentForLabel.childName || childNameForPayment;
-                classNameForPayment = enrollmentForLabel.className || classNameForPayment;
-              }
-            } else if (enrollmentIds.length > 1) {
-              const parts: string[] = [];
-              for (const eid of enrollmentIds) {
-                const e = await storage.getProgramEnrollmentById(eid);
-                if (e?.childName && e?.className) {
-                  parts.push(`${e.childName} - ${e.className}`);
-                }
-              }
-              payerLine = parts.length > 0 ? parts.join('; ') : payerLine;
-              childNameForPayment = 'Multiple children';
-              classNameForPayment = `${enrollmentIds.length} enrollments`;
-            }
-
-            // Get parent user to get schoolId
-            const parentUser = await storage.getUserByEmail(parentEmail);
-            const schoolId = scheduledPayment.schoolId || parentUser?.schoolId || 1;
-
-            const payment = {
-              schoolId,
-              parentId: parentUser?.id ?? null,
-              parentEmail: parentEmail,
-              childName: childNameForPayment,
-              className: classNameForPayment,
-              description: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`,
-              amount: paymentIntent.amount,
-              currency: paymentIntent.currency || 'usd',
-              status: 'completed' as const,
-              stripePaymentIntentId: paymentIntent.id,
-              stripeChargeId: null as string | null,
-              stripeRefundId: null as string | null,
-              originalPaymentId: null as number | null,
-              enrollmentIds,
-              metadata: {
-                scheduledPaymentId: scheduledPaymentId,
-                installmentNumber: scheduledPayment.installmentNumber,
-                totalInstallments: scheduledPayment.totalInstallments,
-                enrollmentIds: JSON.stringify(enrollmentIds),
-              },
-              paymentDate: new Date()
-            };
-
-            await storage.createPayment(payment);
-            console.log(`✅ Created payment history record for scheduled payment ${scheduledPaymentId}`);
             
             // Create payment receipt record for parent documents
             await createReceiptFromPayment({

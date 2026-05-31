@@ -1368,6 +1368,10 @@ export const schoolDocuments = pgTable("school_documents", {
   mimeType: text("mime_type").notNull(),
   isPublished: boolean("is_published").default(true).notNull(),
   visibleToAll: boolean("visible_to_all").default(true).notNull(),
+  expiresAt: timestamp("expires_at"),
+  isArchived: boolean("is_archived").default(false).notNull(),
+  /** Random unguessable token for public (no-login) download links; NULL = not shared. */
+  shareToken: text("share_token"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

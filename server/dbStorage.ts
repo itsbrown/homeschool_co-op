@@ -1313,6 +1313,15 @@ export class DatabaseStorage implements IStorage {
     return document;
   }
 
+  async getSchoolDocumentByShareToken(shareToken: string): Promise<SchoolDocument | undefined> {
+    const db = await getDb();
+    const [document] = await db
+      .select()
+      .from(schoolDocuments)
+      .where(eq(schoolDocuments.shareToken, shareToken));
+    return document;
+  }
+
   async getSchoolDocumentsBySchoolId(schoolId: number): Promise<SchoolDocument[]> {
     const db = await getDb();
     return await db
