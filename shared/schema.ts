@@ -465,6 +465,8 @@ export const sessions = pgTable("sessions", {
   halfDayCapacity: integer("half_day_capacity"),
   fullDayCapacity: integer("full_day_capacity"),
   sortOrder: integer("sort_order").notNull().default(0),
+  /** NULL = legacy school-wide session; set for campus-specific enrollment periods */
+  locationId: integer("location_id").references(() => locations.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -673,8 +675,10 @@ export const programEnrollments = pgTable("program_enrollments", {
   
   // Enrollment status
   status: text("status", { 
-    enum: ["pending_payment", "pending_admin_approval", "enrolled", "waitlist", "cancelled", "completed", "withdrawn", "failed"] 
+    enum: ["pending_payment", "pending_admin_approval", "enrolled", "waitlist", "location_wishlist", "cancelled", "completed", "withdrawn", "failed"] 
   }).default("enrolled").notNull(),
+  /** Campus for location-gated session wishlist enrollments */
+  locationId: integer("location_id").references(() => locations.id),
   waitlistPosition: integer("waitlist_position"), // Position in waitlist (null if not waitlisted)
   enrollmentDate: timestamp("enrollment_date").defaultNow().notNull(),
   
@@ -1963,9 +1967,27 @@ export const locations = pgTable("locations", {
   capacity: integer("capacity"), // total capacity for this location
   isActive: boolean("is_active").default(true).notNull(),
   timezone: text("timezone").default("America/New_York").notNull(),
+  /** Minimum students (with saved PM on wishlist) before campus opens; NULL = always active */
+  activationThreshold: integer("activation_threshold"),
+  activationStatus: text("activation_status", {
+    enum: ["collecting", "notice_period", "activated", "cancelled"],
+  }),
+  noticeStartedAt: timestamp("notice_started_at"),
+  chargeScheduledAt: timestamp("charge_scheduled_at"),
+  activatedAt: timestamp("activated_at"),
+  collectionDeadline: timestamp("collection_deadline"),
+  activationNoticeHours: integer("activation_notice_hours").default(72).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const LOCATION_ACTIVATION_STATUSES = [
+  "collecting",
+  "notice_period",
+  "activated",
+  "cancelled",
+] as const;
+export type LocationActivationStatus = (typeof LOCATION_ACTIVATION_STATUSES)[number];
 
 export const insertLocationSchema = createInsertSchema(locations)
   .omit({ id: true, createdAt: true, updatedAt: true })
@@ -1974,6 +1996,10 @@ export const insertLocationSchema = createInsertSchema(locations)
     email: z.string().nullable().default(null),
     managerName: z.string().nullable().default(null),
     capacity: z.number().nullable().default(null),
+    activationThreshold: z.number().int().positive().nullable().optional(),
+    activationStatus: z.enum(LOCATION_ACTIVATION_STATUSES).nullable().optional(),
+    activationNoticeHours: z.number().int().positive().optional(),
+    collectionDeadline: z.coerce.date().nullable().optional(),
   });
 export type InsertLocation = z.infer<typeof insertLocationSchema>;
 export type Location = typeof locations.$inferSelect;
@@ -2018,11 +2044,38 @@ export const userLocations = pgTable("user_locations", {
   canManageClasses: boolean("can_manage_classes").default(false).notNull(),
   canManageStudents: boolean("can_manage_students").default(false).notNull(),
   canSendNotifications: boolean("can_send_notifications").default(false).notNull(),
+  canViewParentContacts: boolean("can_view_parent_contacts").default(false).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   assignedAt: timestamp("assigned_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+/** School-wide staff permissions (all locations in the school). */
+export const userSchoolPermissions = pgTable("user_school_permissions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  accessLevel: text("access_level", {
+    enum: ["view", "manage", "admin"],
+  }).notNull().default("view"),
+  canViewReports: boolean("can_view_reports").default(false).notNull(),
+  canManageStaff: boolean("can_manage_staff").default(false).notNull(),
+  canManageClasses: boolean("can_manage_classes").default(false).notNull(),
+  canManageStudents: boolean("can_manage_students").default(false).notNull(),
+  canSendNotifications: boolean("can_send_notifications").default(false).notNull(),
+  canViewParentContacts: boolean("can_view_parent_contacts").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueUserSchool: unique("user_school_permissions_user_school_unique").on(table.userId, table.schoolId),
+}));
+
+export const insertUserSchoolPermissionSchema = createInsertSchema(userSchoolPermissions)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertUserSchoolPermission = z.infer<typeof insertUserSchoolPermissionSchema>;
+export type UserSchoolPermission = typeof userSchoolPermissions.$inferSelect;
 
 export const insertUserLocationSchema = createInsertSchema(userLocations)
   .omit({ id: true, createdAt: true, updatedAt: true, assignedAt: true });
@@ -2036,6 +2089,7 @@ export const categories = pgTable("categories", {
   name: text("name").notNull(), // e.g., "Early Childhood", "High School", "Kindergarten"
   description: text("description"), // Optional description of the category
   isActive: boolean("is_active").default(true).notNull(),
+  isPublic: boolean("is_public").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -2844,3 +2898,183 @@ export const creditHoldsRelations = relations(creditHolds, ({ one }) => ({
   user: one(users, { fields: [creditHolds.userId], references: [users.id] }),
   credit: one(credits, { fields: [creditHolds.creditId], references: [credits.id] }),
 }));
+
+// ==================== ASSESSMENTS (F-14) ====================
+
+export const assessmentCategoryEnum = [
+  "reading", "phonics", "math", "writing", "science", "history",
+  "language_arts", "foreign_language", "other", "custom",
+] as const;
+
+export const scoreFormatEnum = [
+  "numeric", "fraction", "level", "percentage", "letter_grade", "pass_fail", "custom",
+] as const;
+
+export const assessmentSourceValues = ["manual_entry", "in_app"] as const;
+
+export const assessmentTypes = pgTable("assessment_types", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").notNull().default("custom"),
+  scoreFormat: text("score_format").notNull().default("numeric"),
+  maxScore: integer("max_score"),
+  levelOptions: text("level_options").array(),
+  hasCurriculumBooks: boolean("has_curriculum_books").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAssessmentTypeSchema = createInsertSchema(assessmentTypes)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertAssessmentType = z.infer<typeof insertAssessmentTypeSchema>;
+export type AssessmentType = typeof assessmentTypes.$inferSelect;
+
+export const curriculumBooks = pgTable("curriculum_books", {
+  id: serial("id").primaryKey(),
+  assessmentTypeId: integer("assessment_type_id").notNull().references(() => assessmentTypes.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  totalLessons: integer("total_lessons"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  progressTrackId: integer("progress_track_id"), // FK to progress_tracks added in init-db
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCurriculumBookSchema = createInsertSchema(curriculumBooks)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCurriculumBook = z.infer<typeof insertCurriculumBookSchema>;
+export type CurriculumBook = typeof curriculumBooks.$inferSelect;
+
+export const studentAssessments = pgTable("student_assessments", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  locationId: integer("location_id").references(() => locations.id),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
+  assessmentTypeId: integer("assessment_type_id").notNull().references(() => assessmentTypes.id),
+  curriculumBookId: integer("curriculum_book_id").references(() => curriculumBooks.id),
+  assessmentDate: timestamp("assessment_date").notNull(),
+  score: text("score").notNull(),
+  lesson: integer("lesson"),
+  notes: text("notes"),
+  recordedBy: integer("recorded_by").notNull().references(() => users.id),
+  source: text("source").notNull().default("manual_entry"),
+  lexileScore: integer("lexile_score"),
+  sessionId: integer("session_id").references(() => sessions.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertStudentAssessmentSchema = createInsertSchema(studentAssessments)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertStudentAssessment = z.infer<typeof insertStudentAssessmentSchema>;
+export type StudentAssessment = typeof studentAssessments.$inferSelect;
+
+// ==================== CURRICULUM PROGRESS (multi-subject) ====================
+
+export const progressTrackKindEnum = ["book_series", "unit_based", "custom"] as const;
+
+export const progressSubjects = pgTable("progress_subjects", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProgressSubjectSchema = createInsertSchema(progressSubjects)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertProgressSubject = z.infer<typeof insertProgressSubjectSchema>;
+export type ProgressSubject = typeof progressSubjects.$inferSelect;
+
+export const progressTracks = pgTable("progress_tracks", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  subjectId: integer("subject_id").notNull().references(() => progressSubjects.id, { onDelete: "cascade" }),
+  parentTrackId: integer("parent_track_id"),
+  name: text("name").notNull(),
+  trackKind: text("track_kind").notNull().default("book_series"),
+  totalLessons: integer("total_lessons"),
+  totalUnits: integer("total_units"),
+  metadata: jsonb("metadata").default({}),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProgressTrackSchema = createInsertSchema(progressTracks)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertProgressTrack = z.infer<typeof insertProgressTrackSchema>;
+export type ProgressTrack = typeof progressTracks.$inferSelect;
+
+export const studentProgressCurrent = pgTable("student_progress_current", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
+  progressTrackId: integer("progress_track_id").notNull().references(() => progressTracks.id, { onDelete: "cascade" }),
+  lessonNumber: integer("lesson_number"),
+  unitLabel: text("unit_label"),
+  topicsSummary: text("topics_summary"),
+  notes: text("notes"),
+  source: text("source").notNull().default("manual"),
+  recordedBy: integer("recorded_by").references(() => users.id),
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const studentProgressLog = pgTable("student_progress_log", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  sessionId: integer("session_id").notNull().references(() => sessions.id),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
+  progressTrackId: integer("progress_track_id").notNull().references(() => progressTracks.id),
+  locationId: integer("location_id").references(() => locations.id),
+  eventDate: date("event_date").notNull(),
+  lessonNumber: integer("lesson_number"),
+  unitLabel: text("unit_label"),
+  topicsCovered: jsonb("topics_covered"),
+  topicsSummary: text("topics_summary"),
+  notes: text("notes"),
+  source: text("source").notNull().default("manual"),
+  recordedBy: integer("recorded_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertStudentProgressLogSchema = createInsertSchema(studentProgressLog)
+  .omit({ id: true, createdAt: true });
+export type InsertStudentProgressLog = z.infer<typeof insertStudentProgressLogSchema>;
+export type StudentProgressLog = typeof studentProgressLog.$inferSelect;
+
+export const childProgressInsights = pgTable("child_progress_insights", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
+  summary: text("summary"),
+  nextSteps: jsonb("next_steps").default([]),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  model: text("model"),
+});
+
+export const insertStudentProgressLogBodySchema = z.object({
+  sessionId: z.number().int().positive(),
+  progressTrackId: z.number().int().positive(),
+  eventDate: z.string(),
+  lessonNumber: z.number().int().positive().optional().nullable(),
+  unitLabel: z.string().max(120).optional().nullable(),
+  topicsCovered: z.string().max(2000).optional().nullable(),
+  topicsSummary: z.string().max(500).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+  locationId: z.number().int().positive().optional().nullable(),
+}).refine(
+  (d) => !!(d.lessonNumber || (d.unitLabel && d.unitLabel.trim()) || (d.topicsCovered && d.topicsCovered.trim())),
+  { message: "Enter a lesson number, unit/chapter, or topics covered", path: ["topicsCovered"] },
+);

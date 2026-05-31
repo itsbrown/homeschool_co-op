@@ -80,6 +80,17 @@ export const uploadCategories: Record<string, UploadCategoryConfig> = {
     public: false,
     description: "User profile photos",
   },
+  formAttachments: {
+    maxSizeBytes: 10 * 1024 * 1024,
+    allowedTypes: [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ],
+    folder: "form-attachments",
+    public: false,
+    description: "Custom form uploads (e.g. resumes)",
+  },
   scheduleResources: {
     maxSizeBytes: 25 * 1024 * 1024,
     allowedTypes: [
@@ -117,6 +128,17 @@ export interface UploadOptions {
   userId?: number;
   schoolId?: number;
   metadata?: Record<string, string>;
+}
+
+/** Skip GCS when Playwright starts the dev server (no object storage in local/CI E2E). */
+function shouldStubFormUploadForE2e(): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+  if (process.env.E2E_STUB_FORM_UPLOADS === "true") {
+    return true;
+  }
+  return process.env.PLAYWRIGHT_WEB_SERVER === "true";
 }
 
 class FileUploadService {
@@ -238,6 +260,22 @@ class FileUploadService {
     const validation = this.validateUpload(uploadOptions);
     if (!validation.valid) {
       throw new Error(validation.error || "Validation failed");
+    }
+
+    if (shouldStubFormUploadForE2e()) {
+      const objectId = randomUUID();
+      const ext = this.getExtension(options.originalFilename);
+      const storagePath = this.buildStoragePath(uploadOptions, objectId, ext);
+      const objectPath = `/objects/${storagePath}`;
+      return {
+        url: objectPath,
+        objectPath,
+        mimeType: options.mimeType,
+        sizeBytes: buffer.length,
+        uploadedAt: new Date(),
+        category: options.category,
+        filename: options.originalFilename,
+      };
     }
 
     const categoryConfig = uploadCategories[options.category];

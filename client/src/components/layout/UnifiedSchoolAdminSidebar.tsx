@@ -261,11 +261,16 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   });
 
   // Fetch staff permissions for non-admin staff members
-  const { data: staffPermissionsData } = useQuery<{ userLocations: Array<{ permissions: { canManageClasses?: boolean } }> }>({
+  const { data: staffPermissionsData } = useQuery<{
+    userLocations: Array<{ permissions: { canManageClasses?: boolean } }>;
+    schoolWide?: { permissions: { canManageClasses?: boolean } } | null;
+  }>({
     queryKey: ['/api/school-admin/user-locations/my-permissions'],
     enabled: !!user && !showAdminNavGroups,
   });
-  const canManageClasses = staffPermissionsData?.userLocations?.[0]?.permissions?.canManageClasses ?? false;
+  const canManageClasses =
+    staffPermissionsData?.schoolWide?.permissions?.canManageClasses === true ||
+    staffPermissionsData?.userLocations?.some((ul) => ul.permissions?.canManageClasses) === true;
 
   // Reset logo load failed states when school logo changes
   useEffect(() => {

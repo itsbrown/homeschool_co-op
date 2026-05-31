@@ -6,6 +6,9 @@ import { jest } from '@jest/globals';
 import {
   findUnpaidMembershipRow,
   computeUnpaidMembershipRemainingCents,
+  isMembershipFullyPaidForCheckout,
+  isPlaceholderMembershipEnrollmentRow,
+  parentHasMemberIdForCheckout,
   type MembershipRowForBalance,
 } from '../utils/cart-pricing';
 
@@ -28,6 +31,19 @@ function makeRow(
     ...overrides,
   };
 }
+
+describe('parentHasMemberIdForCheckout', () => {
+  it('treats non-empty memberId as paid for checkout', () => {
+    expect(parentHasMemberIdForCheckout('ASA-2025-X7K9M2')).toBe(true);
+  });
+
+  it('treats null, empty, and whitespace-only as unpaid', () => {
+    expect(parentHasMemberIdForCheckout(null)).toBe(false);
+    expect(parentHasMemberIdForCheckout('')).toBe(false);
+    expect(parentHasMemberIdForCheckout('   ')).toBe(false);
+    expect(parentHasMemberIdForCheckout(undefined)).toBe(false);
+  });
+});
 
 describe('findUnpaidMembershipRow (task #212)', () => {
   it('Property 2: returns null for first-time enrollment (no membership rows)', () => {
@@ -120,6 +136,16 @@ describe('computeUnpaidMembershipRemainingCents (task #212)', () => {
     warnSpy.mockRestore();
   });
 
+  it('legacy enrolled row with amount but no payment columns is not treated as fully paid', () => {
+    const row = makeRow({
+      amount: FULL_FEE,
+      amountPaid: null,
+      remainingBalance: null,
+      status: 'enrolled',
+    });
+    expect(isMembershipFullyPaidForCheckout(row, SCHOOL_ID, CURRENT_YEAR)).toBe(false);
+  });
+
   it('Property 5b: NULL amountPaid AND NULL remainingBalance clamps to 0 with WARN — does NOT fall back to full fee', () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     const row = makeRow({ amount: 10000, amountPaid: null, remainingBalance: null });
@@ -180,5 +206,24 @@ describe('membership-balance source — end-to-end property simulation (task #21
     // Mirror useUnpaidEnrollments → outstandingBalanceCents = remainingBalance.
     const uiOutstandingBalanceCents = row.remainingBalance;
     expect(simulateMembershipLine([row], FULL_FEE)).toBe(uiOutstandingBalanceCents);
+  });
+
+  it('Property 6: placeholder pending row (registration) uses school fee, not $0', () => {
+    const placeholder = makeRow({
+      amount: 0,
+      amountPaid: 0,
+      remainingBalance: 0,
+      status: 'pending_payment',
+    });
+    expect(isPlaceholderMembershipEnrollmentRow(placeholder)).toBe(true);
+    expect(computeUnpaidMembershipRemainingCents(placeholder)).toBe(0);
+    expect(findUnpaidMembershipRow([placeholder], SCHOOL_ID, CURRENT_YEAR)).toBe(placeholder);
+    // Checkout must not treat this as "paid" — server uses school fee when placeholder.
+    expect(simulateMembershipLine([placeholder], FULL_FEE)).toBe(0);
+  });
+
+  it('Property 5b row is not a placeholder (amount > 0)', () => {
+    const row = makeRow({ amount: 10000, amountPaid: null, remainingBalance: null });
+    expect(isPlaceholderMembershipEnrollmentRow(row)).toBe(false);
   });
 });

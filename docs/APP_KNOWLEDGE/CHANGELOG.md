@@ -1,5 +1,46 @@
 # App knowledge changelog
 
+## 2026-05-31 (Domain docs: custom forms + agent knowledge model)
+
+- **New:** [`domains/custom-forms-public-access.md`](domains/custom-forms-public-access.md) — public `/forms/:slug`, APIs, mentor template/provision, E2E, pitfalls; hub index entry.
+- **ci-and-testing:** Playwright E2E table, **Agent knowledge maintenance** (footer vs persisted docs/rules), port-5000 E2E pitfall.
+- **Hub README:** Step 5/6 clarified — CHANGELOG/domain files persist; chat footer is summary only.
+
+## 2026-05-31 (Domain doc: payments and billing + Jake Fabry correction)
+
+- **New:** [`domains/payments-and-billing.md`](domains/payments-and-billing.md) — balance fields (`effective_balance` vs `remaining_balance`), prod audit queries, credit-application corrections, correction email, incidents (Jake Fabry, Kari Wing, SQL pitfall, ghost checkout).
+- **Hub:** `README.md` index entry for payments/billing domain.
+- **Prod (Jake Fabry, parent 34):** Credit #34 ($810 spring comp) never applied after Mar 10 checkout → `effective_balance` $810. Fixed via `apply-jake-fabry-credits-production.ts` (enr 327–329); email `account-correction-summaries/jake-fabry.json`.
+- **Invariant:** Approved manual credits must consume via `unified_credit_usage_logs` when applied at checkout or in admin correction.
+
+## 2026-05-31 (Knowledge: E2E spec → E2E_COMMANDS maintenance)
+
+- **Protocol:** New/changed `e2e/*.spec.ts` must add testing links in [`docs/E2E_COMMANDS.md`](../E2E_COMMANDS.md) (catalog row + command); optional runbook/domain cross-link + CHANGELOG.
+- **Updated:** `asa-app-knowledge`, `asa-testing-deployment`, `ci-and-testing.md`, `.cursor/rules/app-knowledge.mdc`, “Maintaining this index” section in `E2E_COMMANDS.md`.
+- **Example:** [`e2e/public-custom-forms.spec.ts`](../e2e/public-custom-forms.spec.ts) → `npm run test:e2e -- e2e/public-custom-forms.spec.ts`.
+
+## 2026-05-31 (Resume upload E2E + mentor form provision)
+
+- **E2E:** `public-custom-forms.spec.ts` — `upload-attachment` API + browser resume upload/submit; seed includes `file_upload` field.
+- **E2E storage:** `fileUploadService.uploadBuffer` stubs object storage when `PLAYWRIGHT_WEB_SERVER=true` (non-production).
+- **Ops:** `server/scripts/provision-public-mentor-form.ts` + runbook `docs/APP_KNOWLEDGE/runbooks/public-mentor-application-form.md`.
+
+## 2026-05-31 (E2E command index doc)
+
+- **Doc:** [`docs/E2E_COMMANDS.md`](../E2E_COMMANDS.md) — consolidated Playwright npm scripts, per-spec commands, env, projects, `/api/test/*` seeds; linked from `ci-and-testing.md` and `server/tests/README.md`.
+
+## 2026-05-31 (E2E: public custom forms)
+
+- **Spec:** `e2e/public-custom-forms.spec.ts` — unauthenticated `/forms/:slug`, public `by-slug` + `submit` APIs, members-only hidden from public routes.
+- **Seed:** `POST /api/test/setup-public-form-scenario` (`server/tests/helpers/seedPublicFormScenario.ts`).
+- **UI:** `data-testid="form-submit-success"` on post-submit confirmation card.
+
+## 2026-05-31 (Mentor/educator application form template + resume upload)
+
+- **Template:** `Mentor / Educator Application` in Form Builder (`slug: mentor-application-template`, 23 fields). Seeded via `server/scripts/seed-form-templates.ts`.
+- **Resume:** Public `POST /api/custom-forms/forms/:formId/upload-attachment`; `file_upload` on `DynamicFormPage`; admin download `GET /api/custom-forms/submissions/:id/files/:fieldId` (`formAttachments` storage category).
+- **Clone:** Any `isTemplate` form clones into the admin's school with public access + slug without `-template`.
+
 ## 2026-05-31 (Prod: classes.enrollment_open column missing — cart snapshot)
 
 - **Symptom:** `getClassById` failed with `column "enrollment_open" does not exist`; CombinedStorage fell back to empty memStorage during `/api/cart/snapshot` → checkout/pricing errors (seen in prod logs for parent 31 cart).
@@ -156,6 +197,10 @@ Dated updates to this knowledge base (not product release notes).
 
 ## 2026-05-26
 
+- **Location activation threshold (implemented):** Schema `249-location-activation-threshold.sql`, `location-activation-service`, scheduler, wishlist enroll path, cart/Stripe guards, admin + parent UI. See domain doc.
+- **Location activation threshold (planned):** Product rules locked in `domains/registration-and-locations.md` — student count, `sessions.location_id`, short notice before batch charge, early admin activate + audit, expiry cancels wishlist and releases cards.
+- **School-wide staff permissions:** `user_school_permissions` table + `/api/school-admin/user-school-permissions` (GET/POST/PATCH). Middleware `checkLocationPermission` honors school-wide grants at every location. Staff Permissions page has a **School-wide access** card; `my-permissions` returns `schoolWide` for sidebar nav.
+- **Staff Permissions:** `StaffPermissionsPage` grants location access to any school user via `/api/school-admin/users` (search + quick list), not only `/api/school-admin/staff` roles; assign block always visible below the permissions table. `STAFF_TYPE_ROLES` includes `mentor`/`aide` with case-insensitive match on `/api/school-admin/staff`.
 - **Comp enrollment balance:** `resolveEnrollmentEffectiveBalance` prefers computed `total_cost - total_paid - comp_amount_cents` when stored `effective_balance` drifts; comp API uses same helper; Parent Profile drops `remainingBalance` fallback; `server/scripts/repair-comp-amount-cents.sql` for legacy rows with `comp_percentage` but zero `comp_amount_cents`.
 - **Comp school guard:** `POST /api/admin/enrollments/:id/comp` uses `canAdminManageEnrollmentSchool` (all assignable schools + class `school_id` fallback), not a single `user_roles.school_id` — fixes “Cannot comp enrollments from other schools” when admin is `schools.admin_id` for the enrollment’s school but legacy `users.school_id` differs.
 - Added `domains/student-progress-assessments.md`: audit of F-14 reading assessments — UI/migrations exist; routes, storage, and Drizzle schema not wired (non-functional at runtime).

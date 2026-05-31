@@ -62,6 +62,7 @@ const ParentClassDetailsPage = lazy(() => import("@/pages/parents/ParentClassDet
 const MyDocumentsPage = lazy(() => import("@/pages/parent/MyDocumentsPage"));
 const DocumentDetailPage = lazy(() => import("@/pages/parent/DocumentDetailPage"));
 const MyAssessmentsPage = lazy(() => import("@/pages/parent/MyAssessmentsPage"));
+const ParentProgressPage = lazy(() => import("@/pages/parent/ParentProgressPage"));
 const SimpleClassesPage = lazy(() => import("./pages/SimpleClassesPage").then(m => ({ default: m.SimpleClassesPage })));
 const StaffInvitePage = lazy(() => import("./pages/schools/StaffInvitePage"));
 const StaffPositionsPage = lazy(() => import("./pages/schools/StaffPositionsPage"));
@@ -107,6 +108,16 @@ const UsersPage = lazy(() => import("./pages/schools/UsersPage"));
 const ParentProfilePage = lazy(() => import("./pages/schools/ParentProfilePage"));
 const EducatorProfilePage = lazy(() => import("./pages/schools/EducatorProfilePage"));
 const StaffProfilePage = lazy(() => import("./pages/schools/StaffProfilePage"));
+const UserProfilePage = lazy(() => import("./pages/schools/UserProfilePage"));
+const LegacyParentProfileRedirect = lazy(() =>
+  import("./pages/schools/LegacyProfileRedirects").then((m) => ({ default: m.LegacyParentProfileRedirect })),
+);
+const LegacyEducatorProfileRedirect = lazy(() =>
+  import("./pages/schools/LegacyProfileRedirects").then((m) => ({ default: m.LegacyEducatorProfileRedirect })),
+);
+const LegacyStaffProfileRedirect = lazy(() =>
+  import("./pages/schools/LegacyProfileRedirects").then((m) => ({ default: m.LegacyStaffProfileRedirect })),
+);
 const AdminProfilePage = lazy(() => import("./pages/schools/AdminProfilePage"));
 const ClassesPage = lazy(() => import("./pages/ClassesPage"));
 const CalendarPage = lazy(() => import("./pages/CalendarPage"));
@@ -630,6 +641,7 @@ function Router() {
       <Route path="/parent/documents" component={MyDocumentsPage} />
       <Route path="/parent/documents/:id" component={DocumentDetailPage} />
       <Route path="/parent/assessments" component={MyAssessmentsPage} />
+      <Route path="/parent/progress" component={ParentProgressPage} />
       <Route path="/parent/weekly-schedule" component={WeeklySchedulePage} />
 
       {/* Educator routes - use ParentAppShell when activeRole is 'parent', EducatorAppShell otherwise */}
@@ -778,9 +790,10 @@ function Router() {
       </Route>
       <Route path="/schools/contact-import" component={SchoolContactImportPage} />
       <Route path="/schools/users" component={UsersPage} />
-      <Route path="/schools/parents/:parentId" component={ParentProfilePage} />
-      <Route path="/schools/educators/:educatorId" component={EducatorProfilePage} />
-      <Route path="/schools/staff/:staffId" component={StaffProfilePage} />
+      <Route path="/schools/users/:userId" component={UserProfilePage} />
+      <Route path="/schools/parents/:parentId" component={LegacyParentProfileRedirect} />
+      <Route path="/schools/educators/:educatorId" component={LegacyEducatorProfileRedirect} />
+      <Route path="/schools/staff/:staffId" component={LegacyStaffProfileRedirect} />
       <Route path="/schools/admins/:adminId" component={AdminProfilePage} />
       <Route path="/schools/settings" component={SchoolSettingsPage} />
 

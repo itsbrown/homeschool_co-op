@@ -330,7 +330,7 @@ export default function StaffPage() {
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem asChild>
-                                      <Link href={`/schools/staff/${member.id}`}>View Profile</Link>
+                                      <Link href={`/schools/users/${member.id}`}>View Profile</Link>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem asChild>
                                       <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
@@ -420,7 +420,7 @@ export default function StaffPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem asChild>
-                                  <Link href={`/schools/staff/${member.id}`}>View Profile</Link>
+                                  <Link href={`/schools/users/${member.id}`}>View Profile</Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
                                   <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
@@ -490,7 +490,7 @@ export default function StaffPage() {
                           </CardContent>
                           <CardFooter className="flex justify-center gap-2 pt-2">
                             <Button size="sm" variant="outline">
-                              <Link href={`/schools/staff/${member.id}`}>View Profile</Link>
+                              <Link href={`/schools/users/${member.id}`}>View Profile</Link>
                             </Button>
                             <Button size="sm" variant="outline">
                               <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>

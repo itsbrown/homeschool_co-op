@@ -21,6 +21,11 @@ import { useUnpaidEnrollments, usePayOutstanding, type UnpaidEnrollment } from "
 import { useParentCredits } from "@/hooks/useParentCredits";
 import { formatCurrency } from "@/lib/utils";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
+import {
+  fetchParentMemberId,
+  PARENT_MEMBER_ID_QUERY_KEY,
+  type ParentMemberIdResponse,
+} from "@/lib/parent-member-id";
 import { getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
 import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
@@ -352,30 +357,9 @@ export default function ParentDashboard() {
     [dashboardCreditsCents],
   );
 
-  // Fetch user's member ID and membership status
-  interface MemberIdResponse {
-    memberId: string | null;
-    hasMemberId: boolean; // Whether user has a member ID (for copy/edit controls)
-    hasMembership: boolean; // Whether membership is actively paid (for "Active Member" badge)
-    membershipStatus: string | null; // 'enrolled', 'pending_payment', 'grace_period', etc.
-  }
-
-  const { data: memberIdData, isLoading: memberIdLoading } = useQuery<MemberIdResponse>({
-    queryKey: ["/api/parent/member-id"],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) throw new Error('No authentication token found');
-      
-      const response = await fetch("/api/parent/member-id", {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) throw new Error(`Failed to fetch member ID: ${response.status}`);
-      return response.json();
-    },
+  const { data: memberIdData, isLoading: memberIdLoading } = useQuery<ParentMemberIdResponse>({
+    queryKey: [...PARENT_MEMBER_ID_QUERY_KEY],
+    queryFn: fetchParentMemberId,
     enabled: !!session,
   });
 
@@ -595,7 +579,9 @@ export default function ParentDashboard() {
     if (!Array.isArray(payments)) return 0;
     return payments.filter(
       (p: any) =>
-        p.overdue === true || p.status === "overdue" || p.status === "failed"
+        !p.isCheckoutDue &&
+        p.status !== "checkout_due" &&
+        (p.overdue === true || p.status === "overdue" || p.status === "failed")
     ).length;
   })();
 
@@ -640,47 +626,12 @@ export default function ParentDashboard() {
     retry: 1,
   });
 
-  // Fetch parent membership enrollments
-  interface MembershipEnrollment {
-    id: number;
-    schoolId: number;
-    schoolName: string;
-    schoolLogo: string | null;
-    membershipYear: string;
-    status: string;
-    amount: number;
-    amountPaid: number;
-    remainingBalance: number;
-    dueDate: string | null;
-    expirationDate: string | null;
-    startDate: string | null;
-    renewalDate: string | null;
-    membershipDescription: string | null;
-  }
-  
-  const { data: membershipsData, isLoading: membershipsLoading, isError: membershipsError } = useQuery<MembershipEnrollment[]>({
-    queryKey: ["/api/parent/memberships"],
-    queryFn: async () => {
-      const token = localStorage.getItem('supabase_token');
-      if (!token) {
-        throw new Error('No authentication token found');
-      }
-      
-      const response = await fetch("/api/parent/memberships", {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch memberships: ${response.status}`);
-      }
-      return response.json();
-    },
-    enabled: !!user && !!session,
-    retry: 1,
-  });
+  const membershipOwedCents = useMemo(() => {
+    if (!memberIdData || memberIdData.hasMembership) return 0;
+    return memberIdData.membershipOwedCents > 0
+      ? memberIdData.membershipOwedCents
+      : memberIdData.membershipFeeAmount;
+  }, [memberIdData]);
 
   // Helper function to get membership status display info
   const getMembershipStatusInfo = (status: string) => {
@@ -1011,33 +962,61 @@ export default function ParentDashboard() {
                     >
                       {formatCurrency(nextScheduledPayment.amount)}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Next payment
-                      {nextScheduledPayment.installmentNumber != null &&
-                      nextScheduledPayment.totalInstallments != null
-                        ? ` (${nextScheduledPayment.installmentNumber} of ${nextScheduledPayment.totalInstallments})`
-                        : ""}
-                      {nextScheduledPayment.dueDate
-                        ? ` · due ${format(new Date(nextScheduledPayment.dueDate), "MMM d, yyyy")}`
-                        : ""}
-                    </p>
-                    {(nextScheduledPayment.className || nextScheduledPayment.childName) && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate">
-                        {[nextScheduledPayment.childName, nextScheduledPayment.className]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
+                    {nextScheduledPayment.isCheckoutDue ||
+                    nextScheduledPayment.status === "checkout_due" ? (
+                      <>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Checkout started — payment not completed
+                        </p>
+                        {(nextScheduledPayment.className || nextScheduledPayment.childName) && (
+                          <p className="text-xs text-muted-foreground mt-1 truncate">
+                            {[nextScheduledPayment.childName, nextScheduledPayment.className]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-snug">
+                          Finish checkout to confirm enrollment. You are not on an active payment
+                          plan until the first payment succeeds.
+                        </p>
+                        <Button className="mt-3 w-full h-11" asChild data-testid="button-complete-checkout-dashboard">
+                          <Link href="/cart/checkout">
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Complete checkout
+                          </Link>
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Next payment
+                          {nextScheduledPayment.installmentNumber != null &&
+                          nextScheduledPayment.totalInstallments != null
+                            ? ` (${nextScheduledPayment.installmentNumber} of ${nextScheduledPayment.totalInstallments})`
+                            : ""}
+                          {nextScheduledPayment.dueDate
+                            ? ` · due ${format(new Date(nextScheduledPayment.dueDate), "MMM d, yyyy")}`
+                            : ""}
+                        </p>
+                        {(nextScheduledPayment.className || nextScheduledPayment.childName) && (
+                          <p className="text-xs text-muted-foreground mt-1 truncate">
+                            {[nextScheduledPayment.childName, nextScheduledPayment.className]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-snug">
+                          Class balances are on your payment plan — pay installments from Upcoming
+                          Payments, not checkout.
+                        </p>
+                        <Button className="mt-3 w-full h-11" asChild data-testid="button-view-payment-plan-dashboard">
+                          <Link href="/payments?tab=upcoming">
+                            <Calendar className="h-4 w-4 mr-2" />
+                            View payment plan
+                          </Link>
+                        </Button>
+                      </>
                     )}
-                    <p className="text-xs text-muted-foreground mt-1.5 leading-snug">
-                      Class balances are on your payment plan — pay installments from Upcoming
-                      Payments, not checkout.
-                    </p>
-                    <Button className="mt-3 w-full h-11" asChild data-testid="button-view-payment-plan-dashboard">
-                      <Link href="/payments?tab=upcoming">
-                        <Calendar className="h-4 w-4 mr-2" />
-                        View payment plan
-                      </Link>
-                    </Button>
                   </>
                 ) : (
                   <>
@@ -1307,107 +1286,57 @@ export default function ParentDashboard() {
                 )}
               </div>
 
-              {/* Membership Enrollments Section */}
-              {membershipsLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-muted-foreground">Loading membership details...</span>
-                </div>
-              ) : membershipsError ? (
-                <div className="text-center py-4 text-muted-foreground">
-                  <Award className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm text-red-500">Unable to load membership details.</p>
-                  <Button 
-                    variant="link" 
-                    size="sm" 
-                    onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/parent/memberships"] })}
-                    className="mt-1"
+              {/* Membership summary (single member-id API; no /memberships on dashboard) */}
+              {!memberIdData?.hasMembership && membershipOwedCents > 0 && memberIdData?.schoolName ? (
+                <div
+                  className="p-4 rounded-lg border bg-muted/30"
+                  data-testid="membership-summary-due"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Award className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{memberIdData.schoolName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date().getFullYear()} Membership
+                        </p>
+                      </div>
+                    </div>
+                    {memberIdData.membershipStatus ? (() => {
+                      const statusInfo = getMembershipStatusInfo(memberIdData.membershipStatus);
+                      const StatusIcon = statusInfo.icon;
+                      return (
+                        <Badge className={statusInfo.color}>
+                          <StatusIcon className="h-3 w-3 mr-1" />
+                          {statusInfo.label}
+                        </Badge>
+                      );
+                    })() : null}
+                  </div>
+                  <div className="text-sm">
+                    <p className="text-muted-foreground">Balance Due</p>
+                    <p className="font-medium text-orange-600">
+                      ${(membershipOwedCents / 100).toFixed(2)}
+                    </p>
+                  </div>
+                  <Button
+                    className="w-full mt-3"
+                    size="sm"
+                    onClick={() => setLocation("/payments?tab=upcoming")}
                   >
-                    Try again
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Pay Now
                   </Button>
                 </div>
-              ) : !membershipsData || membershipsData.length === 0 ? (
-                !memberIdData?.hasMembership && (
-                  <div className="text-center py-2 text-muted-foreground">
-                    <p className="text-xs">Complete your membership payment to receive your Member ID.</p>
-                  </div>
-                )
-              ) : (
-                <div className="space-y-4">
-                  {membershipsData.map((membership) => {
-                    const statusInfo = getMembershipStatusInfo(membership.status);
-                    const StatusIcon = statusInfo.icon;
-                    
-                    return (
-                      <div 
-                        key={membership.id} 
-                        className="p-4 rounded-lg border bg-muted/30"
-                        data-testid={`membership-item-${membership.id}`}
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            {membership.schoolLogo ? (
-                              <img 
-                                src={membership.schoolLogo} 
-                                alt={membership.schoolName}
-                                className="h-10 w-10 object-contain rounded"
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                <Award className="h-5 w-5 text-primary" />
-                              </div>
-                            )}
-                            <div>
-                              <p className="font-medium">{membership.schoolName}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {membership.membershipYear} Membership
-                              </p>
-                            </div>
-                          </div>
-                          <Badge className={statusInfo.color}>
-                            <StatusIcon className="h-3 w-3 mr-1" />
-                            {statusInfo.label}
-                          </Badge>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <p className="text-muted-foreground">Amount</p>
-                            <p className="font-medium">${(membership.amount / 100).toFixed(2)}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Paid</p>
-                            <p className="font-medium">${(membership.amountPaid / 100).toFixed(2)}</p>
-                          </div>
-                          {membership.remainingBalance > 0 && (
-                            <div>
-                              <p className="text-muted-foreground">Balance Due</p>
-                              <p className="font-medium text-orange-600">${(membership.remainingBalance / 100).toFixed(2)}</p>
-                            </div>
-                          )}
-                          {membership.expirationDate && (
-                            <div>
-                              <p className="text-muted-foreground">Expires</p>
-                              <p className="font-medium">{new Date(membership.expirationDate).toLocaleDateString()}</p>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {membership.status === 'pending' || membership.status === 'pending_payment' ? (
-                          <Button 
-                            className="w-full mt-3" 
-                            size="sm"
-                            onClick={() => setLocation("/payments?tab=upcoming")}
-                          >
-                            <CreditCard className="mr-2 h-4 w-4" />
-                            Pay Now
-                          </Button>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+              ) : !memberIdData?.hasMembership ? (
+                <div className="text-center py-2 text-muted-foreground">
+                  <p className="text-xs">
+                    Complete your membership payment to receive your Member ID.
+                  </p>
                 </div>
-              )}
+              ) : null}
             </CardContent>
           </Card>
 

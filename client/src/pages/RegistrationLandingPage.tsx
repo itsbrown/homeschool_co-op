@@ -14,7 +14,7 @@ import { Building, ArrowLeft, PlusCircle, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
   fetchPublicRegistration,
-  fetchPublicRegistrationJson,
+  fetchPublicRegistrationLocations,
   PUBLIC_REGISTRATION_LOCATIONS_PATH,
 } from "@/lib/registration-public-api";
 import { registerParentWithChildren } from "@/lib/auth-register";
@@ -115,14 +115,13 @@ export default function RegistrationLandingPage() {
     isError: locationsError,
     error: locationsErrorDetail,
   } = useQuery({
-    queryKey: [PUBLIC_REGISTRATION_LOCATIONS_PATH, school?.id],
-    queryFn: async () => {
-      if (!school?.id) return [];
-      return fetchPublicRegistrationJson<{ id: number; name: string }[]>(
-        `${PUBLIC_REGISTRATION_LOCATIONS_PATH}?schoolId=${school.id}`,
-      );
-    },
-    enabled: !!school?.id,
+    queryKey: [PUBLIC_REGISTRATION_LOCATIONS_PATH, code, school?.id],
+    queryFn: () =>
+      fetchPublicRegistrationLocations({
+        code: code ?? undefined,
+        schoolId: school?.id,
+      }),
+    enabled: !!code || !!school?.id,
     retry: 1,
   });
 
@@ -520,9 +519,19 @@ export default function RegistrationLandingPage() {
                                   : "Could not load locations"}
                               </SelectItem>
                             ) : locations.length > 0 ? (
-                              locations.map((location: { id: number; name: string }) => (
+                              locations.map((location: {
+                                id: number;
+                                name: string;
+                                activationStatus?: string | null;
+                                activationThreshold?: number | null;
+                                eligibleStudentCount?: number;
+                              }) => (
                                 <SelectItem key={location.id} value={location.id.toString()}>
                                   {location.name}
+                                  {location.activationThreshold != null &&
+                                  location.activationStatus === "collecting"
+                                    ? ` (opening soon — ${location.eligibleStudentCount ?? 0}/${location.activationThreshold} students)`
+                                    : ""}
                                 </SelectItem>
                               ))
                             ) : (

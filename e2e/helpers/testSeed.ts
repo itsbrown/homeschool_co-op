@@ -79,6 +79,7 @@ export type SetupRegistrationScenarioResponse = {
   success: boolean;
   data?: {
     registrationCode: string;
+    openSessions?: { id: number; name: string; enrollmentOpen: boolean }[];
     school: { id: number; name: string; registrationCode: string };
     wrongSchool: { id: number; name: string };
     admin: {
@@ -96,13 +97,14 @@ export type SetupRegistrationScenarioResponse = {
 
 export async function postSetupRegistrationScenario(
   request: APIRequestContext,
+  body: { openSessionCount?: number } = {},
 ): Promise<{ response: APIResponse; json: SetupRegistrationScenarioResponse | null }> {
   const response = await request.post("/api/test/setup-registration-scenario", {
     headers: {
       "X-Test-Token": testApiToken(),
       "Content-Type": "application/json",
     },
-    data: {},
+    data: body,
   });
   let json: SetupRegistrationScenarioResponse | null = null;
   try {
@@ -164,6 +166,41 @@ export async function postSetupSessionEnrollmentScenario(
   let json: SetupSessionEnrollmentScenarioResponse | null = null;
   try {
     json = (await response.json()) as SetupSessionEnrollmentScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
+export type SetupPublicFormScenarioResponse = {
+  success: boolean;
+  data?: {
+    school: { id: number; name: string };
+    publicForm: {
+      id: number;
+      slug: string;
+      title: string;
+      fieldIds: { fullName: number; email: number; resume: number; agree: number };
+    };
+    membersForm: { id: number; slug: string };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupPublicFormScenario(
+  request: APIRequestContext,
+): Promise<{ response: APIResponse; json: SetupPublicFormScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-public-form-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: {},
+  });
+  let json: SetupPublicFormScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupPublicFormScenarioResponse;
   } catch {
     json = null;
   }

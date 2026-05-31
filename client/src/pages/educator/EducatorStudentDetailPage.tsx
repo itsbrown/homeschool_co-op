@@ -14,6 +14,7 @@ import {
   Cake
 } from "lucide-react";
 import LexileProfileSection from "@/components/lexile/LexileProfileSection";
+import ProgressQuickLogDialog from "@/components/educator/ProgressQuickLogDialog";
 
 interface Student {
   id: number;
@@ -186,6 +187,15 @@ export default function EducatorStudentDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        <div className="md:col-span-2 flex flex-wrap items-center gap-2">
+          {studentId && student && (
+            <ProgressQuickLogDialog
+              childId={studentId}
+              childName={`${student.firstName} ${student.lastName}`}
+            />
+          )}
+        </div>
 
         <div className="md:col-span-2">
           <LexileProfileSection

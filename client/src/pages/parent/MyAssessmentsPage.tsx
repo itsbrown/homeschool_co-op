@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, BookOpen, TrendingUp, Calendar, User } from "lucide-react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
-import { format } from "date-fns";
+import { safeFormatDate } from "@/utils/safeFormatDate";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 interface Assessment {
@@ -62,7 +62,7 @@ function AssessmentProgressChart({ assessments }: { assessments: Assessment[] })
   const chartData = readingAssessments.map((assessment) => {
     const gradeLevel = parseGradeLevel(assessment.score);
     return {
-      date: format(new Date(assessment.assessmentDate), 'MMM dd'),
+      date: safeFormatDate(assessment.assessmentDate, 'MMM dd'),
       gradeLevel: gradeLevel,
       lexileScore: assessment.lexileScore,
       book: assessment.curriculumBookName || assessment.assessmentTypeName
@@ -239,7 +239,7 @@ function ChildAssessmentTab({ data }: { data: ChildWithAssessments }) {
                       <div>
                         <p className="font-medium">{assessment.assessmentTypeName}</p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>{format(new Date(assessment.assessmentDate), 'MMM d, yyyy')}</span>
+                          <span>{safeFormatDate(assessment.assessmentDate, 'MMM d, yyyy')}</span>
                           {assessment.curriculumBookName && (
                             <>
                               <span>•</span>

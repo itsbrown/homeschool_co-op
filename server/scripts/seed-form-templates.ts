@@ -1,5 +1,5 @@
 import { getDb } from '../db';
-import { customForms, customFormFields, users } from '@shared/schema';
+import { customForms, customFormFields, users, schools } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 
@@ -277,7 +277,194 @@ const TEMPLATE_FORMS = [
         fieldConfig: {}
       }
     ]
-  }
+  },
+  {
+    title: 'Mentor / Educator Application',
+    description:
+      'Application for prospective mentors and educators. Collects contact info, education background, classroom experience, resume upload, and a brief civic knowledge check.',
+    formType: 'custom',
+    slug: 'mentor-application-template',
+    isTemplate: true,
+    isActive: false,
+    accessLevel: 'public',
+    platformFeeType: 'none',
+    platformFeeAmount: 0,
+    isAllLocations: true,
+    fields: [
+      { fieldType: 'text', label: 'First Name', placeholder: 'Jane', order: 1, isRequired: true, fieldConfig: {} },
+      { fieldType: 'text', label: 'Last Name', placeholder: 'Smith', order: 2, isRequired: true, fieldConfig: {} },
+      { fieldType: 'email', label: 'Email Address', placeholder: 'you@email.com', order: 3, isRequired: true, fieldConfig: {} },
+      { fieldType: 'phone', label: 'Phone Number', placeholder: '(555) 123-4567', order: 4, isRequired: true, fieldConfig: {} },
+      { fieldType: 'text', label: 'City', placeholder: 'Your city', order: 5, isRequired: true, fieldConfig: {} },
+      { fieldType: 'text', label: 'State', placeholder: 'NY', order: 6, isRequired: true, fieldConfig: {} },
+      {
+        fieldType: 'dropdown',
+        label: 'Position applying for',
+        order: 7,
+        isRequired: true,
+        fieldConfig: {
+          options: ['Mentor', 'Lead Mentor', 'Classroom Educator', 'Assistant Educator', 'Substitute'],
+        },
+      },
+      {
+        fieldType: 'dropdown',
+        label: 'Highest level of education completed',
+        order: 8,
+        isRequired: true,
+        fieldConfig: {
+          options: [
+            'High school diploma / GED',
+            'Some college',
+            "Associate's degree",
+            "Bachelor's degree",
+            "Master's degree",
+            'Doctorate / professional degree',
+          ],
+        },
+      },
+      {
+        fieldType: 'text',
+        label: 'Degree(s) and field(s) of study',
+        placeholder: 'e.g. B.A. History, M.Ed. Elementary Education',
+        order: 9,
+        isRequired: true,
+        fieldConfig: {},
+      },
+      {
+        fieldType: 'multi_checkbox',
+        label: 'Teaching certifications or credentials (select all that apply)',
+        order: 10,
+        isRequired: false,
+        fieldConfig: {
+          options: [
+            'State teaching license',
+            'Substitute teaching permit',
+            'Homeschool co-op / private school experience',
+            'Tutoring certification',
+            'None / in progress',
+          ],
+        },
+      },
+      {
+        fieldType: 'dropdown',
+        label: 'Years of classroom teaching experience',
+        order: 11,
+        isRequired: true,
+        fieldConfig: {
+          options: ['None', 'Less than 1 year', '1–2 years', '3–5 years', '6–10 years', 'More than 10 years'],
+        },
+      },
+      {
+        fieldType: 'multi_checkbox',
+        label: 'Grade levels you have taught or mentored (select all that apply)',
+        order: 12,
+        isRequired: true,
+        fieldConfig: {
+          options: ['Pre-K / Kindergarten', 'Elementary (1–5)', 'Middle school (6–8)', 'High school (9–12)', 'Mixed ages'],
+        },
+      },
+      {
+        fieldType: 'multi_checkbox',
+        label: 'Subjects you are comfortable teaching (select all that apply)',
+        order: 13,
+        isRequired: true,
+        fieldConfig: {
+          options: [
+            'Language arts / literature',
+            'Mathematics',
+            'Science',
+            'History / social studies',
+            'Civics / government',
+            'Fine arts',
+            'Life skills / enrichment',
+          ],
+        },
+      },
+      {
+        fieldType: 'textarea',
+        label: 'Describe your classroom or mentoring experience',
+        placeholder:
+          'Include settings (co-op, private, public, homeschool), ages taught, and your approach to instruction.',
+        order: 14,
+        isRequired: true,
+        fieldConfig: {},
+      },
+      {
+        fieldType: 'textarea',
+        label: 'Why do you want to serve as a mentor/educator with our program?',
+        order: 15,
+        isRequired: true,
+        fieldConfig: {},
+      },
+      {
+        fieldType: 'file_upload',
+        label: 'Resume (PDF or Word)',
+        order: 16,
+        isRequired: true,
+        fieldConfig: { accept: '.pdf,.doc,.docx' },
+      },
+      {
+        fieldType: 'radio',
+        label: 'Civic knowledge: The U.S. Constitution begins with which phrase?',
+        order: 17,
+        isRequired: true,
+        fieldConfig: {
+          options: ['We the People', 'Four score and seven years ago', 'In God We Trust', 'E pluribus unum'],
+        },
+      },
+      {
+        fieldType: 'radio',
+        label: 'Civic knowledge: How many branches are in the U.S. federal government?',
+        order: 18,
+        isRequired: true,
+        fieldConfig: { options: ['One', 'Two', 'Three', 'Four'] },
+      },
+      {
+        fieldType: 'radio',
+        label: 'Civic knowledge: The Declaration of Independence was adopted in which year?',
+        order: 19,
+        isRequired: true,
+        fieldConfig: { options: ['1492', '1776', '1787', '1865'] },
+      },
+      {
+        fieldType: 'radio',
+        label: 'Civic knowledge: The First Amendment primarily protects',
+        order: 20,
+        isRequired: true,
+        fieldConfig: {
+          options: [
+            'The right to bear arms',
+            'Freedom of speech, religion, press, assembly, and petition',
+            'Voting rights for all citizens at age 16',
+            'Presidential term limits',
+          ],
+        },
+      },
+      {
+        fieldType: 'radio',
+        label: 'Civic knowledge: How many stars are on the current U.S. flag?',
+        order: 21,
+        isRequired: true,
+        fieldConfig: { options: ['13', '48', '50', '52'] },
+      },
+      {
+        fieldType: 'checkbox',
+        label:
+          'I affirm that I support teaching foundational American history, civics, and patriotic principles as part of a well-rounded education.',
+        order: 22,
+        isRequired: true,
+        fieldConfig: {},
+      },
+      {
+        fieldType: 'checkbox',
+        label:
+          'I certify that the information provided is accurate to the best of my knowledge.',
+        order: 23,
+        isRequired: true,
+        fieldConfig: {},
+      },
+    ],
+  },
 ];
 
 async function seedFormTemplates() {
@@ -299,8 +486,15 @@ async function seedFormTemplates() {
     }
     
     const adminUserId = adminUsers[0].id;
+
+    const [templateSchool] = await db.select({ id: schools.id }).from(schools).limit(1);
+    if (!templateSchool) {
+      console.error('No school found. Create a school before seeding templates.');
+      process.exit(1);
+    }
+    const templateSchoolId = templateSchool.id;
     
-    console.log(`Using user ID ${adminUserId} as template creator`);
+    console.log(`Using user ID ${adminUserId} as template creator, school ID ${templateSchoolId} for templates`);
     
     for (const template of TEMPLATE_FORMS) {
       // Check if template already exists
@@ -332,17 +526,28 @@ async function seedFormTemplates() {
           platformFeeAmount: template.platformFeeAmount,
           isAllLocations: template.isAllLocations,
           allowedLocationIds: null,
-          schoolId: 1, // Templates are school 1 by default, can be cloned to other schools
+          schoolId: templateSchoolId,
           createdBy: adminUserId,
-          settings: {
-            requireAuth: true,
-            allowMultipleSubmissions: false,
-            showProgressBar: true,
-            confirmationMessage: "Thank you for your order! You will receive a confirmation email shortly.",
-            redirectUrl: null,
-            notifyOnSubmission: true,
-            notificationEmails: [],
-          },
+          settings: template.formType === 'custom'
+            ? {
+                requireAuth: false,
+                allowMultipleSubmissions: false,
+                showProgressBar: true,
+                confirmationMessage:
+                  'Thank you for applying! We have received your mentor/educator application and will be in touch.',
+                redirectUrl: null,
+                notifyOnSubmission: true,
+                notificationEmails: [],
+              }
+            : {
+                requireAuth: true,
+                allowMultipleSubmissions: false,
+                showProgressBar: true,
+                confirmationMessage: "Thank you for your order! You will receive a confirmation email shortly.",
+                redirectUrl: null,
+                notifyOnSubmission: true,
+                notificationEmails: [],
+              },
           conditionalLogic: [],
         })
         .returning();

@@ -1,0 +1,15 @@
+[
+  {
+    "classId": 1,
+    "marketplaceClassId": 1,
+    "childId": 7,
+    "status": "active",
+    "amount": 10000,
+    "totalCost": 10000,
+    "amountPaid": 0,
+    "remainingBalance": 10000,
+    "depositRequired": 1000,
+    "enrollmentDate": "2026-05-18T20:48:33.886Z",
+    "id": 1779137313903
+  }
+]

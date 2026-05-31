@@ -55,6 +55,7 @@ import { formatCurrency } from "@/utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RefundDialog } from "@/components/payments/RefundDialog";
 import { cn } from "@/lib/utils";
+import { Link } from "wouter";
 
 /** Returns the effective amount owed for an enrollment (in cents).
  *  Prefers the server-computed effectiveBalance field; falls back to the
@@ -80,6 +81,7 @@ interface Enrollment {
   programStartDate?: string;
   programEndDate?: string;
   parentEmail?: string;
+  parentId?: number | null;
   compPercentage?: number | null;
   proratedFromCents?: number | null;
   proratePercentage?: number | null;
@@ -1093,6 +1095,16 @@ export default function EnrollmentsAdminPage() {
                           <TableCell>
                             <div>
                               <div className="font-medium">{enrollment.childName}</div>
+                              {enrollment.parentId ? (
+                                <Link
+                                  href={`/schools/users/${enrollment.parentId}?tab=family`}
+                                  className="text-xs text-primary hover:underline"
+                                >
+                                  {enrollment.parentEmail || 'View parent'}
+                                </Link>
+                              ) : enrollment.parentEmail ? (
+                                <span className="text-xs text-muted-foreground">{enrollment.parentEmail}</span>
+                              ) : null}
                               <div className="text-sm text-muted-foreground md:hidden">
                                 {enrollment.className}
                               </div>

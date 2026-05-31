@@ -96,6 +96,8 @@ node scripts/db-push-with-env.mjs
 PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns=production-path
 ```
 
+**Playwright command index:** [`docs/E2E_COMMANDS.md`](../../docs/E2E_COMMANDS.md) — all `npm run test:e2e` scripts, per-spec commands, env vars, and `/api/test/*` seeds.
+
 **Seed for Playwright:** `POST /api/test/setup-registration-scenario` (see `e2e/school-code-registration.spec.ts`). E2E uses **real Supabase** when secrets are set; skips with placeholder keys.
 
 Harness: `server/tests/helpers/productionPathApp.ts`, `supabaseAuthMock.ts`, `describeProductionPath.ts`, `seedRegistrationScenario.ts`.

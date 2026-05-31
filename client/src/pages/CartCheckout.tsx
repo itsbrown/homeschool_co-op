@@ -14,6 +14,8 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient, safeJsonParse } from '@/lib/queryClient';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Link } from 'wouter';
 import { ShoppingCart, CreditCard, Percent, Gift, AlertCircle, Check, Loader2, Calendar, DollarSign, Clock, CheckCircle2, Award, RefreshCw, ArrowLeft, Zap } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { formatCurrency } from '@/utils/currency';
@@ -46,6 +48,8 @@ type FreeEnrollmentReason =
 type AuthoritativeDataType = {
   itemsTotal: number;
   membershipAmount: number;
+  membershipTotal: number;
+  membershipFeeAmount: number;
   membershipAlreadyPaid: boolean;
   membershipRequired: boolean;
   membershipSchoolId: number | null;
@@ -61,7 +65,7 @@ type AuthoritativeDataType = {
   freeEnrollmentReason: FreeEnrollmentReason | null;
 };
 
-function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled, hasPaymentMethod, togglingAutoPay, toggleAutoPay }: { selectedPaymentPlan: string; selectedPlanAmount: number; autoPayEnabled: boolean; hasPaymentMethod: boolean; togglingAutoPay: boolean; toggleAutoPay: (enabled: boolean) => void }) {
+function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled, hasPaymentMethod, togglingAutoPay, toggleAutoPay, checkoutBlocked, checkoutBlockedReason }: { selectedPaymentPlan: string; selectedPlanAmount: number; autoPayEnabled: boolean; hasPaymentMethod: boolean; togglingAutoPay: boolean; toggleAutoPay: (enabled: boolean) => void; checkoutBlocked?: boolean; checkoutBlockedReason?: string }) {
   const stripe = useStripe();
   const elements = useElements();
   const { cart, clearCart } = useCart();
@@ -98,6 +102,15 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
       return;
     }
 
+    if (checkoutBlocked) {
+      toast({
+        title: "Action required",
+        description: checkoutBlockedReason || "Complete the required steps before paying.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Backup cart data before processing payment
     const cartData = localStorage.getItem('cart');
     if (cartData) {
@@ -110,7 +123,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
     // Save payment plan before payment for success page
     localStorage.setItem('selectedPaymentPlan', selectedPaymentPlan);
 
-    // Save pending auto-pay preference for first-time users (applied on success page after card is saved)
+    // Persist for success page + next payment-intent refresh (vault + enable auto-pay)
     if (!hasPaymentMethod) {
       localStorage.setItem('pendingAutoPay', pendingAutoPayEnabled ? 'true' : 'false');
     }
@@ -187,7 +200,14 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
             </div>
             <Switch
               checked={hasPaymentMethod ? autoPayEnabled : pendingAutoPayEnabled}
-              onCheckedChange={hasPaymentMethod ? (checked) => toggleAutoPay(checked) : setPendingAutoPayEnabled}
+              onCheckedChange={
+                hasPaymentMethod
+                  ? (checked) => toggleAutoPay(checked)
+                  : (checked) => {
+                      setPendingAutoPayEnabled(checked);
+                      localStorage.setItem('pendingAutoPay', checked ? 'true' : 'false');
+                    }
+              }
               disabled={togglingAutoPay}
               aria-label="Enable automatic payments"
             />
@@ -197,7 +217,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
       <Button 
         type="submit" 
         className="w-full" 
-        disabled={!stripe || !elementsReady || processing || (cart.items.length === 0 && !cart.membership)}
+        disabled={!stripe || !elementsReady || processing || checkoutBlocked || (cart.items.length === 0 && !cart.membership)}
         size="lg"
         data-testid="button-checkout-submit"
       >
@@ -223,7 +243,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
 }
 
 export default function CartCheckout() {
-  const { cart, cartHydrated, cartLoading, clearCart, applyPromoCode, removePromoCode, refreshCart } = useCart();
+  const { cart, cartHydrated, cartLoading, clearCart, applyPromoCode, removePromoCode, refreshCart, setMembership } = useCart();
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -332,25 +352,27 @@ export default function CartCheckout() {
     const fromCart = cart.membership?.amount ?? 0;
     if (fromCart > 0) return fromCart;
     const a = authoritativeData;
-    if (a?.membershipRequired && !a.membershipAlreadyPaid && (a.membershipAmount ?? 0) > 0) {
-      return a.membershipAmount;
-    }
-    return 0;
+    if (!a || a.membershipAlreadyPaid) return 0;
+    const owed =
+      a.membershipTotal ??
+      a.membershipAmount ??
+      (!a.membershipAlreadyPaid && a.membershipFeeAmount > 0 ? a.membershipFeeAmount : 0);
+    return owed > 0 ? owed : 0;
   }, [cart.membership?.amount, authoritativeData]);
 
   const membershipForOrderSummary = useMemo((): MembershipFee | null => {
     if (cart.membership) return cart.membership;
     const a = authoritativeData;
-    if (
-      a?.membershipRequired &&
-      !a.membershipAlreadyPaid &&
-      (a.membershipAmount ?? 0) > 0 &&
-      a.membershipSchoolId != null
-    ) {
+    if (!a || a.membershipAlreadyPaid || a.membershipSchoolId == null) return null;
+    const owed =
+      a.membershipTotal ??
+      a.membershipAmount ??
+      (!a.membershipAlreadyPaid && a.membershipFeeAmount > 0 ? a.membershipFeeAmount : 0);
+    if (owed > 0) {
       return {
         schoolId: a.membershipSchoolId,
         schoolName: a.membershipSchoolName,
-        amount: a.membershipAmount,
+        amount: owed,
         year: a.membershipYear,
       };
     }
@@ -358,6 +380,31 @@ export default function CartCheckout() {
   }, [cart.membership, authoritativeData]);
 
   const actualPayableAmount = cart.total + effectiveMembershipCents;
+
+  const agreementSchoolId =
+    authoritativeData?.membershipSchoolId ?? membershipForOrderSummary?.schoolId ?? null;
+
+  const { data: agreementStatus, isLoading: agreementStatusLoading } = useQuery<{
+    hasSigned: boolean;
+    requiresNewSignature: boolean;
+  }>({
+    queryKey: ['agreement-status-checkout', agreementSchoolId],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      const res = await fetch(`/api/parent/agreements/check/${agreementSchoolId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        throw new Error('Failed to check membership agreement status');
+      }
+      return res.json();
+    },
+    enabled: !!agreementSchoolId && isAuthenticated,
+    staleTime: 30_000,
+  });
+
+  const mustSignAgreement = agreementStatus?.requiresNewSignature === true;
 
   const isFreeEnrollmentApproved = gateIsFreeEnrollmentApproved(actualPayableAmount, authoritativeData);
   const cartLooksFreeButUnverified = gateCartLooksFreeButUnverified(actualPayableAmount, authoritativeData);
@@ -564,6 +611,21 @@ export default function CartCheckout() {
       }
     };
   }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, cart.membership, cart.total, effectiveMembershipCents, actualPayableAmount, hasCheckoutConflict]); // Re-run when cart or loading status changes
+
+  // Load authoritative snapshot (including membership) as soon as the cart is ready,
+  // not only inside create-payment-intent — so the order summary shows membership.
+  useEffect(() => {
+    if (!isAuthenticated || !cartHydrated || cartLoading || cart.items.length === 0) {
+      return;
+    }
+    if (authoritativeData?.membershipTotal != null && authoritativeData.membershipTotal > 0) {
+      return;
+    }
+    if (authoritativeData?.membershipAlreadyPaid) {
+      return;
+    }
+    void fetchCartSnapshot();
+  }, [isAuthenticated, cartHydrated, cartLoading, cart.items.length, authoritativeData?.membershipTotal, authoritativeData?.membershipAlreadyPaid]);
   
   // Separate effect to handle discount changes - recreate payment intent when cart total changes
   useEffect(() => {
@@ -698,6 +760,7 @@ export default function CartCheckout() {
             childId: item.childId,
             childName: item.childName,
             variantId: item.variantId,
+            sessionId: item.sessionId,
             // Include enrollment data for existing enrollments with partial payments
             enrollmentId: item.enrollmentId,
             remainingBalance: item.remainingBalance
@@ -755,17 +818,23 @@ export default function CartCheckout() {
       console.log('📸 Cart snapshot received:', {
         snapshotId: snapshot.snapshotId,
         serverTotal: snapshot.totals.grandTotal,
+        membershipTotal: snapshot.totals.membershipTotal,
         clientTotal: cart.total + (cart.membership?.amount || 0),
         membershipRequired: snapshot.membership.required,
         membershipAmount: snapshot.membership.discountedAmount,
         membershipAlreadyPaid: snapshot.membership.alreadyPaid,
+        membershipSchoolId: snapshot.membership.schoolId,
         availableCredits: snapshot.credits.available
       });
 
       // Build authoritative data object
       const authData: AuthoritativeDataType = {
         itemsTotal: snapshot.totals.itemsTotal,
-        membershipAmount: snapshot.membership.alreadyPaid ? 0 : snapshot.membership.discountedAmount,
+        membershipTotal: snapshot.totals.membershipTotal ?? 0,
+        membershipAmount: snapshot.membership.alreadyPaid
+          ? 0
+          : (snapshot.totals.membershipTotal ?? snapshot.membership.discountedAmount ?? 0),
+        membershipFeeAmount: snapshot.membership.amount ?? 0,
         membershipAlreadyPaid: snapshot.membership.alreadyPaid,
         membershipRequired: snapshot.membership.required,
         membershipSchoolId: snapshot.membership.schoolId || null,
@@ -784,6 +853,20 @@ export default function CartCheckout() {
 
       // Store authoritative data in state for UI components
       setAuthoritativeData(authData);
+
+      const owedMembership = authData.membershipTotal ?? authData.membershipAmount ?? 0;
+      if (
+        !authData.membershipAlreadyPaid &&
+        owedMembership > 0 &&
+        authData.membershipSchoolId != null
+      ) {
+        setMembership({
+          schoolId: authData.membershipSchoolId,
+          schoolName: authData.membershipSchoolName,
+          amount: owedMembership,
+          year: authData.membershipYear,
+        });
+      }
 
       // Update available credits from snapshot
       setAvailableCredits(snapshot.credits.available);
@@ -849,8 +932,10 @@ export default function CartCheckout() {
       // Use authoritative data from snapshot (now guaranteed to exist)
       const useAuthData = currentAuthData !== null;
       const itemsTotal = useAuthData ? currentAuthData.itemsTotal : cart.total;
-      const membershipAmount = useAuthData 
-        ? currentAuthData.membershipAmount 
+      const membershipAmount = useAuthData
+        ? (currentAuthData.membershipTotal ??
+          currentAuthData.membershipAmount ??
+          0)
         : (cart.membership?.amount || 0);
       const membershipAlreadyPaid = useAuthData ? currentAuthData.membershipAlreadyPaid : false;
       const discounts = useAuthData 
@@ -870,14 +955,14 @@ export default function CartCheckout() {
         if (membershipAlreadyPaid) {
           // Already paid - don't send membership at all
           membershipPayload = null;
-        } else if (currentAuthData.membershipRequired && currentAuthData.membershipSchoolId) {
-          // Membership required and not paid - ALWAYS send payload using authoritative data
-          // This handles the case where cart.membership is null (discounted to $0 on load)
-          // We use authoritative values because cart.membership may be stale or missing
+        } else if (
+          currentAuthData.membershipSchoolId != null &&
+          (membershipAmount > 0 || currentAuthData.membershipRequired)
+        ) {
           membershipPayload = {
             schoolId: currentAuthData.membershipSchoolId,
             schoolName: currentAuthData.membershipSchoolName || cart.membership?.schoolName || 'School',
-            amount: membershipAmount, // Use authoritative amount (may be 0 for discounted)
+            amount: membershipAmount,
             year: currentAuthData.membershipYear,
           };
         } else if (cart.membership) {
@@ -976,6 +1061,11 @@ export default function CartCheckout() {
           promoCode: useAuthData ? currentAuthData.appliedPromoCode : (cart.appliedPromoCode?.code || null),
           // Volunteer credits to apply (in cents)
           creditsToApply: creditsToApply,
+          savePaymentMethodForAutoPay:
+            checkoutPlan.paymentPlan === 'biweekly' ||
+            localStorage.getItem('pendingAutoPay') === 'true',
+          enableAutoPayAfterCheckout:
+            localStorage.getItem('pendingAutoPay') === 'true',
           // Optional trust signal — only present on payment-plan / frequency
           // toggles. The server verifies it against its in-memory snapshot
           // cache and falls back to strict validation on any mismatch.
@@ -2203,7 +2293,27 @@ export default function CartCheckout() {
                     Enter your payment details to complete enrollment
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  {mustSignAgreement && (
+                    <Alert variant="destructive" data-testid="checkout-agreement-required">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription className="space-y-2">
+                        <p>
+                          You must review and sign the school membership agreement before paying
+                          {membershipForOrderSummary
+                            ? ` (includes ${formatCurrency(membershipForOrderSummary.amount)} annual membership).`
+                            : '.'}
+                        </p>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link
+                            href={`/membership-agreement?schoolId=${agreementSchoolId}&return=${encodeURIComponent('/cart/checkout')}`}
+                          >
+                            Review & sign agreement
+                          </Link>
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   {!stripeReady ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -2237,6 +2347,12 @@ export default function CartCheckout() {
                         hasPaymentMethod={hasPaymentMethod}
                         togglingAutoPay={togglingAutoPay}
                         toggleAutoPay={toggleAutoPay}
+                        checkoutBlocked={mustSignAgreement || agreementStatusLoading}
+                        checkoutBlockedReason={
+                          agreementStatusLoading
+                            ? 'Checking membership agreement status…'
+                            : 'Please sign the membership agreement before completing payment.'
+                        }
                       />
                     </Elements>
                   ) : (

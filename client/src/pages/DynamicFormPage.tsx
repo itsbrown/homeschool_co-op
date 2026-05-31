@@ -1,4 +1,100 @@
 import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import type { Control } from 'react-hook-form';
+
+type FormFileAttachment = {
+  fileName: string;
+  objectPath: string;
+};
+
+function FileUploadField({
+  field,
+  formId,
+  control,
+  onUploaded,
+  onError,
+}: {
+  field: FormFieldType;
+  formId: number;
+  control: Control<any>;
+  onUploaded: (fileName: string) => void;
+  onError: (message: string) => void;
+}) {
+  const fieldKey = `field_${field.id}`;
+  const [uploading, setUploading] = useState(false);
+  const accept = field.fieldConfig?.accept || '.pdf,.doc,.docx';
+
+  return (
+    <FormField
+      control={control}
+      name={fieldKey}
+      render={({ field: formField }) => {
+        const attachment = formField.value as FormFileAttachment | null;
+        return (
+          <FormItem>
+            <FormLabel>
+              {field.label}
+              {field.isRequired && <span className="text-destructive ml-1">*</span>}
+            </FormLabel>
+            <FormControl>
+              <div className="space-y-2">
+                <Input
+                  type="file"
+                  accept={accept}
+                  disabled={uploading}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploading(true);
+                    try {
+                      const body = new FormData();
+                      body.append('file', file);
+                      const response = await fetch(
+                        `/api/custom-forms/forms/${formId}/upload-attachment`,
+                        { method: 'POST', body }
+                      );
+                      const data = await response.json();
+                      if (!response.ok) {
+                        throw new Error(data.message || 'Upload failed');
+                      }
+                      formField.onChange({
+                        fileName: data.fileName,
+                        objectPath: data.objectPath,
+                      });
+                      onUploaded(data.fileName);
+                    } catch (err: any) {
+                      onError(err?.message || 'Could not upload file');
+                      e.target.value = '';
+                    } finally {
+                      setUploading(false);
+                    }
+                  }}
+                  data-testid={`file-field-${field.id}`}
+                />
+                {uploading && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading...
+                  </p>
+                )}
+                {attachment?.fileName && !uploading && (
+                  <p
+                    className="text-sm text-green-700"
+                    data-testid={`file-uploaded-${field.id}`}
+                  >
+                    Uploaded: {attachment.fileName}
+                  </p>
+                )}
+              </div>
+            </FormControl>
+            {field.helpText && <FormDescription>{field.helpText}</FormDescription>}
+            <FormMessage />
+          </FormItem>
+        );
+      }}
+    />
+  );
+}
 import { useRoute, useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -274,13 +370,37 @@ export default function DynamicFormPage() {
           }
           break;
         case 'checkbox':
-          fieldSchema = z.boolean();
+          if (field.isRequired) {
+            fieldSchema = z.literal(true, {
+              errorMap: () => ({ message: `${field.label} is required` }),
+            });
+          } else {
+            fieldSchema = z.boolean().optional();
+          }
           break;
         case 'multi_checkbox':
           if (field.isRequired) {
             fieldSchema = z.array(z.string()).min(1, `${field.label} is required`);
           } else {
             fieldSchema = z.array(z.string()).optional();
+          }
+          break;
+        case 'file_upload':
+          if (field.isRequired) {
+            fieldSchema = z
+              .object({
+                fileName: z.string().min(1),
+                objectPath: z.string().min(1),
+              })
+              .refine((v) => !!v.objectPath, { message: `${field.label} is required` });
+          } else {
+            fieldSchema = z
+              .object({
+                fileName: z.string().optional(),
+                objectPath: z.string().optional(),
+              })
+              .optional()
+              .nullable();
           }
           break;
         default:
@@ -303,6 +423,8 @@ export default function DynamicFormPage() {
         acc[`field_${field.id}`] = false;
       } else if (field.fieldType === 'multi_checkbox') {
         acc[`field_${field.id}`] = [];
+      } else if (field.fieldType === 'file_upload') {
+        acc[`field_${field.id}`] = null;
       } else {
         acc[`field_${field.id}`] = '';
       }
@@ -604,6 +726,23 @@ export default function DynamicFormPage() {
           />
         );
 
+      case 'file_upload':
+        if (!form?.id) return null;
+        return (
+          <FileUploadField
+            key={field.id}
+            field={field}
+            formId={form.id}
+            control={form_hook.control}
+            onUploaded={(fileName) =>
+              toast({ title: 'File uploaded', description: fileName })
+            }
+            onError={(message) =>
+              toast({ title: 'Upload failed', description: message, variant: 'destructive' })
+            }
+          />
+        );
+
       default:
         return null;
     }
@@ -633,7 +772,7 @@ export default function DynamicFormPage() {
   if (submitted) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <Card className="max-w-md text-center">
+        <Card className="max-w-md text-center" data-testid="form-submit-success">
           <CardHeader>
             {form.school && <SchoolBranding school={form.school} />}
             <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />

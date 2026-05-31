@@ -6,8 +6,11 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { trackAddToCart, trackRemoveFromCart, trackViewCart } from '@/lib/analytics';
 import { filterEnrollmentsToCartLineItems } from '@/utils/parentEnrollmentLineItems';
-import { getMembershipOutstandingBalance } from '@/utils/parentBalance';
 import { isViteFlagTrue } from '@/lib/viteEnv';
+import {
+  fetchParentMemberId,
+  PARENT_MEMBER_ID_QUERY_KEY,
+} from '@/lib/parent-member-id';
 
 // Helper function to get user-specific cart storage key
 // This prevents cross-account data leakage by namespacing localStorage per user
@@ -1237,133 +1240,119 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return session.access_token;
   }, [session]);
 
-  // Helper function to fetch membership requirements during cart hydration
-  // Returns membership data if user should have membership added, null otherwise
-  // Uses timeout to prevent blocking checkout flow
-  const fetchMembershipForCart = useCallback(async (userEmail: string): Promise<MembershipFee | null> => {
-    const TIMEOUT_MS = 3000; // 3 second timeout to prevent blocking
-    
-    const fetchWithTimeout = async (): Promise<MembershipFee | null> => {
+  // Helper: server-authoritative membership for a cart with class lines (matches checkout).
+  const fetchMembershipFromCartSnapshot = useCallback(
+    async (cartItems: CartItem[]): Promise<MembershipFee | null> => {
+      if (cartItems.length === 0) return null;
       try {
-        const token = await getAccessToken();
-
-        // Align with dashboard / useUnpaidEnrollments: unpaid membership rows come from
-        // `/api/parent/memberships` + `getMembershipOutstandingBalance`. The old path used
-        // `hasMembership` from `/api/parent/member-id`, which hid partial balances (cart
-        // total below dashboard "owed").
-        const [membershipsResponse, schoolResponse, memberResponse] = await Promise.all([
-          fetch('/api/parent/memberships', {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }),
-          fetch(`/api/school-parents/school/${encodeURIComponent(userEmail)}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }),
-          fetch('/api/parent/member-id', {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }),
-        ]);
-
-        type MembershipApiRow = {
-          schoolId?: number | null;
-          schoolName?: string | null;
-          membershipYear?: number | null;
-          remainingBalance?: number | null;
-          status?: string | null;
-          amount?: number | null;
-          amountPaid?: number | null;
+        const res = await apiRequest('POST', '/api/cart/snapshot', {
+          items: cartItems.map((item) => ({
+            id: item.id,
+            classId: item.classId,
+            childId: item.childId,
+            childName: item.childName,
+            variantId: item.variantId,
+            enrollmentId: item.enrollmentId,
+            sessionId: item.sessionId,
+            remainingBalance: item.remainingBalance,
+          })),
+        });
+        if (!res.ok) return null;
+        const snapshot = await res.json();
+        if (snapshot?.membership?.alreadyPaid) return null;
+        const owed =
+          snapshot?.totals?.membershipTotal ??
+          snapshot?.membership?.discountedAmount ??
+          (snapshot?.membership?.amount > 0 && !snapshot?.membership?.alreadyPaid
+            ? snapshot.membership.amount
+            : 0);
+        if (owed <= 0) return null;
+        const schoolId = snapshot?.membership?.schoolId;
+        if (schoolId == null) return null;
+        return {
+          schoolId,
+          schoolName: snapshot.membership.schoolName || 'School',
+          amount: owed,
+          year: snapshot.membership.year ?? new Date().getFullYear(),
         };
+      } catch (error) {
+        console.warn('🎫 Cart snapshot membership lookup failed (non-blocking):', error);
+        return null;
+      }
+    },
+    [],
+  );
 
-        let membershipRows: MembershipApiRow[] = [];
-        if (membershipsResponse.ok) {
-          const parsed = await membershipsResponse.json();
-          membershipRows = Array.isArray(parsed) ? parsed : [];
-        }
+  // Returns membership owed for cart hydration / add-to-cart. Cart snapshot when items
+  // exist; otherwise one cached `GET /api/parent/member-id` (users.member_id is source of truth).
+  const fetchMembershipForCart = useCallback(
+    async (_userEmail: string, cartItems: CartItem[] = []): Promise<MembershipFee | null> => {
+      const TIMEOUT_MS = 5000;
 
-        let totalOutstandingCents = 0;
-        let primaryForLabel: { row: MembershipApiRow; balance: number } | null = null;
-        for (const m of membershipRows) {
-          const balance = getMembershipOutstandingBalance(m);
-          if (balance <= 0) continue;
-          totalOutstandingCents += balance;
-          if (!primaryForLabel || balance > primaryForLabel.balance) {
-            primaryForLabel = { row: m, balance };
+      const fetchWithTimeout = async (): Promise<MembershipFee | null> => {
+        try {
+          if (cartItems.length > 0) {
+            // Snapshot is authoritative for checkout — do not race it against a short timeout.
+            const fromSnapshot = await fetchMembershipFromCartSnapshot(cartItems);
+            if (fromSnapshot) {
+              console.log('🎫 CartContext: membership from cart snapshot:', {
+                schoolId: fromSnapshot.schoolId,
+                amountCents: fromSnapshot.amount,
+              });
+              return fromSnapshot;
+            }
           }
-        }
 
-        const p = primaryForLabel?.row;
-        if (
-          totalOutstandingCents > 0 &&
-          p &&
-          p.schoolId != null &&
-          p.schoolName &&
-          p.membershipYear != null
-        ) {
-          console.log('🎫 CartContext: membership balance from API rows:', {
-            schoolId: p.schoolId,
-            schoolName: p.schoolName,
-            amountCents: totalOutstandingCents,
+          const memberIdData = await queryClient.fetchQuery({
+            queryKey: [...PARENT_MEMBER_ID_QUERY_KEY],
+            queryFn: fetchParentMemberId,
+            staleTime: 60_000,
           });
-          return {
-            schoolId: p.schoolId,
-            schoolName: p.schoolName,
-            amount: totalOutstandingCents,
-            year: p.membershipYear,
-          };
-        }
 
-        // No unpaid membership enrollment rows: offer full school fee for first-time purchase.
-        if (memberResponse.ok) {
-          const memberData = await memberResponse.json();
-          if (memberData.hasMembership) {
-            console.log('🎫 User already has active membership (enrolled/grace_period), skipping auto-add');
+          if (memberIdData.hasMembership) {
+            console.log('🎫 CartContext: member ID on file — skipping membership line');
             return null;
           }
-        }
 
-        if (schoolResponse.ok) {
-          const schoolResult = await schoolResponse.json();
-          if (schoolResult.success && schoolResult.school && schoolResult.school.membershipFeeAmount > 0) {
-            console.log('🎫 CartContext: Adding new membership fee during hydration:', {
-              schoolId: schoolResult.school.id,
-              schoolName: schoolResult.school.name,
-              amount: schoolResult.school.membershipFeeAmount,
-            });
-
+          const owed =
+            memberIdData.membershipOwedCents > 0
+              ? memberIdData.membershipOwedCents
+              : memberIdData.membershipFeeAmount;
+          if (
+            owed > 0 &&
+            memberIdData.schoolId != null &&
+            memberIdData.schoolName
+          ) {
             return {
-              schoolId: schoolResult.school.id,
-              schoolName: schoolResult.school.name,
-              amount: schoolResult.school.membershipFeeAmount,
+              schoolId: memberIdData.schoolId,
+              schoolName: memberIdData.schoolName,
+              amount: owed,
               year: new Date().getFullYear(),
             };
           }
-        }
 
-        return null;
-      } catch (error) {
-        console.warn('🎫 Error fetching membership data (non-blocking):', error);
-        return null;
+          return null;
+        } catch (error) {
+          console.warn('🎫 Error fetching membership data (non-blocking):', error);
+          return null;
+        }
+      };
+
+      if (cartItems.length > 0) {
+        return fetchWithTimeout();
       }
-    };
-    
-    // Race between fetch and timeout - never block cart hydration
-    const timeoutPromise = new Promise<null>((resolve) => {
-      setTimeout(() => {
-        console.warn('🎫 Membership fetch timed out after', TIMEOUT_MS, 'ms');
-        resolve(null);
-      }, TIMEOUT_MS);
-    });
-    
-    return Promise.race([fetchWithTimeout(), timeoutPromise]);
-  }, [getAccessToken]);
+
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          console.warn('🎫 Membership fetch timed out after', TIMEOUT_MS, 'ms');
+          resolve(null);
+        }, TIMEOUT_MS);
+      });
+
+      return Promise.race([fetchWithTimeout(), timeoutPromise]);
+    },
+    [fetchMembershipFromCartSnapshot],
+  );
 
   // Use TanStack Query to fetch enrollments with proper caching
   // This prevents duplicate API calls during component remounts
@@ -1559,7 +1548,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Fetch membership data during cart hydration (non-blocking with timeout)
       // This ensures membership is available when cart first renders
-      const membership = await fetchMembershipForCart(user.email);
+      const membership = await fetchMembershipForCart(user.email, cartItems);
 
       // Stale localStorage can outlive API exclusion — always clear when filter is empty
       if (cartItems.length === 0 && !membership) {
@@ -1650,13 +1639,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         getAccessToken,
         state.cart.appliedPromoCode?.code || null
       );
+      let membership = state.cart.membership;
+      if (!membership) {
+        membership = await fetchMembershipForCart(user?.email ?? '', state.cart.items);
+      }
       dispatch({
         type: 'LOAD_CART',
         payload: {
           items: state.cart.items,
           ...serverPricing,
           appliedPromoCode: state.cart.appliedPromoCode, // Preserve promo code
-          membership: state.cart.membership,
+          membership,
         },
       });
     } catch (error) {
@@ -1669,20 +1662,24 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           state.cart.appliedPromoCode,
           userRolesList
         );
+        let membership = state.cart.membership;
+        if (!membership && user?.email) {
+          membership = await fetchMembershipForCart(user.email, state.cart.items);
+        }
         dispatch({
           type: 'LOAD_CART',
           payload: {
             items: state.cart.items,
             ...fallbackTotals,
             appliedPromoCode: state.cart.appliedPromoCode,
-            membership: state.cart.membership,
+            membership,
           },
         });
       } catch (fallbackError) {
         console.error('Client-side fallback also failed:', fallbackError);
       }
     }
-  }, [state.cart.items, state.cart.appliedPromoCode, getAccessToken, userRolesList]);
+  }, [state.cart.items, state.cart.appliedPromoCode, getAccessToken, userRolesList, user?.email, fetchMembershipForCart]);
 
   // When parent role resolves, force cart re-hydration from API (not cached hash)
   useEffect(() => {
@@ -1823,6 +1820,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     console.log('🛒 Dispatching ADD_ITEM action:', newItem);
     dispatch({ type: 'ADD_ITEM', payload: newItem });
+
+    if (!state.cart.membership && user?.email) {
+      const nextItems = [...state.cart.items, newItem];
+      void fetchMembershipForCart(user.email, nextItems).then((membership) => {
+        if (membership) {
+          dispatch({ type: 'SET_MEMBERSHIP', payload: membership });
+        }
+      });
+    }
 
     // Track add to cart event for GA4
     trackAddToCart({

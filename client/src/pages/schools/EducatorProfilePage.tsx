@@ -18,9 +18,27 @@ import {
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { formatDate } from 'date-fns';
 
-export default function EducatorProfilePage() {
+type EducatorProfilePageProps = {
+  userIdOverride?: string;
+  embedded?: boolean;
+};
+
+function EducatorShell({
+  embedded,
+  pageTitle,
+  children,
+}: {
+  embedded?: boolean;
+  pageTitle: string;
+  children: React.ReactNode;
+}) {
+  if (embedded) return <>{children}</>;
+  return <SchoolAdminLayout pageTitle={pageTitle}>{children}</SchoolAdminLayout>;
+}
+
+export default function EducatorProfilePage({ userIdOverride, embedded }: EducatorProfilePageProps = {}) {
   const [, params] = useRoute<{ educatorId: string }>('/schools/educators/:educatorId');
-  const educatorId = params?.educatorId;
+  const educatorId = userIdOverride ?? params?.educatorId;
 
   const { data: educator, isLoading, error } = useQuery({
     queryKey: [`/api/school-admin/users/${educatorId}`],
@@ -29,17 +47,17 @@ export default function EducatorProfilePage() {
 
   if (isLoading) {
     return (
-      <SchoolAdminLayout pageTitle="Educator Profile">
+      <EducatorShell embedded={embedded} pageTitle="Educator Profile">
         <div className="flex items-center justify-center h-96">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
         </div>
-      </SchoolAdminLayout>
+      </EducatorShell>
     );
   }
 
   if (error || !educator) {
     return (
-      <SchoolAdminLayout pageTitle="Educator Profile">
+      <EducatorShell embedded={embedded} pageTitle="Educator Profile">
         <Card>
           <CardContent className="py-8">
             <p className="text-center text-muted-foreground">
@@ -55,12 +73,12 @@ export default function EducatorProfilePage() {
             </div>
           </CardContent>
         </Card>
-      </SchoolAdminLayout>
+      </EducatorShell>
     );
   }
 
   return (
-    <SchoolAdminLayout pageTitle={`${educator.firstName} ${educator.lastName}`}>
+    <EducatorShell embedded={embedded} pageTitle={`${educator.firstName} ${educator.lastName}`}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -233,6 +251,6 @@ export default function EducatorProfilePage() {
           </CardContent>
         </Card>
       </div>
-    </SchoolAdminLayout>
+    </EducatorShell>
   );
 }

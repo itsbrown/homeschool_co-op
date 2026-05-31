@@ -27,8 +27,13 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 |-----|----------|
 | [architecture.md](./architecture.md) | Stack, tenancy, storage, auth |
 | [domains/registration-and-locations.md](./domains/registration-and-locations.md) | School code signup, locations, school_id |
-| [domains/ci-and-testing.md](./domains/ci-and-testing.md) | GitHub Actions, production-path, local commands |
+| [domains/payments-and-billing.md](./domains/payments-and-billing.md) | Ledgers, credits, prod balance audit, correction email |
+| [domains/ci-and-testing.md](./domains/ci-and-testing.md) | GitHub Actions, Playwright, agent knowledge maintenance |
+| [domains/custom-forms-public-access.md](./domains/custom-forms-public-access.md) | Public Form Builder, mentor app, resume upload, E2E |
+| [../E2E_COMMANDS.md](../E2E_COMMANDS.md) | Playwright: npm scripts, per-spec commands, seeds (**update catalog when adding `e2e/*.spec.ts`**) |
+| [domains/student-progress-assessments.md](./domains/student-progress-assessments.md) | F-14 assessments, Lexile, progress tracking audit |
 | [runbooks/merge-replit-prod.md](./runbooks/merge-replit-prod.md) | Merge → Replit → prod SQL |
+| [runbooks/public-mentor-application-form.md](./runbooks/public-mentor-application-form.md) | Mentor form: seed, clone/provision, public URL |
 | [CHANGELOG.md](./CHANGELOG.md) | Knowledge updates by date |
 
 ### Existing project docs (authoritative for depth)
@@ -61,8 +66,8 @@ Use the matching skill when editing that area; update the skill if you change co
 2. Read [architecture.md](./architecture.md) if touching server, DB, or auth.
 3. Read the relevant **domain** doc and **asa-* skill**.
 4. Do the task.
-5. Update domain doc / skill / [CHANGELOG.md](./CHANGELOG.md) if you learned something durable.
-6. End with a **Knowledge update** (learned / updated / gaps).
+5. Update domain doc / skill / [CHANGELOG.md](./CHANGELOG.md) if you learned something durable (**files are the source of truth**).
+6. End with a **Knowledge update** footer (learned / updated / gaps) — a summary only; it does not replace step 5. See [ci-and-testing.md](./domains/ci-and-testing.md#agent-knowledge-maintenance).
 
 ## Personal skill (all projects)
 

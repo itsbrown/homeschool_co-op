@@ -58,7 +58,7 @@ import { apiRequest } from '@/lib/queryClient';
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRole, setSelectedRole] = useState('all');
+  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -85,6 +85,28 @@ export default function UsersPage() {
     select: (raw) => (Array.isArray(raw) ? raw : []),
   });
 
+  const { data: labelOptions } = useQuery<{ system: string[]; custom: string[] }>({
+    queryKey: ['/api/school-admin/users/label-options'],
+    enabled: !!schoolId,
+  });
+
+  const normalizeLabel = (label: string) => (label || '').toLowerCase();
+
+  const getUserLabels = (user: any): string[] => {
+    if (Array.isArray(user.labels) && user.labels.length > 0) return user.labels;
+    if (user.role) return [user.role];
+    return [];
+  };
+
+  const toggleLabelFilter = (label: string) => {
+    const key = normalizeLabel(label);
+    setSelectedLabels((prev) =>
+      prev.some((l) => normalizeLabel(l) === key)
+        ? prev.filter((l) => normalizeLabel(l) !== key)
+        : [...prev, label],
+    );
+  };
+
   const isLoading = isLoadingSchool || isLoadingUsers;
 
   // Filter users based on search, role, and location
@@ -92,11 +114,15 @@ export default function UsersPage() {
     const matchesSearch = user.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = selectedRole === 'all' || user.role?.toLowerCase() === selectedRole.toLowerCase();
+    const matchesLabel =
+      selectedLabels.length === 0 ||
+      getUserLabels(user).some((l) =>
+        selectedLabels.some((s) => normalizeLabel(s) === normalizeLabel(l)),
+      );
     const matchesLocation = selectedLocation === 'all' || 
                            (selectedLocation === 'none' && !user.locationId) ||
                            String(user.locationId) === selectedLocation;
-    return matchesSearch && matchesRole && matchesLocation;
+    return matchesSearch && matchesLabel && matchesLocation;
   });
 
   const getRoleBadgeVariant = (role: string) => {
@@ -135,14 +161,7 @@ export default function UsersPage() {
     }
   };
 
-  const getProfileUrl = (user: any): string => {
-    const role = (user.role || '').toLowerCase();
-    if (role === 'parent') return `/schools/parents/${user.id}`;
-    if (['educator', 'mentor', 'teacher', 'instructor'].includes(role)) return `/schools/educators/${user.id}`;
-    if (role === 'staff') return `/schools/staff/${user.staffId || user.id}`;
-    if (role === 'schooladmin') return `/schools/admins/${user.id}`;
-    return `/schools/staff/${user.staffId || user.id}`;
-  };
+  const getProfileUrl = (user: any): string => `/schools/users/${user.id}`;
 
   const handleEditUser = (user: any) => {
     setEditingUser(user);
@@ -403,7 +422,7 @@ export default function UsersPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter((u: any) => u.role === 'parent').length}
+              {users.filter((u: any) => getUserLabels(u).some((l) => normalizeLabel(l) === 'parent')).length}
             </div>
           </CardContent>
         </Card>
@@ -425,7 +444,7 @@ export default function UsersPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter((u: any) => u.role === 'educator').length}
+              {users.filter((u: any) => getUserLabels(u).some((l) => ['educator', 'teacher'].includes(normalizeLabel(l)))).length}
             </div>
           </CardContent>
         </Card>
@@ -454,25 +473,41 @@ export default function UsersPage() {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="flex items-center gap-2">
                   <Filter className="h-4 w-4" />
-                  Role: {selectedRole === 'all' ? 'All' : getRoleDisplayName(selectedRole)}
+                  Labels: {selectedLabels.length === 0 ? 'All' : `${selectedLabels.length} selected`}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setSelectedRole('all')}>
-                  All Roles
+              <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto w-56">
+                <DropdownMenuItem onClick={() => setSelectedLabels([])}>
+                  All labels
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedRole('parent')}>
-                  Parents
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedRole('educator')}>
-                  Educators
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedRole('staff')}>
-                  Staff
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSelectedRole('schoolAdmin')}>
-                  School Admins
-                </DropdownMenuItem>
+                {(labelOptions?.system || ['parent', 'educator', 'teacher', 'director', 'schoolAdmin']).map((label) => (
+                  <DropdownMenuItem
+                    key={`sys-${label}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleLabelFilter(label);
+                    }}
+                  >
+                    <span className={selectedLabels.some((l) => normalizeLabel(l) === normalizeLabel(label)) ? 'font-semibold' : ''}>
+                      {getRoleDisplayName(label)}
+                      {selectedLabels.some((l) => normalizeLabel(l) === normalizeLabel(label)) ? ' ✓' : ''}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+                {(labelOptions?.custom || []).map((label) => (
+                  <DropdownMenuItem
+                    key={`custom-${label}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleLabelFilter(label);
+                    }}
+                  >
+                    <span className={selectedLabels.some((l) => normalizeLabel(l) === normalizeLabel(label)) ? 'font-semibold' : ''}>
+                      {label}
+                      {selectedLabels.some((l) => normalizeLabel(l) === normalizeLabel(label)) ? ' ✓' : ''}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
             <DropdownMenu>
@@ -511,7 +546,7 @@ export default function UsersPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Role</TableHead>
+                  <TableHead>Labels</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
@@ -522,7 +557,7 @@ export default function UsersPage() {
                 {filteredUsers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="h-24 text-center">
-                      {searchTerm || selectedRole !== 'all' || selectedLocation !== 'all' ? 'No users match your filters.' : 'No users found.'}
+                      {searchTerm || selectedLabels.length > 0 || selectedLocation !== 'all' ? 'No users match your filters.' : 'No users found.'}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -555,9 +590,17 @@ export default function UsersPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={getRoleBadgeVariant(user.role)}>
-                          {getRoleDisplayName(user.role)}
-                        </Badge>
+                        <div className="flex flex-wrap gap-1">
+                          {getUserLabels(user).length > 0 ? (
+                            getUserLabels(user).map((label: string) => (
+                              <Badge key={label} variant={getRoleBadgeVariant(label)} className="text-xs">
+                                {getRoleDisplayName(label)}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {user.locationName ? (

@@ -671,9 +671,28 @@ function enrollmentEffectiveBalance(e: {
   return Math.max(0, e.totalCost - (e.totalPaid || 0) - compDollars);
 }
 
-export default function ParentProfilePage() {
+type ParentProfilePageProps = {
+  /** When embedded in unified /schools/users/:userId profile */
+  userIdOverride?: string;
+  embedded?: boolean;
+};
+
+function ProfileShell({
+  embedded,
+  pageTitle,
+  children,
+}: {
+  embedded?: boolean;
+  pageTitle: string;
+  children: React.ReactNode;
+}) {
+  if (embedded) return <>{children}</>;
+  return <SchoolAdminLayout pageTitle={pageTitle}>{children}</SchoolAdminLayout>;
+}
+
+export default function ParentProfilePage({ userIdOverride, embedded }: ParentProfilePageProps = {}) {
   const [match, params] = useRoute('/schools/parents/:parentId');
-  const parentId = params?.parentId;
+  const parentId = userIdOverride ?? params?.parentId;
   const [addChildDialogOpen, setAddChildDialogOpen] = useState(false);
   const [editChildDialogOpen, setEditChildDialogOpen] = useState(false);
   const [selectedChild, setSelectedChild] = useState<any>(null);
@@ -1471,11 +1490,11 @@ export default function ParentProfilePage() {
 
   if (isLoading) {
     return (
-      <SchoolAdminLayout pageTitle="Parent Profile">
+      <ProfileShell embedded={embedded} pageTitle="Parent Profile">
         <div className="flex items-center justify-center h-96">
           <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
         </div>
-      </SchoolAdminLayout>
+      </ProfileShell>
     );
   }
 
@@ -1504,19 +1523,21 @@ export default function ParentProfilePage() {
     }
     
     return (
-      <SchoolAdminLayout pageTitle="Parent Profile">
+      <ProfileShell embedded={embedded} pageTitle="Parent Profile">
         <div className="flex flex-col items-center justify-center h-96 space-y-4">
           <AlertTriangle className="h-12 w-12 text-destructive" />
           <h2 className="text-xl font-semibold" data-testid="error-title">{title}</h2>
           <p className="text-muted-foreground text-center max-w-md" data-testid="error-description">{description}</p>
-          <Link href="/schools/users">
-            <Button data-testid="button-back-users">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Users
-            </Button>
-          </Link>
+          {!embedded && (
+            <Link href="/schools/users">
+              <Button data-testid="button-back-users">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Users
+              </Button>
+            </Link>
+          )}
         </div>
-      </SchoolAdminLayout>
+      </ProfileShell>
     );
   }
 
@@ -1549,16 +1570,21 @@ export default function ParentProfilePage() {
   };
 
   return (
-    <SchoolAdminLayout pageTitle={`${profile.parent.firstName} ${profile.parent.lastName}`}>
+    <ProfileShell
+      embedded={embedded}
+      pageTitle={`${profile.parent.firstName} ${profile.parent.lastName}`}
+    >
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <Link href="/schools/users">
-            <Button variant="ghost">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Users
-            </Button>
-          </Link>
+          {!embedded && (
+            <Link href="/schools/users">
+              <Button variant="ghost">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Users
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* Parent Info Card */}
@@ -3637,6 +3663,6 @@ export default function ParentProfilePage() {
           </DialogContent>
         </Dialog>
       </div>
-    </SchoolAdminLayout>
+    </ProfileShell>
   );
 }

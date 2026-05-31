@@ -19,6 +19,7 @@ module.exports = {
     '<rootDir>/server/tests/reconciliation-autopay.test.ts',
     '<rootDir>/server/tests/scheduled-payment-auto-pay-webhook-helper.test.ts',
     '<rootDir>/server/tests/integration/scheduled-payment-stripe-webhook.test.ts',
+    '<rootDir>/server/tests/integration/credit-ledger-repair.integration.test.ts',
     '<rootDir>/server/tests/scheduled-payment-due-query-source.test.ts',
     '<rootDir>/server/tests/scheduled-payment-intent-metadata.test.ts',
     '<rootDir>/server/tests/payment-plan-policy-matrix.test.ts',
@@ -27,5 +28,9 @@ module.exports = {
     '<rootDir>/server/tests/autopay-metadata-flag.test.ts',
     '<rootDir>/server/tests/balance-payment-metadata.test.ts',
     '<rootDir>/server/tests/payment-settlement-display.test.ts',
+    '<rootDir>/server/tests/ensure-scheduled-payment-credits.test.ts',
+    '<rootDir>/server/tests/fulfill-balance-payment-credits.test.ts',
+    '<rootDir>/server/tests/credit-ledger-repair.test.ts',
+    '<rootDir>/server/tests/webhook-scheduled-credit-failure.test.ts',
   ],
 };

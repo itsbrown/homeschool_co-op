@@ -25,6 +25,10 @@ interface LocationOverview {
   staffCount: number
   utilization: number
   status: string
+  activationThreshold?: number | null
+  activationStatus?: string | null
+  eligibleStudentCount?: number
+  chargeScheduledAt?: string | null
 }
 
 interface Student {
@@ -191,7 +195,10 @@ export default function LocationManagementPage() {
       email: formData.get('email') as string || undefined,
       managerName: formData.get('managerName') as string || undefined,
       capacity: formData.get('capacity') ? parseInt(formData.get('capacity') as string) : undefined,
-      timezone: formData.get('timezone') as string || 'America/New_York'
+      timezone: formData.get('timezone') as string || 'America/New_York',
+      activationThreshold: formData.get('activationThreshold')
+        ? parseInt(formData.get('activationThreshold') as string, 10)
+        : undefined,
     }
 
     console.log('🆕 CREATE LOCATION - Form data captured:', {
@@ -263,6 +270,38 @@ export default function LocationManagementPage() {
         variant: "destructive",
       })
     }
+  })
+
+  const activateEarlyMutation = useMutation({
+    mutationFn: ({ locationId, reason }: { locationId: number; reason: string }) =>
+      apiRequest('POST', `/api/school-admin/locations/${locationId}/activate-early`, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
+      toast({ title: 'Notice period started', description: 'Families will be notified before charges run.' })
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: 'Error',
+        description: formatFetchErrorMessage(error) || 'Failed to activate',
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const cancelCollectionMutation = useMutation({
+    mutationFn: ({ locationId, reason }: { locationId: number; reason: string }) =>
+      apiRequest('POST', `/api/school-admin/locations/${locationId}/cancel-collection`, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/locations/overview'] })
+      toast({ title: 'Collection closed', description: 'Wishlist enrollments were cancelled.' })
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: 'Error',
+        description: formatFetchErrorMessage(error) || 'Failed to close collection',
+        variant: 'destructive',
+      })
+    },
   })
 
   const handleToggleStatus = (location: LocationOverview) => {
@@ -537,6 +576,20 @@ export default function LocationManagementPage() {
                     required
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="activationThreshold">Min. students to open (optional)</Label>
+                  <Input
+                    id="activationThreshold"
+                    name="activationThreshold"
+                    type="number"
+                    min={1}
+                    placeholder="e.g. 20"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank for an always-open campus. Families save a card on the waitlist; charges run after the goal is met and a short notice period.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="capacity">Capacity</Label>
                   <Input
@@ -828,6 +881,7 @@ export default function LocationManagementPage() {
                         <TableHead className="hidden lg:table-cell min-w-[60px]">Staff</TableHead>
                         <TableHead className="hidden lg:table-cell min-w-[80px]">Capacity</TableHead>
                         <TableHead className="hidden xl:table-cell min-w-[120px]">Utilization</TableHead>
+                        <TableHead className="hidden lg:table-cell min-w-[100px]">Opening</TableHead>
                         <TableHead className="min-w-[80px]">Status</TableHead>
                         <TableHead className="min-w-[120px]">Actions</TableHead>
                       </TableRow>
@@ -861,6 +915,16 @@ export default function LocationManagementPage() {
                               </div>
                             </div>
                           </TableCell>
+                          <TableCell className="hidden lg:table-cell text-sm">
+                            {location.activationThreshold != null && location.activationThreshold > 0 ? (
+                              <span>
+                                {location.eligibleStudentCount ?? 0} / {location.activationThreshold}
+                                {location.activationStatus ? ` (${location.activationStatus})` : ''}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Badge variant={location.status === 'Active' ? 'default' : 'secondary'}>
                               {location.status}
@@ -868,6 +932,41 @@ export default function LocationManagementPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
+                              {location.activationThreshold != null &&
+                                location.activationStatus === 'collecting' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-xs h-8 px-2"
+                                    onClick={() => {
+                                      const reason = window.prompt('Reason for early activation (optional):') ?? ''
+                                      activateEarlyMutation.mutate({ locationId: location.id, reason })
+                                    }}
+                                  >
+                                    Open now
+                                  </Button>
+                                )}
+                              {location.activationStatus === 'collecting' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs h-8 px-2"
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        `Close waitlist for "${location.name}" without opening?`,
+                                      )
+                                    ) {
+                                      cancelCollectionMutation.mutate({
+                                        locationId: location.id,
+                                        reason: 'Admin closed collection',
+                                      })
+                                    }
+                                  }}
+                                >
+                                  Close
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"

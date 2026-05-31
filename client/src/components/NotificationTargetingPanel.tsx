@@ -78,11 +78,26 @@ export function NotificationTargetingPanel({
   });
   const classes = schoolClassesData?.items || [];
 
+  const { data: labelOptions } = useQuery<{ system: string[]; custom: string[] }>({
+    queryKey: ["/api/school-admin/users/label-options"],
+  });
+
   const { data: staffPositions = [] } = useQuery<StaffPosition[]>({
     queryKey: ["/api/school-admin/staff-positions"],
   });
 
-  const roles = staffPositions.map((p) => p.title.toLowerCase());
+  const systemRoles = labelOptions?.system ?? [
+    "parent",
+    "educator",
+    "teacher",
+    "director",
+    "schoolAdmin",
+  ];
+  const customRoles =
+    labelOptions?.custom?.length
+      ? labelOptions.custom
+      : staffPositions.map((p) => p.title);
+  const roles = [...systemRoles, ...customRoles];
 
   const update = (partial: Partial<TargetingState>) => {
     onChange({ ...value, ...partial });
@@ -326,7 +341,7 @@ export function NotificationTargetingPanel({
                           }}
                         />
                         <Label htmlFor={`role-${role}`} className="capitalize">
-                          {role}
+                          {role.replace(/([A-Z])/g, " $1").trim()}
                         </Label>
                       </div>
                     ))}

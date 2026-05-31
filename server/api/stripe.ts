@@ -6,6 +6,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
+import { resolveMembershipOwedForCheckout, resolveCheckoutSchoolId, type CartItem } from '../utils/cart-pricing';
 import { calculateCanonicalAmounts } from '../services/canonical-amount-calculator';
 import { enrollmentOutstandingCentsForCheckout } from '../lib/checkout-enrollment-balance';
 import { findProgramEnrollmentForCartItem } from '../lib/cart-checkout-enrollment-match';
@@ -83,6 +84,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       paymentFrequency: rawPaymentFrequency = 'one_time',
       membership,
       creditsToApply,
+      savePaymentMethodForAutoPay: bodySavePaymentMethod,
+      enableAutoPayAfterCheckout: bodyEnableAutoPayAfterCheckout,
     } = req.body;
 
     const checkoutPlan = normalizeCheckoutPaymentPlanRequest(
@@ -320,13 +323,17 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             });
           }
           
+          if (enrollment.status === 'location_wishlist') {
+            return res.status(400).json({
+              message:
+                'This enrollment is on a campus waitlist and cannot be checked out yet. You will be charged when the campus opens.',
+              error: 'LOCATION_WISHLIST_CHECKOUT_BLOCKED',
+            });
+          }
+
           console.log(`✅ Found existing pending enrollment ${enrollment.id} for child ${item.childId}`);
-          // Update the existing enrollment with payment plan details
-          await storage.updateProgramEnrollment(enrollment.id, {
-            paymentPlan: dbPaymentPlan,
-            paymentFrequency: paymentFrequency,
-            paymentSystemVersion: 'v2_stripe'
-          });
+          // Payment plan is stored on the PaymentIntent and committed to enrollments
+          // only after the first installment succeeds (webhook).
           enrollmentIds.push(enrollment.id);
         } else {
           if (Number.isFinite(cartEnrollmentId) && cartEnrollmentId > 0) {
@@ -408,7 +415,44 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       const enrollmentsForAmount = await Promise.all(
         enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
       );
-      const membershipAmount = membership?.amount || 0;
+
+      let checkoutSchoolId: number | null = parent.schoolId ?? null;
+      if (hasItems) {
+        const cartItemsForSchool: CartItem[] = items.map((item: any) => ({
+          id: item.id || (item.enrollmentId ? `enrollment-${item.enrollmentId}` : `${item.classId}-${item.childId}`),
+          classId: item.classId ?? item.marketplaceClassId,
+          childId: item.childId,
+          childName: item.childName || '',
+          variantId: item.variantId,
+          enrollmentId: item.enrollmentId,
+        }));
+        const schoolResult = await resolveCheckoutSchoolId(parent, cartItemsForSchool);
+        if (schoolResult.schoolId) {
+          checkoutSchoolId = schoolResult.schoolId;
+        }
+      } else if (!checkoutSchoolId) {
+        const firstWithSchool = enrollmentsForAmount.find((e: any) => e?.schoolId);
+        if (firstWithSchool?.schoolId) {
+          checkoutSchoolId = firstWithSchool.schoolId;
+        }
+      }
+
+      let membershipAmount = membership?.amount || 0;
+      let membershipResolved: Awaited<ReturnType<typeof resolveMembershipOwedForCheckout>> = null;
+      if (checkoutSchoolId) {
+        membershipResolved = await resolveMembershipOwedForCheckout(parent.id, checkoutSchoolId);
+        if (membershipResolved && !membershipResolved.alreadyPaid && membershipResolved.owedCents > 0) {
+          membershipAmount = membershipResolved.owedCents;
+          console.log('🎫 Server resolved membership for checkout:', {
+            checkoutSchoolId,
+            owedCents: membershipResolved.owedCents,
+            clientSent: membership?.amount ?? 0,
+          });
+        } else if (membershipResolved?.alreadyPaid) {
+          membershipAmount = 0;
+        }
+      }
+
       const authoritativeAmountResult = calculateCanonicalAmounts({
         mode: 'checkout',
         items: enrollmentsForAmount
@@ -498,10 +542,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         discountAmount?: number;
       } | undefined;
       
-      if (membership && membershipAmount > 0 && parent.schoolId) {
-        // Validate that the requested school matches the parent's school
-        if (membership.schoolId !== parent.schoolId) {
-          console.error('🚨 SECURITY: Membership schoolId mismatch. Request:', membership.schoolId, 'Parent:', parent.schoolId);
+      if (membershipAmount > 0 && checkoutSchoolId) {
+        const membershipSchoolId = membership?.schoolId ?? checkoutSchoolId;
+        if (membership?.schoolId && membership.schoolId !== checkoutSchoolId) {
+          console.error('🚨 SECURITY: Membership schoolId mismatch. Request:', membership.schoolId, 'Checkout school:', checkoutSchoolId);
           return res.status(403).json({
             message: 'Cannot create membership for a different school',
             error: 'SCHOOL_MISMATCH'
@@ -509,39 +553,45 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         }
         
         // Get school's configured membership fee
-        const parentSchool = await storage.getSchool(parent.schoolId);
+        const parentSchool = await storage.getSchool(checkoutSchoolId);
         const originalMembershipFee = parentSchool?.membershipFeeAmount || 0;
         
-        if (!originalMembershipFee) {
-          console.error('🚨 SECURITY: School has no membership fee configured but client sent membership');
+        if (!originalMembershipFee && membershipAmount <= 0) {
+          console.error('🚨 SECURITY: School has no membership fee configured');
           return res.status(403).json({
             message: 'School does not have a membership fee configured',
             error: 'NO_MEMBERSHIP_FEE'
           });
         }
         
-        // Calculate the expected discounted membership amount server-side
-        // This accounts for any applicable membership discounts
-        const discountResult = await calculateMembershipDiscount(
-          parent.schoolId,
-          parent.id,
-          originalMembershipFee
-        );
-        
-        // Validate that client's amount matches server-calculated amount
-        // Allow either the original amount OR the discounted amount
-        const isValidAmount = membershipAmount === originalMembershipFee || 
-                             membershipAmount === discountResult.finalAmount;
-        
+        const discountResult = originalMembershipFee
+          ? await calculateMembershipDiscount(
+              checkoutSchoolId,
+              parent.id,
+              originalMembershipFee,
+            )
+          : { finalAmount: membershipAmount, appliedDiscounts: [], discountAmount: 0 };
+
+        const serverExpectedOwed =
+          membershipResolved?.owedCents ??
+          discountResult.finalAmount ??
+          originalMembershipFee;
+
+        const isValidAmount =
+          membershipAmount === serverExpectedOwed ||
+          membershipAmount === originalMembershipFee ||
+          membershipAmount === discountResult.finalAmount;
+
         if (!isValidAmount) {
           console.error('🚨 SECURITY: Membership amount mismatch. Request:', membershipAmount, 
-            'Original:', originalMembershipFee, 'Discounted:', discountResult.finalAmount);
+            'Expected:', serverExpectedOwed, 'Original:', originalMembershipFee, 'Discounted:', discountResult.finalAmount);
           return res.status(403).json({
             message: 'Membership fee amount does not match expected amount',
             error: 'AMOUNT_MISMATCH',
             details: {
               originalAmount: originalMembershipFee,
               discountedAmount: discountResult.finalAmount,
+              expectedOwed: serverExpectedOwed,
               clientAmount: membershipAmount
             }
           });
@@ -574,9 +624,9 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         // IMPORTANT: Only include discount info when client is actually paying discounted amount
         serverMembership = {
           parentUserId: parent.id, // Server-derived, not from client
-          schoolId: parent.schoolId, // Server-derived, not from client
+          schoolId: checkoutSchoolId,
           amount: validatedMembershipAmount, // Use validated amount (may be discounted)
-          year: membership.year || new Date().getFullYear(),
+          year: membership?.year || membershipResolved?.year || new Date().getFullYear(),
           // Only include discount info if client is paying the discounted amount
           ...(isPayingDiscountedAmount && {
             discountId: discountResult.appliedDiscounts[0].discountId,
@@ -660,6 +710,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       // NOTE: CombinedStorage has all IStorage methods needed but doesn't formally implement the interface
       // See server/storage.ts TODO comment for full context on storage interface alignment
       const paymentPlanService = new StripePaymentPlanService(storage as any);
+      const savePaymentMethodForAutoPay =
+        bodySavePaymentMethod === true || paymentPlan === 'biweekly';
+      const enableAutoPayAfterCheckout = bodyEnableAutoPayAfterCheckout === true;
+
       const paymentPlanPayload: PaymentPlanData = {
         parentEmail: userEmail,
         enrollmentIds,
@@ -667,6 +721,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         paymentPlan: paymentPlan as 'deposit' | 'split' | 'biweekly' | 'full',
         paymentFrequency: paymentFrequency as 'weekly' | 'biweekly' | 'monthly' | 'one_time',
         membership: serverMembership,
+        savePaymentMethodForAutoPay,
+        enableAutoPayAfterCheckout,
         ...(appliedVolunteerCreditsCents > 0
           ? {
               creditsAppliedCents: appliedVolunteerCreditsCents,

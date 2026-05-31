@@ -10,7 +10,7 @@ export async function loginSchoolAdmin(page: Page, email: string, password: stri
 }
 
 export async function openParentCreditsTab(page: Page, parentId: number) {
-  const profilePath = `/schools/parents/${parentId}`;
+  const profilePath = `/schools/users/${parentId}?tab=family`;
   const profileResponse = page.waitForResponse(
     (r) => r.url().includes(`/api/parent-profile/${parentId}`) && r.ok(),
     { timeout: 60_000 },

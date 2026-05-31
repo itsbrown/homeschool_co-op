@@ -655,10 +655,38 @@ router.post('/setup-registration-scenario', async (req: Request, res: Response) 
       password: await bcrypt.hash(seed.adminPassword, 10),
     });
 
+    const openSessionCount = Math.min(Math.max(Number(req.body?.openSessionCount ?? 0), 0), 5);
+    const openSessions: { id: number; name: string; enrollmentOpen: boolean }[] = [];
+    if (openSessionCount > 0) {
+      await storage.updateSchool(seed.registrationSchool.id, { sessionModeEnabled: true });
+      // Fixed window matches TEST_CHECKOUT_ANCHOR_ISO (2029-12-01) so biweekly yields 2+ installments.
+      const start = '2030-01-01';
+      const end = '2030-06-01';
+      for (let i = 0; i < openSessionCount; i++) {
+        const [row] = await db
+          .insert(sessions)
+          .values({
+            schoolId: seed.registrationSchool.id,
+            name: `E2E Reg Session ${i + 1} ${seed.registrationCode}`,
+            description: 'Playwright parent journey',
+            startDate: start,
+            endDate: end,
+            status: 'upcoming',
+            enrollmentOpen: true,
+            halfDayPrice: 15000,
+            fullDayPrice: 25000,
+            sortOrder: i,
+          })
+          .returning();
+        openSessions.push({ id: row.id, name: row.name, enrollmentOpen: row.enrollmentOpen });
+      }
+    }
+
     res.json({
       success: true,
       data: {
         registrationCode: seed.registrationCode,
+        openSessions,
         school: {
           id: seed.registrationSchool.id,
           name: seed.registrationSchool.name,
@@ -2274,6 +2302,34 @@ router.post('/setup-auto-pay-scenario', async (req: Request, res: Response) => {
  *
  * Returns: { result: 'charged' | 'skipped' | 'failed' }
  */
+router.get('/latest-payment-intent-for-parent', async (req: Request, res: Response) => {
+  try {
+    const parentEmail = String(req.query.parentEmail ?? '').trim();
+    if (!parentEmail) {
+      return res.status(400).json({ error: 'parentEmail query param required' });
+    }
+    const payments = await storage.getPaymentsByParentEmail(parentEmail);
+    const succeeded = payments
+      .filter(
+        (p) =>
+          p.stripePaymentIntentId &&
+          (p.status === 'completed' || p.status === 'succeeded'),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.paymentDate ?? 0).getTime() - new Date(a.paymentDate ?? 0).getTime(),
+      );
+    const paymentIntentId = succeeded[0]?.stripePaymentIntentId ?? null;
+    return res.json({ success: true, paymentIntentId });
+  } catch (error) {
+    console.error('[Test] latest-payment-intent-for-parent:', error);
+    return res.status(500).json({
+      error: 'Failed to resolve payment intent',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 router.post('/run-auto-pay-for/:scheduledPaymentId', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.scheduledPaymentId);
@@ -2282,8 +2338,14 @@ router.post('/run-auto-pay-for/:scheduledPaymentId', async (req: Request, res: R
     const sp = await storage.getScheduledPaymentById(id);
     if (!sp) return res.status(404).json({ error: `Scheduled payment ${id} not found` });
 
+    const parent = sp.parentId ? await storage.getUser(sp.parentId) : null;
     const result = await processOneScheduledPayment(sp);
-    return res.json({ success: true, result });
+    return res.json({
+      success: true,
+      result,
+      parentAutoPayEnabled: parent?.autoPayEnabled ?? false,
+      hasSavedCard: Boolean(parent?.stripeDefaultPaymentMethodId),
+    });
   } catch (error) {
     console.error('[Test] Error running auto-pay for payment:', error);
     return res.status(500).json({
@@ -2660,6 +2722,172 @@ router.get('/count-error-logs', async (req: Request, res: Response) => {
     console.error('[Test] Error counting error_logs:', error);
     return res.status(500).json({
       error: 'Failed to count error_logs',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/test/pending-scheduled-payments?parentEmail=
+ * Lists pending/overdue scheduled_payments for a parent (E2E assertions).
+ */
+router.get('/pending-scheduled-payments', async (req: Request, res: Response) => {
+  try {
+    const parentEmail = String(req.query.parentEmail ?? '').trim();
+    if (!parentEmail) {
+      return res.status(400).json({ error: 'parentEmail query param required' });
+    }
+    const rows = await storage.getScheduledPaymentsByParentEmail(parentEmail);
+    const payments = rows
+      .filter((p) => {
+        const s = String(p.status);
+        return s === 'pending' || s === 'overdue';
+      })
+      .map((p) => ({
+        id: p.id,
+        status: p.status,
+        amount: p.amount,
+        installmentNumber: p.installmentNumber,
+        totalInstallments: p.totalInstallments,
+        enrollmentId: p.enrollmentId,
+        scheduledDate: p.scheduledDate,
+      }));
+    return res.json({ success: true, payments });
+  } catch (error) {
+    console.error('[Test] Error listing pending scheduled payments:', error);
+    return res.status(500).json({
+      error: 'Failed to list pending scheduled payments',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/persist-checkout-schedule-from-pi
+ * Creates installments 2..N in scheduled_payments when Stripe webhooks are not delivered (E2E).
+ */
+router.post('/persist-checkout-schedule-from-pi', async (req: Request, res: Response) => {
+  try {
+    const paymentIntentId = String(req.body?.paymentIntentId ?? '').trim();
+    if (!paymentIntentId.startsWith('pi_')) {
+      return res.status(400).json({ error: 'paymentIntentId (pi_...) required' });
+    }
+    const { getStripeClient } = await import('../config/stripe');
+    const stripe = await getStripeClient();
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({
+        error: 'PaymentIntent not succeeded',
+        status: paymentIntent.status,
+      });
+    }
+    const { StripePaymentPlanService } = await import('../services/stripe-payment-plans.js');
+    const planService = new StripePaymentPlanService(storage as any);
+    const rows = await planService.persistRemainingScheduledPaymentsAfterFirstCheckoutPayment(
+      paymentIntent,
+    );
+    const meta = paymentIntent.metadata as Record<string, string | undefined>;
+    return res.json({
+      success: true,
+      scheduledPaymentCount: rows.length,
+      paymentIntentId,
+      totalInstallments: meta.totalInstallments ?? null,
+      installmentNumber: meta.installmentNumber ?? null,
+      paymentPlan: meta.paymentPlan ?? null,
+    });
+  } catch (error) {
+    console.error('[Test] persist-checkout-schedule-from-pi:', error);
+    return res.status(500).json({
+      error: 'Failed to persist checkout schedule',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/sync-parent-stripe-for-e2e
+ * After checkout, attach the parent's latest Stripe card to users.stripe_* columns
+ * so auto-pay E2E can charge installment 2 (checkout PI does not always persist PM).
+ */
+router.post('/sync-parent-stripe-for-e2e', async (req: Request, res: Response) => {
+  try {
+    const parentEmail = String(req.body?.email ?? '').trim();
+    if (!parentEmail) {
+      return res.status(400).json({ error: 'email required' });
+    }
+    const user = await storage.getUserByEmail(parentEmail);
+    if (!user) {
+      return res.status(404).json({ error: `User not found: ${parentEmail}` });
+    }
+
+    const { getStripeClient } = await import('../config/stripe');
+    const stripe = await getStripeClient();
+
+    let customerId = user.stripeCustomerId ?? null;
+    if (!customerId) {
+      const search = await stripe.customers.search({
+        query: `email:'${parentEmail.replace(/'/g, "\\'")}'`,
+      });
+      customerId = search.data[0]?.id ?? null;
+    }
+    if (!customerId) {
+      const created = await stripe.customers.create({ email: parentEmail });
+      customerId = created.id;
+    }
+
+    let paymentMethodId: string | null = null;
+    const attached = await stripe.paymentMethods.list({
+      customer: customerId,
+      type: 'card',
+    });
+    paymentMethodId = attached.data[0]?.id ?? null;
+
+    if (!paymentMethodId) {
+      const intents = await stripe.paymentIntents.list({ customer: customerId, limit: 10 });
+      const succeeded = intents.data.find((pi) => pi.status === 'succeeded');
+      const pm = succeeded?.payment_method;
+      if (typeof pm === 'string') {
+        paymentMethodId = pm;
+      } else if (pm && typeof pm === 'object' && 'id' in pm) {
+        paymentMethodId = String((pm as { id: string }).id);
+      }
+      if (paymentMethodId) {
+        try {
+          await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+        } catch {
+          /* may already be attached */
+        }
+      }
+    }
+
+    if (!paymentMethodId) {
+      return res.status(400).json({
+        error: 'No Stripe payment method found for parent after checkout',
+        customerId,
+      });
+    }
+
+    await stripe.customers.update(customerId, {
+      invoice_settings: { default_payment_method: paymentMethodId },
+    });
+
+    const enableAutoPay = req.body?.enableAutoPay !== false;
+    await storage.updateUser(user.id, {
+      stripeCustomerId: customerId,
+      stripeDefaultPaymentMethodId: paymentMethodId,
+      ...(enableAutoPay ? { autoPayEnabled: true } : {}),
+    });
+
+    return res.json({
+      success: true,
+      customerId,
+      paymentMethodId,
+      autoPayEnabled: enableAutoPay,
+    });
+  } catch (error) {
+    console.error('[Test] sync-parent-stripe-for-e2e:', error);
+    return res.status(500).json({
+      error: 'Failed to sync parent Stripe card',
       details: error instanceof Error ? error.message : String(error),
     });
   }
@@ -3203,6 +3431,35 @@ router.post('/setup-reallocation-pair', async (req: Request, res: Response) => {
     console.error('[Test] Error seeding reallocation pair:', error);
     return res.status(500).json({
       error: 'Failed to seed reallocation pair',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/setup-public-form-scenario
+ * Seeds public + members-only custom forms for Playwright public-access tests.
+ */
+router.post('/setup-public-form-scenario', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+    }
+
+    const { seedPublicFormScenario } = await import(
+      '../tests/helpers/seedPublicFormScenario'
+    );
+    const seed = await seedPublicFormScenario(new TestDatabase());
+
+    res.json({
+      success: true,
+      data: seed,
+    });
+  } catch (error) {
+    console.error('❌ setup-public-form-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup public form scenario',
       details: error instanceof Error ? error.message : String(error),
     });
   }

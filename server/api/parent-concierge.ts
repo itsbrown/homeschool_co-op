@@ -125,6 +125,18 @@ const CONCIERGE_TOOLS: Anthropic.Tool[] = [
       required: ['child_name'],
     },
   },
+  {
+    name: 'get_child_progress',
+    description: 'Get current curriculum position and recent coverage for a child. Use when parent asks how their child is doing in a subject or what was covered this term.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        child_name: { type: 'string', description: 'Name of the child' },
+        subject: { type: 'string', description: 'Optional subject filter: math, science, reading, etc.' },
+      },
+      required: ['child_name'],
+    },
+  },
 ];
 
 function buildSystemPrompt(parentName: string, contextSummary: string): string {
@@ -150,6 +162,7 @@ CAPABILITIES — USE TOOLS TO GET REAL DATA:
 6. **Add to Cart**: Add classes to the parent's cart for checkout. Use add_to_cart tool.
 7. **School Information**: Answer questions about policies, curriculum, schedules using knowledge base. Use search_knowledge_base tool.
 8. **Schedule Check**: You can check what's on a child's published weekly schedule, including subjects, activities, and planned topics for each day. Use check_schedule tool.
+9. **Progress**: Use get_child_progress when parents ask how their child is doing in math, science, reading, or what curriculum was covered.
 
 BEHAVIORAL RULES:
 1. Always use tools to fetch REAL data — never make up amounts, dates, or class names
@@ -630,6 +643,52 @@ You can now enroll ${firstName} in classes. Would you like me to show you availa
         }
 
         return `Schedule for **${child.firstName} ${child.lastName}**:\n\n${results.join('\n---\n\n')}`;
+      }
+
+      case 'get_child_progress': {
+        const children = await storage.getChildrenByParentEmail(userEmail);
+        const childName = toolInput.child_name?.toLowerCase();
+        const child = children.find(c =>
+          `${c.firstName} ${c.lastName}`.toLowerCase().includes(childName) ||
+          c.firstName?.toLowerCase().includes(childName)
+        );
+        if (!child) {
+          return `Could not find a child named "${toolInput.child_name}". Your children: ${children.map(c => `${c.firstName} ${c.lastName}`).join(', ') || 'none'}.`;
+        }
+        const sid = child.schoolId || schoolId;
+        if (!sid) return `${child.firstName} is not linked to a school yet.`;
+        const current = await storage.getStudentProgressCurrent(child.id, sid);
+        const logs = await storage.getStudentProgressLog(child.id, sid);
+        const subjectFilter = toolInput.subject?.toLowerCase();
+        const filterSubject = (label: string, key: string) =>
+          !subjectFilter || label.toLowerCase().includes(subjectFilter) || key.toLowerCase().includes(subjectFilter);
+
+        let out = `**${child.firstName} ${child.lastName}** — curriculum progress\n\n**Current positions:**\n`;
+        const filteredCurrent = current.filter((c) => filterSubject(c.subject.label, c.subject.key));
+        if (filteredCurrent.length === 0) {
+          out += 'No progress recorded yet for that subject.\n';
+        } else {
+          for (const row of filteredCurrent) {
+            out += `• **${row.subject.label}** (${row.track.name}): `;
+            if (row.current.lessonNumber != null) out += `Lesson ${row.current.lessonNumber}. `;
+            if (row.current.unitLabel) out += `${row.current.unitLabel}. `;
+            if (row.current.topicsSummary) out += row.current.topicsSummary;
+            out += '\n';
+          }
+        }
+        out += '\n**Recent activity:**\n';
+        const recent = logs.filter((l) => filterSubject(l.subject.label, l.subject.key)).slice(0, 5);
+        if (recent.length === 0) {
+          out += 'No recent session logs.\n';
+        } else {
+          for (const entry of recent) {
+            out += `• ${entry.subject.label}: ${entry.log.topicsSummary || 'logged'} (${entry.log.eventDate})\n`;
+          }
+        }
+        if (child.currentLexileRange || child.currentReadingGradeLevel) {
+          out += `\n**Reading snapshot:** Lexile ${child.currentLexileRange || 'n/a'}, grade level ${child.currentReadingGradeLevel || 'n/a'}.`;
+        }
+        return out;
       }
 
       default:

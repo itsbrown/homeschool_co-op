@@ -51,6 +51,10 @@ export interface PaymentPlanData {
   originalAmountCents?: number;
   /** Parent user id for credit consumption on webhook success. */
   creditUserId?: number;
+  /** Vault card on first checkout PI (biweekly / parent opted into auto-pay). */
+  savePaymentMethodForAutoPay?: boolean;
+  /** After success, set users.auto_pay_enabled when card is synced. */
+  enableAutoPayAfterCheckout?: boolean;
 }
 
 export interface PaymentPhase {
@@ -216,8 +220,15 @@ export class StripePaymentPlanService {
         installmentNumber: '1',
         totalInstallments: phases.length.toString(),
         createdBy: 'asa_payment_system',
-        version: 'v2_stripe_simplified'
+        version: 'v2_stripe_simplified',
       };
+
+      if (data.savePaymentMethodForAutoPay) {
+        paymentMetadata.savePaymentMethodForAutoPay = 'true';
+      }
+      if (data.enableAutoPayAfterCheckout) {
+        paymentMetadata.enableAutoPayAfterCheckout = 'true';
+      }
 
       if (appliedCredits > 0) {
         paymentMetadata.creditsAppliedCents = String(appliedCredits);
@@ -257,6 +268,10 @@ export class StripePaymentPlanService {
         });
       }
       
+      const saveCardForFutureInstallments =
+        data.paymentPlan === 'biweekly' ||
+        paymentMetadata.savePaymentMethodForAutoPay === 'true';
+
       paymentIntent = await stripe.paymentIntents.create({
         amount: firstPhase.amount,
         currency: 'usd',
@@ -264,8 +279,11 @@ export class StripePaymentPlanService {
         description: `ASA Learning Platform - ${data.paymentPlan} payment (${firstPhase.description})`,
         metadata: paymentMetadata,
         automatic_payment_methods: {
-          enabled: true
-        }
+          enabled: true,
+        },
+        ...(saveCardForFutureInstallments
+          ? { setup_future_usage: 'off_session' as const }
+          : {}),
       });
     }
 
@@ -290,14 +308,8 @@ export class StripePaymentPlanService {
     // Installments 2+ are created only after installment 1 succeeds (webhook).
     const scheduledPayments: any[] = [];
 
-    // Update enrollments with PaymentIntent reference
-    await this.updateEnrollmentsWithPaymentIntent(
-      data.enrollmentIds,
-      paymentIntent.id,
-      customer.id,
-      data.paymentPlan as CheckoutPaymentPlanId,
-      data.paymentFrequency ?? 'one_time',
-    );
+    // Enrollment payment-plan fields are committed only after installment 1 succeeds
+    // (see persistRemainingScheduledPaymentsAfterFirstCheckoutPayment).
 
     console.log(
       '✅ Payment plan created with PaymentIntent for installment 1;',
@@ -344,6 +356,29 @@ export class StripePaymentPlanService {
     }
     if (enrollmentIds.length === 0) return [];
 
+    const parentUser = await this.storage.getUserByEmail(parentEmail);
+    if (!parentUser) return [];
+
+    const customerId =
+      typeof paymentIntent.customer === 'string'
+        ? paymentIntent.customer
+        : (paymentIntent.customer as { id?: string } | null)?.id ??
+          String(meta.stripeCustomerId ?? '');
+
+    if (customerId) {
+      const normalizedPlan = normalizeCheckoutPaymentPlanRequest(
+        meta.paymentPlan ?? 'full',
+        meta.paymentFrequency ?? 'one_time',
+      );
+      await this.updateEnrollmentsWithPaymentIntent(
+        enrollmentIds,
+        paymentIntent.id,
+        customerId,
+        normalizedPlan.paymentPlan,
+        normalizedPlan.paymentFrequency,
+      );
+    }
+
     const totalInstallments = parseInt(String(meta.totalInstallments ?? '1'), 10) || 1;
     const installmentNumber = parseInt(String(meta.installmentNumber ?? '1'), 10) || 1;
     if (totalInstallments <= 1 || installmentNumber !== 1) {
@@ -372,9 +407,6 @@ export class StripePaymentPlanService {
       console.warn('⚠️ Skipping scheduled payments — missing totalAmount on PI', paymentIntent.id);
       return [];
     }
-
-    const parentUser = await this.storage.getUserByEmail(parentEmail);
-    if (!parentUser) return [];
 
     let programStartDate: Date | null = null;
     let programEndDate: Date | null = null;

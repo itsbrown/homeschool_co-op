@@ -5,13 +5,21 @@ import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 import { storage } from "../storage";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { getDb } from "../db";
-import { eq, and, inArray, notInArray, sql } from "drizzle-orm";
+import { eq, and, inArray, notInArray, sql, or, isNull } from "drizzle-orm";
 import {
   getChildrenForAuthenticatedParent,
   parentAuthCriteriaFromRequest,
   resolveParentDbUser,
   resolveSchoolIdsForParentSessions,
 } from "../lib/parent-auth-scope";
+import { getLocationCore } from "../lib/location-db";
+import {
+  isLocationActivationCancelled,
+  isLocationInNoticePeriod,
+  isLegacyActiveLocation,
+  locationAllowsNewWishlistSignups,
+} from "@shared/location-activation";
+import { recheckLocationThreshold } from "../services/location-activation-service";
 
 const router = Router();
 
@@ -20,6 +28,35 @@ const sessionEnrollSchema = z.object({
   sessionIds: z.array(z.number()).min(1, "Select at least one session"),
   variant: z.enum(["half_day", "full_day"]),
 });
+
+/** Explain why a child+session+schedule type cannot be enrolled again (cart may hide some statuses). */
+function describeExistingSessionEnrollment(row: {
+  id?: number;
+  status?: string | null;
+  variantId?: string | null;
+}): string {
+  const status = String(row.status ?? "").toLowerCase();
+  const idHint = row.id != null ? ` (enrollment #${row.id})` : "";
+  if (status === "waitlist") {
+    return "already on the waitlist for this session (check Payments or contact the school)";
+  }
+  if (status === "location_wishlist") {
+    return "already on the campus waitlist for this session";
+  }
+  if (status === "pending_payment" || status === "pending_admin_approval") {
+    const schedule =
+      row.variantId === "half_day"
+        ? "Half Day"
+        : row.variantId === "full_day"
+          ? "Full Day"
+          : "this schedule";
+    return `already reserved${idHint} (${schedule}) — My Children → this child's Enrollments → Unenroll, or open Payments if it is on a payment plan`;
+  }
+  if (status === "enrolled") {
+    return "already enrolled for this session";
+  }
+  return `already has an enrollment for this session (${status || "active"})`;
+}
 
 router.post("/", supabaseAuth, async (req: any, res) => {
   try {
@@ -67,76 +104,158 @@ router.post("/", supabaseAuth, async (req: any, res) => {
       });
     }
 
-    const closedSessions = sessionRows.filter((s) => !s.enrollmentOpen);
-    if (closedSessions.length > 0) {
+    for (const session of sessionRows) {
+      if (session.locationId != null) {
+        const loc = await getLocationCore(session.locationId);
+        if (isLocationActivationCancelled(loc)) {
+          return res.status(400).json({
+            message: `Enrollment is closed for campus: ${loc?.name ?? session.locationId}`,
+          });
+        }
+        if (isLocationInNoticePeriod(loc)) {
+          return res.status(400).json({
+            message: `This campus has reached its signup goal. New waitlist signups are closed while we prepare to charge families.`,
+          });
+        }
+      }
+    }
+
+    for (const session of sessionRows) {
+      if (session.enrollmentOpen) continue;
+      if (session.locationId != null) {
+        const loc = await getLocationCore(session.locationId);
+        if (locationAllowsNewWishlistSignups(loc)) continue;
+      }
       return res.status(400).json({
-        message: `Enrollment is not open for: ${closedSessions.map((s) => s.name).join(", ")}`,
+        message: `Enrollment is not open for: ${session.name}`,
+      });
+    }
+
+    const requiresWishlist = await Promise.all(
+      sessionRows.map(async (session) => {
+        if (session.locationId == null) return { session, wishlist: false, location: null as Awaited<ReturnType<typeof getLocationCore>> };
+        const location = await getLocationCore(session.locationId);
+        const wishlist =
+          !isLegacyActiveLocation(location) && locationAllowsNewWishlistSignups(location);
+        return { session, wishlist, location };
+      }),
+    );
+
+    const anyWishlist = requiresWishlist.some((r) => r.wishlist);
+    if (anyWishlist && !parent.stripeDefaultPaymentMethodId) {
+      return res.status(402).json({
+        message: "A saved payment method is required to join the campus waitlist.",
+        requiresPaymentMethod: true,
+        code: "PAYMENT_METHOD_REQUIRED",
       });
     }
 
     const createdEnrollments: any[] = [];
     const skipped: string[] = [];
+    const touchedLocationIds = new Set<number>();
 
     for (const childId of childIds) {
       const child = parentChildren.find((c: any) => c.id === childId);
       if (!child) continue;
 
-      for (const session of sessionRows) {
+      for (const { session, wishlist, location } of requiresWishlist) {
         const price = variant === "half_day" ? session.halfDayPrice : session.fullDayPrice;
         if (price == null || price <= 0) {
           skipped.push(`${child.firstName} - ${session.name} (${variant} pricing not configured)`);
           continue;
         }
 
+        // Match child + session + schedule type (half vs full). Capacity checks already
+        // scope by variantId; duplicate prevention must do the same or families see
+        // "already in cart" while the visible cart line is a different schedule type.
         const duplicateRows = await db
-          .select({ id: programEnrollments.id })
+          .select({
+            id: programEnrollments.id,
+            status: programEnrollments.status,
+            variantId: programEnrollments.variantId,
+            dayType: programEnrollments.dayType,
+            paymentPlan: programEnrollments.paymentPlan,
+          })
           .from(programEnrollments)
           .where(
             and(
               eq(programEnrollments.childId, childId),
               eq(programEnrollments.sessionId, session.id),
-              notInArray(programEnrollments.status, ["cancelled"])
-            )
+              or(
+                eq(programEnrollments.variantId, variant),
+                and(
+                  isNull(programEnrollments.variantId),
+                  eq(programEnrollments.dayType, variant),
+                ),
+              ),
+              notInArray(programEnrollments.status, ["cancelled"]),
+            ),
           )
           .limit(1);
 
         if (duplicateRows.length > 0) {
-          skipped.push(`${child.firstName} - ${session.name} (already enrolled or in cart)`);
-          continue;
-        }
+          const existing = duplicateRows[0];
+          const [fullRow] = await db
+            .select()
+            .from(programEnrollments)
+            .where(eq(programEnrollments.id, existing.id))
+            .limit(1);
 
-        const capacity = variant === "half_day" ? session.halfDayCapacity : session.fullDayCapacity;
+          const canReplaceStalePending =
+            fullRow &&
+            fullRow.status === "pending_payment" &&
+            (fullRow.totalPaid ?? 0) <= 0;
+
+          if (canReplaceStalePending) {
+            await storage.deletePendingScheduledPaymentsByEnrollmentId(fullRow.id);
+            await storage.deleteProgramEnrollment(fullRow.id);
+            console.log(
+              `♻️ Replaced stale pending_payment enrollment ${fullRow.id} (${session.name} / ${child.firstName}) before re-enrolling`,
+            );
+          } else {
+            const reason = describeExistingSessionEnrollment(existing);
+            skipped.push(`${child.firstName} - ${session.name} (${reason})`);
+            continue;
+          }
+        }
 
         let enrollmentStatus = "pending_payment";
         let waitlistPosition = null;
 
-        if (capacity != null && capacity > 0) {
-          const [countResult] = await db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(programEnrollments)
-            .where(
-              and(
-                eq(programEnrollments.sessionId, session.id),
-                eq(programEnrollments.variantId, variant),
-                notInArray(programEnrollments.status, ["cancelled"])
-              )
-            );
+        if (wishlist && session.locationId != null) {
+          enrollmentStatus = "location_wishlist";
+          touchedLocationIds.add(session.locationId);
+        } else {
+          const capacity = variant === "half_day" ? session.halfDayCapacity : session.fullDayCapacity;
 
-          const currentCount = countResult?.count || 0;
-
-          if (currentCount >= capacity) {
-            const [waitlistResult] = await db
+          if (capacity != null && capacity > 0) {
+            const [countResult] = await db
               .select({ count: sql<number>`count(*)::int` })
               .from(programEnrollments)
               .where(
                 and(
                   eq(programEnrollments.sessionId, session.id),
                   eq(programEnrollments.variantId, variant),
-                  eq(programEnrollments.status, "waitlist")
+                  notInArray(programEnrollments.status, ["cancelled"])
                 )
               );
-            waitlistPosition = (waitlistResult?.count || 0) + 1;
-            enrollmentStatus = "waitlist";
+
+            const currentCount = countResult?.count || 0;
+
+            if (currentCount >= capacity) {
+              const [waitlistResult] = await db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(programEnrollments)
+                .where(
+                  and(
+                    eq(programEnrollments.sessionId, session.id),
+                    eq(programEnrollments.variantId, variant),
+                    eq(programEnrollments.status, "waitlist")
+                  )
+                );
+              waitlistPosition = (waitlistResult?.count || 0) + 1;
+              enrollmentStatus = "waitlist";
+            }
           }
         }
 
@@ -149,6 +268,7 @@ router.post("/", supabaseAuth, async (req: any, res) => {
           classId: null,
           marketplaceClassId: null,
           sessionId: session.id,
+          locationId: session.locationId ?? null,
           enrollmentVersion: "v2",
           dayType: variant,
           enrolledHalfDayPrice: session.halfDayPrice ?? null,
@@ -177,7 +297,7 @@ router.post("/", supabaseAuth, async (req: any, res) => {
         const saved = await storage.createProgramEnrollment(enrollmentData);
         createdEnrollments.push(saved);
 
-        if (saved.enrollmentVersion === "v2" && saved.id) {
+        if (saved.enrollmentVersion === "v2" && saved.id && enrollmentStatus !== "location_wishlist") {
           const dayType = saved.dayType ?? variant;
           try {
             await storage.createPriceHistoryEntry({
@@ -193,7 +313,6 @@ router.post("/", supabaseAuth, async (req: any, res) => {
               reason: "Session enrollment created",
             });
           } catch (historyError) {
-            // Enrollment is already persisted; audit row failure must not block checkout.
             console.error(
               `Failed to write price history for enrollment ${saved.id}:`,
               historyError,
@@ -207,12 +326,21 @@ router.post("/", supabaseAuth, async (req: any, res) => {
       }
     }
 
+    for (const locId of touchedLocationIds) {
+      await recheckLocationThreshold(locId);
+    }
+
+    const hasWishlist = createdEnrollments.some((e) => e.status === "location_wishlist");
+
     res.json({
       enrollments: createdEnrollments,
       skipped,
+      requiresPaymentMethod: hasWishlist && !parent.stripeDefaultPaymentMethodId,
       message:
         createdEnrollments.length > 0
-          ? `${createdEnrollments.length} enrollment(s) added to cart`
+          ? hasWishlist
+            ? `${createdEnrollments.length} waitlist signup(s) recorded — you will be notified before any charge`
+            : `${createdEnrollments.length} enrollment(s) added to cart`
           : "No new enrollments created",
     });
   } catch (error) {

@@ -1,0 +1,177 @@
+# Playwright E2E — command index
+
+Single reference for **npm scripts**, **per-spec commands**, prerequisites, and test seeds. Specs live in [`e2e/`](../e2e/); config is [`playwright.config.ts`](../playwright.config.ts).
+
+## Maintaining this index (required when adding E2E)
+
+When you add or materially change a Playwright spec under `e2e/`:
+
+1. **Add a row** to the [Spec catalog](#spec-catalog) below: spec path, run command, what it covers, prerequisites, and `/api/test/*` seed if any.
+2. **Optional:** add a dedicated npm script in `package.json` only when the spec is run often (e.g. `test:e2e:checkout-membership`); otherwise use `npm run test:e2e -- e2e/your-spec.spec.ts`.
+3. **Cross-link** from a domain doc or runbook when the spec documents a product lane (example: [`public-mentor-application-form.md`](APP_KNOWLEDGE/runbooks/public-mentor-application-form.md) → `e2e/public-custom-forms.spec.ts`).
+4. **CHANGELOG:** one dated bullet in [`docs/APP_KNOWLEDGE/CHANGELOG.md`](APP_KNOWLEDGE/CHANGELOG.md) with spec file + command.
+
+Agents: see `asa-testing-deployment` and `asa-app-knowledge` maintenance workflow.
+
+## Quick start
+
+```bash
+# Install browser + OS libs (once per machine / CI image)
+npm run playwright:install:deps
+
+# Full suite (starts npm run dev on :5000 unless CI/reuse rules apply)
+npm run test:e2e
+
+# One file or folder (recommended for focused work)
+npm run test:e2e -- e2e/public-custom-forms.spec.ts
+```
+
+**Local env:** Copy [`.env.e2e.example`](../.env.e2e.example) → `.env.e2e` (gitignored). Loaded by [`scripts/run-playwright.mjs`](../scripts/run-playwright.mjs) without overriding shell exports.
+
+**Port 5000:** If tests fail with HTML instead of JSON from `/api/test/*`, free the port and avoid a stale server:
+
+```bash
+node scripts/free-port-5000.mjs
+CI=true npm run test:e2e -- e2e/smoke.spec.ts
+```
+
+**Replit:** Prefer GitHub Actions for E2E; see [`docs/APP_KNOWLEDGE/runbooks/replit-e2e-playwright.md`](APP_KNOWLEDGE/runbooks/replit-e2e-playwright.md).
+
+---
+
+## npm scripts (`package.json`)
+
+| Script | Command | Purpose |
+|--------|---------|---------|
+| `test:e2e` | `node scripts/run-playwright.mjs test` | All specs under `e2e/` |
+| `test:e2e:ui` | `… test --ui` | Playwright UI mode |
+| `test:e2e:headed` | `… test --headed` | Visible browser |
+| `test:e2e:checkout-membership` | `… test e2e/checkout-membership-order-summary.spec.ts` | Membership order summary |
+| `test:e2e:authenticated` | `… test e2e/authenticated/` | Logged-in parent specs (needs env below) |
+| `playwright:install` | `… install chromium` | Browser binary only |
+| `playwright:install:deps` | `… install-deps chromium chromium-headless-shell` | Browser + Ubuntu/macOS libs |
+| `playwright:install:replit` | alias of `playwright:install` | Replit (limited; use CI for full E2E) |
+
+**CI:** [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml) runs `CI=true npm run test:e2e` (full suite, placeholder Supabase OK for smoke/public specs).
+
+**Pass extra Playwright flags** after `--`:
+
+```bash
+npm run test:e2e -- e2e/smoke.spec.ts --debug
+npm run test:e2e:headed -- e2e/school-code-registration.spec.ts
+```
+
+---
+
+## Environment variables
+
+| Variable | Used for |
+|----------|----------|
+| `DATABASE_URL` | Postgres; required for any spec that calls `/api/test/*` seeds |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Real auth (registration, login, seeded users) |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Browser Supabase client (often same as above) |
+| `E2E_PARENT_EMAIL`, `E2E_PARENT_PASSWORD` | `auth.setup.ts` + `e2e/authenticated/**` project |
+| `E2E_EDUCATOR_EMAIL` (+ password if added later) | `e2e/authenticated/educator-progress-tab.spec.ts` |
+| `E2E_TEST_API_TOKEN` | `X-Test-Token` header (default `test-secret-token`) |
+| `TESTING_STRIPE_SECRET_KEY`, `VITE_TESTING_STRIPE_PUBLIC_KEY` | Live Stripe test mode checkout specs |
+| `VITE_E2E_EXPOSE_CART` | Set `true` by Playwright webServer for membership cart hook |
+
+Placeholder Supabase keys in `playwright.config.ts` are enough for **smoke** and **public custom forms**. Specs that call `isRealSupabaseConfigured()` or need `supabaseLinked: true` **skip** without real keys.
+
+---
+
+## Playwright projects
+
+| Project | Runs | When |
+|---------|------|------|
+| `chromium` | All `e2e/*.spec.ts` except `auth.setup.ts` and `authenticated/` | Always |
+| `setup` | `e2e/auth.setup.ts` | `E2E_PARENT_EMAIL` + `E2E_PARENT_PASSWORD` set |
+| `chromium-authenticated` | `e2e/authenticated/**` | After `setup`; uses `playwright/.auth/parent.json` |
+
+Run authenticated lane only:
+
+```bash
+npm run test:e2e:authenticated
+```
+
+See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
+
+---
+
+## Spec catalog
+
+### Always runs (default `chromium` project)
+
+| Spec | Command | What it covers | Prerequisites |
+|------|---------|----------------|---------------|
+| [`e2e/smoke.spec.ts`](../e2e/smoke.spec.ts) | `npm run test:e2e -- e2e/smoke.spec.ts` | `/` HTML shell; `/api/cart/snapshot` returns JSON | Dev server on :5000 |
+| [`e2e/public-custom-forms.spec.ts`](../e2e/public-custom-forms.spec.ts) | `npm run test:e2e -- e2e/public-custom-forms.spec.ts` | Public `/forms/:slug`, API, **resume `upload-attachment`**, browser upload + submit | `DATABASE_URL`; seed `setup-public-form-scenario`; stub storage via `PLAYWRIGHT_WEB_SERVER` |
+| [`e2e/parent-dashboard.spec.ts`](../e2e/parent-dashboard.spec.ts) | `npm run test:e2e -- e2e/parent-dashboard.spec.ts` | Unauthenticated dashboard gating | — |
+
+### Postgres + Supabase (skips if seed/auth fails)
+
+| Spec | Command | What it covers | Seed endpoint |
+|------|---------|----------------|---------------|
+| [`e2e/school-code-registration.spec.ts`](../e2e/school-code-registration.spec.ts) | `npm run test:e2e -- e2e/school-code-registration.spec.ts` | `/register/:code` UI + live signup | `POST /api/test/setup-registration-scenario` |
+| [`e2e/session-enrollment-flow.spec.ts`](../e2e/session-enrollment-flow.spec.ts) | `npm run test:e2e -- e2e/session-enrollment-flow.spec.ts` | Parent session wizard + `POST /api/session-enrollments` | `setup-session-enrollment-scenario` |
+| [`e2e/credit-management-parent-lookup.spec.ts`](../e2e/credit-management-parent-lookup.spec.ts) | `npm run test:e2e -- e2e/credit-management-parent-lookup.spec.ts` | School-admin parent search / manual credit | `setup-credit-lookup-scenario` |
+| [`e2e/parent-profile-credits-tab.spec.ts`](../e2e/parent-profile-credits-tab.spec.ts) | `npm run test:e2e -- e2e/parent-profile-credits-tab.spec.ts` | Admin parent profile Credits tab | `setup-cart-scenario` (`linkSupabaseAuthAdmin`) |
+
+**Supabase:** Real project required (`isRealSupabaseConfigured()` or `supabaseLinked === true`).
+
+### Postgres + Supabase + Stripe test keys
+
+| Spec | Command | What it covers | Seed endpoint |
+|------|---------|----------------|---------------|
+| [`e2e/parent-payment-flow.spec.ts`](../e2e/parent-payment-flow.spec.ts) | `npm run test:e2e -- e2e/parent-payment-flow.spec.ts` | Pay in full, biweekly checkout, upcoming payment | `setup-cart-scenario`, `seed-upcoming-scheduled-payment` |
+| [`e2e/checkout-volunteer-credits.spec.ts`](../e2e/checkout-volunteer-credits.spec.ts) | `npm run test:e2e -- e2e/checkout-volunteer-credits.spec.ts` | Credits reduce Stripe charge at checkout | `setup-cart-scenario` (`withCredits`) |
+| [`e2e/checkout-membership-order-summary.spec.ts`](../e2e/checkout-membership-order-summary.spec.ts) | `npm run test:e2e:checkout-membership` | Membership lines + `__E2E_CART__` refresh | `setup-cart-scenario` (`membershipRequired`) |
+| [`e2e/parent-full-journey.spec.ts`](../e2e/parent-full-journey.spec.ts) | `npm run test:e2e -- e2e/parent-full-journey.spec.ts` | Register → 2 sessions → biweekly → autopay #2 | `setup-registration-scenario` (`openSessionCount: 2`) + Stripe + test autopay APIs |
+
+Stripe helpers: [`e2e/helpers/stripePlaywright.ts`](../e2e/helpers/stripePlaywright.ts). Use **test mode** keys from the same Stripe account.
+
+### Authenticated (`chromium-authenticated`)
+
+Requires `E2E_PARENT_EMAIL` / `E2E_PARENT_PASSWORD` (and real Supabase). Run via `npm run test:e2e:authenticated` or full `test:e2e` when env is set.
+
+| Spec | Command | What it covers |
+|------|---------|----------------|
+| [`e2e/authenticated/dashboard.spec.ts`](../e2e/authenticated/dashboard.spec.ts) | `npm run test:e2e -- e2e/authenticated/dashboard.spec.ts` | Logged-in parent not sent to login |
+| [`e2e/authenticated/parent-profile-routes.spec.ts`](../e2e/authenticated/parent-profile-routes.spec.ts) | `npm run test:e2e -- e2e/authenticated/parent-profile-routes.spec.ts` | Parent routes + critical GET APIs 2xx |
+| [`e2e/authenticated/parent-progress-hub.spec.ts`](../e2e/authenticated/parent-progress-hub.spec.ts) | `npm run test:e2e -- e2e/authenticated/parent-progress-hub.spec.ts` | `/parent/progress` hub |
+| [`e2e/authenticated/educator-progress-tab.spec.ts`](../e2e/authenticated/educator-progress-tab.spec.ts) | `npm run test:e2e -- e2e/authenticated/educator-progress-tab.spec.ts` | Educator progress tab (`E2E_EDUCATOR_EMAIL`) |
+
+---
+
+## Test seed API (`/api/test/*`)
+
+Only when `NODE_ENV !== 'production'`. Header: `X-Test-Token: test-secret-token` (or `E2E_TEST_API_TOKEN`).
+
+Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
+
+| Endpoint | Used by |
+|----------|---------|
+| `POST /api/test/setup-public-form-scenario` | `public-custom-forms.spec.ts` |
+| `POST /api/test/setup-registration-scenario` | `school-code-registration`, `parent-full-journey` |
+| `POST /api/test/setup-session-enrollment-scenario` | `session-enrollment-flow` |
+| `POST /api/test/setup-cart-scenario` | Payment, credits, membership, profile credits |
+| `POST /api/test/setup-credit-lookup-scenario` | `credit-management-parent-lookup` |
+| `POST /api/test/seed-upcoming-scheduled-payment` | `parent-payment-flow` (installment test) |
+
+Implementation: [`server/api/test.ts`](../server/api/test.ts). Helpers: [`server/tests/helpers/`](../server/tests/helpers/).
+
+---
+
+## Related docs
+
+| Doc | Topic |
+|-----|--------|
+| [`docs/APP_KNOWLEDGE/domains/ci-and-testing.md`](APP_KNOWLEDGE/domains/ci-and-testing.md) | CI workflows vs local Jest |
+| [`server/tests/README.md`](../server/tests/README.md) | Integration tests + E2E cross-links |
+| [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md) | Authenticated parent route matrix |
+| [`docs/APP_KNOWLEDGE/runbooks/replit-e2e-playwright.md`](APP_KNOWLEDGE/runbooks/replit-e2e-playwright.md) | Replit limitations |
+| [`.agents/skills/asa-testing-deployment/SKILL.md`](../.agents/skills/asa-testing-deployment/SKILL.md) | Agent conventions |
+
+### Planned / doc-only
+
+[`docs/F001_SESSION_ENROLLMENT_TESTS.md`](F001_SESSION_ENROLLMENT_TESTS.md) describes `e2e/f001-session-enrollment-wizard.spec.ts`; that file is **not** in the repo yet—use `session-enrollment-flow.spec.ts` for session E2E today.

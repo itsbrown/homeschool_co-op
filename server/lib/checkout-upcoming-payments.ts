@@ -1,5 +1,6 @@
 import { storage } from '../storage';
 import { calculateCheckoutBiweeklySchedule } from './payment-calculator';
+import { formatEnrollmentCoverageLabel } from './enrollment-coverage-label';
 import { resolveEnrollmentIdsFromScheduledRow } from './scheduled-payment-intent-metadata';
 
 export type UpcomingPaymentRow = {
@@ -14,6 +15,8 @@ export type UpcomingPaymentRow = {
   enrollmentId?: number | null;
   className: string;
   childName: string;
+  enrollmentCount?: number;
+  enrollmentCoverageLabel?: string;
   retryCount?: number;
   failureReason?: string | null;
   overdue?: boolean;
@@ -48,33 +51,40 @@ export async function buildCheckoutFirstInstallmentDueRows(
       (e.totalPaid ?? 0) === 0,
   );
 
-  const byPi = new Map<string, any[]>();
+  const byGroup = new Map<string, any[]>();
   for (const row of parentRows) {
     const meta = row.metadata as Record<string, unknown> | null | undefined;
     const piId = meta?.initialPaymentIntentId;
-    if (typeof piId !== 'string' || !piId.startsWith('pi_')) continue;
     const plan =
       row.paymentPlan === 'biweekly' ||
       String(meta?.paymentPlan ?? '').toLowerCase() === 'biweekly';
     if (!plan) continue;
-    if (!byPi.has(piId)) byPi.set(piId, []);
-    byPi.get(piId)!.push(row);
+
+    const groupKey =
+      typeof piId === 'string' && piId.startsWith('pi_')
+        ? piId
+        : `pending-checkout-${row.id}`;
+
+    if (!byGroup.has(groupKey)) byGroup.set(groupKey, []);
+    byGroup.get(groupKey)!.push(row);
   }
 
   const out: UpcomingPaymentRow[] = [];
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
-  for (const [piId, rows] of byPi.entries()) {
-    const existingPayment = await storage.getPaymentByStripeId(piId);
-    if (
-      existingPayment &&
-      (existingPayment.status === 'completed' || existingPayment.status === 'succeeded')
-    ) {
-      continue;
+  for (const [groupKey, rows] of byGroup.entries()) {
+    const piId = groupKey.startsWith('pi_') ? groupKey : undefined;
+    if (piId) {
+      const existingPayment = await storage.getPaymentByStripeId(piId);
+      if (
+        existingPayment &&
+        (existingPayment.status === 'completed' || existingPayment.status === 'succeeded')
+      ) {
+        continue;
+      }
     }
 
-    const enrollmentIds = rows.map((r: any) => r.id).filter(Boolean);
     const totalCost = rows.reduce(
       (sum: number, r: any) => sum + (r.totalCost ?? 0),
       0,
@@ -87,35 +97,41 @@ export async function buildCheckoutFirstInstallmentDueRows(
         programEnd = d;
       }
     }
-    if (!programEnd) continue;
 
-    const schedule = calculateCheckoutBiweeklySchedule(
-      totalCost,
-      new Date(),
-      programEnd,
-    );
+    let firstPaymentAmount = totalCost;
+    if (programEnd) {
+      const schedule = calculateCheckoutBiweeklySchedule(
+        totalCost,
+        new Date(),
+        programEnd,
+      );
+      firstPaymentAmount = schedule.firstPaymentAmount;
+    }
+
     const first = rows[0];
-    const childNames = [...new Set(rows.map((r: any) => r.childName).filter(Boolean))];
+    const enrollmentCount = rows.length;
     const classLabel =
-      rows.length > 1
-        ? `${rows.length} class enrollments`
+      enrollmentCount > 1
+        ? `${enrollmentCount} class enrollments`
         : (first.className ?? 'Class');
 
     out.push({
-      id: `checkout-${piId}`,
-      amount: schedule.firstPaymentAmount,
+      id: `checkout-${groupKey}`,
+      amount: firstPaymentAmount,
       dueDate: startOfToday,
-      description: `Biweekly payment 1 of ${schedule.numberOfPayments} (complete checkout)`,
-      paymentPlan: 'biweekly',
+      description: `Complete checkout — ${classLabel}`,
+      paymentPlan: '',
       status: 'checkout_due',
-      installmentNumber: 1,
-      totalInstallments: schedule.numberOfPayments,
+      installmentNumber: 0,
+      totalInstallments: 0,
       enrollmentId: first.id,
+      enrollmentCount,
+      enrollmentCoverageLabel: formatEnrollmentCoverageLabel(enrollmentCount),
       className: classLabel,
-      childName: childNames.join(', '),
+      childName: '',
       retryCount: 0,
       failureReason: null,
-      overdue: true,
+      overdue: false,
       isCheckoutDue: true,
       checkoutPaymentIntentId: piId,
     });

@@ -118,6 +118,65 @@ export default function SubmissionsPage() {
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
+  const downloadAttachment = async (submissionId: number, fieldId: number, fileName: string) => {
+    try {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch(
+        `/api/custom-forms/submissions/${submissionId}/files/${fieldId}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: 'include',
+        }
+      );
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert('Unable to download file. Please try again.');
+    }
+  };
+
+  const renderResponseValue = (key: string, value: unknown, submissionId: number) => {
+    if (
+      value &&
+      typeof value === 'object' &&
+      'objectPath' in (value as object) &&
+      'fileName' in (value as object)
+    ) {
+      const attachment = value as { fileName: string; objectPath: string };
+      const fieldId = parseInt(key.replace('field_', ''), 10);
+      if (!Number.isFinite(fieldId)) {
+        return attachment.fileName;
+      }
+      return (
+        <Button
+          type="button"
+          variant="link"
+          className="h-auto p-0"
+          onClick={() => downloadAttachment(submissionId, fieldId, attachment.fileName)}
+        >
+          Download {attachment.fileName}
+        </Button>
+      );
+    }
+    if (Array.isArray(value)) {
+      return value.join(', ');
+    }
+    if (typeof value === 'boolean') {
+      return value ? 'Yes' : 'No';
+    }
+    return String(value ?? '');
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -460,7 +519,11 @@ export default function SubmissionsPage() {
                             {fieldLabelMap[key] || key}
                           </TableCell>
                           <TableCell>
-                            {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                            {renderResponseValue(
+                              key,
+                              value,
+                              selectedSubmission.id
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}

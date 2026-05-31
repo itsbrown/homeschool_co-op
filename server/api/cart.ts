@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { storage } from '../storage';
-import { calculateCartPricing, validateCartTotal, calculateCartSnapshot, CartItem, deriveSchoolIdFromCart, SchoolIdResult } from '../utils/cart-pricing';
+import { calculateCartPricing, validateCartTotal, calculateCartSnapshot, CartItem, resolveCheckoutSchoolId } from '../utils/cart-pricing';
 import {
   cacheSnapshot,
   computeCartItemFingerprint,
@@ -51,29 +51,17 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    // Derive schoolId: prefer user.schoolId, fall back to cart items with strict validation
-    let effectiveSchoolId = user.schoolId;
-    if (!effectiveSchoolId && cartItems.length > 0) {
-      console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items...`);
-      const result = await deriveSchoolIdFromCart(cartItems, { strict: true }) as SchoolIdResult;
-      if (result.error) {
-        return res.status(400).json({ 
-          error: result.error,
-          message: result.errorMessage || 'Unable to determine school for this cart.'
-        });
-      }
-      effectiveSchoolId = result.schoolId;
-      if (effectiveSchoolId) {
-        console.log(`🏫 Using derived schoolId ${effectiveSchoolId} for cart snapshot`);
-      }
-    }
-
-    if (!effectiveSchoolId) {
-      return res.status(400).json({ 
-        error: 'SCHOOL_NOT_FOUND',
-        message: 'Unable to determine school for this cart. Please ensure classes are valid.'
+    const schoolResult = await resolveCheckoutSchoolId(user, cartItems);
+    if (schoolResult.error || !schoolResult.schoolId) {
+      return res.status(400).json({
+        error: schoolResult.error || 'SCHOOL_NOT_FOUND',
+        message:
+          schoolResult.errorMessage ||
+          'Unable to determine school for this cart. Please ensure classes are valid.',
       });
     }
+    const effectiveSchoolId = schoolResult.schoolId;
+    console.log(`🏫 Cart snapshot schoolId ${effectiveSchoolId} for ${userEmail}`);
 
     // Server-side validation: refresh remainingBalance for existing enrollments
     // from the DB-generated effective_balance (see resolveEnrollmentEffectiveBalance).
@@ -81,6 +69,13 @@ router.post('/snapshot', supabaseAuth, async (req: any, res) => {
       if (item.enrollmentId) {
         const enrollment: any = await storage.getProgramEnrollmentById(item.enrollmentId);
         if (enrollment) {
+          if (enrollment.status === 'location_wishlist') {
+            return res.status(400).json({
+              error: 'LOCATION_WISHLIST_CHECKOUT_BLOCKED',
+              message:
+                'Waitlist enrollments are not payable until the campus opens. Save a payment method to join the waitlist.',
+            });
+          }
           const effectiveBalance = resolveEnrollmentEffectiveBalance(enrollment);
           item.remainingBalance = effectiveBalance;
           console.log(`✅ /cart/snapshot: enrollment ${item.enrollmentId} effectiveBalance=${effectiveBalance} (totalCost=${enrollment.totalCost}, totalPaid=${enrollment.totalPaid}, compAmountCents=${enrollment.compAmountCents}, storedRemainingBalance=${enrollment.remainingBalance})`);
@@ -251,26 +246,16 @@ router.post('/calculate', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    // Derive schoolId: prefer user.schoolId, fall back to cart items with strict validation
-    let effectiveSchoolId = user.schoolId;
-    if (!effectiveSchoolId && cartItems.length > 0) {
-      console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items...`);
-      const result = await deriveSchoolIdFromCart(cartItems, { strict: true }) as SchoolIdResult;
-      if (result.error) {
-        return res.status(400).json({ 
-          error: result.error,
-          message: result.errorMessage || 'Unable to determine school for this cart.'
-        });
-      }
-      effectiveSchoolId = result.schoolId;
-    }
-
-    if (!effectiveSchoolId) {
-      return res.status(400).json({ 
-        error: 'SCHOOL_NOT_FOUND',
-        message: 'Unable to determine school for this cart. Please ensure classes are valid.'
+    const schoolResult = await resolveCheckoutSchoolId(user, cartItems);
+    if (schoolResult.error || !schoolResult.schoolId) {
+      return res.status(400).json({
+        error: schoolResult.error || 'SCHOOL_NOT_FOUND',
+        message:
+          schoolResult.errorMessage ||
+          'Unable to determine school for this cart. Please ensure classes are valid.',
       });
     }
+    const effectiveSchoolId = schoolResult.schoolId;
 
     // Server-side validation: refresh remainingBalance for existing enrollments
     // from the DB-generated effective_balance (see resolveEnrollmentEffectiveBalance).
@@ -351,26 +336,16 @@ router.post('/validate', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    // Derive schoolId: prefer user.schoolId, fall back to cart items with strict validation
-    let effectiveSchoolId = user.schoolId;
-    if (!effectiveSchoolId && cartItems.length > 0) {
-      console.log(`🏫 User ${userEmail} has no schoolId, deriving from cart items for validation...`);
-      const derivedResult = await deriveSchoolIdFromCart(cartItems, { strict: true }) as SchoolIdResult;
-      if (derivedResult.error) {
-        return res.status(400).json({ 
-          error: derivedResult.error,
-          message: derivedResult.errorMessage || 'Unable to determine school for this cart.'
-        });
-      }
-      effectiveSchoolId = derivedResult.schoolId;
-    }
-
-    if (!effectiveSchoolId) {
-      return res.status(400).json({ 
-        error: 'SCHOOL_NOT_FOUND',
-        message: 'Unable to determine school for this cart. Please ensure classes are valid.'
+    const schoolResult = await resolveCheckoutSchoolId(user, cartItems);
+    if (schoolResult.error || !schoolResult.schoolId) {
+      return res.status(400).json({
+        error: schoolResult.error || 'SCHOOL_NOT_FOUND',
+        message:
+          schoolResult.errorMessage ||
+          'Unable to determine school for this cart. Please ensure classes are valid.',
       });
     }
+    const effectiveSchoolId = schoolResult.schoolId;
 
     // Server-side validation: refresh remainingBalance for existing enrollments
     // from the DB-generated effective_balance (see resolveEnrollmentEffectiveBalance).

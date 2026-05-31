@@ -31,7 +31,11 @@ import { FINANCIAL_ADMIN_ROLES } from "./lib/auth-roles";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
+import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import cartRouter from "./api/cart";
+import progressRouter from "./api/progress";
+import progressInsightsRouter from "./api/progress-insights";
+import locationEnrollmentsRouter from "./api/location-enrollments";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
 const currentEnv = process.env.NODE_ENV || 'development';
@@ -110,6 +114,14 @@ app.use('/api/schools/documents/upload', fileUpload({
   createParentPath: true,
 }));
 
+// Custom form public attachments (e.g. resume on mentor application)
+app.use('/api/custom-forms/forms/:formId/upload-attachment', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  abortOnLimit: true,
+  createParentPath: true,
+}));
+
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
@@ -158,10 +170,15 @@ app.use("/api/payment-import", paymentImport);
 app.use("/api/account-import", accountImport);
 app.use("/api/daily-flows", dailyFlowsRoutes);
 app.use("/api/user", userRolesRouter); // Multi-role management endpoints
+app.use("/api/user", autoPayRouter); // Payment methods + auto-pay (same /api/user prefix)
+app.use("/api/admin/users", adminPaymentMethodsRouter);
 // Cart pricing (snapshot / calculate / validate). Each route applies supabaseAuth.
 // Must be registered on the Express app — otherwise /api/cart/* falls through to Vite
 // and returns HTML, which breaks checkout with "Unexpected token '<'" JSON errors.
 app.use("/api/cart", cartRouter);
+app.use("/api/progress", progressRouter);
+app.use("/api/progress/insights", progressInsightsRouter);
+app.use("/api/location-enrollments", locationEnrollmentsRouter);
 
 // Test endpoints for development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
@@ -361,6 +378,11 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       
       // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
       startScheduledPaymentReminderJob();
+
+      const { startLocationActivationScheduler } = await import(
+        './services/location-activation-scheduler.js'
+      );
+      startLocationActivationScheduler();
       
       // Load notifications and notification recipients from JSON into database.
       // In local fallback mode, DB may be unavailable; do not crash server startup.
@@ -384,11 +406,15 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
             const { stopEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
             const { stopScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
             const { stopCreditExpirationJob } = await import('./services/creditExpirationService.js');
+            const { stopLocationActivationScheduler } = await import(
+              './services/location-activation-scheduler.js'
+            );
             backup.stopAutomaticBackups();
             MembershipSvc.stopMembershipStatusJob();
             stopEnrollmentReminderScheduler();
             stopScheduledPaymentReminderJob();
             stopCreditExpirationJob();
+            stopLocationActivationScheduler();
           } catch (err) {
             console.warn('⚠️ Error while stopping background intervals:', (err as Error).message);
           }

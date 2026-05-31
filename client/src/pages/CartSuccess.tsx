@@ -60,8 +60,9 @@ export default function CartSuccess() {
             }
           }
 
-          // Get payment plan info for display
+          // Capture before cart cleanup removes these keys (used for autopay card sync below)
           const selectedPaymentPlan = localStorage.getItem('selectedPaymentPlan') || 'full';
+          const pendingAutoPay = localStorage.getItem('pendingAutoPay') === 'true';
           console.log(`💳 Payment plan: ${selectedPaymentPlan}`);
           
           // CRITICAL: Confirm enrollments in database (update status from pending_payment to enrolled)
@@ -121,6 +122,7 @@ export default function CartSuccess() {
           localStorage.removeItem('asa_cart');
           localStorage.removeItem('selectedPaymentPlan');
           sessionStorage.removeItem('cart_backup');
+          // pendingAutoPay cleared in autopay sync finally block
           
           // Clear cart in context - skip enrollment cancellation since payment already succeeded
           // Await to ensure cart clears properly, but don't fail if it errors
@@ -133,6 +135,48 @@ export default function CartSuccess() {
           
           // Refresh all payment/membership caches so "Pay now" state converges immediately.
           await refreshPostPaymentState(queryClient);
+
+          const shouldSyncCard =
+            pendingAutoPay || selectedPaymentPlan === 'biweekly';
+          try {
+            if (!shouldSyncCard) {
+              localStorage.removeItem('pendingAutoPay');
+            }
+            const syncRes = shouldSyncCard
+              ? await apiRequest('POST', '/api/user/sync-checkout-payment-method', {
+                  paymentIntentId: paymentIntent,
+                  enableAutoPay: pendingAutoPay,
+                })
+              : null;
+            if (syncRes?.ok) {
+              await queryClient.invalidateQueries({ queryKey: ['/api/user/auto-pay-status'] });
+              await queryClient.invalidateQueries({ queryKey: ['/api/user/payment-methods'] });
+              await queryClient.invalidateQueries({ queryKey: ['/api/user/payment-method'] });
+              if (pendingAutoPay) {
+                toast({
+                  title: 'Auto-pay enabled',
+                  description: 'Your card is saved and future installments will charge automatically.',
+                  duration: 6000,
+                });
+              }
+            } else if (syncRes) {
+              const errBody = await syncRes.json().catch(() => ({}));
+              console.error('Failed to sync card after checkout:', errBody);
+              if (pendingAutoPay) {
+                toast({
+                  title: 'Auto-pay not activated',
+                  description:
+                    'Payment succeeded, but we could not save your card. Add a card under Payment Methods and turn on Auto Pay.',
+                  variant: 'destructive',
+                  duration: 8000,
+                });
+              }
+            }
+          } catch (syncErr) {
+            console.error('Failed to sync payment method after checkout:', syncErr);
+          } finally {
+            localStorage.removeItem('pendingAutoPay');
+          }
           
           console.log('✅ Cart cleared and queries invalidated');
           

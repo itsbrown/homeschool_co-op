@@ -57,6 +57,23 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - Application may have existing data — don't assume empty state
 - Generate unique values (e.g., `nanoid`) for test data to avoid conflicts
 - Include `data-testid` attributes on key interactive elements for reliable selectors
+- **Command index:** [`docs/E2E_COMMANDS.md`](../../docs/E2E_COMMANDS.md) — single catalog of npm scripts, per-spec commands, env, and seeds
+
+### Adding a new E2E spec (documentation checklist)
+
+When you create or extend `e2e/**/*.spec.ts`:
+
+1. Add a row to the spec catalog in [`docs/E2E_COMMANDS.md`](../../docs/E2E_COMMANDS.md) with:
+   - Relative path (e.g. `e2e/public-custom-forms.spec.ts`)
+   - Run command: `npm run test:e2e -- e2e/<file>.spec.ts`
+   - One-line coverage + prerequisites (`DATABASE_URL`, Supabase, Stripe, etc.)
+   - `POST /api/test/...` seed helper if used (`e2e/helpers/testSeed.ts`)
+2. Link from [`docs/APP_KNOWLEDGE/domains/ci-and-testing.md`](../../docs/APP_KNOWLEDGE/domains/ci-and-testing.md) only when introducing a new lane worth calling out in CI docs.
+3. Link from a feature runbook under `docs/APP_KNOWLEDGE/runbooks/` when the spec is the verification step for that workflow.
+4. Dated bullet in `docs/APP_KNOWLEDGE/CHANGELOG.md`.
+5. Optional `package.json` script only for suites run very frequently; prefer the `-- e2e/file.spec.ts` form.
+
+**Example (public forms):** [`e2e/public-custom-forms.spec.ts`](../../e2e/public-custom-forms.spec.ts) — `npm run test:e2e -- e2e/public-custom-forms.spec.ts`; seed `setup-public-form-scenario`; runbook [`public-mentor-application-form.md`](../../docs/APP_KNOWLEDGE/runbooks/public-mentor-application-form.md).
 
 ### What to Test with Playwright
 - Frontend features and multi-page flows

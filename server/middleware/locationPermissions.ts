@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { getDb } from '../db';
-import { userLocations, locations, users } from '@shared/schema';
+import { userLocations, userSchoolPermissions, locations, users, userRoles } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
+import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
+import { getSchoolCoreByAdminId } from '../lib/school-db';
 
 export type LocationPermission = 
   | 'canViewReports'
@@ -21,7 +23,74 @@ const permissionCache = new Map<string, CachedPermission>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 function getCacheKey(userId: number, locationId: number): string {
-  return `${userId}:${locationId}`;
+  return `loc:${userId}:${locationId}`;
+}
+
+function getSchoolCacheKey(userId: number, schoolId: number): string {
+  return `school:${userId}:${schoolId}`;
+}
+
+function permissionsFromSchoolRow(row: {
+  canViewReports: boolean;
+  canManageStaff: boolean;
+  canManageClasses: boolean;
+  canManageStudents: boolean;
+  canSendNotifications: boolean;
+  canViewParentContacts: boolean;
+  accessLevel: string;
+}): { permissions: Record<LocationPermission, boolean>; accessLevel: string } {
+  return {
+    permissions: {
+      canViewReports: row.canViewReports,
+      canManageStaff: row.canManageStaff,
+      canManageClasses: row.canManageClasses,
+      canManageStudents: row.canManageStudents,
+      canSendNotifications: row.canSendNotifications,
+      canViewParentContacts: row.canViewParentContacts,
+    },
+    accessLevel: row.accessLevel,
+  };
+}
+
+export async function getUserSchoolPermissions(
+  userId: number,
+  schoolId: number,
+): Promise<{ permissions: Record<LocationPermission, boolean>; accessLevel: string } | null> {
+  const cacheKey = getSchoolCacheKey(userId, schoolId);
+  const cached = permissionCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return { permissions: cached.permissions, accessLevel: cached.accessLevel };
+  }
+
+  try {
+    const db = await getDb();
+    const result = await db
+      .select()
+      .from(userSchoolPermissions)
+      .where(
+        and(
+          eq(userSchoolPermissions.userId, userId),
+          eq(userSchoolPermissions.schoolId, schoolId),
+          eq(userSchoolPermissions.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    if (result.length === 0) {
+      return null;
+    }
+
+    const parsed = permissionsFromSchoolRow(result[0]);
+    permissionCache.set(cacheKey, {
+      ...parsed,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
+    return parsed;
+  } catch (error) {
+    console.error('Error fetching school permissions:', error);
+    return null;
+  }
 }
 
 export async function getUserLocationPermissions(
@@ -50,27 +119,27 @@ export async function getUserLocationPermissions(
       return null;
     }
 
-    const userLocation = result[0];
-    const permissions: Record<LocationPermission, boolean> = {
-      canViewReports: userLocation.canViewReports,
-      canManageStaff: userLocation.canManageStaff,
-      canManageClasses: userLocation.canManageClasses,
-      canManageStudents: userLocation.canManageStudents,
-      canSendNotifications: userLocation.canSendNotifications,
-      canViewParentContacts: userLocation.canViewParentContacts,
-    };
-
+    const parsed = permissionsFromSchoolRow(result[0]);
     permissionCache.set(cacheKey, {
-      permissions,
-      accessLevel: userLocation.accessLevel,
+      ...parsed,
       expiresAt: Date.now() + CACHE_TTL_MS,
     });
 
-    return { permissions, accessLevel: userLocation.accessLevel };
+    return parsed;
   } catch (error) {
     console.error('Error fetching location permissions:', error);
     return null;
   }
+}
+
+function hasPermissionInGrant(
+  grant: { permissions: Record<LocationPermission, boolean>; accessLevel: string },
+  permission: LocationPermission,
+): boolean {
+  if (grant.accessLevel === 'admin') {
+    return true;
+  }
+  return grant.permissions[permission] === true;
 }
 
 export async function checkLocationPermission(
@@ -78,66 +147,107 @@ export async function checkLocationPermission(
   locationId: number,
   permission: LocationPermission
 ): Promise<boolean> {
-  const result = await getUserLocationPermissions(userId, locationId);
-  
-  if (!result) {
-    return false;
-  }
-
-  if (result.accessLevel === 'admin') {
-    return true;
-  }
-
-  return result.permissions[permission] === true;
-}
-
-export function clearPermissionCache(userId?: number, locationId?: number): void {
-  if (userId && locationId) {
-    permissionCache.delete(getCacheKey(userId, locationId));
-  } else if (userId) {
-    for (const key of permissionCache.keys()) {
-      if (key.startsWith(`${userId}:`)) {
-        permissionCache.delete(key);
-      }
-    }
-  } else {
-    permissionCache.clear();
-  }
-}
-
-async function isSchoolAdminForLocation(userId: number, locationId: number): Promise<boolean> {
   try {
     const db = await getDb();
-    
-    const userResult = await db.select({
-      role: users.role,
-      schoolId: users.schoolId,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-    if (userResult.length === 0) {
-      return false;
-    }
-
-    const user = userResult[0];
-    const isSchoolAdmin = user.role === 'schoolAdmin' || user.role === 'admin';
-    
-    if (!isSchoolAdmin || !user.schoolId) {
-      return false;
-    }
-
-    const locationResult = await db.select({ schoolId: locations.schoolId })
+    const locationResult = await db
+      .select({ schoolId: locations.schoolId })
       .from(locations)
       .where(eq(locations.id, locationId))
       .limit(1);
 
-    if (locationResult.length === 0) {
+    if (locationResult.length > 0 && locationResult[0].schoolId != null) {
+      const schoolGrant = await getUserSchoolPermissions(userId, locationResult[0].schoolId);
+      if (schoolGrant && hasPermissionInGrant(schoolGrant, permission)) {
+        return true;
+      }
+    }
+  } catch (error) {
+    console.error('Error checking school-wide permission:', error);
+  }
+
+  const result = await getUserLocationPermissions(userId, locationId);
+  if (!result) {
+    return false;
+  }
+
+  return hasPermissionInGrant(result, permission);
+}
+
+export function clearPermissionCache(userId?: number, locationId?: number, schoolId?: number): void {
+  if (userId && locationId) {
+    permissionCache.delete(getCacheKey(userId, locationId));
+  }
+  if (userId && schoolId) {
+    permissionCache.delete(getSchoolCacheKey(userId, schoolId));
+  }
+  if (userId && !locationId && !schoolId) {
+    for (const key of permissionCache.keys()) {
+      if (key.startsWith(`${userId}:`) || key.startsWith(`loc:${userId}:`) || key.startsWith(`school:${userId}:`)) {
+        permissionCache.delete(key);
+      }
+    }
+  } else if (!userId) {
+    permissionCache.clear();
+  }
+}
+
+const SCHOOL_ADMIN_ROLES = new Set(['schoolAdmin', 'director', 'admin', 'superAdmin']);
+
+async function isSchoolAdminForLocation(userId: number, locationId: number): Promise<boolean> {
+  try {
+    const db = await getDb();
+
+    const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (userResult.length === 0) {
+      return false;
+    }
+    const user = userResult[0];
+
+    const locationResult = await db
+      .select({ schoolId: locations.schoolId })
+      .from(locations)
+      .where(eq(locations.id, locationId))
+      .limit(1);
+
+    if (locationResult.length === 0 || locationResult[0].schoolId == null) {
       return false;
     }
 
-    return locationResult[0].schoolId === user.schoolId;
+    const locationSchoolId = locationResult[0].schoolId;
+
+    if (SCHOOL_ADMIN_ROLES.has(user.role ?? '')) {
+      const resolved = await resolveSchoolIdForUser(user);
+      if (resolved === locationSchoolId) {
+        return true;
+      }
+    }
+
+    const activeRole = user.activeRole ?? user.role ?? '';
+    if (SCHOOL_ADMIN_ROLES.has(activeRole)) {
+      const resolved = await resolveSchoolIdForUser(user);
+      if (resolved === locationSchoolId) {
+        return true;
+      }
+    }
+
+    const adminSchool = await getSchoolCoreByAdminId(userId);
+    if (adminSchool?.id === locationSchoolId) {
+      return true;
+    }
+
+    const roleRows = await db
+      .select({ role: userRoles.role, schoolId: userRoles.schoolId, isActive: userRoles.isActive })
+      .from(userRoles)
+      .where(eq(userRoles.userId, userId));
+
+    for (const row of roleRows) {
+      if (!row.isActive || row.schoolId !== locationSchoolId) continue;
+      if (SCHOOL_ADMIN_ROLES.has(row.role ?? '')) {
+        return true;
+      }
+    }
+
+    return false;
   } catch (error) {
     console.error('Error checking school admin status for location:', error);
     return false;

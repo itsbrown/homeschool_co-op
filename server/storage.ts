@@ -32,6 +32,7 @@ import {
   schoolStudents, type SchoolStudent, type InsertSchoolStudent,
   schoolStaff, type SchoolStaff, type InsertSchoolStaff,
   userLocations, type UserLocation, type InsertUserLocation,
+  userSchoolPermissions, type UserSchoolPermission, type InsertUserSchoolPermission,
   locations, type Location, type InsertLocation,
   dailyFlowTemplates, type DailyFlowTemplate, type InsertDailyFlowTemplate,
   dailyFlowEntries, type DailyFlowEntry, type InsertDailyFlowEntry,
@@ -483,6 +484,13 @@ export interface IStorage {
   updateUserLocation(id: number, userLocation: Partial<InsertUserLocation>): Promise<UserLocation | undefined>;
   deleteUserLocation(id: number): Promise<void>;
 
+  // School-wide permission methods
+  getUserSchoolPermissionById(id: number): Promise<UserSchoolPermission | undefined>;
+  getUserSchoolPermissionByUserAndSchool(userId: number, schoolId: number): Promise<UserSchoolPermission | undefined>;
+  getUserSchoolPermissionsBySchoolId(schoolId: number): Promise<UserSchoolPermission[]>;
+  createUserSchoolPermission(permission: InsertUserSchoolPermission): Promise<UserSchoolPermission>;
+  updateUserSchoolPermission(id: number, permission: Partial<InsertUserSchoolPermission>): Promise<UserSchoolPermission | undefined>;
+
   // Location methods
   getLocationById(id: number): Promise<Location | undefined>;
   getLocations(): Promise<Location[]>;
@@ -640,6 +648,7 @@ export interface IStorage {
   getMismatchedStatusCredits(schoolId?: number): Promise<Credit[]>;
   getCompletedScheduledPaymentsWithCreditSource(schoolId?: number): Promise<ScheduledPayment[]>;
   getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId: number): Promise<UnifiedCreditUsageLog[]>;
+  getUnifiedCreditUsageLogsByCheckoutPaymentIntentId(paymentIntentId: string): Promise<UnifiedCreditUsageLog[]>;
   createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog>;
   createCreditHolds(
     userId: number,
@@ -4820,6 +4829,12 @@ export class MemStorage implements IStorage {
     return [];
   }
 
+  async getUnifiedCreditUsageLogsByCheckoutPaymentIntentId(
+    _paymentIntentId: string,
+  ): Promise<UnifiedCreditUsageLog[]> {
+    return [];
+  }
+
   async createUnifiedCreditUsageLog(_log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
     throw new Error('Unified credits require PostgreSQL storage');
   }
@@ -5812,20 +5827,14 @@ export class MemStorage implements IStorage {
     }
 
     async deleteProgramEnrollment(id: number): Promise<void> {
-      try {
-        if (this.dbStorage && typeof this.dbStorage.deleteProgramEnrollment === 'function') {
-          return await this.dbStorage.deleteProgramEnrollment(id);
-        } else {
-          console.log('💾 DB storage unavailable, using memStorage fallback for deleteProgramEnrollment');
-          return await this.memStorage.deleteProgramEnrollment(id);
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV === 'production') {
-          throw error;
-        }
-        console.log('❌ Error deleting program enrollment from database, falling back to memStorage:', error);
-        return await this.memStorage.deleteProgramEnrollment(id);
+      if (this.dbStorage && typeof this.dbStorage.deleteProgramEnrollment === 'function') {
+        await this.dbStorage.deleteProgramEnrollment(id);
+        // Keep mem cache in sync so reads never resurrect a DB-deleted row (or vice versa).
+        await this.memStorage.deleteProgramEnrollment(id);
+        return;
       }
+      console.log('💾 DB storage unavailable, using memStorage fallback for deleteProgramEnrollment');
+      await this.memStorage.deleteProgramEnrollment(id);
     }
 
     async cancelPendingEnrollments(enrollmentIds: number[], parentUserId: number): Promise<{ cancelled: number[]; skipped: number[]; errors: string[] }> {
@@ -6691,6 +6700,34 @@ export class MemStorage implements IStorage {
         return this.dbStorage.deleteUserLocation(id);
       }
 
+      async getUserSchoolPermissionById(id: number): Promise<UserSchoolPermission | undefined> {
+        return this.dbStorage.getUserSchoolPermissionById(id);
+      }
+
+      async getUserSchoolPermissionByUserAndSchool(
+        userId: number,
+        schoolId: number,
+      ): Promise<UserSchoolPermission | undefined> {
+        return this.dbStorage.getUserSchoolPermissionByUserAndSchool(userId, schoolId);
+      }
+
+      async getUserSchoolPermissionsBySchoolId(schoolId: number): Promise<UserSchoolPermission[]> {
+        return this.dbStorage.getUserSchoolPermissionsBySchoolId(schoolId);
+      }
+
+      async createUserSchoolPermission(
+        permission: InsertUserSchoolPermission,
+      ): Promise<UserSchoolPermission> {
+        return this.dbStorage.createUserSchoolPermission(permission);
+      }
+
+      async updateUserSchoolPermission(
+        id: number,
+        permission: Partial<InsertUserSchoolPermission>,
+      ): Promise<UserSchoolPermission | undefined> {
+        return this.dbStorage.updateUserSchoolPermission(id, permission);
+      }
+
       // Location methods — Postgres only when DATABASE_URL is set (no stale locations.json fallback)
       async getLocationById(id: number): Promise<Location | undefined> {
         try {
@@ -7499,6 +7536,12 @@ export class MemStorage implements IStorage {
         return this.dbStorage.getUnifiedCreditUsageLogsByScheduledPaymentId(scheduledPaymentId);
       }
 
+      async getUnifiedCreditUsageLogsByCheckoutPaymentIntentId(
+        paymentIntentId: string,
+      ): Promise<UnifiedCreditUsageLog[]> {
+        return this.dbStorage.getUnifiedCreditUsageLogsByCheckoutPaymentIntentId(paymentIntentId);
+      }
+
       async createUnifiedCreditUsageLog(log: InsertUnifiedCreditUsageLog): Promise<UnifiedCreditUsageLog> {
         return this.dbStorage.createUnifiedCreditUsageLog(log);
       }
@@ -7617,6 +7660,145 @@ export class MemStorage implements IStorage {
       // Database initialization methods
       async initializeNotifications(): Promise<void> {
         return this.dbStorage.initializeNotifications();
+      }
+
+      // Assessment & curriculum progress (PostgreSQL)
+      private requireApDb(): DatabaseStorage {
+        if (!(this.dbStorage instanceof DatabaseStorage)) {
+          throw new Error('Assessment and progress features require PostgreSQL');
+        }
+        return this.dbStorage;
+      }
+
+      getChildByIdForSchool(childId: number, schoolId: number) {
+        return this.requireApDb().getChildByIdForSchool(childId, schoolId);
+      }
+      getChildrenForSchool(schoolId: number) {
+        return this.requireApDb().getChildrenForSchool(schoolId);
+      }
+      fuzzyMatchStudentsForSchool(schoolId: number, rawName: string) {
+        return this.requireApDb().fuzzyMatchStudentsForSchool(schoolId, rawName);
+      }
+      resolveActiveSessionIdForChild(childId: number, schoolId: number) {
+        return this.requireApDb().resolveActiveSessionIdForChild(childId, schoolId);
+      }
+      getAssessmentTypesBySchoolId(schoolId: number) {
+        return this.requireApDb().getAssessmentTypesBySchoolId(schoolId);
+      }
+      getAssessmentTypeById(id: number) {
+        return this.requireApDb().getAssessmentTypeById(id);
+      }
+      createAssessmentType(data: Parameters<DatabaseStorage['createAssessmentType']>[0]) {
+        return this.requireApDb().createAssessmentType(data);
+      }
+      updateAssessmentType(id: number, data: Parameters<DatabaseStorage['updateAssessmentType']>[1]) {
+        return this.requireApDb().updateAssessmentType(id, data);
+      }
+      deleteAssessmentType(id: number) {
+        return this.requireApDb().deleteAssessmentType(id);
+      }
+      getCurriculumBooksByAssessmentTypeId(typeId: number) {
+        return this.requireApDb().getCurriculumBooksByAssessmentTypeId(typeId);
+      }
+      getCurriculumBookById(id: number) {
+        return this.requireApDb().getCurriculumBookById(id);
+      }
+      createCurriculumBook(data: Parameters<DatabaseStorage['createCurriculumBook']>[0]) {
+        return this.requireApDb().createCurriculumBook(data);
+      }
+      updateCurriculumBook(id: number, data: Parameters<DatabaseStorage['updateCurriculumBook']>[1]) {
+        return this.requireApDb().updateCurriculumBook(id, data);
+      }
+      deleteCurriculumBook(id: number) {
+        return this.requireApDb().deleteCurriculumBook(id);
+      }
+      getStudentAssessmentById(id: number) {
+        return this.requireApDb().getStudentAssessmentById(id);
+      }
+      getStudentAssessmentsByChildId(childId: number) {
+        return this.requireApDb().getStudentAssessmentsByChildId(childId);
+      }
+      getStudentAssessmentsBySchoolId(
+        schoolId: number,
+        filters?: Parameters<DatabaseStorage['getStudentAssessmentsBySchoolId']>[1],
+      ) {
+        return this.requireApDb().getStudentAssessmentsBySchoolId(schoolId, filters);
+      }
+      createStudentAssessment(data: Parameters<DatabaseStorage['createStudentAssessment']>[0]) {
+        return this.requireApDb().createStudentAssessment(data);
+      }
+      updateStudentAssessment(id: number, data: Parameters<DatabaseStorage['updateStudentAssessment']>[1]) {
+        return this.requireApDb().updateStudentAssessment(id, data);
+      }
+      deleteStudentAssessment(id: number) {
+        return this.requireApDb().deleteStudentAssessment(id);
+      }
+      recordLexileAssessment(
+        childId: number,
+        schoolId: number,
+        userId: number,
+        data: Parameters<DatabaseStorage['recordLexileAssessment']>[3],
+      ) {
+        return this.requireApDb().recordLexileAssessment(childId, schoolId, userId, data);
+      }
+      getLexileHistoryForChildBySchool(childId: number, schoolId: number) {
+        return this.requireApDb().getLexileHistoryForChildBySchool(childId, schoolId);
+      }
+      getProgressSubjectsBySchool(schoolId: number) {
+        return this.requireApDb().getProgressSubjectsBySchool(schoolId);
+      }
+      createProgressSubject(data: Parameters<DatabaseStorage['createProgressSubject']>[0]) {
+        return this.requireApDb().createProgressSubject(data);
+      }
+      updateProgressSubject(id: number, data: Parameters<DatabaseStorage['updateProgressSubject']>[1]) {
+        return this.requireApDb().updateProgressSubject(id, data);
+      }
+      getProgressTracksBySubject(schoolId: number, subjectId: number) {
+        return this.requireApDb().getProgressTracksBySubject(schoolId, subjectId);
+      }
+      getProgressTrackById(id: number) {
+        return this.requireApDb().getProgressTrackById(id);
+      }
+      createProgressTrack(data: Parameters<DatabaseStorage['createProgressTrack']>[0]) {
+        return this.requireApDb().createProgressTrack(data);
+      }
+      updateProgressTrack(id: number, data: Parameters<DatabaseStorage['updateProgressTrack']>[1]) {
+        return this.requireApDb().updateProgressTrack(id, data);
+      }
+      createStudentProgressLog(
+        childId: number,
+        schoolId: number,
+        recordedBy: number,
+        body: Parameters<DatabaseStorage['createStudentProgressLog']>[3],
+      ) {
+        return this.requireApDb().createStudentProgressLog(childId, schoolId, recordedBy, body);
+      }
+      getStudentProgressCurrent(childId: number, schoolId: number) {
+        return this.requireApDb().getStudentProgressCurrent(childId, schoolId);
+      }
+      getStudentProgressLog(childId: number, schoolId: number, sessionId?: number) {
+        return this.requireApDb().getStudentProgressLog(childId, schoolId, sessionId);
+      }
+      getRecentProgressLogForSchool(schoolId: number, limit?: number, sessionId?: number) {
+        return this.requireApDb().getRecentProgressLogForSchool(schoolId, limit, sessionId);
+      }
+      getParentProgressSummary(childrenIds: number[]) {
+        return this.requireApDb().getParentProgressSummary(childrenIds);
+      }
+      getProgressInsightCache(childId: number, schoolId: number) {
+        return this.requireApDb().getProgressInsightCache(childId, schoolId);
+      }
+      saveProgressInsightCache(
+        childId: number,
+        schoolId: number,
+        summary: string,
+        nextSteps: string[],
+        model: string,
+      ) {
+        return this.requireApDb().saveProgressInsightCache(childId, schoolId, summary, nextSteps, model);
+      }
+      ensureProgressSubjectsForSchool(schoolId: number) {
+        return this.requireApDb().ensureProgressSubjectsForSchool(schoolId);
       }
 
       // Clear all data from storage (for testing)

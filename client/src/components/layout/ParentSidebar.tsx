@@ -28,6 +28,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   UserCheck,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -315,8 +316,14 @@ export default function ParentSidebar() {
       icon: <FolderOpen className="h-5 w-5" />,
     },
     {
+      href: "/parent/progress",
+      title: "Progress",
+      icon: <TrendingUp className="h-5 w-5" />,
+      description: "Multi-subject progress and reading"
+    },
+    {
       href: "/parent/assessments",
-      title: "Reading Progress",
+      title: "Reading Assessments",
       icon: <BookOpen className="h-5 w-5" />,
       description: "View reading assessments and Lexile scores"
     },

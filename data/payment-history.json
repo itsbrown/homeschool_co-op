@@ -1,57 +1,30 @@
 [
   {
     "id": 1,
-    "createdAt": "2025-11-16T20:59:12.639Z",
-    "updatedAt": "2025-11-16T20:59:12.639Z",
+    "createdAt": "2026-05-15T20:30:47.171Z",
+    "updatedAt": "2026-05-15T20:30:47.171Z",
     "schoolId": 1,
-    "parentId": 1,
-    "parentEmail": "parent@test.com",
-    "amount": 10000,
-    "status": "completed",
-    "paymentMethod": "stripe",
-    "metadata": {},
-    "currency": "usd"
-  },
-  {
-    "id": 2,
-    "createdAt": "2025-11-16T20:59:45.257Z",
-    "updatedAt": "2025-11-16T20:59:45.257Z",
-    "schoolId": 1,
-    "parentId": 8,
-    "parentEmail": "parent@test.com",
-    "amount": 10000,
-    "status": "completed",
-    "paymentMethod": "stripe",
-    "description": "Test payment",
-    "metadata": {},
-    "currency": "usd"
-  },
-  {
-    "id": 3,
-    "createdAt": "2025-12-16T20:01:28.890Z",
-    "updatedAt": "2025-12-16T20:01:28.890Z",
-    "parentEmail": "jocimarie@gmail.com",
-    "childName": "Membership Fee",
-    "className": "2026 Annual Membership",
-    "amount": 17500,
+    "parentId": 683,
+    "parentEmail": "test_35DoL4PQ@example.com",
+    "childName": "Multi Child",
+    "className": "Multi Class",
+    "description": "Scheduled installment 2 of 3",
+    "amount": 4000,
     "currency": "usd",
     "status": "completed",
-    "paymentMethod": "manual",
-    "stripePaymentIntentId": "MANUAL-MEMBERSHIP-1765915288791",
-    "description": "Manual membership payment marked as paid",
-    "schoolId": 1,
-    "parentId": 10,
+    "stripePaymentIntentId": "pi_multi_pay_1",
     "stripeChargeId": null,
     "stripeRefundId": null,
-    "enrollmentIds": [],
     "originalPaymentId": null,
-    "paymentDate": "2025-12-16T20:01:28.791Z",
+    "paymentMethod": "stripe",
+    "enrollmentIds": [
+      1,
+      2
+    ],
     "metadata": {
-      "membershipId": 17,
-      "paymentType": "membership",
-      "membershipYear": 2026,
-      "schoolId": 1,
-      "notes": "Payment marked as paid by school administrator"
-    }
+      "scheduledPaymentId": "99",
+      "reconciliation": true
+    },
+    "paymentDate": "2026-05-15T20:30:46.997Z"
   }
 ]

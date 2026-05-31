@@ -80,11 +80,35 @@ export default function ChildEnrollmentsPage() {
     enabled: !!childId,
   });
 
-  // Fetch enrollments for this child
-  const { data: enrollments = [], isLoading: enrollmentsLoading } = useQuery<Enrollment[]>({
+  const childEnrollmentsQuery = useQuery<Enrollment[]>({
     queryKey: [`/api/children/${childId}/enrollments`],
     enabled: !!childId,
   });
+
+  const parentEnrollmentsQuery = useQuery<any[]>({
+    queryKey: ['/api/parent/enrollments'],
+    enabled: !!childId,
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/parent/enrollments');
+      const rows = await response.json();
+      return Array.isArray(rows) ? rows : [];
+    },
+  });
+
+  const enrollmentsLoading =
+    childEnrollmentsQuery.isLoading || parentEnrollmentsQuery.isLoading;
+
+  // Child endpoint is authoritative for which rows exist; parent endpoint adds cart flags.
+  const enrollments = useMemo(() => {
+    const childRows = childEnrollmentsQuery.data ?? [];
+    const parentById = new Map(
+      (parentEnrollmentsQuery.data ?? []).map((row) => [row.id, row]),
+    );
+    return childRows.map((row) => {
+      const parentRow = parentById.get((row as any).id);
+      return parentRow ? { ...row, ...parentRow } : row;
+    });
+  }, [childEnrollmentsQuery.data, parentEnrollmentsQuery.data]);
 
   // Fetch marketplace classes to get class details
   const { data: marketplaceClasses = [] } = useQuery({
@@ -111,13 +135,15 @@ export default function ChildEnrollmentsPage() {
 
   const unenrollMutation = useMutation({
     mutationFn: async (enrollmentId: number) => {
-      return apiRequest("DELETE", `/api/enrollments/${enrollmentId}/unenroll`);
+      const response = await apiRequest("DELETE", `/api/enrollments/${enrollmentId}/unenroll`);
+      return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/children/${childId}/enrollments`] });
-      queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: [`/api/children/${childId}/enrollments`] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/enrollments"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/parent/enrollments"] });
       // Refresh cart to remove unenrolled items
-      refreshCart();
+      await refreshCart();
       toast({
         title: "Success",
         description: "Successfully unenrolled from the class",
@@ -322,9 +348,17 @@ export default function ChildEnrollmentsPage() {
                     <CardHeader className="p-4 sm:p-6">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
                         <CardTitle className="text-base sm:text-lg">{details.className}</CardTitle>
-                        <Badge className={`${getStatusColor(enrollment.status)} self-start sm:self-auto text-xs`}>
-                          {enrollment.status.replace('_', ' ').charAt(0).toUpperCase() + enrollment.status.replace('_', ' ').slice(1)}
-                        </Badge>
+                        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+                          <Badge className={`${getStatusColor(enrollment.status)} text-xs`}>
+                            {enrollment.status.replace('_', ' ').charAt(0).toUpperCase() + enrollment.status.replace('_', ' ').slice(1)}
+                          </Badge>
+                          {(enrollment as any).checkoutExcluded &&
+                            enrollment.status === 'pending_payment' && (
+                              <Badge variant="outline" className="text-xs border-amber-300 text-amber-800 bg-amber-50">
+                                Not in cart — Unenroll or use Payments
+                              </Badge>
+                            )}
+                        </div>
                       </div>
                       <CardDescription className="text-sm line-clamp-3 sm:line-clamp-none">{details.description}</CardDescription>
                     </CardHeader>

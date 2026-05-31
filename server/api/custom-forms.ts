@@ -1,9 +1,12 @@
 import { Router } from 'express';
+import type { UploadedFile } from 'express-fileupload';
 import { getDb } from '../db';
 import { customForms, customFormFields, customFormSubmissions, schools, insertCustomFormSchema, insertCustomFormFieldSchema, insertCustomFormSubmissionSchema } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { jwtCheck, requireSchoolAccess } from '../middleware/auth0-auth';
+import { fileUploadService } from '../services/fileUploadService';
+import { ObjectStorageService } from '../replit_integrations/object_storage';
 
 const router = Router();
 
@@ -94,6 +97,56 @@ router.get('/forms/by-slug-auth/:slug', jwtCheck, async (req: any, res) => {
   } catch (error) {
     console.error('Error fetching form by slug:', error);
     res.status(500).json({ message: 'Error fetching form' });
+  }
+});
+
+// Upload a file attachment for a public form field (e.g. resume) — no auth required.
+router.post('/forms/:formId/upload-attachment', async (req, res) => {
+  try {
+    const formId = parseInt(req.params.formId);
+    if (!Number.isFinite(formId)) {
+      return res.status(400).json({ message: 'Invalid form ID' });
+    }
+
+    const db = await getDb();
+    const [form] = await db
+      .select()
+      .from(customForms)
+      .where(and(
+        eq(customForms.id, formId),
+        eq(customForms.isActive, true),
+        eq(customForms.accessLevel, 'public'),
+      ));
+
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found or not public' });
+    }
+
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const file = req.files.file as UploadedFile;
+    const uploadResult = await fileUploadService.uploadBuffer(file.data, {
+      category: 'formAttachments',
+      originalFilename: file.name,
+      mimeType: file.mimetype,
+      schoolId: form.schoolId,
+      metadata: { formId: String(formId), purpose: 'custom_form_attachment' },
+    });
+
+    res.json({
+      success: true,
+      fileName: file.name,
+      objectPath: uploadResult.objectPath,
+      mimeType: file.mimetype,
+      sizeBytes: file.size,
+    });
+  } catch (error: any) {
+    console.error('Error uploading form attachment:', error);
+    res.status(500).json({
+      message: error?.message || 'Failed to upload file',
+    });
   }
 });
 
@@ -195,10 +248,7 @@ router.get('/templates', async (req: any, res) => {
     const templates = await db
       .select()
       .from(customForms)
-      .where(and(
-        eq(customForms.isTemplate, true),
-        eq(customForms.schoolId, 1) // Templates belong to school 1
-      ))
+      .where(eq(customForms.isTemplate, true))
       .orderBy(desc(customForms.createdAt));
     
     res.json(templates);
@@ -655,9 +705,19 @@ router.post('/forms/:formId/clone', async (req: any, res) => {
       return res.status(404).json({ message: 'Form not found' });
     }
     
-    // Check ownership - must have access to original form
-    if (req.auth.role !== 'superAdmin' && originalForm.schoolId !== req.auth.schoolId) {
+    // Global templates (school 1) may be cloned into any school admin's school
+    const isGlobalTemplate = originalForm.isTemplate;
+    if (
+      req.auth.role !== 'superAdmin' &&
+      !isGlobalTemplate &&
+      originalForm.schoolId !== req.auth.schoolId
+    ) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const targetSchoolId = req.auth.schoolId;
+    if (!targetSchoolId && req.auth.role !== 'superAdmin') {
+      return res.status(400).json({ message: 'No school associated with user' });
     }
     
     const originalFields = await db
@@ -666,17 +726,26 @@ router.post('/forms/:formId/clone', async (req: any, res) => {
       .where(eq(customFormFields.formId, formId))
       .orderBy(customFormFields.order);
     
+    const cloneTitle = req.body.title || (isGlobalTemplate ? originalForm.title : `${originalForm.title} (Copy)`);
+    const cloneSlug =
+      req.body.slug ||
+      (isGlobalTemplate
+        ? originalForm.slug.replace(/-template$/, '')
+        : `${originalForm.slug}-copy-${Date.now()}`);
+
     // Create new form - derive createdBy and schoolId from auth, not from client
     const [newForm] = await db
       .insert(customForms)
       .values({
         ...originalForm,
         id: undefined,
-        title: `${originalForm.title} (Copy)`,
-        slug: `${originalForm.slug}-copy-${Date.now()}`,
+        title: cloneTitle,
+        slug: cloneSlug,
         isTemplate: req.body.saveAsTemplate || false,
-        createdBy: req.auth.dbUserId, // Always use authenticated user
-        schoolId: req.auth.schoolId, // Always use authenticated user's school
+        isActive: req.body.isActive ?? (isGlobalTemplate ? true : originalForm.isActive),
+        accessLevel: req.body.accessLevel ?? (isGlobalTemplate ? 'public' : originalForm.accessLevel),
+        createdBy: req.auth.dbUserId,
+        schoolId: targetSchoolId ?? originalForm.schoolId,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -699,6 +768,62 @@ router.post('/forms/:formId/clone', async (req: any, res) => {
   } catch (error) {
     console.error('Error cloning form:', error);
     res.status(500).json({ message: 'Error cloning form' });
+  }
+});
+
+// Download a file attachment from a form submission (school admin)
+router.get('/submissions/:submissionId/files/:fieldId', async (req: any, res) => {
+  try {
+    const submissionId = parseInt(req.params.submissionId);
+    const fieldId = parseInt(req.params.fieldId);
+    const db = await getDb();
+
+    const [submission] = await db
+      .select()
+      .from(customFormSubmissions)
+      .where(eq(customFormSubmissions.id, submissionId));
+
+    if (!submission) {
+      return res.status(404).json({ message: 'Submission not found' });
+    }
+
+    const [form] = await db
+      .select()
+      .from(customForms)
+      .where(eq(customForms.id, submission.formId));
+
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found' });
+    }
+
+    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const fieldKey = `field_${fieldId}`;
+    const attachment = (submission.responseData as Record<string, any>)?.[fieldKey];
+    const objectPath =
+      typeof attachment === 'object' && attachment?.objectPath
+        ? String(attachment.objectPath)
+        : null;
+    const fileName =
+      typeof attachment === 'object' && attachment?.fileName
+        ? String(attachment.fileName)
+        : 'attachment';
+
+    if (!objectPath || !objectPath.startsWith('/objects/')) {
+      return res.status(404).json({ message: 'No file attachment for this field' });
+    }
+
+    const objectStorageService = new ObjectStorageService();
+    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    await objectStorageService.downloadObject(objectFile, res, 0);
+  } catch (error: any) {
+    console.error('Error downloading form attachment:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Failed to download attachment' });
+    }
   }
 });
 

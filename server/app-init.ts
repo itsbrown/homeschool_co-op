@@ -28,6 +28,7 @@ import adminRefundsRouter from "./api/admin-refunds";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
+import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import errorTelemetryRouter from "./api/error-telemetry";
 import { errorNotificationService } from "./services/error-notification";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
@@ -39,6 +40,13 @@ import financialReportsRouter, {
 import retentionRouter from "./api/retention";
 import scheduleBuilderRouter from "./api/schedule-builder";
 import scheduleAiRouter from "./api/schedule-ai";
+import assessmentsRouter from "./api/assessments";
+import lexileRouter from "./api/lexile";
+import lexileAiRouter from "./api/lexile-ai";
+import assessmentUploadRouter from "./api/assessment-upload";
+import progressRouter from "./api/progress";
+import progressInsightsRouter from "./api/progress-insights";
+import locationEnrollmentsRouter from "./api/location-enrollments";
 
 async function ensureAdminRoles(): Promise<void> {
   try {
@@ -136,6 +144,13 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
     createParentPath: true,
   }));
 
+  app.use('/api/custom-forms/forms/:formId/upload-attachment', fileUpload({
+    useTempFiles: false,
+    limits: { fileSize: 10 * 1024 * 1024 },
+    abortOnLimit: true,
+    createParentPath: true,
+  }));
+
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
@@ -202,10 +217,19 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/payment-import", paymentImport);
   app.use("/api/account-import", accountImport);
   app.use("/api/user", userRolesRouter);
+  app.use("/api/user", autoPayRouter);
+  app.use("/api/admin/users", adminPaymentMethodsRouter);
   app.use("/api/telemetry/errors", errorTelemetryRouter);
   app.use("/api/unified-uploads", unifiedUploadsRouter);
   app.use("/api/schedule-builder", scheduleBuilderRouter);
   app.use("/api/schedule-ai", scheduleAiRouter);
+  app.use("/api/assessments", assessmentsRouter);
+  app.use("/api/lexile", lexileRouter);
+  app.use("/api/lexile", lexileAiRouter);
+  app.use("/api/assessment-upload", assessmentUploadRouter);
+  app.use("/api/progress", progressRouter);
+  app.use("/api/progress/insights", progressInsightsRouter);
+  app.use("/api/location-enrollments", locationEnrollmentsRouter);
 
   // Register object storage routes for serving uploaded files
   registerObjectStorageRoutes(app);

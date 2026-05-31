@@ -1,7 +1,13 @@
 import type { InsertLocation, Location } from '@shared/schema';
 import { getRawPg } from './pg-raw';
 
-export type PublicLocationRow = { id: number; name: string };
+export type PublicLocationRow = {
+  id: number;
+  name: string;
+  activationStatus?: string | null;
+  activationThreshold?: number | null;
+  eligibleStudentCount?: number;
+};
 
 const LOCATION_COLUMNS = `
   id,
@@ -18,6 +24,13 @@ const LOCATION_COLUMNS = `
   capacity,
   is_active,
   timezone,
+  activation_threshold,
+  activation_status,
+  notice_started_at,
+  charge_scheduled_at,
+  activated_at,
+  collection_deadline,
+  activation_notice_hours,
   created_at,
   updated_at
 `;
@@ -38,6 +51,26 @@ function mapLocationRow(row: Record<string, unknown>): Location {
     capacity: row.capacity != null ? Number(row.capacity) : null,
     isActive: Boolean(row.is_active),
     timezone: String(row.timezone ?? 'America/New_York'),
+    activationThreshold:
+      row.activation_threshold != null ? Number(row.activation_threshold) : null,
+    activationStatus:
+      row.activation_status != null
+        ? (String(row.activation_status) as Location['activationStatus'])
+        : null,
+    noticeStartedAt: row.notice_started_at
+      ? new Date(row.notice_started_at as string | Date)
+      : null,
+    chargeScheduledAt: row.charge_scheduled_at
+      ? new Date(row.charge_scheduled_at as string | Date)
+      : null,
+    activatedAt: row.activated_at ? new Date(row.activated_at as string | Date) : null,
+    collectionDeadline: row.collection_deadline
+      ? new Date(row.collection_deadline as string | Date)
+      : null,
+    activationNoticeHours:
+      row.activation_notice_hours != null
+        ? Number(row.activation_notice_hours)
+        : 72,
     createdAt: new Date(row.created_at as string | Date),
     updatedAt: new Date(row.updated_at as string | Date),
   };
@@ -62,9 +95,35 @@ export async function ensureLocationsTable(): Promise<void> {
       capacity integer,
       is_active boolean NOT NULL DEFAULT true,
       timezone text NOT NULL DEFAULT 'America/New_York',
+      activation_threshold integer,
+      activation_status text,
+      notice_started_at timestamp,
+      charge_scheduled_at timestamp,
+      activated_at timestamp,
+      collection_deadline timestamp,
+      activation_notice_hours integer NOT NULL DEFAULT 72,
       created_at timestamp NOT NULL DEFAULT now(),
       updated_at timestamp NOT NULL DEFAULT now()
     )
+  `);
+  await pg.unsafe(`
+    ALTER TABLE locations ADD COLUMN IF NOT EXISTS activation_threshold integer;
+    ALTER TABLE locations ADD COLUMN IF NOT EXISTS activation_status text;
+    ALTER TABLE locations ADD COLUMN IF NOT EXISTS notice_started_at timestamp;
+    ALTER TABLE locations ADD COLUMN IF NOT EXISTS charge_scheduled_at timestamp;
+    ALTER TABLE locations ADD COLUMN IF NOT EXISTS activated_at timestamp;
+    ALTER TABLE locations ADD COLUMN IF NOT EXISTS collection_deadline timestamp;
+    ALTER TABLE locations ADD COLUMN IF NOT EXISTS activation_notice_hours integer NOT NULL DEFAULT 72;
+  `);
+  await pg.unsafe(`
+    ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location_id integer REFERENCES locations(id);
+    ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS location_id integer REFERENCES locations(id);
+  `);
+  await pg.unsafe(`
+    UPDATE locations
+    SET activation_status = 'activated'
+    WHERE activation_threshold IS NULL
+      AND (activation_status IS NULL OR activation_status = '');
   `);
 }
 
@@ -100,11 +159,59 @@ export async function getAllLocationsCore(): Promise<Location[]> {
   return (rows as Record<string, unknown>[]).map(mapLocationRow);
 }
 
+export async function countEligibleActivationStudents(
+  locationId: number,
+): Promise<number> {
+  await ensureLocationsTable();
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `SELECT COUNT(DISTINCT pe.child_id)::int AS count
+     FROM program_enrollments pe
+     INNER JOIN children c ON c.id = pe.child_id
+     INNER JOIN users u ON u.id = c.parent_id
+     INNER JOIN sessions s ON s.id = pe.session_id
+     WHERE pe.status = 'location_wishlist'
+       AND (pe.location_id = $1 OR s.location_id = $1)
+       AND u.stripe_default_payment_method_id IS NOT NULL
+       AND u.stripe_default_payment_method_id <> ''`,
+    [locationId],
+  );
+  const row = rows[0] as { count?: number } | undefined;
+  return Number(row?.count ?? 0);
+}
+
 export async function getPublicLocationsBySchoolId(
   schoolId: number,
 ): Promise<PublicLocationRow[]> {
-  const locations = await getLocationsBySchoolIdCore(schoolId);
-  return locations.map((row) => ({ id: row.id, name: row.name }));
+  const locations = (await getLocationsBySchoolIdCore(schoolId)).filter(
+    (row) => row.activationStatus !== 'cancelled',
+  );
+  const result: PublicLocationRow[] = [];
+  for (const row of locations) {
+    const base: PublicLocationRow = {
+      id: row.id,
+      name: row.name,
+      activationStatus: row.activationStatus,
+      activationThreshold: row.activationThreshold,
+    };
+    if (
+      row.activationThreshold != null &&
+      row.activationThreshold > 0 &&
+      (row.activationStatus === 'collecting' || row.activationStatus === 'notice_period')
+    ) {
+      try {
+        base.eligibleStudentCount = await countEligibleActivationStudents(row.id);
+      } catch (error) {
+        console.warn(
+          `[locations] eligibleStudentCount unavailable for location ${row.id}:`,
+          error instanceof Error ? error.message : error,
+        );
+        base.eligibleStudentCount = 0;
+      }
+    }
+    result.push(base);
+  }
+  return result;
 }
 
 /**
@@ -133,11 +240,19 @@ export async function createLocationCore(location: InsertLocation): Promise<Loca
   }
   await ensureLocationsTable();
   const pg = getRawPg();
+
+  const hasThreshold =
+    location.activationThreshold != null && location.activationThreshold > 0;
+  const activationStatus =
+    location.activationStatus ??
+    (hasThreshold ? 'collecting' : 'activated');
+
   const rows = await pg.unsafe(
     `INSERT INTO locations (
       school_id, name, code, address, city, state, zip_code,
-      phone_number, email, manager_name, capacity, is_active, timezone
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      phone_number, email, manager_name, capacity, is_active, timezone,
+      activation_threshold, activation_status, collection_deadline, activation_notice_hours
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
     RETURNING ${LOCATION_COLUMNS}`,
     [
       location.schoolId,
@@ -153,6 +268,10 @@ export async function createLocationCore(location: InsertLocation): Promise<Loca
       location.capacity ?? null,
       location.isActive ?? true,
       location.timezone || 'America/New_York',
+      hasThreshold ? location.activationThreshold : null,
+      hasThreshold ? activationStatus : 'activated',
+      location.collectionDeadline ?? null,
+      location.activationNoticeHours ?? 72,
     ],
   );
   const row = rows[0] as Record<string, unknown> | undefined;
@@ -186,6 +305,20 @@ export async function updateLocationCore(
     capacity: update.capacity !== undefined ? update.capacity : existing.capacity,
     isActive: update.isActive ?? existing.isActive,
     timezone: update.timezone ?? existing.timezone,
+    activationThreshold:
+      update.activationThreshold !== undefined
+        ? update.activationThreshold
+        : existing.activationThreshold,
+    activationStatus:
+      update.activationStatus !== undefined
+        ? update.activationStatus
+        : existing.activationStatus,
+    activationNoticeHours:
+      update.activationNoticeHours ?? existing.activationNoticeHours,
+    collectionDeadline:
+      update.collectionDeadline !== undefined
+        ? update.collectionDeadline
+        : existing.collectionDeadline,
   };
 
   const pg = getRawPg();
@@ -204,6 +337,10 @@ export async function updateLocationCore(
       capacity = $12,
       is_active = $13,
       timezone = $14,
+      activation_threshold = $15,
+      activation_status = $16,
+      collection_deadline = $17,
+      activation_notice_hours = $18,
       updated_at = now()
      WHERE id = $1
      RETURNING ${LOCATION_COLUMNS}`,
@@ -222,6 +359,45 @@ export async function updateLocationCore(
       merged.capacity,
       merged.isActive,
       merged.timezone,
+      merged.activationThreshold,
+      merged.activationStatus,
+      merged.collectionDeadline,
+      merged.activationNoticeHours ?? 72,
+    ],
+  );
+  const row = rows[0] as Record<string, unknown> | undefined;
+  return row ? mapLocationRow(row) : undefined;
+}
+
+export async function updateLocationActivationFields(
+  id: number,
+  fields: {
+    activationStatus?: Location['activationStatus'];
+    noticeStartedAt?: Date | null;
+    chargeScheduledAt?: Date | null;
+    activatedAt?: Date | null;
+  },
+): Promise<Location | undefined> {
+  await ensureLocationsTable();
+  const existing = await getLocationCore(id);
+  if (!existing) return undefined;
+
+  const pg = getRawPg();
+  const rows = await pg.unsafe(
+    `UPDATE locations SET
+      activation_status = COALESCE($2, activation_status),
+      notice_started_at = COALESCE($3, notice_started_at),
+      charge_scheduled_at = COALESCE($4, charge_scheduled_at),
+      activated_at = COALESCE($5, activated_at),
+      updated_at = now()
+     WHERE id = $1
+     RETURNING ${LOCATION_COLUMNS}`,
+    [
+      id,
+      fields.activationStatus ?? null,
+      fields.noticeStartedAt ?? null,
+      fields.chargeScheduledAt ?? null,
+      fields.activatedAt ?? null,
     ],
   );
   const row = rows[0] as Record<string, unknown> | undefined;

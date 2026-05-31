@@ -4,13 +4,16 @@ import { useCart, type MembershipFee } from '@/contexts/CartContext';
 import { useParentCredits } from '@/hooks/useParentCredits';
 import {
   getEnrollmentEffectiveBalance,
-  getMembershipOutstandingBalance,
   computeParentOutstandingTotal,
   computeOutstandingDisplay,
   computeOutstandingBreakdown,
   type OutstandingBreakdown,
-  type ParentMembershipBalanceFields,
 } from '@/utils/parentBalance';
+import {
+  fetchParentMemberId,
+  PARENT_MEMBER_ID_QUERY_KEY,
+  type ParentMemberIdResponse,
+} from '@/lib/parent-member-id';
 import { filterEnrollmentsToCartLineItems } from '@/utils/parentEnrollmentLineItems';
 
 async function postParentCartCalculate(body: unknown): Promise<Response> {
@@ -53,14 +56,7 @@ type EnrollmentsResponse =
   | null
   | undefined;
 
-/** Raw row shape returned by `/api/parent/memberships` (enriched in `server/api/parent.ts`). */
-interface UnpaidMembershipRow extends ParentMembershipBalanceFields {
-  schoolId?: number | null;
-  schoolName?: string | null;
-  membershipYear?: number | null;
-}
-
-export interface UnpaidMembership extends ParentMembershipBalanceFields {
+export interface UnpaidMembership {
   schoolId: number;
   schoolName: string;
   membershipYear: number;
@@ -101,8 +97,9 @@ export function useUnpaidEnrollments() {
 
   const { totalAvailableCents: creditsAvailableFromMe } = useParentCredits();
 
-  const { data: membershipsRaw } = useQuery<UnpaidMembershipRow[]>({
-    queryKey: ['/api/parent/memberships'],
+  const { data: memberIdData } = useQuery<ParentMemberIdResponse>({
+    queryKey: [...PARENT_MEMBER_ID_QUERY_KEY],
+    queryFn: fetchParentMemberId,
   });
 
   const unpaidEnrollments = useMemo<UnpaidEnrollment[]>(() => {
@@ -198,29 +195,33 @@ export function useUnpaidEnrollments() {
   });
 
   const unpaidMemberships = useMemo<UnpaidMembership[]>(() => {
-    const result: UnpaidMembership[] = [];
-    for (const m of membershipsRaw ?? []) {
-      const balance = getMembershipOutstandingBalance(m);
-      if (balance <= 0) continue;
-      // Skip rows missing the cart-required fields (defensive — the API
-      // enriches every row with schoolId/schoolName/membershipYear).
-      if (
-        m.schoolId == null ||
-        !m.schoolName ||
-        m.membershipYear == null
-      ) {
-        continue;
-      }
-      result.push({
-        ...m,
-        schoolId: m.schoolId,
-        schoolName: m.schoolName,
-        membershipYear: m.membershipYear,
-        outstandingBalanceCents: balance,
-      });
+    if (!memberIdData || memberIdData.hasMembership) {
+      return [];
     }
-    return result;
-  }, [membershipsRaw]);
+    const owed =
+      memberIdData.membershipOwedCents > 0
+        ? memberIdData.membershipOwedCents
+        : memberIdData.membershipFeeAmount;
+    if (
+      owed <= 0 ||
+      memberIdData.schoolId == null ||
+      !memberIdData.schoolName
+    ) {
+      return [];
+    }
+    return [
+      {
+        schoolId: memberIdData.schoolId,
+        schoolName: memberIdData.schoolName,
+        membershipYear: new Date().getFullYear(),
+        outstandingBalanceCents: owed,
+        remainingBalance: owed,
+        amount: memberIdData.membershipFeeAmount,
+        amountPaid: 0,
+        status: memberIdData.membershipStatus ?? 'pending_payment',
+      },
+    ];
+  }, [memberIdData]);
 
   const enrollmentsTotalCentsOverride = useMemo(() => {
     if (unpaidEnrollments.length === 0) {

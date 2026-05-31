@@ -5,6 +5,12 @@ import { storage } from '../storage';
 import { jwtCheck } from '../middleware/auth0-auth';
 import { createChildLinkedToParent } from '../lib/parent-child-registration';
 import { getChildrenForAuthenticatedParent, resolveParentDbUser } from '../lib/parent-auth-scope';
+import { ensurePendingMembershipEnrollmentForCheckout } from '../lib/ensure-pending-membership-enrollment';
+import {
+  isMembershipFullyPaidForCheckout,
+  parentHasMemberIdForCheckout,
+  resolveMembershipOwedForCheckout,
+} from '../utils/cart-pricing';
 import { enrollmentMatchesParent, emailsMatch } from '@shared/parent-identity';
 
 const router = Router();
@@ -338,6 +344,30 @@ router.get('/memberships', jwtCheck, async (req: any, res) => {
     }
 
     // Get all membership enrollments for this parent
+    if (user.schoolId) {
+      const school = await storage.getSchool(user.schoolId);
+      const fee = school?.membershipFeeAmount ?? 0;
+      if (fee > 0) {
+        const currentYear = new Date().getFullYear();
+        const existing = await storage.getMembershipEnrollmentsByParentId(user.id);
+        const alreadyPaid = existing.some((m) =>
+          isMembershipFullyPaidForCheckout(m, user.schoolId!, currentYear),
+        );
+        if (!alreadyPaid) {
+          try {
+            await ensurePendingMembershipEnrollmentForCheckout(
+              user.id,
+              user.schoolId,
+              fee,
+              currentYear,
+            );
+          } catch (ensureErr) {
+            console.error('⚠️ ensurePendingMembershipEnrollmentForCheckout failed:', ensureErr);
+          }
+        }
+      }
+    }
+
     const memberships = await storage.getMembershipEnrollmentsByParentId(user.id);
     console.log(`🎫 Found ${memberships.length} membership enrollments for parent ${userEmail}`);
 
@@ -669,9 +699,50 @@ router.get('/member-id', jwtCheck, async (req: any, res) => {
       });
     }
 
+    const hasMemberId = parentHasMemberIdForCheckout(user.memberId);
+    const currentYear = new Date().getFullYear();
+    let schoolId: number | null = user.schoolId ?? null;
+    let schoolName: string | null = null;
+    let membershipFeeAmount = 0;
+    let membershipRequired = false;
+    let membershipOwedCents = 0;
+    let membershipStatus: string | null = null;
+
+    if (schoolId) {
+      const school = await storage.getSchool(schoolId);
+      schoolName = school?.name ?? null;
+      membershipFeeAmount = school?.membershipFeeAmount ?? 0;
+      membershipRequired = school?.membershipRequired ?? false;
+
+      const memberships = await storage.getMembershipEnrollmentsByParentId(user.id);
+      const latestForSchool = memberships
+        .filter(
+          (m) =>
+            Number(m.schoolId) === Number(schoolId) &&
+            (m.membershipYear === currentYear || m.membershipYear === currentYear + 1),
+        )
+        .sort((a, b) => (b.membershipYear ?? 0) - (a.membershipYear ?? 0))[0];
+      membershipStatus = latestForSchool?.status ?? null;
+
+      const resolved = await resolveMembershipOwedForCheckout(user.id, schoolId);
+      if (resolved) {
+        membershipOwedCents = resolved.owedCents;
+        membershipFeeAmount = resolved.membershipFeeAmount;
+        membershipRequired = resolved.membershipRequired;
+        schoolName = resolved.schoolName;
+      }
+    }
+
     return res.status(200).json({
       memberId: user.memberId || null,
-      hasMembership: !!user.memberId && user.memberId.trim() !== ''
+      hasMemberId,
+      hasMembership: hasMemberId,
+      membershipStatus,
+      schoolId,
+      schoolName,
+      membershipFeeAmount,
+      membershipRequired,
+      membershipOwedCents,
     });
   } catch (error: any) {
     console.error('❌ Error getting member ID:', error);
@@ -727,10 +798,12 @@ router.put('/member-id', jwtCheck, async (req: any, res) => {
 
     console.log(`✅ Updated member ID for user ${user.id}: ${memberId || 'cleared'}`);
 
+    const hasMemberId = parentHasMemberIdForCheckout(updatedUser.memberId);
     return res.status(200).json({
       success: true,
       memberId: updatedUser.memberId || null,
-      hasMembership: !!updatedUser.memberId && updatedUser.memberId.trim() !== ''
+      hasMemberId,
+      hasMembership: hasMemberId,
     });
   } catch (error: any) {
     console.error('❌ Error updating member ID:', error);

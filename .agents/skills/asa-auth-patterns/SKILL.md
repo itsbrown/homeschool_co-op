@@ -100,6 +100,14 @@ users.activeRole    → currently selected role name
 users.activeRoleId  → ID from user_roles table for current selection
 ```
 
+### Admin directory labels (Users page)
+For **school admin user directory and notifications**, treat `user_roles` rows at the current school as **additive labels** (a user can be `parent` + `educator` + custom positions). Do not default unknown roles to `parent` in list APIs.
+
+- List API: `GET /api/school-admin/users` returns `labels: string[]` and `primaryLabel`
+- Profile URL: `/schools/users/:userId` (canonical `users.id`)
+- Notifications: resolve recipients with `user_roles` at `schoolId`, not `users.role` alone
+- `users.activeRole` / `activeRoleId` = what the **logged-in user** is doing in the app; labels = what an **admin** sees on someone else's account
+
 ### Checking Permissions (Backend)
 Route handlers should use `req.user.allRoles` (populated by `supabaseAuth` from the `user_roles` table) rather than calling `storage.getUserRolesByUserId()` directly. This avoids an extra DB round-trip on every request.
 

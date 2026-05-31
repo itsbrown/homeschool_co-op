@@ -8,7 +8,7 @@ import { FileText, FolderOpen, Loader2, Eye, Download, Receipt, FileType, Image,
 import { useAuth } from "@/components/SupabaseProvider";
 import { queryClient } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
-import { format } from "date-fns";
+import { safeFormatDate } from "@/utils/safeFormatDate";
 import { useToast } from "@/hooks/use-toast";
 
 interface ParentDocument {
@@ -291,7 +291,7 @@ export default function MyDocumentsPage() {
                                 v{doc.agreementVersion}
                               </Badge>
                               <Badge variant="secondary" className="text-xs">
-                                Signed: {new Date(doc.signedAt).toLocaleDateString()}
+                                Signed: {safeFormatDate(doc.signedAt, 'MMM d, yyyy')}
                               </Badge>
                               <Badge variant="secondary" className="text-xs">
                                 By: {doc.signatoryName}
@@ -433,7 +433,7 @@ export default function MyDocumentsPage() {
                                 {formatCurrency(receipt.amount)}
                               </Badge>
                               <Badge variant="secondary" className="text-xs">
-                                {format(new Date(receipt.receiptDate), 'MMM d, yyyy')}
+                                {safeFormatDate(receipt.receiptDate, 'MMM d, yyyy')}
                               </Badge>
                             </div>
                           </div>
