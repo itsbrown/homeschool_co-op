@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-06-01 (Cart checkout spinner recovery)
+
+- **Cart checkout hang:** Slow `refreshCart` / `cartLoading` left checkout on spinners with no recovery; CartDrawer shows "Updating cart…"; checkout shows cart-loading copy and a retry card when payment intent never loads; **empty cart** (installment-plan exclusions) clears `loading` and redirects to `/payments?tab=upcoming`.
+- **Prod notes (no deploy):** Jen Kuhns — stale `membership_enrollments` #113 vs `member_id` reconciled; cart tuition $600. Taylor Karnath — Aurora #403 biweekly ($520 owed); pay via Payments → Upcoming, not cart.
+- **Ops:** `server/scripts/diagnose-parent-cart.ts` — `--email` cart eligibility + pricing on prod.
+
 ## 2026-06-01 (Pay in full on Payments page)
 
 - Parents on installment plans can **Pay in full** from `/payments` (overview + upcoming tabs) via `/api/billing/pay-balance`; pending installments are cancelled when the enrollment balance reaches zero (`cancel-pending-scheduled-after-payoff.ts`).
