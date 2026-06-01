@@ -1113,6 +1113,30 @@ export const insertErrorLogSchema = createInsertSchema(errorLogs).omit({
 export type InsertErrorLog = z.infer<typeof insertErrorLogSchema>;
 export type ErrorLog = typeof errorLogs.$inferSelect;
 
+/** Phase A post-payment verification audit trail (read-only checks; no auto-fix). */
+export const paymentVerificationLogs = pgTable("payment_verification_logs", {
+  id: serial("id").primaryKey(),
+  stripePaymentIntentId: text("stripe_payment_intent_id").notNull(),
+  stripeEventId: text("stripe_event_id"),
+  schoolId: integer("school_id"),
+  parentId: integer("parent_id"),
+  enrollmentIds: jsonb("enrollment_ids").default([]).notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  overallStatus: text("overall_status", {
+    enum: ["pass", "warning", "critical"],
+  }).notNull(),
+  checks: jsonb("checks").default([]).notNull(),
+  durationMs: integer("duration_ms"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPaymentVerificationLogSchema = createInsertSchema(paymentVerificationLogs).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPaymentVerificationLog = z.infer<typeof insertPaymentVerificationLogSchema>;
+export type PaymentVerificationLog = typeof paymentVerificationLogs.$inferSelect;
+
 // Define emergency contact relations
 export const emergencyContactsRelations = relations(emergencyContacts, ({ one }) => ({
   user: one(users, { fields: [emergencyContacts.userId], references: [users.id] })

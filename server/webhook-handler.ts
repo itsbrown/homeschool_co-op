@@ -20,6 +20,7 @@ import {
 } from './lib/fulfill-balance-payment-intent';
 import { resolveScheduledPaymentEnrollmentIds } from './lib/scheduled-payment-intent-metadata';
 import { ensureScheduledPaymentCreditsConsumed } from './lib/ensure-scheduled-payment-credits-consumed';
+import { schedulePostPaymentVerificationIfEnabled } from './services/post-payment-verification-schedule';
 
 // Stripe client will be lazily initialized within the webhook handler
 const RECENT_WEBHOOK_EVENTS_MAX = 1000;
@@ -810,6 +811,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       } catch (error) {
         console.error('❌ Error processing payment:', error);
       }
+      schedulePostPaymentVerificationIfEnabled(paymentIntent, event.id);
       break;
 
     case 'payment_intent.payment_failed': {

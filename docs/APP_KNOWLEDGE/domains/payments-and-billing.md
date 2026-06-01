@@ -183,6 +183,7 @@ Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current ba
 | Correction email | `server/lib/account-correction-email.ts`, `server/scripts/send-account-correction-email.ts` |
 | Batch balance reminders | `server/scripts/send-balance-reminders-batch.ts` |
 | PI reconcile | `server/scripts/reconcile-payment-intent-to-enrollments.ts` |
+| **Post-payment verify (Phase A)** | `server/services/post-payment-verification.ts`, `payment_verification_logs`; flag `POST_PAYMENT_VERIFY_ENABLED` — see [`post-payment-verification-pipeline.md`](../../plans/post-payment-verification-pipeline.md) |
 | **Stripe ↔ DB audit (email)** | `server/scripts/inspect-parent-stripe-by-email.ts` |
 | Payment patterns skill | `.agents/skills/asa-payment-patterns/SKILL.md` |
 | Credit skill | `.agents/skills/asa-credit-system/SKILL.md` |

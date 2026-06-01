@@ -3126,6 +3126,36 @@ async function runMigrations() {
       throw membershipUniqueError;
     }
   }
+
+  console.log('Running migration: Creating payment_verification_logs table (Phase A post-payment verify)...');
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS payment_verification_logs (
+      id SERIAL PRIMARY KEY,
+      stripe_payment_intent_id TEXT NOT NULL,
+      stripe_event_id TEXT,
+      school_id INTEGER,
+      parent_id INTEGER,
+      enrollment_ids JSONB NOT NULL DEFAULT '[]',
+      amount_cents INTEGER NOT NULL,
+      overall_status TEXT NOT NULL CHECK (overall_status IN ('pass', 'warning', 'critical')),
+      checks JSONB NOT NULL DEFAULT '[]',
+      duration_ms INTEGER,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_payment_verification_logs_pi
+    ON payment_verification_logs(stripe_payment_intent_id);
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_payment_verification_logs_created_at
+    ON payment_verification_logs(created_at);
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS idx_payment_verification_logs_status
+    ON payment_verification_logs(overall_status);
+  `);
+  console.log('✅ Migration completed: payment_verification_logs table');
 }
 
 // Initialize database tables

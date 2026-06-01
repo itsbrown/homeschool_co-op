@@ -31,6 +31,7 @@
 ## 2026-06-01 (Plan: post-payment verification pipeline)
 
 - **Plan:** [`docs/plans/post-payment-verification-pipeline.md`](../plans/post-payment-verification-pipeline.md) — three-layer verify (post-webhook service, Cursor Automation on failure, existing payment-flow-monitor/reconciliation), per-PI checks, env vars, phases A–D, communication matrix, open questions.
+- **Phase A shipped:** `post-payment-verification.ts` + async webhook hook; table `payment_verification_logs`. Off until `POST_PAYMENT_VERIFY_ENABLED=true` on worker. Tests: `server/tests/post-payment-verification.test.ts`.
 
 ## 2026-06-01 (Stripe email audit script)
 
