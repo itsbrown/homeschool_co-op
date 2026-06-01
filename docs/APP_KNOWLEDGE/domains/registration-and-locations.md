@@ -8,6 +8,7 @@ Parents register with a **school registration code**, pick a location when offer
 
 ## Critical invariants
 
+- **Parent campus on signup** — school-code registration must set **three** places: `user_locations` (permissions), `users.location_id` (profile), and each child’s `children.location_id` (+ `school_students.location_id`). Child rows used to get a default campus via `resolveSchoolAndChildLocation` even when parent `user_locations` failed silently; `ensureParentRegistrationLocation` in `server/lib/persist-parent-location.ts` now requires a selected campus and fails registration if persist fails.
 - **Admin school** = school where `schools.admin_id = user.id`, not only `users.school_id`.
 - **Public locations** must be readable **before** auth (registration landing).
 - **POST /api/locations** must accept body `schoolId` for the registration school when admin is misaligned; server resolves via `resolveRequestedSchoolIdForUser`.
@@ -30,7 +31,9 @@ Harness: `server/tests/helpers/productionPathApp.ts`, `describeProductionPath.ts
 |-------|--------|
 | `public-registration-locations.test.ts` | Public list by code |
 | `school-validate-code.test.ts` | Valid / invalid codes |
-| `auth-register-school-signup.test.ts` | Register + DB user |
+| `auth-register-school-signup.test.ts` | Register + DB user + campus on parent/child |
+| `auth-register-location-persist.test.ts` | Campus before children; 400 invalid campus; 500 + rollback on persist failure |
+| `persist-parent-location.test.ts` (unit) | `user_locations` + `users.location_id`; school-code validation |
 | `auth-register-orphan-supabase.test.ts` | Block orphan Supabase-only users |
 | `associate-parent-school.test.ts` | Associate parent ↔ school |
 | `location-school-context.test.ts` | Misaligned `users.school_id`; POST/GET locations |
@@ -62,6 +65,8 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 - `server/lib/registration-public-locations.ts` — public location list
 - `server/lib/location-db.ts` — Postgres location reads
 - `server/lib/associate-parent-school.ts` — parent ↔ school link
+- `server/lib/persist-parent-location.ts` — `user_locations` + `users.location_id` on signup
+- `server/scripts/audit-registration-locations.ts` — find/fix parents missing campus while children have `location_id`
 - `server/api/locations.ts` — CRUD + school context
 - `server/api/schools.ts` — validate registration code
 - `client/src/pages/.../RegistrationLandingPage.tsx` — `data-testid` for E2E

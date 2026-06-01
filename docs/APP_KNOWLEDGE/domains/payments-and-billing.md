@@ -27,6 +27,10 @@ Parents pay via cart checkout (Stripe PaymentIntents). The server is authoritati
 
 **Membership:** separate table `membership_enrollments` (`amount_paid`, `remaining_balance`, status). Include in family balance totals.
 
+## Post-payment verification (planned)
+
+Architecture plan (not implemented): [`docs/plans/post-payment-verification-pipeline.md`](../../plans/post-payment-verification-pipeline.md).
+
 ## Prod balance audit (read-only)
 
 ```bash
@@ -56,6 +60,35 @@ WHERE user_id = <id> AND status IN ('approved', 'partially_used');
 ```
 
 **Sanity check:** Sum of Stripe `payments.amount` + applied credits should cover `total_paid` across enrollments (allowing membership and comp rows).
+
+## Stripe audit — match by parent email (required)
+
+**Do not conclude a parent owes money from DB alone.** Always compare Stripe succeeded PaymentIntents to `payments` using the parent’s **email** (not only `users.stripe_customer_id` — one email can have **multiple** Stripe customers after re-link).
+
+```bash
+# Add STRIPE_SECRET_KEY=sk_live_... to .env.prod (or run on Replit production)
+node scripts/with-prod-env.mjs npx tsx server/scripts/inspect-parent-stripe-by-email.ts --email kelsforte@gmail.com
+node scripts/with-prod-env.mjs npx tsx server/scripts/inspect-parent-stripe-by-email.ts --parent-id 38 --json
+```
+
+Script output:
+
+| Section | Meaning |
+|---------|---------|
+| **Stripe succeeded PIs** | All `status=succeeded` for every Stripe customer with that email |
+| **✗ MISSING FROM DB** | Paid in Stripe, no `payments.stripe_payment_intent_id` — **reconcile** |
+| **App payments table** | What our ledger shows (includes `MANUAL-*` membership marks) |
+| **Missed total** | Sum of succeeded PIs not in DB — often equals phantom `effective_balance` |
+
+**Reconcile a missed PI:**
+
+```bash
+# Live key on Replit prod, or export PI JSON from Stripe Dashboard:
+node scripts/with-prod-env.mjs npx tsx server/scripts/reconcile-payment-intent-to-enrollments.ts pi_...
+node scripts/with-prod-env.mjs npx tsx server/scripts/reconcile-payment-intent-to-enrollments.ts --from-json docs/audit/<parent>-pi.json
+```
+
+If reconcile leaves a small remainder (even-split allocation), finish ledger manually — see Kelsie Forte incident.
 
 ## Applying missed credits (prod correction)
 
@@ -95,6 +128,30 @@ Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current ba
 
 ## Incidents (reference)
 
+### Karen Raczka — parent 173 (2026-06-01)
+
+- **Symptom:** First biweekly checkout installment ($125.96, PI `pi_3TdJRKGhVuNOnUs70JMSM5PV`) applied a **double** membership credit (`amount_paid=962` cents) instead of one proportional slice (`481` cents expected).
+- **Root cause:** `server/webhook-handler.ts` called `fulfillMembershipFromCartPaymentIntent(paymentIntent)` and then called `processBalancePayment(...)`, which calls `fulfillMembershipFromCartPaymentIntent(paymentIntent)` again in `server/api/billing.ts`.
+- **Scope check:** Production audit found one checkout-note membership row with `updated_at > created_at` (Karen), consistent with same-PI duplicate application; one other checkout-note row (Heather Jacks) did **not** show this pattern.
+- **Detection SQL (prod):**
+  ```sql
+  SELECT me.id, me.parent_user_id, me.amount, me.amount_paid, me.created_at, me.updated_at, me.notes
+  FROM membership_enrollments me
+  WHERE me.notes ILIKE 'Stripe payment via cart checkout (%'
+    AND me.updated_at > me.created_at
+  ORDER BY me.updated_at DESC;
+  ```
+- **Operational note:** AutoPay requires user-level Stripe linkage (`users.stripe_customer_id` + `users.stripe_default_payment_method_id`), not only scheduled-payment `metadata.autoPay`.
+- **Backfill constraint:** If checkout PI used a card without future-use setup, Stripe can return `This PaymentMethod ... may not be used again`; those accounts cannot be auto-wired post hoc and need a fresh card save / SetupIntent flow.
+
+### Kelsie Forte — parent 38 (2026-06-01)
+
+- **Claim / DB:** Portal showed **$1,721** class balance owed.
+- **Stripe (email `kelsforte@gmail.com`):** Two customers (`cus_T5xCiZtMIQCkR5`, `cus_UQ5o8PpNsXWrPJ`). Succeeded PIs: $130 + $199 + $150 + **$1,546** (May 14) = **$2,025** class cash; PI metadata **$175** credit at checkout.
+- **Gap:** `pi_3TX0QiGhVuNOnUs71FpbivFk` (**$1,546**) succeeded but **not in `payments`** — webhook miss.
+- **Fix:** `reconcile-payment-intent-to-enrollments.ts --from-json docs/audit/kelsie-forte-pi.json` + `complete-kelsie-forte-reconcile.ts` ($110.50 even-split remainder on Winter enr 167). Email: `kelsie-forte-reconcile.json`.
+- **Lesson:** Always match Stripe by **email**; DB `payments` alone under-counts.
+
 ### Jake Fabry — parent 34 (2026-05-31)
 
 - **Claim:** Paid in full.
@@ -126,6 +183,7 @@ Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current ba
 | Correction email | `server/lib/account-correction-email.ts`, `server/scripts/send-account-correction-email.ts` |
 | Batch balance reminders | `server/scripts/send-balance-reminders-batch.ts` |
 | PI reconcile | `server/scripts/reconcile-payment-intent-to-enrollments.ts` |
+| **Stripe ↔ DB audit (email)** | `server/scripts/inspect-parent-stripe-by-email.ts` |
 | Payment patterns skill | `.agents/skills/asa-payment-patterns/SKILL.md` |
 | Credit skill | `.agents/skills/asa-credit-system/SKILL.md` |
 
@@ -138,4 +196,6 @@ Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current ba
 | Checkout charged $630, `total_cost` still $900 | List price stored; credit or proration not on enrollment | Match ledger to cash + credits (see Jake Fabry) |
 | Admin credit “used” in UI but `used_amount_cents = 0` | Credit approved manually, never linked at checkout | Post-hoc apply script + usage logs |
 | Audit query shows huge total owed | JOIN inflation with `payments` | Aggregate enrollments only |
-| Parent says paid; no `stripe_customer_id` on user | Customer id may live in enrollment `metadata.stripeCustomerId` | Check PI metadata and payments table |
+| Parent says paid; DB shows balance | Webhook miss; trust Stripe email search first | `inspect-parent-stripe-by-email.ts` → reconcile missed PI |
+| Parent says paid; no `stripe_customer_id` on user | Customer id may live in enrollment `metadata.stripeCustomerId` | Email search finds all Stripe customers; check PI metadata |
+| Membership `amount_paid` jumps by 2x on first checkout installment | Membership fulfillment called twice for same PI in webhook path (`webhook-handler` + `processBalancePayment`) | Ensure one fulfillment call per PI; audit `membership_enrollments` rows where checkout-note `updated_at > created_at` |

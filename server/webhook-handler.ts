@@ -12,7 +12,6 @@ import {
   parseMetadataMembershipAmountCents,
   totalCentsForBalanceAllocation,
 } from './lib/balance-payment-metadata';
-import { fulfillMembershipFromCartPaymentIntent } from './services/fulfill-membership-payment-intent';
 import { applyClassPoolToEnrollments } from './lib/apply-class-pool-to-enrollments';
 import { findProgramEnrollmentForCartItem } from './lib/cart-checkout-enrollment-match';
 import {
@@ -612,7 +611,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 paymentIntent,
               );
             } else {
-              await fulfillMembershipFromCartPaymentIntent(paymentIntent);
+              // processBalancePayment() already performs membership fulfillment.
+              // Do not call it here as well, or the same PI can double-apply membership cents.
               // Calculate payment amount in dollars (Stripe amount is in cents)
               const totalAmount = paymentIntent.amount / 100;
 

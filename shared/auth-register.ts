@@ -176,6 +176,15 @@ export function normalizeAuthRegisterInput(
     };
   }
 
+  const preferredLocationId = parsePreferredLocationId(body.location);
+  if (requireChildWithSchoolSignup && preferredLocationId == null) {
+    return {
+      ok: false,
+      message: "Please select a campus location to finish registration.",
+      status: 400,
+    };
+  }
+
   return {
     ok: true,
     data: {
@@ -187,7 +196,7 @@ export function normalizeAuthRegisterInput(
       role,
       schoolId,
       registrationCode,
-      preferredLocationId: parsePreferredLocationId(body.location),
+      preferredLocationId,
       signupChildren: signupChildrenParse.children,
       requireChildWithSchoolSignup,
     },

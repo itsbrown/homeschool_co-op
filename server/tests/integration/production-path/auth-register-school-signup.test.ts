@@ -11,7 +11,7 @@ import { assertPostgresStorageForProductionPath } from '../../helpers/production
 import { seedRegistrationScenario } from '../../helpers/seedRegistrationScenario';
 import { getDb } from '../../../db';
 import { storage } from '../../../storage';
-import { userRoles, users } from '@shared/schema';
+import { userLocations, userRoles, users } from '@shared/schema';
 
 describeProductionPath('production-path: school-code parent register', () => {
   const http = getProductionPathHttp();
@@ -65,5 +65,44 @@ describeProductionPath('production-path: school-code parent register', () => {
     const children = await storage.getChildrenByParentId(user!.id);
     expect(children.length).toBe(1);
     expect(children[0].firstName).toBe('Student');
+
+    const campusId = seed.locationsOnSchool[0].id;
+    expect(updated[0]?.locationId).toBe(campusId);
+    expect(children[0].locationId).toBe(campusId);
+
+    const userLocs = await db
+      .select()
+      .from(userLocations)
+      .where(eq(userLocations.userId, user!.id));
+    expect(userLocs.some((ul) => ul.locationId === campusId && ul.isActive)).toBe(true);
+  });
+
+  it('rejects school signup without a campus location', async () => {
+    const seed = await seedRegistrationScenario();
+    const email = `noloc_${Date.now()}@test.com`;
+
+    const res = await http.post('/api/auth/register', {
+      email,
+      password: 'SecurePass123!',
+      parentFirstName: 'No',
+      parentLastName: 'Location',
+      phone: '5555550100',
+      schoolId: seed.registrationSchool.id,
+      registrationCode: seed.registrationCode,
+      role: 'parent',
+      children: [
+        {
+          firstName: 'Kid',
+          lastName: 'One',
+          birthdate: '2015-03-10',
+          gradeLevel: '3rd Grade',
+        },
+      ],
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/campus location/i);
+    const user = await storage.getUserByEmail(email);
+    expect(user).toBeUndefined();
   });
 });

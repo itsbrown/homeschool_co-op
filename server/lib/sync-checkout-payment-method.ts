@@ -123,6 +123,19 @@ export async function syncParentPaymentMethodFromPaymentIntent(
     };
   }
 
+  // Prefer the customer already owning this payment method (if any).
+  // This avoids updating defaults on a different customer and failing with:
+  // "customer does not have a payment method with the ID ...".
+  try {
+    const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+    const pmCustomer = typeof pm.customer === 'string' ? pm.customer : null;
+    if (pmCustomer) {
+      customerId = pmCustomer;
+    }
+  } catch (pmErr) {
+    console.warn('[sync-checkout-payment-method] retrieve payment method:', pmErr);
+  }
+
   try {
     await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
   } catch (attachErr: unknown) {

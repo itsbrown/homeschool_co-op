@@ -250,6 +250,18 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       enrollments.map((e) => e.id),
     );
     console.log('✅ applyClassPoolToEnrollments from processBalancePayment:', applyResult);
+
+    const { cancelPendingScheduledAfterEnrollmentPayoff } = await import(
+      '../lib/cancel-pending-scheduled-after-payoff'
+    );
+    const cancelledInstallments = await cancelPendingScheduledAfterEnrollmentPayoff(
+      applyResult.enrollmentIds,
+    );
+    if (cancelledInstallments > 0) {
+      console.log(
+        `🧹 Cancelled ${cancelledInstallments} pending scheduled payment(s) after balance payoff`,
+      );
+    }
     
     // Create payment record with installment details
     // Get schoolId from enrollment or parent user - NEVER allow hardcoded fallback
