@@ -56,6 +56,10 @@ import {
   computePaymentOverviewTotals,
 } from "@/utils/paymentOverviewTotals";
 import { resolveUpcomingEnrollmentCoverageLabel } from "@/utils/enrollmentCoverageLabel";
+import {
+  PayBalanceInFullDialog,
+  type PayInFullTarget,
+} from "@/components/payments/PayBalanceInFullDialog";
 
 interface Payment {
   id: string;
@@ -474,6 +478,7 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
   
   // State for the Stripe payment dialog
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [payInFullTarget, setPayInFullTarget] = useState<PayInFullTarget | null>(null);
   const [selectedPaymentForDialog, setSelectedPaymentForDialog] = useState<any>(null);
 
   const searchString = useSearch();
@@ -540,6 +545,54 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
       return await response.json();
     },
   });
+
+  const { data: billingSummary } = useQuery<{
+    enrollmentDetails?: Array<{
+      enrollmentId: number;
+      childName: string;
+      className: string;
+      balance: number;
+    }>;
+  }>({
+    queryKey: ["billing-summary"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/billing/summary");
+      if (!response.ok) {
+        throw new Error("Failed to load billing summary");
+      }
+      return response.json();
+    },
+  });
+
+  const payInFullOffers = React.useMemo(() => {
+    const details =
+      billingSummary?.enrollmentDetails?.filter((d) => d.balance > 0) ?? [];
+    return details.map((d) => ({
+      enrollmentIds: [d.enrollmentId],
+      totalAmountCents: d.balance,
+      title: d.className,
+      subtitle: d.childName,
+    }));
+  }, [billingSummary]);
+
+  const payAllInFullTarget = React.useMemo((): PayInFullTarget | null => {
+    if (payInFullOffers.length === 0) return null;
+    const enrollmentIds = payInFullOffers.flatMap((o) => o.enrollmentIds);
+    const totalAmountCents = payInFullOffers.reduce(
+      (sum, o) => sum + o.totalAmountCents,
+      0,
+    );
+    if (totalAmountCents <= 0) return null;
+    return {
+      enrollmentIds,
+      totalAmountCents,
+      title:
+        payInFullOffers.length === 1
+          ? payInFullOffers[0].title
+          : `${payInFullOffers.length} enrollments`,
+      subtitle: "Pay entire remaining balance",
+    };
+  }, [payInFullOffers]);
 
   // Get subscription schedules for upcoming payments tab (Stripe-managed)
   const { data: scheduledPayments, isLoading: isLoadingScheduled } = useQuery({
@@ -930,19 +983,68 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                     )}
                   </div>
                   {paymentOverview.totalRemainingCents > 0 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setActivePaymentTab("upcoming")}
-                    >
-                      View upcoming payments
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setActivePaymentTab("upcoming")}
+                      >
+                        View upcoming payments
+                      </Button>
+                      {payAllInFullTarget && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => setPayInFullTarget(payAllInFullTarget)}
+                          data-testid="button-pay-all-in-full-overview"
+                        >
+                          <CreditCard className="h-4 w-4 mr-2" />
+                          Pay in full (
+                          {formatCurrency(payAllInFullTarget.totalAmountCents)})
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </>
               )}
             </CardContent>
           </Card>
+
+          {payInFullOffers.length > 0 && (
+            <Card className="border-emerald-200 bg-emerald-50/40">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Pay remaining balance in full</CardTitle>
+                <CardDescription>
+                  Close out a class in one payment instead of paying each installment separately.
+                  Future installments on that plan are cleared after you pay in full.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {payInFullOffers.map((offer) => (
+                  <div
+                    key={offer.enrollmentIds[0]}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border bg-background p-3"
+                  >
+                    <div>
+                      <p className="font-medium">{offer.title}</p>
+                      <p className="text-sm text-muted-foreground">{offer.subtitle}</p>
+                      <p className="text-sm font-semibold text-orange-700 mt-1">
+                        {formatCurrency(offer.totalAmountCents)} remaining
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => setPayInFullTarget(offer)}
+                      data-testid={`button-pay-in-full-${offer.enrollmentIds[0]}`}
+                    >
+                      Pay in full
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
@@ -1254,6 +1356,28 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
         
         {/* Upcoming Payments Tab */}
         <TabsContent value="upcoming" className="space-y-4">
+          {payInFullOffers.length > 0 && (
+            <Alert className="border-emerald-200 bg-emerald-50">
+              <CreditCard className="h-4 w-4 text-emerald-800" />
+              <AlertDescription className="text-emerald-950">
+                You can pay one installment below, or{" "}
+                <button
+                  type="button"
+                  className="font-semibold underline underline-offset-2"
+                  onClick={() =>
+                    payAllInFullTarget && setPayInFullTarget(payAllInFullTarget)
+                  }
+                >
+                  pay your full remaining balance (
+                  {payAllInFullTarget
+                    ? formatCurrency(payAllInFullTarget.totalAmountCents)
+                    : ""}
+                  )
+                </button>{" "}
+                in a single payment.
+              </AlertDescription>
+            </Alert>
+          )}
           <Card>
             <CardHeader>
               <CardTitle>Upcoming Payments</CardTitle>
@@ -1531,6 +1655,17 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
           formatDate={formatDate}
         />
       )}
+
+      <PayBalanceInFullDialog
+        target={payInFullTarget}
+        isOpen={payInFullTarget != null}
+        onClose={() => setPayInFullTarget(null)}
+        onSuccess={() => {
+          refetch();
+          refetchDbScheduledPayments();
+          queryClient.invalidateQueries({ queryKey: ["billing-summary"] });
+        }}
+      />
     </div>
   );
 }

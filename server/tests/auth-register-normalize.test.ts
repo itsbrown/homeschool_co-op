@@ -55,6 +55,30 @@ describe("normalizeAuthRegisterInput", () => {
     expect(result.data.preferredLocationId).toBe(2);
   });
 
+  it("rejects school signup without campus location", () => {
+    const result = normalizeAuthRegisterInput({
+      email: "parent@example.com",
+      password: "SecurePass123!",
+      parentFirstName: "Pat",
+      parentLastName: "Parent",
+      schoolId: 1,
+      registrationCode: "TESTCODE",
+      role: "parent",
+      children: [
+        {
+          firstName: "Kid",
+          lastName: "One",
+          birthdate: "2016-01-15",
+          gradeLevel: "2nd Grade",
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).toMatch(/campus location/i);
+  });
+
   it("rejects school signup without children", () => {
     const result = normalizeAuthRegisterInput({
       email: "parent@example.com",

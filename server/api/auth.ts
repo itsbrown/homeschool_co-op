@@ -18,6 +18,10 @@ import {
   createChildLinkedToParent,
   deleteChildAndSchoolLink,
 } from "../lib/parent-child-registration";
+import {
+  ensureParentRegistrationLocation,
+  rollbackRegistrationAfterLocationFailure,
+} from "../lib/persist-parent-location";
 
 const router = Router();
 
@@ -58,7 +62,7 @@ router.post('/register', async (req, res) => {
       role,
       schoolId,
       registrationCode,
-      preferredSignupLocationId,
+      preferredLocationId: preferredSignupLocationId,
       signupChildren,
     } = normalized.data;
 
@@ -297,23 +301,6 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Save location association if location was provided during registration
-    if (preferredSignupLocationId != null) {
-      try {
-        const locationId = preferredSignupLocationId;
-        console.log(`📍 Saving location association for user ${user.id} with location ${locationId}`);
-        await storage.createUserLocation({
-          userId: user.id,
-          locationId,
-        });
-        console.log(`✅ Location association saved successfully`);
-      } catch (locationError) {
-        // Log error but don't fail registration - location is supplementary data
-        console.error("⚠️ Failed to save location association:", locationError);
-        console.log("⚠️ Registration will continue without location association");
-      }
-    }
-
     // If this is a school-specific registration, associate with school
     // CRITICAL: School association MUST succeed for school registrations
     if (schoolId && registrationCode) {
@@ -353,6 +340,36 @@ router.post('/register', async (req, res) => {
         });
       }
     }
+
+    const isSchoolCodeParentSignup = Boolean(
+      schoolId && registrationCode && (role === "parent" || !role),
+    );
+    const locationResult = await ensureParentRegistrationLocation(storage, {
+      userId: user.id,
+      schoolId: user.schoolId ?? schoolId ?? null,
+      preferredLocationId: preferredSignupLocationId,
+      isSchoolCodeParentSignup,
+    });
+    if (!locationResult.ok) {
+      try {
+        await rollbackRegistrationAfterLocationFailure(storage, user.id);
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabaseAdminCleanup = createClient(
+          process.env.SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          { auth: { autoRefreshToken: false, persistSession: false } },
+        );
+        await supabaseAdminCleanup.auth.admin.deleteUser(supabaseUser.id);
+      } catch (cleanupError) {
+        console.error("❌ Rollback after location failure:", cleanupError);
+      }
+      return res.status(locationResult.status).json({
+        success: false,
+        message: locationResult.message,
+      });
+    }
+    const resolvedSignupLocationId =
+      locationResult.locationId ?? preferredSignupLocationId;
 
     console.log(`✅ Registration complete for ${email} (User ID: ${user.id}, Supabase ID: ${supabaseUser.id})`);
     
@@ -400,7 +417,7 @@ router.post('/register', async (req, res) => {
           const savedChild = await createChildLinkedToParent(storage, {
             parent: user,
             parentEmail: email,
-            preferredLocationId: preferredSignupLocationId,
+            preferredLocationId: resolvedSignupLocationId,
             fields: {
               firstName: row.firstName,
               lastName: row.lastName,

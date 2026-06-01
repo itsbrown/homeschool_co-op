@@ -6,6 +6,37 @@
 - **Prod notes (no deploy):** Jen Kuhns — stale `membership_enrollments` #113 vs `member_id` reconciled; cart tuition $600. Taylor Karnath — Aurora #403 biweekly ($520 owed); pay via Payments → Upcoming, not cart.
 - **Ops:** `server/scripts/diagnose-parent-cart.ts` — `--email` cart eligibility + pricing on prod.
 
+## 2026-06-01 (Pay in full on Payments page)
+
+- Parents on installment plans can **Pay in full** from `/payments` (overview + upcoming tabs) via `/api/billing/pay-balance`; pending installments are cancelled when the enrollment balance reaches zero (`cancel-pending-scheduled-after-payoff.ts`).
+
+## 2026-06-01 (Registration parent/child campus)
+
+- School-code signup now requires campus and persists `user_locations` + `users.location_id` via `server/lib/persist-parent-location.ts` (children already got `location_id` via fallback).
+- **Fix:** `server/api/auth.ts` must destructure `preferredLocationId` from `normalizeAuthRegisterInput` (was `preferredSignupLocationId`, so campus was dropped and signup returned 400).
+- **Tests:** `persist-parent-location.test.ts`, `auth-register-location-persist.test.ts` — order (campus before `createChild`), invalid cross-school campus rejected, rollback on persist failure (`rollbackRegistrationAfterLocationFailure`).
+- Prod backfill: 8 recent ASA parents fixed with `audit-registration-locations.ts --fix` (copied child campus 3 onto parent).
+
+## 2026-06-01 (Vega Venmo manual payments — parent 88)
+
+- **Prod:** Recorded Venmo $400 (2026-04-30) and $300 (2026-05-19) via `server/scripts/apply-vega-venmo-payments-production.ts` → payments **#319**, **#320**; enrollment **#292** now **paid in full** ($1,180 `total_paid` on $900 tuition). Stripe email audit still shows **$1,250** succeeded PIs missing from `payments` (separate webhook-reconcile track).
+
+## 2026-06-01 (Membership double-credit investigation)
+
+- **Incident:** Added Karen Raczka (parent 173) membership double-credit root cause and detection SQL to `domains/payments-and-billing.md`.
+- **Invariant:** Membership fulfillment must run once per succeeded PI; `webhook-handler.ts` + `processBalancePayment(...)` currently duplicate the call in one checkout branch.
+- **Scope:** Prod sweep found one checkout-note membership row with same-PI double-apply signature (`updated_at > created_at`) and flagged two separate manual overpaid memberships (rows 92, 122) for finance cleanup.
+- **AutoPay backfill finding:** Historical first-installment PI cards often cannot be re-attached (`may not be used again`) without prior future-use setup; documented as a post-hoc wiring constraint in payments domain doc.
+
+## 2026-06-01 (Plan: post-payment verification pipeline)
+
+- **Plan:** [`docs/plans/post-payment-verification-pipeline.md`](../plans/post-payment-verification-pipeline.md) — three-layer verify (post-webhook service, Cursor Automation on failure, existing payment-flow-monitor/reconciliation), per-PI checks, env vars, phases A–D, communication matrix, open questions.
+
+## 2026-06-01 (Stripe email audit script)
+
+- **New:** `server/scripts/inspect-parent-stripe-by-email.ts` — match parent email to all Stripe customers + succeeded PIs vs `payments`; flags missed reconciles.
+- **Domain:** `payments-and-billing.md` — email-first Stripe audit required before trusting DB balance; Kelsie Forte incident added.
+
 ## 2026-05-31 (Prod mentor form: ASA branding)
 
 - **Prod:** Live `mentor-application` on school **2** (American Seekers Academy, form id 13); deactivated mistaken copy on school 3 (Fin Reports fixture, form id 12).
