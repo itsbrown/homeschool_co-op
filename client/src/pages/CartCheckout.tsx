@@ -584,8 +584,11 @@ export default function CartCheckout() {
       return;
     }
 
-    // Cart looks empty: debounce redirect so a refetching window does not send users
-    // away from checkout while lines are still loading into state.
+    // Cart empty after hydration (common when balances are on a biweekly/installment plan).
+    // Clear the checkout spinner — otherwise parents see "Preparing checkout" forever.
+    setLoading(false);
+
+    // Debounce redirect so a refetching window does not send users away while lines load.
     const expectingCheckoutAfterEnrollment =
       sessionStorage.getItem("postSessionEnrollmentCheckout") === "1";
     const redirectDebounceMs = expectingCheckoutAfterEnrollment ? 2500 : 600;
@@ -595,9 +598,9 @@ export default function CartCheckout() {
       const stillEmpty =
         g.hydrated && !g.loading && g.itemCount === 0 && !g.hasMembership;
       if (stillEmpty) {
-        console.log('🛒 Cart still empty after debounce — leaving checkout for /payments');
+        console.log('🛒 Cart empty — redirecting to Upcoming Payments (installment-plan balances)');
         sessionStorage.removeItem("postSessionEnrollmentCheckout");
-        setLocation('/payments');
+        setLocation('/payments?tab=upcoming');
       } else {
         sessionStorage.removeItem("postSessionEnrollmentCheckout");
       }
@@ -1490,13 +1493,13 @@ export default function CartCheckout() {
     return getSelectedPlanAmount();
   };
 
-  if (loading) {
+  if (loading || (cartHydrated && cartLoading && !clientSecret && actualPayableAmount > 0)) {
     return (
       <ParentAppShell>
         <div className="flex items-center justify-center h-[50vh]">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p>Preparing your checkout...</p>
+            <p>{cartLoading ? 'Updating your cart...' : 'Preparing your checkout...'}</p>
           </div>
         </div>
       </ParentAppShell>
@@ -1646,13 +1649,41 @@ export default function CartCheckout() {
     );
   }
 
-  // Only show loading spinner if we actually need a clientSecret for payment
-  // If actualPayableAmount is $0, we don't need a clientSecret - show Free Enrollment flow
-  if (!clientSecret && actualPayableAmount > 0) {
+  // Payment form not ready — show recovery UI instead of a silent spinner
+  if (!clientSecret && actualPayableAmount > 0 && !error) {
     return (
       <ParentAppShell>
-        <div className="flex items-center justify-center h-[50vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-center flex items-center justify-center gap-2">
+                <RefreshCw className="h-5 w-5" />
+                Checkout did not finish loading
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-center">
+              <p className="text-muted-foreground text-sm">
+                We could not start the payment form. This usually clears after refreshing your cart or trying again in a moment.
+              </p>
+              <Button
+                onClick={async () => {
+                  setLoading(true);
+                  retryCountRef.current = 0;
+                  setRetryCount(0);
+                  setHasCheckoutConflict(false);
+                  setSnapshotId(null);
+                  await refreshCart();
+                  await createPaymentIntent(null, true);
+                }}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh cart &amp; retry
+              </Button>
+              <Button variant="outline" onClick={() => setLocation('/payments')}>
+                Back to Payments
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </ParentAppShell>
     );

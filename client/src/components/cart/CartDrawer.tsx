@@ -7,15 +7,16 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Trash2, ShoppingCart, CreditCard, Percent, Gift, X, Clock, AlertCircle, Award } from 'lucide-react';
+import { Trash2, ShoppingCart, CreditCard, Percent, Gift, X, Clock, AlertCircle, Award, Loader2 } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/utils/currency';
 
 export default function CartDrawer() {
-  const { cart, isOpen, closeCart, removeItem, clearCart, getItemCount, refreshCart } = useCart();
+  const { cart, isOpen, closeCart, removeItem, clearCart, getItemCount, refreshCart, cartLoading } = useCart();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [checkoutNavigating, setCheckoutNavigating] = React.useState(false);
 
   const handleCheckout = async (e: React.MouseEvent) => {
     console.log('🛒 🚨 CHECKOUT BUTTON CLICKED - EVENT RECEIVED!');
@@ -36,10 +37,13 @@ export default function CartDrawer() {
       return;
     }
 
+    setCheckoutNavigating(true);
     try {
       await refreshCart();
     } catch (err) {
       console.warn('🛒 refreshCart before checkout failed (non-fatal):', err);
+    } finally {
+      setCheckoutNavigating(false);
     }
 
     console.log('🛒 Navigating to checkout...');
@@ -274,11 +278,24 @@ export default function CartDrawer() {
                   type="button"
                   onClick={handleCheckout}
                   className="flex-1 relative z-50"
-                  disabled={cart.items.length === 0 && !cart.membership}
+                  disabled={
+                    (cart.items.length === 0 && !cart.membership) ||
+                    checkoutNavigating ||
+                    cartLoading
+                  }
                   style={{ pointerEvents: 'auto' }}
                 >
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Checkout
+                  {checkoutNavigating || cartLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Updating cart...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Checkout
+                    </>
+                  )}
                 </Button>
               </div>
               

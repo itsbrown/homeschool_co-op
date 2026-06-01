@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-06-01 (Cart checkout spinner recovery)
+
+- **Cart checkout hang:** Slow `refreshCart` / `cartLoading` left checkout on spinners with no recovery; CartDrawer shows "Updating cart…"; checkout shows cart-loading copy and a retry card when payment intent never loads; **empty cart** (installment-plan exclusions) clears `loading` and redirects to `/payments?tab=upcoming`.
+- **Prod notes (no deploy):** Jen Kuhns — stale `membership_enrollments` #113 vs `member_id` reconciled; cart tuition $600. Taylor Karnath — Aurora #403 biweekly ($520 owed); pay via Payments → Upcoming, not cart.
+- **Ops:** `server/scripts/diagnose-parent-cart.ts` — `--email` cart eligibility + pricing on prod.
+
 ## 2026-05-31 (Prod mentor form: ASA branding)
 
 - **Prod:** Live `mentor-application` on school **2** (American Seekers Academy, form id 13); deactivated mistaken copy on school 3 (Fin Reports fixture, form id 12).
