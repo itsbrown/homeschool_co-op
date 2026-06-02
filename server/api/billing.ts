@@ -27,6 +27,7 @@ import {
   parseBalanceIntentCredits,
   totalCentsForBalanceAllocation,
 } from '../lib/balance-payment-metadata';
+import { resolveMembershipReserveForPaymentIntent } from '../lib/resolve-membership-reserve-for-payment';
 
 const router = Router();
 const PAY_BALANCE_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -199,19 +200,24 @@ export async function processBalancePayment(paymentIntent: Stripe.PaymentIntent,
       throw new Error('Payment intent amount must be a positive integer in cents');
     }
     
-    const membershipCents = membershipCentsReservedForPaymentIntent(
-      currentPaymentAmount,
+    const resolved = await resolveMembershipReserveForPaymentIntent(paymentIntent);
+    const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(
       paymentIntent.metadata as Record<string, string | undefined>,
     );
-    const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(
-      paymentIntent.metadata as Record<string, string | undefined>
-    );
-    const totalChargedCents = totalCentsForBalanceAllocation({
-      paymentIntentAmountCents: currentPaymentAmount,
-      creditsAppliedCents,
-      originalAmountCents,
-    });
-    const classPoolCents = enrollmentPoolCentsForBalanceIntent(totalChargedCents, membershipCents);
+    const totalChargedCents =
+      resolved?.allocationGrossCents ??
+      totalCentsForBalanceAllocation({
+        paymentIntentAmountCents: currentPaymentAmount,
+        creditsAppliedCents,
+        originalAmountCents,
+      });
+    const membershipCents =
+      resolved?.membershipPortionThisPaymentCents ??
+      membershipCentsReservedForPaymentIntent(currentPaymentAmount, paymentIntent.metadata as Record<string, string | undefined>, {
+        allocationGrossCents: totalChargedCents,
+      });
+    const classPoolCents =
+      resolved?.classPoolCents ?? enrollmentPoolCentsForBalanceIntent(totalChargedCents, membershipCents);
 
     console.log('💰 Processing balance payment with installment support:', {
       enrollmentIds,

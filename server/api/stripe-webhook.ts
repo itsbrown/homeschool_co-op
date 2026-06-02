@@ -6,7 +6,8 @@ import { membershipEnrollments } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 import { getStripeClient } from '../config/stripe';
 import { fulfillMembershipFromCartPaymentIntent } from '../services/fulfill-membership-payment-intent';
-import { parseMetadataMembershipAmountCents, enrollmentPoolCentsForBalanceIntent, membershipCentsReservedForPaymentIntent } from '../lib/balance-payment-metadata';
+import { enrollmentPoolCentsForBalanceIntent } from '../lib/balance-payment-metadata';
+import { resolveMembershipReserveForPaymentIntent } from '../lib/resolve-membership-reserve-for-payment';
 import { splitCentsEvenly } from '../api/billing';
 
 const router = express.Router();
@@ -251,11 +252,10 @@ async function handleDirectPaymentSuccess(paymentIntent: any) {
     
     const enrollmentIdList = JSON.parse(enrollmentIds);
     const amountCents = typeof paymentIntent.amount === 'number' ? paymentIntent.amount : 0;
-    const membershipCents = membershipCentsReservedForPaymentIntent(
-      amountCents,
-      paymentIntent.metadata as Record<string, string | undefined>,
-    );
-    const enrollmentTotal = enrollmentPoolCentsForBalanceIntent(amountCents, membershipCents);
+    const resolved = await resolveMembershipReserveForPaymentIntent(paymentIntent);
+    const membershipCents = resolved?.membershipPortionThisPaymentCents ?? 0;
+    const grossCents = resolved?.allocationGrossCents ?? amountCents;
+    const enrollmentTotal = resolved?.classPoolCents ?? enrollmentPoolCentsForBalanceIntent(grossCents, membershipCents);
     const allocation = splitCentsEvenly(enrollmentTotal, enrollmentIdList.length);
 
     console.log(

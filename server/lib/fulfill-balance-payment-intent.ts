@@ -3,6 +3,8 @@ import { storage } from '../storage';
 import { applyClassPoolToEnrollments } from './apply-class-pool-to-enrollments';
 import { parseBalanceIntentCredits } from './balance-payment-metadata';
 import { fulfillMembershipFromCartPaymentIntent } from '../services/fulfill-membership-payment-intent';
+import { persistPaymentAllocationBreakdown } from './persist-payment-allocation-breakdown';
+import { resolveMembershipReserveForPaymentIntent } from './resolve-membership-reserve-for-payment';
 
 export type FulfillBalancePaymentIntentResult = {
   enrollmentApply: Awaited<ReturnType<typeof applyClassPoolToEnrollments>>;
@@ -19,9 +21,24 @@ export async function fulfillBalancePaymentIntent(
   enrollmentIds: number[],
   options?: { paymentHistoryId?: number | null },
 ): Promise<FulfillBalancePaymentIntentResult> {
-  await fulfillMembershipFromCartPaymentIntent(paymentIntent);
+  const membershipBreakdown = await fulfillMembershipFromCartPaymentIntent(paymentIntent);
 
   const enrollmentApply = await applyClassPoolToEnrollments(paymentIntent, enrollmentIds);
+
+  const resolved = await resolveMembershipReserveForPaymentIntent(paymentIntent);
+  const breakdown =
+    membershipBreakdown ??
+    (resolved
+      ? {
+          membershipCents: resolved.membershipPortionThisPaymentCents,
+          classPoolCents: resolved.classPoolCents,
+          grossCents: resolved.allocationGrossCents,
+        }
+      : null);
+
+  if (breakdown && breakdown.grossCents > 0) {
+    await persistPaymentAllocationBreakdown(paymentIntent.id, breakdown);
+  }
 
   const { creditsConsumedCents, creditsSkippedAlreadyApplied } =
     await consumeCreditsFromPaymentIntentMetadata(paymentIntent, options?.paymentHistoryId);

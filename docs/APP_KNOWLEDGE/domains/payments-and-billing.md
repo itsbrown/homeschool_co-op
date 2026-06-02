@@ -27,9 +27,20 @@ Parents pay via cart checkout (Stripe PaymentIntents). The server is authoritati
 
 **Membership:** separate table `membership_enrollments` (`amount_paid`, `remaining_balance`, status). Include in family balance totals.
 
-## Post-payment verification (planned)
+### Membership vs class allocation (waterfall)
 
-Architecture plan (not implemented): [`docs/plans/post-payment-verification-pipeline.md`](../../plans/post-payment-verification-pipeline.md).
+On cart/balance PaymentIntents with `hasMembership=true`, each payment’s **gross** (card + `originalAmountCents` credits) allocates:
+
+1. **Membership** — `min(gross, membership_remaining)` where `membership_remaining = fee − amount_paid` (fee from `membership_enrollments.amount` or school `membershipFeeAmount`, not a per-installment proration of `metadata.membershipAmount / totalAmount`).
+2. **Class** — remainder of gross to `program_enrollments` via `apply-class-pool-to-enrollments.ts`.
+
+Key files: `server/lib/balance-payment-metadata.ts`, `server/lib/resolve-membership-reserve-for-payment.ts`, `server/services/membership-fulfill-from-cart-intent.ts`. Volunteer credits: membership first (`allocateVolunteerCreditsWaterfall`).
+
+**Scheduled autopay** (`paymentType: scheduled_payment`) still applies installments to class only; use `membership_scheduled_while_owed` verification warning if membership balance remains.
+
+## Post-payment verification (Phase A)
+
+Read-only checks after webhook when `POST_PAYMENT_VERIFY_ENABLED=true`. Includes **`membership_waterfall`** (expected vs `membership_enrollments.amount_paid`, `payments.metadata.allocationBreakdown`, proportional regression). Plan: [`docs/plans/post-payment-verification-pipeline.md`](../../plans/post-payment-verification-pipeline.md).
 
 ## Prod balance audit (read-only)
 

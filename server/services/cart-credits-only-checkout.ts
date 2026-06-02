@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { storage } from '../storage';
 import type { CanonicalAmountCalculationResult } from './canonical-amount-calculator';
 import { generateMemberId } from '../utils/membership';
+import { allocateVolunteerCreditsWaterfall } from '../lib/balance-payment-metadata';
 
 export type ServerMembershipForCheckout = {
   parentUserId: number;
@@ -60,7 +61,11 @@ async function fulfillMembershipCreditsOnly(
   parentEmail: string,
   m: ServerMembershipForCheckout,
   referenceNote: string,
+  creditCentsApplied: number,
 ): Promise<void> {
+  if (creditCentsApplied <= 0) {
+    return;
+  }
   const user = await storage.getUser(parentUserId);
   if (!user) return;
 
@@ -81,16 +86,24 @@ async function fulfillMembershipCreditsOnly(
 
   const notes = `Credits-only cart checkout (${referenceNote})${m.discountName ? ` - Discount: ${m.discountName}` : ''}`;
 
+  const priorPaid = existingEnrollment?.amountPaid ?? 0;
+  const newPaid = Math.min(m.amount, priorPaid + creditCentsApplied);
+  const newRemaining = Math.max(0, m.amount - newPaid);
+  const newStatus = newRemaining <= 0 ? 'enrolled' : 'pending_payment';
+
   if (existingEnrollment) {
-    if (existingEnrollment.status === 'enrolled') {
+    if (
+      existingEnrollment.status === 'enrolled' &&
+      (existingEnrollment.amountPaid ?? 0) >= m.amount
+    ) {
       return;
     }
     await storage.updateMembershipEnrollment(existingEnrollment.id, {
-      status: 'enrolled',
-      amountPaid: m.amount,
-      remainingBalance: 0,
+      status: newStatus,
+      amountPaid: newPaid,
+      remainingBalance: newRemaining,
       totalAmount: m.amount,
-      balanceDue: 0,
+      balanceDue: newRemaining,
       stripeCustomerId: user.stripeCustomerId || null,
       startDate,
       renewalDate: expirationDate,
@@ -106,11 +119,11 @@ async function fulfillMembershipCreditsOnly(
       membershipYear: m.year,
       membershipTier: 'basic',
       amount: m.amount,
-      amountPaid: m.amount,
-      remainingBalance: 0,
+      amountPaid: newPaid,
+      remainingBalance: newRemaining,
       totalAmount: m.amount,
-      balanceDue: 0,
-      status: 'enrolled',
+      balanceDue: newRemaining,
+      status: newStatus,
       stripeSubscriptionId: null,
       stripeCustomerId: user.stripeCustomerId || null,
       startDate,
@@ -247,10 +260,42 @@ export async function completeCartCreditsOnlyCheckout(params: {
       `Cart credits-only checkout payment #${createdPayment.id}`,
     );
 
+    let membershipOwedCents = 0;
+    if (serverMembership) {
+      const existingMe = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
+        serverMembership.parentUserId,
+        serverMembership.schoolId,
+        serverMembership.year,
+      );
+      membershipOwedCents = Math.max(
+        0,
+        serverMembership.amount - (existingMe?.amountPaid ?? 0),
+      );
+    }
+
+    const creditSplit = allocateVolunteerCreditsWaterfall({
+      creditsCents: appliedVolunteerCreditsCents,
+      membershipOwedCents,
+    });
+
+    if (serverMembership && creditSplit.membershipCredits > 0) {
+      await fulfillMembershipCreditsOnly(
+        serverMembership.parentUserId,
+        parentEmail,
+        serverMembership,
+        syntheticPaymentIntentId,
+        creditSplit.membershipCredits,
+      );
+    }
+
+    let enrollmentCreditPool = creditSplit.enrollmentCredits;
     for (const line of breakdown) {
       const enrollmentId = parseInt(line.id, 10);
-      if (!Number.isFinite(enrollmentId)) continue;
-      const creditCents = line.selectedChargeCents;
+      if (!Number.isFinite(enrollmentId) || enrollmentCreditPool <= 0) continue;
+      const lineCap = line.selectedChargeCents;
+      const creditCents = Math.min(lineCap, enrollmentCreditPool);
+      if (creditCents <= 0) continue;
+      enrollmentCreditPool -= creditCents;
       const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
       if (!enrollment) continue;
       const currentPaid = enrollment.totalPaid || 0;
@@ -265,14 +310,19 @@ export async function completeCartCreditsOnlyCheckout(params: {
       await syncScheduledPaymentsForEnrollment(enrollmentId, newPaid);
     }
 
-    if (serverMembership) {
-      await fulfillMembershipCreditsOnly(
-        serverMembership.parentUserId,
-        parentEmail,
-        serverMembership,
-        syntheticPaymentIntentId,
-      );
-    }
+    await storage.updatePayment(createdPayment.id, {
+      metadata: {
+        creditOnlyCheckout: true,
+        creditsAppliedCents: appliedVolunteerCreditsCents,
+        totalWithMembershipCents: totalWithMembership,
+        creditAllocation: creditSplit,
+        allocationBreakdown: {
+          membershipCents: creditSplit.membershipCredits,
+          classPoolCents: creditSplit.enrollmentCredits,
+          grossCents: appliedVolunteerCreditsCents,
+        },
+      },
+    });
 
     try {
       const { dataLayer } = await import('./dataLayer.js');

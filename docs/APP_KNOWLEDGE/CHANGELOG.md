@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-06-01 (Membership-first payment allocation)
+
+- **Waterfall:** `server/lib/balance-payment-metadata.ts` — membership annual fee is satisfied before class tuition on each payment gross (PI + credits), not proportional to cart total. Resolver: `resolve-membership-reserve-for-payment.ts`.
+- **Credits:** Volunteer credits apply to membership first (`allocateVolunteerCreditsWaterfall`); credits-only cart reordered in `cart-credits-only-checkout.ts`; checkout PI metadata `creditAllocation` from `stripe-payment-plans.ts`.
+- **Verification:** `membership_waterfall` checks in `post-payment-verification.ts` / `verify-membership-waterfall.ts`; `payments.metadata.allocationBreakdown` written on fulfill.
+- **Prod script:** `server/scripts/repair-heather-jacks-membership-first-production.ts` — Heather Jacks enrollment #449 ($125 membership + $14.58 class from first PI; 11 biweeklies on original dates 2–12).
+
 ## 2026-06-01 (Cart checkout spinner recovery)
 
 - **Cart checkout hang:** Slow `refreshCart` / `cartLoading` left checkout on spinners with no recovery; CartDrawer shows "Updating cart…"; checkout shows cart-loading copy and a retry card when payment intent never loads; **empty cart** (installment-plan exclusions) clears `loading` and redirects to `/payments?tab=upcoming`.

@@ -16,6 +16,7 @@ import {
 } from '@shared/checkout-payment-plan';
 import { programEnrollments, scheduledPayments } from '@shared/schema';
 import type { Payment } from '@shared/schema';
+import { buildMembershipWaterfallChecks } from '../lib/verify-membership-waterfall';
 
 export type VerificationSeverity = 'info' | 'warning' | 'critical';
 
@@ -263,6 +264,9 @@ export async function verifyPaymentIntent(
       });
     }
   }
+
+  const membershipChecks = await buildMembershipWaterfallChecks(pi, payment);
+  checks.push(...membershipChecks);
 
   const { creditsAppliedCents } = parseBalanceIntentCredits(meta as Record<string, string | undefined>);
   if (creditsAppliedCents > 0) {

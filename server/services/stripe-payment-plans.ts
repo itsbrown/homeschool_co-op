@@ -15,6 +15,7 @@ import {
   type CheckoutPaymentPlanId,
 } from '@shared/checkout-payment-plan';
 import { resolveEnrollmentIdsFromScheduledRow } from '../lib/scheduled-payment-intent-metadata';
+import { allocateVolunteerCreditsWaterfall } from '../lib/balance-payment-metadata';
 
 /** Read at call time — env is set in Jest beforeAll after this module may have loaded. */
 function skipStripeApiInTests(): boolean {
@@ -201,6 +202,17 @@ export class StripePaymentPlanService {
                 ...(data.creditUserId != null && data.creditUserId > 0
                   ? { userId: String(Math.floor(data.creditUserId)) }
                   : {}),
+                ...(data.membership
+                  ? (() => {
+                      const split = allocateVolunteerCreditsWaterfall({
+                        creditsCents: appliedCredits,
+                        membershipOwedCents: data.membership!.amount,
+                      });
+                      return {
+                        creditAllocation: JSON.stringify(split),
+                      };
+                    })()
+                  : {}),
               }
             : {}),
         },
@@ -239,6 +251,13 @@ export class StripePaymentPlanService {
         paymentMetadata.originalAmountCents = String(gross);
         if (data.creditUserId != null && data.creditUserId > 0) {
           paymentMetadata.userId = String(Math.floor(data.creditUserId));
+        }
+        if (data.membership) {
+          const split = allocateVolunteerCreditsWaterfall({
+            creditsCents: appliedCredits,
+            membershipOwedCents: data.membership.amount,
+          });
+          paymentMetadata.creditAllocation = JSON.stringify(split);
         }
       }
       

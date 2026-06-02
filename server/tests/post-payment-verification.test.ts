@@ -7,6 +7,8 @@ import {
   verifyPaymentIntent,
 } from '../services/post-payment-verification';
 
+const PARENT_EMAIL_HEATHER = 'hlcelso@mail.naz.edu';
+
 describe('post-payment-verification', () => {
   beforeEach(() => {
     jest.restoreAllMocks();
@@ -123,5 +125,65 @@ describe('post-payment-verification', () => {
     const result = await verifyPaymentIntent(pi, { dbLookupAttempts: 1, dbLookupDelayMs: 0 });
     expect(result.overallStatus).toBe('critical');
     expect(result.checks.some((c) => c.key === 'enrollment_ledger')).toBe(true);
+  });
+
+  it('flags proportional membership when waterfall expected (Heather case)', async () => {
+    jest.spyOn(storage, 'getPaymentByStripeId').mockResolvedValue({
+      id: 1,
+      amount: 13958,
+      status: 'completed',
+      schoolId: 2,
+      parentId: 146,
+      enrollmentIds: [449],
+      metadata: {
+        allocationBreakdown: {
+          membershipCents: 1458,
+          classPoolCents: 12500,
+          grossCents: 13958,
+        },
+      },
+    } as any);
+    jest.spyOn(storage, 'getProgramEnrollmentById').mockResolvedValue({
+      id: 449,
+      schoolId: 2,
+      parentId: 146,
+      totalCost: 135000,
+      totalPaid: 12500,
+      compAmountCents: 0,
+      effectiveBalance: 122500,
+    } as any);
+    jest.spyOn(storage, 'getUnifiedCreditUsageLogsByCheckoutPaymentIntentId').mockResolvedValue([]);
+    jest.spyOn(storage, 'getMembershipEnrollmentByParentAndSchoolAndYear').mockResolvedValue({
+      id: 1,
+      amount: 12500,
+      amountPaid: 1458,
+      remainingBalance: 11042,
+      status: 'pending_payment',
+    } as any);
+    jest.spyOn(storage, 'getSchool').mockResolvedValue({ membershipFeeAmount: 12500 } as any);
+    jest.spyOn(storage, 'getUserByEmail').mockResolvedValue(undefined);
+
+    const pi = {
+      id: 'pi_heather_test',
+      status: 'succeeded',
+      amount: 13958,
+      metadata: {
+        hasMembership: 'true',
+        membershipAmount: '17500',
+        membershipParentUserId: '146',
+        membershipSchoolId: '2',
+        membershipYear: '2026',
+        totalAmount: '167500',
+        enrollmentIds: '[449]',
+        paymentPlan: 'biweekly',
+        paymentFrequency: 'biweekly',
+        installmentNumber: '1',
+        totalInstallments: '12',
+        parentEmail: PARENT_EMAIL_HEATHER,
+      },
+    } as Stripe.PaymentIntent;
+
+    const result = await verifyPaymentIntent(pi, { dbLookupAttempts: 1, dbLookupDelayMs: 0 });
+    expect(result.checks.some((c) => c.key === 'membership_waterfall')).toBe(true);
   });
 });

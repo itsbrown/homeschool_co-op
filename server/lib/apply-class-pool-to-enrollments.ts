@@ -7,12 +7,14 @@ import {
   parseBalanceIntentCredits,
   totalCentsForBalanceAllocation,
 } from './balance-payment-metadata';
+import { resolveMembershipReserveForPaymentIntent } from './resolve-membership-reserve-for-payment';
 import type Stripe from 'stripe';
 
 export type ApplyClassPoolResult = {
   enrollmentIds: number[];
   appliedCents: number;
   skippedCents: number;
+  classPoolCents: number;
 };
 
 /**
@@ -24,23 +26,38 @@ export async function applyClassPoolToEnrollments(
   enrollmentIds: number[],
 ): Promise<ApplyClassPoolResult> {
   if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
-    return { enrollmentIds: [], appliedCents: 0, skippedCents: 0 };
+    return { enrollmentIds: [], appliedCents: 0, skippedCents: 0, classPoolCents: 0 };
   }
 
   const amountCents = typeof paymentIntent.amount === 'number' ? paymentIntent.amount : 0;
-  if (!Number.isInteger(amountCents) || amountCents <= 0) {
-    throw new Error('Payment intent amount must be a positive integer in cents');
+  const meta = paymentIntent.metadata as Record<string, string | undefined>;
+  const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(meta);
+
+  const resolved = await resolveMembershipReserveForPaymentIntent(paymentIntent);
+  const totalCharged =
+    resolved?.allocationGrossCents ??
+    totalCentsForBalanceAllocation({
+      paymentIntentAmountCents: amountCents,
+      creditsAppliedCents,
+      originalAmountCents,
+    });
+
+  if (!Number.isInteger(totalCharged) || totalCharged <= 0) {
+    throw new Error('Payment allocation gross must be a positive integer in cents');
   }
 
-  const meta = paymentIntent.metadata as Record<string, string | undefined>;
-  const membershipCents = membershipCentsReservedForPaymentIntent(amountCents, meta);
-  const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(meta);
-  const totalCharged = totalCentsForBalanceAllocation({
-    paymentIntentAmountCents: amountCents,
-    creditsAppliedCents,
-    originalAmountCents,
-  });
-  const classPoolCents = enrollmentPoolCentsForBalanceIntent(totalCharged, membershipCents);
+  const membershipCents =
+    resolved?.membershipPortionThisPaymentCents ??
+    membershipCentsReservedForPaymentIntent(amountCents, meta, {
+      allocationGrossCents: totalCharged,
+    });
+  const classPoolCents =
+    resolved?.classPoolCents ?? enrollmentPoolCentsForBalanceIntent(totalCharged, membershipCents);
+
+  if (classPoolCents <= 0) {
+    return { enrollmentIds: [], appliedCents: 0, skippedCents: 0, classPoolCents: 0 };
+  }
+
   const allocation = splitCentsEvenly(classPoolCents, enrollmentIds.length);
 
   let appliedCents = 0;
@@ -84,5 +101,5 @@ export async function applyClassPoolToEnrollments(
     updatedIds.push(enrollment.id);
   }
 
-  return { enrollmentIds: updatedIds, appliedCents, skippedCents };
+  return { enrollmentIds: updatedIds, appliedCents, skippedCents, classPoolCents };
 }

@@ -27,43 +27,121 @@ export function enrollmentPoolCentsForBalanceIntent(
   return totalChargedCents - reserved;
 }
 
+/** Membership-first: pay annual fee before class from each allocation gross. */
+export function computeMembershipWaterfallPortion(args: {
+  allocationGrossCents: number;
+  cartMembershipTotalCents: number;
+  membershipAlreadyPaidCents: number;
+}): number {
+  const gross = args.allocationGrossCents;
+  const cartTotal = args.cartMembershipTotalCents;
+  const priorPaid = Math.max(0, args.membershipAlreadyPaidCents);
+  if (!Number.isInteger(gross) || gross <= 0 || cartTotal <= 0) {
+    return 0;
+  }
+  const remaining = Math.max(0, cartTotal - priorPaid);
+  return Math.min(gross, remaining);
+}
+
+/** Split volunteer credits: membership owed first, remainder to enrollments. */
+export function allocateVolunteerCreditsWaterfall(args: {
+  creditsCents: number;
+  membershipOwedCents: number;
+}): { membershipCredits: number; enrollmentCredits: number } {
+  const credits = Math.max(0, Math.floor(args.creditsCents));
+  const owed = Math.max(0, Math.floor(args.membershipOwedCents));
+  const membershipCredits = Math.min(credits, owed);
+  return {
+    membershipCredits,
+    enrollmentCredits: credits - membershipCredits,
+  };
+}
+
+export type MembershipPaymentIntentAllocation = {
+  cartMembershipTotalCents: number;
+  membershipPortionThisPaymentCents: number;
+  allocationGrossCents: number;
+  classPoolCents: number;
+};
+
 /**
- * Cart membership total (metadata.membershipAmount) vs the membership share of *this*
- * PaymentIntent. On biweekly/ deposit plans, PI.amount is one installment while
- * metadata.membershipAmount is the full annual fee — reserving the full fee zeroes out
- * the class pool on installment 1 (Heather Jacks / $139.58 of $1675 case).
+ * Cart membership total vs membership share of *this* payment (waterfall).
+ * Use allocationGrossCents (PI + credits) when credits partially cover checkout.
  */
 export function membershipCentsForThisPaymentIntent(
   paymentIntentAmountCents: number,
   metadata: Record<string, string | undefined> | null | undefined,
-): { cartMembershipTotalCents: number; membershipPortionThisPaymentCents: number } {
-  const cartMembershipTotalCents = parseMetadataMembershipAmountCents(metadata);
+  options?: {
+    membershipAlreadyPaidCents?: number;
+    allocationGrossCents?: number;
+    cartMembershipTotalCents?: number;
+  },
+): MembershipPaymentIntentAllocation {
+  const cartMembershipTotalCents =
+    options?.cartMembershipTotalCents ?? parseMetadataMembershipAmountCents(metadata);
+  const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(metadata);
+  const allocationGrossCents =
+    options?.allocationGrossCents ??
+    totalCentsForBalanceAllocation({
+      paymentIntentAmountCents,
+      creditsAppliedCents,
+      originalAmountCents,
+    });
+
   if (cartMembershipTotalCents <= 0) {
-    return { cartMembershipTotalCents: 0, membershipPortionThisPaymentCents: 0 };
-  }
-  if (!Number.isInteger(paymentIntentAmountCents) || paymentIntentAmountCents <= 0) {
-    return { cartMembershipTotalCents, membershipPortionThisPaymentCents: 0 };
-  }
-
-  const totalAmount = parseInt(String(metadata?.totalAmount ?? '0'), 10);
-  if (!Number.isInteger(totalAmount) || totalAmount <= 0) {
-    const portion = Math.min(cartMembershipTotalCents, paymentIntentAmountCents);
-    return { cartMembershipTotalCents, membershipPortionThisPaymentCents: portion };
+    return {
+      cartMembershipTotalCents: 0,
+      membershipPortionThisPaymentCents: 0,
+      allocationGrossCents,
+      classPoolCents: allocationGrossCents,
+    };
   }
 
-  const portion = Math.min(
-    paymentIntentAmountCents,
-    Math.round(paymentIntentAmountCents * (cartMembershipTotalCents / totalAmount)),
-  );
-  return { cartMembershipTotalCents, membershipPortionThisPaymentCents: portion };
+  const membershipPortionThisPaymentCents = computeMembershipWaterfallPortion({
+    allocationGrossCents,
+    cartMembershipTotalCents,
+    membershipAlreadyPaidCents: options?.membershipAlreadyPaidCents ?? 0,
+  });
+
+  return {
+    cartMembershipTotalCents,
+    membershipPortionThisPaymentCents,
+    allocationGrossCents,
+    classPoolCents: enrollmentPoolCentsForBalanceIntent(
+      allocationGrossCents,
+      membershipPortionThisPaymentCents,
+    ),
+  };
+}
+
+/** Gross cents allocated (card + credits) for a PaymentIntent. */
+export function allocationGrossCentsFromPaymentIntent(
+  paymentIntent: Pick<{ amount: number; metadata?: Record<string, string | undefined> | null }>,
+): number {
+  const amountCents =
+    typeof paymentIntent.amount === 'number' && Number.isInteger(paymentIntent.amount)
+      ? paymentIntent.amount
+      : 0;
+  const meta = (paymentIntent.metadata ?? {}) as Record<string, string | undefined>;
+  const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(meta);
+  return totalCentsForBalanceAllocation({
+    paymentIntentAmountCents: amountCents,
+    creditsAppliedCents,
+    originalAmountCents,
+  });
 }
 
 /** Membership cents to subtract before allocating the class pool for a PI. */
 export function membershipCentsReservedForPaymentIntent(
   paymentIntentAmountCents: number,
   metadata: Record<string, string | undefined> | null | undefined,
+  options?: {
+    membershipAlreadyPaidCents?: number;
+    allocationGrossCents?: number;
+    cartMembershipTotalCents?: number;
+  },
 ): number {
-  return membershipCentsForThisPaymentIntent(paymentIntentAmountCents, metadata)
+  return membershipCentsForThisPaymentIntent(paymentIntentAmountCents, metadata, options)
     .membershipPortionThisPaymentCents;
 }
 
@@ -100,4 +178,26 @@ export function totalCentsForBalanceAllocation(args: {
     return args.originalAmountCents;
   }
   return pi + args.creditsAppliedCents;
+}
+
+/** Proportional membership slice (legacy); used only for post-payment regression detection. */
+export function proportionalMembershipPortionCents(
+  paymentIntentAmountCents: number,
+  metadata: Record<string, string | undefined> | null | undefined,
+): number | null {
+  const cartMembershipTotalCents = parseMetadataMembershipAmountCents(metadata);
+  const totalAmount = parseInt(String(metadata?.totalAmount ?? '0'), 10);
+  if (
+    cartMembershipTotalCents <= 0 ||
+    !Number.isInteger(paymentIntentAmountCents) ||
+    paymentIntentAmountCents <= 0 ||
+    !Number.isInteger(totalAmount) ||
+    totalAmount <= 0
+  ) {
+    return null;
+  }
+  return Math.min(
+    paymentIntentAmountCents,
+    Math.round(paymentIntentAmountCents * (cartMembershipTotalCents / totalAmount)),
+  );
 }

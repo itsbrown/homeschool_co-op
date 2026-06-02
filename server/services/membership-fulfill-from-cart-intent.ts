@@ -4,7 +4,8 @@ import { getDb } from '../db';
 import { storage } from '../storage';
 import { users } from '../../shared/schema';
 import { generateMemberId } from '../utils/membership';
-import { membershipCentsForThisPaymentIntent } from '../lib/balance-payment-metadata';
+import { resolveMembershipReserveForPaymentIntent } from '../lib/resolve-membership-reserve-for-payment';
+import type { PaymentAllocationBreakdown } from '../lib/persist-payment-allocation-breakdown';
 
 /**
  * Apply membership enrollment create/update when a cart PaymentIntent includes
@@ -15,7 +16,7 @@ import { membershipCentsForThisPaymentIntent } from '../lib/balance-payment-meta
  */
 export async function applyMembershipFulfillmentFromCartPaymentIntent(
   paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'customer' | 'metadata' | 'amount'>,
-): Promise<void> {
+): Promise<PaymentAllocationBreakdown | null> {
   const md = paymentIntent.metadata || {};
   const hasMembership = md.hasMembership === 'true';
   const membershipSchoolId = md.membershipSchoolId ? parseInt(md.membershipSchoolId, 10) : null;
@@ -27,8 +28,10 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
     typeof paymentIntent.amount === 'number' && Number.isInteger(paymentIntent.amount)
       ? paymentIntent.amount
       : 0;
-  const { cartMembershipTotalCents, membershipPortionThisPaymentCents } =
-    membershipCentsForThisPaymentIntent(piAmount, md as Record<string, string | undefined>);
+
+  const resolved = await resolveMembershipReserveForPaymentIntent(paymentIntent);
+  const cartMembershipTotalCents = resolved?.cartMembershipTotalCents ?? 0;
+  const membershipPortionThisPaymentCents = resolved?.membershipPortionThisPaymentCents ?? 0;
 
   const membershipDiscountId = md.membershipDiscountId ? parseInt(md.membershipDiscountId, 10) : null;
   const membershipDiscountName = (md.membershipDiscountName as string) || null;
@@ -40,7 +43,7 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
     : 0;
 
   if (!hasMembership || !parentUserId || !membershipSchoolId || cartMembershipTotalCents <= 0) {
-    return;
+    return null;
   }
 
   if (membershipPortionThisPaymentCents <= 0) {
@@ -49,7 +52,13 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
       piAmount,
       cartMembershipTotalCents,
     });
-    return;
+    return resolved
+      ? {
+          membershipCents: 0,
+          classPoolCents: resolved.classPoolCents,
+          grossCents: resolved.allocationGrossCents,
+        }
+      : null;
   }
 
   console.log('🎫 Processing membership payment:', {
@@ -194,7 +203,13 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
         console.error('⚠️ Error tracking membership discount application:', discountTrackError);
       }
     }
+    return {
+      membershipCents: membershipPortionThisPaymentCents,
+      classPoolCents: resolved?.classPoolCents ?? 0,
+      grossCents: resolved?.allocationGrossCents ?? piAmount,
+    };
   } catch (membershipError) {
     console.error('❌ Error processing membership payment:', membershipError);
+    return null;
   }
 }

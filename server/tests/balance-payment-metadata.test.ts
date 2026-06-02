@@ -5,6 +5,9 @@ import {
   enrollmentPoolCentsForBalanceIntent,
   membershipCentsForThisPaymentIntent,
   membershipCentsReservedForPaymentIntent,
+  computeMembershipWaterfallPortion,
+  allocateVolunteerCreditsWaterfall,
+  proportionalMembershipPortionCents,
 } from '../lib/balance-payment-metadata';
 
 describe('balance-payment-metadata', () => {
@@ -51,7 +54,7 @@ describe('balance-payment-metadata', () => {
     ).toBe(400661);
   });
 
-  it('prorates membership reserve on biweekly installment 1 (class + membership cart)', () => {
+  it('waterfalls membership on biweekly installment 1 (Heather Jacks case)', () => {
     const meta = {
       hasMembership: 'true',
       membershipAmount: '17500',
@@ -61,12 +64,86 @@ describe('balance-payment-metadata', () => {
     };
     const piAmount = 13958;
     const { cartMembershipTotalCents, membershipPortionThisPaymentCents } =
-      membershipCentsForThisPaymentIntent(piAmount, meta);
-    expect(cartMembershipTotalCents).toBe(17500);
-    expect(membershipPortionThisPaymentCents).toBe(1458);
-    expect(membershipCentsReservedForPaymentIntent(piAmount, meta)).toBe(1458);
+      membershipCentsForThisPaymentIntent(piAmount, meta, {
+        cartMembershipTotalCents: 12500,
+        membershipAlreadyPaidCents: 0,
+      });
+    expect(cartMembershipTotalCents).toBe(12500);
+    expect(membershipPortionThisPaymentCents).toBe(12500);
+    expect(membershipCentsReservedForPaymentIntent(piAmount, meta, {
+      cartMembershipTotalCents: 12500,
+      membershipAlreadyPaidCents: 0,
+    })).toBe(12500);
     expect(enrollmentPoolCentsForBalanceIntent(piAmount, membershipPortionThisPaymentCents)).toBe(
-      12500,
+      1458,
     );
+  });
+
+  it('allocates no membership when already paid', () => {
+    const meta = { hasMembership: 'true', membershipAmount: '12500', totalAmount: '167500' };
+    const { membershipPortionThisPaymentCents } = membershipCentsForThisPaymentIntent(13958, meta, {
+      cartMembershipTotalCents: 12500,
+      membershipAlreadyPaidCents: 12500,
+    });
+    expect(membershipPortionThisPaymentCents).toBe(0);
+  });
+
+  it('uses gross including credits for membership reserve', () => {
+    const meta = {
+      hasMembership: 'true',
+      membershipAmount: '12500',
+      creditsAppliedCents: '5000',
+      originalAmountCents: '13958',
+    };
+    const { membershipPortionThisPaymentCents, allocationGrossCents } =
+      membershipCentsForThisPaymentIntent(8958, meta, {
+        cartMembershipTotalCents: 12500,
+        membershipAlreadyPaidCents: 0,
+        allocationGrossCents: 13958,
+      });
+    expect(allocationGrossCents).toBe(13958);
+    expect(membershipPortionThisPaymentCents).toBe(12500);
+  });
+
+  it('computeMembershipWaterfallPortion caps at remaining fee', () => {
+    expect(
+      computeMembershipWaterfallPortion({
+        allocationGrossCents: 13958,
+        cartMembershipTotalCents: 12500,
+        membershipAlreadyPaidCents: 0,
+      }),
+    ).toBe(12500);
+    expect(
+      computeMembershipWaterfallPortion({
+        allocationGrossCents: 5000,
+        cartMembershipTotalCents: 12500,
+        membershipAlreadyPaidCents: 0,
+      }),
+    ).toBe(5000);
+  });
+
+  it('allocateVolunteerCreditsWaterfall pays membership first', () => {
+    expect(
+      allocateVolunteerCreditsWaterfall({ creditsCents: 20000, membershipOwedCents: 12500 }),
+    ).toEqual({ membershipCredits: 12500, enrollmentCredits: 7500 });
+    expect(
+      allocateVolunteerCreditsWaterfall({ creditsCents: 5000, membershipOwedCents: 12500 }),
+    ).toEqual({ membershipCredits: 5000, enrollmentCredits: 0 });
+  });
+
+  it('proportional helper differs from waterfall for Heather PI', () => {
+    const meta = {
+      hasMembership: 'true',
+      membershipAmount: '17500',
+      totalAmount: '167500',
+    };
+    expect(proportionalMembershipPortionCents(13958, meta)).toBe(1458);
+    expect(
+      computeMembershipWaterfallPortion({
+        allocationGrossCents: 13958,
+        cartMembershipTotalCents: 12500,
+        membershipAlreadyPaidCents: 0,
+      }),
+    ).toBe(12500);
   });
 });

@@ -108,7 +108,7 @@ scheduled_payments:
 
 - Schools configure annual `membershipFeeAmount` (in cents)
 - Membership is validated at checkout — parents must pay if not already current
-- **Membership fee priority disbursement**: When included in biweekly payments, membership amount is allocated FIRST from the total payment before enrollment amounts
+- **Membership fee priority disbursement (waterfall)**: On each payment gross (PI + credits), `computeMembershipWaterfallPortion` in `server/lib/balance-payment-metadata.ts` pays down `membership_enrollments` until the annual fee is satisfied, then applies the remainder to class enrollments. Volunteer credits use the same order (`allocateVolunteerCreditsWaterfall`). Post-payment check: `membership_waterfall` in `post-payment-verification.ts`.
 - Membership discounts can be applied (role-based, sibling, etc.)
 
 ## Payment Allocation Audit Trail

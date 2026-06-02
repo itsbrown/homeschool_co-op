@@ -62,6 +62,7 @@ Run after webhook processing settles (or with short retry if `payments` row not 
 | **Autopay readiness** | `users.stripe_customer_id`, `stripe_default_payment_method_id`, `metadata.autoPay` on pending rows | Warning if autoPay true but no saved PM |
 | **Reminders** | `reminder_count`, due dates within policy window | Info / warning |
 | **Credits** | Approved unused credits vs checkout snapshot / allocation | Critical if checkout expected credit application but `unified_credit_usage_logs` empty |
+| **Membership waterfall** | `hasMembership` checkout: gross → membership before class; `allocationBreakdown` on payment row; `creditAllocation` split | Critical if `amount_paid` under waterfall or proportional slice detected; warning if scheduled pay while membership owed |
 
 **Multi-enrollment biweekly:** Today remaining installments attach to `enrollment_ids[0]` only (`persistRemainingScheduledPaymentsAfterFirstCheckoutPayment` in `stripe-payment-plans.ts`). Verification must treat that as **intentional** but validate combined installment totals against sum of per-enrollment ledgers.
 
