@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { computeEffectiveBalance } from '@shared/schema';
 import { storage } from '../storage';
 import type { CanonicalAmountCalculationResult } from './canonical-amount-calculator';
 import { generateMemberId } from '../utils/membership';
@@ -31,6 +32,35 @@ function buildSyntheticStripeId(params: {
   ].join('|');
   const hash = crypto.createHash('sha256').update(key).digest('hex').slice(0, 32);
   return `credit_only_cart_${hash}`;
+}
+
+async function applyCreditCentsToEnrollment(
+  enrollmentId: number,
+  creditCents: number,
+): Promise<number> {
+  if (creditCents <= 0) return 0;
+  const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+  if (!enrollment) return 0;
+
+  const compAmount = enrollment.compAmountCents ?? 0;
+  const owedBefore = computeEffectiveBalance(
+    enrollment.totalCost ?? 0,
+    enrollment.totalPaid ?? 0,
+    compAmount,
+  );
+  const toApply = Math.min(creditCents, owedBefore);
+  if (toApply <= 0) return 0;
+
+  const newPaid = (enrollment.totalPaid ?? 0) + toApply;
+  const newBalance = Math.max(0, (enrollment.totalCost ?? 0) - newPaid - compAmount);
+  await storage.updateProgramEnrollment(enrollmentId, {
+    totalPaid: newPaid,
+    remainingBalance: newBalance,
+    paymentStatus: newBalance <= 0 ? 'completed' : 'deposit_paid',
+    status: 'enrolled',
+  });
+  await syncScheduledPaymentsForEnrollment(enrollmentId, newPaid);
+  return toApply;
 }
 
 async function syncScheduledPaymentsForEnrollment(enrollmentId: number, newTotalPaid: number): Promise<void> {
@@ -203,62 +233,17 @@ export async function completeCartCreditsOnlyCheckout(params: {
   });
 
   const existing = await storage.getPaymentByStripeId(syntheticPaymentIntentId);
-  if (existing) {
-    return { creditsApplied: appliedVolunteerCreditsCents, syntheticPaymentIntentId };
-  }
 
   const holdSessionId = `cart_credits_${syntheticPaymentIntentId}`;
   let holdCreated = false;
 
   try {
-    const { totalHeld } = await storage.createCreditHolds(
-      parentId,
-      appliedVolunteerCreditsCents,
-      holdSessionId,
-      `Cart checkout credits-only (${syntheticPaymentIntentId})`,
-      60,
-    );
-    if (totalHeld < appliedVolunteerCreditsCents) {
-      throw new Error(`INSUFFICIENT_CREDIT_HOLD: need ${appliedVolunteerCreditsCents}, held ${totalHeld}`);
-    }
-    holdCreated = true;
-
     const breakdown = authoritativeAmountResult.breakdown;
     const schoolIdFromEnrollment =
       enrollmentIds.length > 0
         ? (await storage.getProgramEnrollmentById(enrollmentIds[0]!))?.schoolId
         : null;
     const schoolId = parentSchoolId ?? schoolIdFromEnrollment ?? 1;
-
-    const createdPayment = await storage.createPayment({
-      schoolId,
-      parentId,
-      parentEmail,
-      childName: 'Cart checkout',
-      className: enrollmentIds.length > 1 ? `${enrollmentIds.length} classes` : 'Class',
-      description: `Credits-only checkout — volunteer credits applied`,
-      amount: 0,
-      currency: 'usd',
-      status: 'completed',
-      stripePaymentIntentId: syntheticPaymentIntentId,
-      stripeChargeId: null,
-      stripeRefundId: null,
-      originalPaymentId: null,
-      enrollmentIds,
-      paymentMethod: 'other',
-      metadata: {
-        creditOnlyCheckout: true,
-        creditsAppliedCents: appliedVolunteerCreditsCents,
-        totalWithMembershipCents: totalWithMembership,
-      },
-      paymentDate: new Date(),
-    });
-
-    await storage.finalizeCreditHolds(
-      holdSessionId,
-      createdPayment.id,
-      `Cart credits-only checkout payment #${createdPayment.id}`,
-    );
 
     let membershipOwedCents = 0;
     if (serverMembership) {
@@ -278,6 +263,60 @@ export async function completeCartCreditsOnlyCheckout(params: {
       membershipOwedCents,
     });
 
+    if (!existing) {
+      const { totalHeld } = await storage.createCreditHolds(
+        parentId,
+        appliedVolunteerCreditsCents,
+        holdSessionId,
+        `Cart checkout credits-only (${syntheticPaymentIntentId})`,
+        60,
+      );
+      if (totalHeld < appliedVolunteerCreditsCents) {
+        throw new Error(`INSUFFICIENT_CREDIT_HOLD: need ${appliedVolunteerCreditsCents}, held ${totalHeld}`);
+      }
+      holdCreated = true;
+    }
+
+    const createdPayment =
+      existing ??
+      (await storage.createPayment({
+      schoolId,
+      parentId,
+      parentEmail,
+      childName: 'Cart checkout',
+      className: enrollmentIds.length > 1 ? `${enrollmentIds.length} classes` : 'Class',
+      description: `Credits-only checkout — volunteer credits applied`,
+      amount: 0,
+      currency: 'usd',
+      status: 'completed',
+      stripePaymentIntentId: syntheticPaymentIntentId,
+      stripeChargeId: null,
+      stripeRefundId: null,
+      originalPaymentId: null,
+      enrollmentIds,
+      paymentMethod: 'other',
+      metadata: {
+        creditOnlyCheckout: true,
+        creditsAppliedCents: appliedVolunteerCreditsCents,
+        totalWithMembershipCents: totalWithMembership,
+        creditAllocation: creditSplit,
+        allocationBreakdown: {
+          membershipCents: creditSplit.membershipCredits,
+          classPoolCents: creditSplit.enrollmentCredits,
+          grossCents: appliedVolunteerCreditsCents,
+        },
+      },
+      paymentDate: new Date(),
+    }));
+
+    if (!existing) {
+      await storage.finalizeCreditHolds(
+        holdSessionId,
+        createdPayment.id,
+        `Cart credits-only checkout payment #${createdPayment.id}`,
+      );
+    }
+
     if (serverMembership && creditSplit.membershipCredits > 0) {
       await fulfillMembershipCreditsOnly(
         serverMembership.parentUserId,
@@ -294,35 +333,16 @@ export async function completeCartCreditsOnlyCheckout(params: {
       if (!Number.isFinite(enrollmentId) || enrollmentCreditPool <= 0) continue;
       const lineCap = line.selectedChargeCents;
       const creditCents = Math.min(lineCap, enrollmentCreditPool);
-      if (creditCents <= 0) continue;
-      enrollmentCreditPool -= creditCents;
-      const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
-      if (!enrollment) continue;
-      const currentPaid = enrollment.totalPaid || 0;
-      const newPaid = currentPaid + creditCents;
-      const newBalance = Math.max(0, (enrollment.totalCost || 0) - newPaid);
-      await storage.updateProgramEnrollment(enrollmentId, {
-        totalPaid: newPaid,
-        remainingBalance: newBalance,
-        paymentStatus: newBalance <= 0 ? 'completed' : 'deposit_paid',
-        status: 'enrolled',
-      });
-      await syncScheduledPaymentsForEnrollment(enrollmentId, newPaid);
+      const applied = await applyCreditCentsToEnrollment(enrollmentId, creditCents);
+      enrollmentCreditPool -= applied;
     }
 
-    await storage.updatePayment(createdPayment.id, {
-      metadata: {
-        creditOnlyCheckout: true,
-        creditsAppliedCents: appliedVolunteerCreditsCents,
-        totalWithMembershipCents: totalWithMembership,
-        creditAllocation: creditSplit,
-        allocationBreakdown: {
-          membershipCents: creditSplit.membershipCredits,
-          classPoolCents: creditSplit.enrollmentCredits,
-          grossCents: appliedVolunteerCreditsCents,
-        },
-      },
-    });
+    // Apply any remaining class credits (breakdown line caps can be 0 when ids diverge from enrollmentIds).
+    for (const enrollmentId of enrollmentIds) {
+      if (enrollmentCreditPool <= 0) break;
+      const applied = await applyCreditCentsToEnrollment(enrollmentId, enrollmentCreditPool);
+      enrollmentCreditPool -= applied;
+    }
 
     try {
       const { dataLayer } = await import('./dataLayer.js');

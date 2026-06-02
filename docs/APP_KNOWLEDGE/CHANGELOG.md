@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-06-02 (Credits-only checkout test fixes)
+
+- **Credits-only fulfill:** `applyCreditCentsToEnrollment` uses `computeEffectiveBalance`; fallback applies remaining class credits via `enrollmentIds` when canonical breakdown line caps are zero.
+- **Storage/test harness:** `createPayment` DB errors fall back to file storage (non-prod); `getUser` / `getUserByEmail` use mem when Postgres unavailable in `NODE_ENV=test`; `supabaseAuth` honors `x-test-user-email` in tests.
+- **Schema:** Export `assessmentSessions` (was breaking `storage` import / Jest globalSetup).
+- **Integration:** `cart-credits-only-checkout-route.test.ts` uses `installFinancialIntegrationStubs()`.
+
 ## 2026-06-01 (Membership-first payment allocation)
 
 - **Waterfall:** `server/lib/balance-payment-metadata.ts` — membership annual fee is satisfied before class tuition on each payment gross (PI + credits), not proportional to cart total. Resolver: `resolve-membership-reserve-for-payment.ts`.

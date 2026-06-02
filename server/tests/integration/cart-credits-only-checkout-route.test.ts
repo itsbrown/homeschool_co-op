@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
 import { nanoid } from 'nanoid';
-import { testDb } from '../helpers/testDatabase';
+import { testDb, installFinancialIntegrationStubs } from '../helpers/testDatabase';
 import { api, resetApi } from '../helpers/apiHelpers';
 import { storage } from '../../storage';
 
@@ -22,6 +22,8 @@ jest.mock('../../config/stripe', () => ({
 }));
 
 describeWithDb('Integration: cart credits-only checkout (create-payment-intent)', () => {
+  installFinancialIntegrationStubs();
+
   let testUser: any;
   let testSchool: any;
   let testChild: any;
@@ -68,6 +70,8 @@ describeWithDb('Integration: cart credits-only checkout (create-payment-intent)'
     testSchool = await testDb.createTestSchool(admin.id, {
       name: `Cart Credit School ${uid}`,
       registrationCode: `CART${uid.toUpperCase().slice(0, 6)}`,
+      membershipFeeAmount: 0,
+      membershipRequired: false,
     });
 
     testUser = await testDb.createTestUser({
@@ -91,7 +95,7 @@ describeWithDb('Integration: cart credits-only checkout (create-payment-intent)'
       name: `Cart Credit Category ${uid}`,
     });
     testClass = await testDb.createTestClass(testSchool.id, {
-      name: `Cart Credit Class ${uid}`,
+      title: `Cart Credit Class ${uid}`,
       description: 'For credits-only checkout',
       price: 10000,
       status: 'active',
@@ -101,11 +105,36 @@ describeWithDb('Integration: cart credits-only checkout (create-payment-intent)'
     });
   });
 
+  let pendingEnrollment: Awaited<ReturnType<typeof storage.createProgramEnrollment>>;
+
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
   it('returns 200 with creditOnlyCheckout and marks enrollment paid when credits cover the cart', async () => {
+    pendingEnrollment = await storage.createProgramEnrollment({
+      schoolId: testSchool.id,
+      classType: 'school_class',
+      classId: testClass.id,
+      programId: testClass.id,
+      childId: testChild.id,
+      childName: `${testChild.firstName} ${testChild.lastName}`,
+      className: testClass.title,
+      parentId: testUser.id,
+      parentEmail: testUser.email,
+      totalCost: 10000,
+      totalPaid: 0,
+      remainingBalance: 10000,
+      depositRequired: 0,
+      paymentStatus: 'pending',
+      status: 'pending_payment',
+      paymentPlan: 'full_payment',
+      paymentSystemVersion: 'v2_stripe',
+      paymentFrequency: 'one_time',
+      enrollmentDate: new Date(),
+    });
+
+    jest.spyOn(storage, 'getPaymentByStripeId').mockResolvedValue(undefined);
     jest.spyOn(storage, 'getTotalAvailableCredits').mockResolvedValue(10000);
     jest.spyOn(storage, 'createCreditHolds').mockResolvedValue({ holds: [], totalHeld: 10000 } as any);
     jest.spyOn(storage, 'finalizeCreditHolds').mockResolvedValue({
@@ -120,10 +149,11 @@ describeWithDb('Integration: cart credits-only checkout (create-payment-intent)'
     const response = await api.post('/api/stripe/create-payment-intent', {
       items: [
         {
+          enrollmentId: pendingEnrollment.id,
           childId: testChild.id,
           childName: `${testChild.firstName} ${testChild.lastName}`,
           classId: testClass.id,
-          className: testClass.name,
+          className: testClass.title,
           classType: 'school_class',
           price: 10000,
           totalCost: 10000,

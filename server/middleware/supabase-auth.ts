@@ -39,6 +39,34 @@ export const supabaseAuth = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
+
+    // Integration / simple-test-app harness: authenticate via header without Supabase JWT.
+    if (process.env.NODE_ENV === 'test' && req.headers['x-test-user-email']) {
+      const testEmail = String(req.headers['x-test-user-email']);
+      const testUser = await storage.getUserByEmail(testEmail);
+      if (testUser) {
+        req.user = {
+          id: testUser.id,
+          email: testUser.email,
+          sub: testUser.supabaseId || String(testUser.id),
+          role: testUser.role,
+          permissions: testUser.permissions,
+          schoolId: testUser.schoolId,
+          name: testUser.name,
+        };
+        req.auth = {
+          payload: {
+            sub: testUser.supabaseId || String(testUser.id),
+            email: testUser.email,
+            role: testUser.role,
+            school_id: testUser.schoolId,
+            name: testUser.name,
+            permissions: testUser.permissions,
+          },
+        };
+        return next();
+      }
+    }
     
     if (process.env.NODE_ENV === 'development') {
       console.log('🔐 supabaseAuth middleware - Path:', req.path);

@@ -2975,6 +2975,30 @@ export const insertCurriculumBookSchema = createInsertSchema(curriculumBooks)
 export type InsertCurriculumBook = z.infer<typeof insertCurriculumBookSchema>;
 export type CurriculumBook = typeof curriculumBooks.$inferSelect;
 
+export const assessmentSessions = pgTable("assessment_sessions", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
+  assessmentTypeId: integer("assessment_type_id").notNull().references(() => assessmentTypes.id),
+  startedAt: timestamp("started_at").notNull(),
+  completedAt: timestamp("completed_at"),
+  status: text("status").notNull().default("in_progress"),
+  totalQuestions: integer("total_questions"),
+  correctAnswers: integer("correct_answers"),
+  timeSpentSeconds: integer("time_spent_seconds"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertAssessmentSessionSchema = createInsertSchema(assessmentSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertAssessmentSession = z.infer<typeof insertAssessmentSessionSchema>;
+export type AssessmentSession = typeof assessmentSessions.$inferSelect;
+
 export const studentAssessments = pgTable("student_assessments", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
@@ -2989,7 +3013,7 @@ export const studentAssessments = pgTable("student_assessments", {
   recordedBy: integer("recorded_by").notNull().references(() => users.id),
   source: text("source").notNull().default("manual_entry"),
   lexileScore: integer("lexile_score"),
-  sessionId: integer("session_id").references(() => sessions.id),
+  sessionId: integer("session_id").references(() => assessmentSessions.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
