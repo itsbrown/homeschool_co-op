@@ -928,6 +928,7 @@ export class MemStorage implements IStorage {
     this.userNotificationsStore.clear();
     this.notificationsStore.clear();
     this.notificationRecipientsStore.clear();
+    this.scheduledPaymentsStore.clear();
     this.classEnrollments = [];
     
     // Reset ID counters
@@ -955,6 +956,22 @@ export class MemStorage implements IStorage {
     this.dailyFlowTemplateIdCounter = 1;
     this.dailyFlowEntryIdCounter = 1;
     this.dailyFlowScheduleIdCounter = 1;
+    this.scheduledPaymentIdCounter = 1;
+  }
+
+  /** Keep in-memory cache aligned with Postgres rows (CombinedStorage tests). */
+  mirrorProgramEnrollment(enrollment: ProgramEnrollment): void {
+    this.programEnrollmentsStore.set(enrollment.id, enrollment);
+    if (enrollment.id >= this.programEnrollmentIdCounter) {
+      this.programEnrollmentIdCounter = enrollment.id + 1;
+    }
+  }
+
+  mirrorScheduledPayment(payment: ScheduledPayment): void {
+    this.scheduledPaymentsStore.set(payment.id, payment);
+    if (payment.id >= this.scheduledPaymentIdCounter) {
+      this.scheduledPaymentIdCounter = payment.id + 1;
+    }
   }
 
   // User methods
@@ -5063,14 +5080,31 @@ export class MemStorage implements IStorage {
 
     async getAllEnrollments(): Promise<ProgramEnrollment[]> {
       try {
-        const enrollments = await this.dbStorage.getAllEnrollments();
-        if (process.env.NODE_ENV !== 'production' && (!enrollments || enrollments.length === 0)) {
-          const fallback = await this.memStorage.getAllEnrollments();
-          if (fallback.length > 0) {
-            return fallback;
+        let dbRows: ProgramEnrollment[] = [];
+        if (this.dbStorage && typeof this.dbStorage.getAllEnrollments === 'function') {
+          dbRows = await this.dbStorage.getAllEnrollments();
+        }
+        if (process.env.NODE_ENV === 'production') {
+          return dbRows;
+        }
+        const memRows = await this.memStorage.getAllEnrollments();
+        const byId = new Map<number, ProgramEnrollment>();
+        for (const row of dbRows) {
+          byId.set(row.id, row);
+        }
+        for (const row of memRows) {
+          const prev = byId.get(row.id);
+          if (!prev) {
+            byId.set(row.id, row);
+            continue;
+          }
+          const prevTs = prev.updatedAt ? new Date(prev.updatedAt).getTime() : 0;
+          const rowTs = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
+          if (rowTs >= prevTs) {
+            byId.set(row.id, row);
           }
         }
-        return enrollments;
+        return Array.from(byId.values());
       } catch (error) {
         if (process.env.NODE_ENV !== 'production') {
           console.error('❌ Error getting enrollments from database, falling back to memStorage:', error);
@@ -5734,14 +5768,16 @@ export class MemStorage implements IStorage {
       try {
         if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentById === 'function') {
           const fromDb = await this.dbStorage.getProgramEnrollmentById(id);
-          if (fromDb) {
-            return fromDb;
-          }
-          // DB answered "no row" — enrollment may exist only in mem after DB-write fallback (tests / local)
           if (process.env.NODE_ENV === 'production') {
-            return undefined;
+            return fromDb ?? undefined;
           }
-          return (await this.memStorage.getProgramEnrollmentById(id)) ?? undefined;
+          const fromMem = await this.memStorage.getProgramEnrollmentById(id);
+          if (fromDb && fromMem) {
+            const dbTs = fromDb.updatedAt ? new Date(fromDb.updatedAt).getTime() : 0;
+            const memTs = fromMem.updatedAt ? new Date(fromMem.updatedAt).getTime() : 0;
+            return memTs >= dbTs ? fromMem : fromDb;
+          }
+          return fromDb ?? fromMem ?? undefined;
         } else {
           console.log('💾 DB storage unavailable, using memStorage fallback for getProgramEnrollmentById');
           return await this.memStorage.getProgramEnrollmentById(id);
@@ -5813,7 +5849,9 @@ export class MemStorage implements IStorage {
     async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
       try {
         if (this.dbStorage && typeof this.dbStorage.createProgramEnrollment === 'function') {
-          return await this.dbStorage.createProgramEnrollment(enrollment);
+          const created = await this.dbStorage.createProgramEnrollment(enrollment);
+          this.memStorage.mirrorProgramEnrollment(created);
+          return created;
         } else {
           if (process.env.NODE_ENV === 'production') {
             throw new Error('Database storage is required in production environment');
@@ -5826,14 +5864,26 @@ export class MemStorage implements IStorage {
           throw error;
         }
         console.error('❌ Error creating program enrollment in database, falling back to memStorage:', error);
-        return await this.memStorage.createProgramEnrollment(enrollment);
+        const fromMem = await this.memStorage.createProgramEnrollment(enrollment);
+        return fromMem;
       }
     }
 
     async updateProgramEnrollment(id: number, enrollment: Partial<InsertProgramEnrollment>): Promise<ProgramEnrollment | undefined> {
       try {
         if (this.dbStorage && typeof this.dbStorage.updateProgramEnrollment === 'function') {
-          return await this.dbStorage.updateProgramEnrollment(id, enrollment);
+          const updated = await this.dbStorage.updateProgramEnrollment(id, enrollment);
+          if (updated) {
+            this.memStorage.mirrorProgramEnrollment(updated);
+            return updated;
+          }
+          if (process.env.NODE_ENV !== 'production') {
+            const fromMem = await this.memStorage.updateProgramEnrollment(id, enrollment);
+            if (fromMem) {
+              return fromMem;
+            }
+          }
+          return undefined;
         } else {
           if (process.env.NODE_ENV === 'production') {
             throw new Error('Database storage is required in production environment');
@@ -5846,7 +5896,25 @@ export class MemStorage implements IStorage {
           throw error;
         }
         console.error('❌ Error updating program enrollment in database, falling back to memStorage:', error);
-        return await this.memStorage.updateProgramEnrollment(id, enrollment);
+        const fromMem = await this.memStorage.updateProgramEnrollment(id, enrollment);
+        if (fromMem) {
+          return fromMem;
+        }
+        try {
+          const existing = await this.dbStorage.getProgramEnrollmentById(id);
+          if (existing) {
+            const merged: ProgramEnrollment = {
+              ...existing,
+              ...enrollment,
+              updatedAt: new Date(),
+            } as ProgramEnrollment;
+            this.memStorage.mirrorProgramEnrollment(merged);
+            return merged;
+          }
+        } catch {
+          /* ignore */
+        }
+        return undefined;
       }
     }
 
@@ -6445,6 +6513,7 @@ export class MemStorage implements IStorage {
           if (this.dbStorage && typeof this.dbStorage.createScheduledPayment === 'function') {
             console.log('💾 Using PostgreSQL database for scheduled payment creation');
             const result = await this.dbStorage.createScheduledPayment(scheduledPayment);
+            this.memStorage.mirrorScheduledPayment(result);
             console.log('✅ Scheduled payment saved to database:', result.id);
             return result;
           } else {
@@ -6453,21 +6522,54 @@ export class MemStorage implements IStorage {
           }
         } catch (error) {
           console.error('❌ Error creating scheduled payment in database, falling back to file storage:', error);
-          return await this.fileStorage.createScheduledPayment(scheduledPayment);
+          const fromFile = await this.fileStorage.createScheduledPayment(scheduledPayment);
+          this.memStorage.mirrorScheduledPayment(fromFile);
+          return fromFile;
         }
       }
 
       async getScheduledPaymentsByParentEmail(parentEmail: string): Promise<ScheduledPayment[]> {
+        let dbRows: ScheduledPayment[] = [];
+        let memRows: ScheduledPayment[] = [];
         try {
           if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentsByParentEmail === 'function') {
-            return await this.dbStorage.getScheduledPaymentsByParentEmail(parentEmail);
+            dbRows = await this.dbStorage.getScheduledPaymentsByParentEmail(parentEmail);
           } else {
             console.log('💾 DB storage unavailable or method missing, using file storage fallback for getScheduledPaymentsByParentEmail');
             return await this.fileStorage.getScheduledPaymentsByParentEmail(parentEmail);
           }
         } catch (error) {
-          return await this.fileStorage.getScheduledPaymentsByParentEmail(parentEmail);
+          try {
+            return await this.fileStorage.getScheduledPaymentsByParentEmail(parentEmail);
+          } catch {
+            dbRows = [];
+          }
         }
+        try {
+          memRows = await this.memStorage.getScheduledPaymentsByParentEmail(parentEmail);
+        } catch {
+          memRows = [];
+        }
+        if (process.env.NODE_ENV === 'production') {
+          return dbRows;
+        }
+        const byId = new Map<number, ScheduledPayment>();
+        for (const row of dbRows) {
+          byId.set(row.id, row);
+        }
+        for (const row of memRows) {
+          const prev = byId.get(row.id);
+          if (!prev) {
+            byId.set(row.id, row);
+            continue;
+          }
+          const prevTs = prev.updatedAt ? new Date(prev.updatedAt).getTime() : 0;
+          const rowTs = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
+          if (rowTs >= prevTs) {
+            byId.set(row.id, row);
+          }
+        }
+        return Array.from(byId.values());
       }
 
       async getScheduledPaymentsByEnrollmentId(enrollmentId: number): Promise<ScheduledPayment[]> {
@@ -6484,7 +6586,11 @@ export class MemStorage implements IStorage {
       async getScheduledPaymentById(id: number): Promise<ScheduledPayment | undefined> {
         try {
           if (this.dbStorage && typeof this.dbStorage.getScheduledPaymentById === 'function') {
-            return await this.dbStorage.getScheduledPaymentById(id);
+            const fromDb = await this.dbStorage.getScheduledPaymentById(id);
+            if (process.env.NODE_ENV === 'production') {
+              return fromDb;
+            }
+            return fromDb ?? (await this.memStorage.getScheduledPaymentById(id));
           }
         } catch (error) {
           console.error('❌ Error loading scheduled payment by id, using mem fallback:', error);
@@ -6573,11 +6679,36 @@ export class MemStorage implements IStorage {
       ): Promise<ScheduledPayment | undefined> {
         try {
           if (this.dbStorage && typeof this.dbStorage.updateScheduledPayment === 'function') {
-            return await this.dbStorage.updateScheduledPayment(id, payment);
+            const updated = await this.dbStorage.updateScheduledPayment(id, payment);
+            if (updated) {
+              this.memStorage.mirrorScheduledPayment(updated);
+              return updated;
+            }
+            if (process.env.NODE_ENV !== 'production') {
+              const fromMem = await this.memStorage.updateScheduledPayment(id, payment);
+              if (fromMem) {
+                return fromMem;
+              }
+            }
+            return undefined;
           }
           return await this.memStorage.updateScheduledPayment(id, payment);
         } catch (error) {
-          return await this.memStorage.updateScheduledPayment(id, payment);
+          const fromMem = await this.memStorage.updateScheduledPayment(id, payment);
+          if (fromMem) {
+            return fromMem;
+          }
+          const existing = await this.dbStorage.getScheduledPaymentById(id);
+          if (existing) {
+            const merged = {
+              ...existing,
+              ...payment,
+              updatedAt: new Date(),
+            } as ScheduledPayment;
+            this.memStorage.mirrorScheduledPayment(merged);
+            return merged;
+          }
+          return undefined;
         }
       }
 

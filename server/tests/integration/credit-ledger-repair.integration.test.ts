@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
+import { nanoid } from 'nanoid';
 import { describeIntegration } from '../helpers/integrationDb';
 import { testDb } from '../helpers/testDatabase';
 import { storage } from '../../storage';
+import { sql } from 'drizzle-orm';
+import { getDb } from '../../db';
 import {
   findMissingCreditLedgerEntries,
   repairAllMissingCreditLedgerEntries,
@@ -17,10 +20,14 @@ describeIntegration('Integration: credit ledger repair', () => {
   });
 
   it('finds and repairs credits-only scheduled payment missing usage logs', async () => {
-    const admin = await testDb.createTestUser({ email: 'clr-admin@test.com', role: 'schoolAdmin' });
-    const school = await testDb.createTestSchool(admin.id, { name: 'CLR School' });
+    const uid = nanoid(8).toLowerCase();
+    const admin = await testDb.createTestUser({
+      email: `clr_admin_${uid}@test.com`,
+      role: 'schoolAdmin',
+    });
+    const school = await testDb.createTestSchool(admin.id, { name: `CLR School ${uid}` });
     const parent = await testDb.createTestUser({
-      email: 'clr-parent@test.com',
+      email: `clr_parent_${uid}@test.com`,
       role: 'parent',
       schoolId: school.id,
     });
@@ -44,7 +51,7 @@ describeIntegration('Integration: credit ledger repair', () => {
       classId: klass.id,
       childId: child.id,
       childName: 'Test Child',
-      className: klass.name,
+      className: klass.title,
       parentId: parent.id,
       parentEmail: parent.email,
       totalCost: 4000,
@@ -67,9 +74,20 @@ describeIntegration('Integration: credit ledger repair', () => {
       status: 'completed',
       completionSource: 'credits_only',
       processedAt: new Date(),
-      stripePaymentIntentId: 'credit_test_repair_1',
+      stripePaymentIntentId: `credit_test_repair_${uid}`,
       metadata: {},
     } as any);
+
+    const spInStorage = await storage.getScheduledPaymentById(sp.id);
+    expect(spInStorage?.status).toBe('completed');
+    expect(spInStorage?.completionSource).toBe('credits_only');
+
+    const db = await getDb();
+    const dbRows = await db.execute(
+      sql`SELECT id FROM scheduled_payments WHERE id = ${sp.id} AND school_id = ${school.id}`,
+    );
+    const persisted = Array.isArray(dbRows) ? dbRows : (dbRows as { rows?: unknown[] }).rows ?? [];
+    expect(persisted.length).toBeGreaterThan(0);
 
     await storage.updateProgramEnrollment(enrollment.id, {
       totalPaid: 4000,

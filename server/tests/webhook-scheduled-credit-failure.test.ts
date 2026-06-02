@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { storage } from '../storage';
+import { mockStripeConstructEventParsesBody } from './helpers/stripeWebhookTestMock';
 
 const mockConstructEvent = jest.fn();
 const mockGetStripeClient = jest.fn();
@@ -20,9 +21,7 @@ describe('webhook scheduled_payment credit hardening', () => {
     process.env.STRIPE_WEBHOOK_DEV_BYPASS = 'true';
     process.env.NODE_ENV = 'test';
     mockConstructEvent.mockReset();
-    mockConstructEvent.mockImplementation(() => {
-      throw new Error('force dev bypass');
-    });
+    mockStripeConstructEventParsesBody(mockConstructEvent);
     mockGetStripeClient.mockReset();
     mockGetStripeClient.mockResolvedValue({
       webhooks: { constructEvent: mockConstructEvent },

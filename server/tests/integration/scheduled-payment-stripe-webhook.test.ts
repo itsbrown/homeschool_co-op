@@ -3,6 +3,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { describeIntegration } from '../helpers/integrationDb';
 import { testDb } from '../helpers/testDatabase';
+import { mockStripeConstructEventParsesBody } from '../helpers/stripeWebhookTestMock';
 import { storage } from '../../storage';
 
 const mockConstructEvent = jest.fn();
@@ -24,9 +25,7 @@ describeIntegration('Integration: scheduled_payment Stripe webhooks', () => {
     process.env.NODE_ENV = 'test';
 
     mockConstructEvent.mockReset();
-    mockConstructEvent.mockImplementation(() => {
-      throw new Error('force dev bypass path');
-    });
+    mockStripeConstructEventParsesBody(mockConstructEvent);
     mockGetStripeClient.mockReset();
     mockGetStripeClient.mockResolvedValue({
       webhooks: { constructEvent: mockConstructEvent },
@@ -56,7 +55,7 @@ describeIntegration('Integration: scheduled_payment Stripe webhooks', () => {
       lastName: 'Child',
       schoolId: school.id,
     });
-    const klass = await testDb.createTestClass(school.id, { name: 'Scheduled Class', price: 10000 });
+    const klass = await testDb.createTestClass(school.id, { title: 'Scheduled Class', price: 10000 });
 
     const enrollment = await storage.createProgramEnrollment({
       schoolId: school.id,
@@ -64,7 +63,7 @@ describeIntegration('Integration: scheduled_payment Stripe webhooks', () => {
       classId: klass.id,
       childId: child.id,
       childName: `${child.firstName} ${child.lastName}`,
-      className: klass.name,
+      className: klass.title,
       parentId: parent.id,
       parentEmail: parent.email,
       totalCost: 10000,

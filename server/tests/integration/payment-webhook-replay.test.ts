@@ -3,6 +3,7 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { describeIntegration } from '../helpers/integrationDb';
 import { testDb } from '../helpers/testDatabase';
+import { mockStripeConstructEventParsesBody } from '../helpers/stripeWebhookTestMock';
 import { storage } from '../../storage';
 
 const mockConstructEvent = jest.fn();
@@ -24,9 +25,7 @@ describeIntegration('Integration: payment webhook replay idempotency', () => {
     process.env.NODE_ENV = 'test';
 
     mockConstructEvent.mockReset();
-    mockConstructEvent.mockImplementation(() => {
-      throw new Error('force dev bypass path');
-    });
+    mockStripeConstructEventParsesBody(mockConstructEvent);
     mockGetStripeClient.mockReset();
     mockGetStripeClient.mockResolvedValue({
       webhooks: {
@@ -62,7 +61,7 @@ describeIntegration('Integration: payment webhook replay idempotency', () => {
       classId: klass.id,
       childId: child.id,
       childName: `${child.firstName} ${child.lastName}`,
-      className: klass.name,
+      className: klass.title,
       parentId: parent.id,
       parentEmail: parent.email,
       totalCost: 10000,
@@ -225,7 +224,7 @@ describeIntegration('Integration: payment webhook replay idempotency', () => {
       classId: classA.id,
       childId: child.id,
       childName: `${child.firstName} ${child.lastName}`,
-      className: classA.name,
+      className: classA.title,
       parentId: parent.id,
       parentEmail: parent.email,
       totalCost: 6000,
@@ -241,7 +240,7 @@ describeIntegration('Integration: payment webhook replay idempotency', () => {
       classId: classB.id,
       childId: child.id,
       childName: `${child.firstName} ${child.lastName}`,
-      className: classB.name,
+      className: classB.title,
       parentId: parent.id,
       parentEmail: parent.email,
       totalCost: 6000,

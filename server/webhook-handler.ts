@@ -55,14 +55,39 @@ async function applyCartCheckoutItemsFromWebhook(
   const amountPerItem = Math.round(paymentIntent.amount / items.length);
   const updatedEnrollments: any[] = [];
 
+  const parentEmail =
+    typeof paymentIntent.metadata?.parentEmail === 'string'
+      ? paymentIntent.metadata.parentEmail
+      : undefined;
+
   for (const item of items) {
     try {
-      const allEnrollments = await storage.getAllEnrollments();
-      const enrollment = findProgramEnrollmentForCartItem(allEnrollments as any, item);
+      let enrollment: Awaited<ReturnType<typeof storage.getProgramEnrollmentById>>;
+      const enrollmentId = Number(item.enrollmentId);
+      if (Number.isFinite(enrollmentId) && enrollmentId > 0) {
+        enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+      }
+      if (!enrollment) {
+        const allEnrollments = await storage.getAllEnrollments();
+        enrollment = findProgramEnrollmentForCartItem(
+          allEnrollments as any,
+          item,
+          parentEmail,
+        ) as typeof enrollment;
+      }
 
       if (enrollment) {
         const currentAmount = enrollment.totalPaid || 0;
-        const newAmount = currentAmount + amountPerItem;
+        const owed = Math.max(0, (enrollment.totalCost || 0) - currentAmount);
+        const toApply = Math.min(amountPerItem, owed);
+        if (toApply <= 0) {
+          console.log(
+            `ℹ️ Enrollment ${enrollment.id} already satisfied; skipping cart webhook apply (${amountPerItem}c offered)`,
+          );
+          updatedEnrollments.push(enrollment);
+          continue;
+        }
+        const newAmount = currentAmount + toApply;
         const remainingBalance = Math.max(0, (enrollment.totalCost || 0) - newAmount);
 
         const updatedEnrollment = await storage.updateProgramEnrollment(enrollment.id, {
@@ -152,54 +177,64 @@ export const webhookHandler = async (req: Request, res: Response) => {
     // Extract signature properly - handle both string and array cases
     const signature = Array.isArray(sig) ? sig[0] : sig;
     
-    console.log('🔍 Processing signature verification:', {
-      signature: signature.substring(0, 50) + '...',
-      payloadLength: payload.length,
-      secretLength: endpointSecret.length
-    });
+    if (process.env.NODE_ENV !== 'test') {
+      console.log('🔍 Processing signature verification:', {
+        signature: signature.substring(0, 50) + '...',
+        payloadLength: payload.length,
+        secretLength: endpointSecret.length,
+      });
+    }
 
     // Use the raw buffer directly for signature verification
     event = stripe.webhooks.constructEvent(payload, signature, endpointSecret);
-    console.log('✅ Webhook signature verified successfully for event:', event.type);
+    if (process.env.NODE_ENV !== 'test') {
+      console.log('✅ Webhook signature verified successfully for event:', event.type);
+    }
   } catch (err: any) {
-    console.error('❌ Webhook signature verification failed:', err.message);
-    console.error('🔍 Detailed debug info:', {
-      payloadType: typeof payload,
-      payloadLength: payload?.length,
-      signatureType: typeof sig,
-      signatureValue: Array.isArray(sig) ? `Array[${sig.length}]` : sig?.substring(0, 50) + '...',
-      secretExists: !!endpointSecret,
-      secretPrefix: endpointSecret ? endpointSecret.substring(0, 15) + '...' : 'none',
-      isBuffer: Buffer.isBuffer(payload),
-      errorStack: err.stack
-    });
-    
     // Strict security - reject all invalid signatures in production
     // Only allow bypass in development with explicit flag for testing
-    const allowDevBypass = process.env.STRIPE_WEBHOOK_DEV_BYPASS === 'true' && 
-                          (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test');
-    
+    const allowDevBypass =
+      process.env.STRIPE_WEBHOOK_DEV_BYPASS === 'true' &&
+      (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test');
+
     if (allowDevBypass) {
-      console.log('⚠️ DEVELOPMENT BYPASS: Processing webhook despite signature verification failure');
-      console.log('⚠️ This bypass should NEVER be enabled in production!');
+      if (process.env.NODE_ENV === 'test') {
+        console.log('ℹ️ Webhook test/dev bypass (invalid signature):', err.message);
+      } else {
+        console.warn('⚠️ DEVELOPMENT BYPASS: Processing webhook despite signature verification failure');
+        console.warn('⚠️ This bypass should NEVER be enabled in production!');
+      }
       try {
         // Parse the raw body as JSON to get the event data
         const eventData = JSON.parse(payload.toString());
         event = eventData;
-        console.log('✅ Parsed webhook event in development mode:', event.type);
+        if (process.env.NODE_ENV !== 'test') {
+          console.log('✅ Parsed webhook event in development mode:', event.type);
+        }
       } catch (parseErr) {
         console.error('❌ Failed to parse webhook payload in development mode:', parseErr);
         return res.status(400).json({ error: 'Invalid payload format' });
       }
     } else {
-      // Security: Always reject invalid signatures in production or when bypass is disabled
+      console.error('❌ Webhook signature verification failed:', err.message);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('🔍 Detailed debug info:', {
+          payloadType: typeof payload,
+          payloadLength: payload?.length,
+          signatureType: typeof sig,
+          isBuffer: Buffer.isBuffer(payload),
+          errorStack: err.stack,
+        });
+      }
       console.error('🚨 Webhook signature verification failed - rejecting request for security');
       return res.status(400).json({ error: 'Webhook signature verification failed' });
     }
   }
 
   // Handle the event - process webhooks securely
-  console.log('📥 Processing webhook event:', event.type);
+  if (process.env.NODE_ENV !== 'test') {
+    console.log('📥 Processing webhook event:', event.type);
+  }
   const now = Date.now();
   cleanupRecentWebhookEvents(now);
   if (event?.id && recentWebhookEvents.has(event.id)) {
@@ -343,9 +378,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
           
           console.log(`💰 Processing completed scheduled payment: ${scheduledPaymentId} for ${parentEmail}`);
           
-          // Get the scheduled payment from storage
-          const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(parentEmail);
-          const scheduledPayment = allScheduledPayments.find(p => p.id === parseInt(scheduledPaymentId));
+          const spIdParsed = parseInt(String(scheduledPaymentId), 10);
+          let scheduledPayment =
+            Number.isFinite(spIdParsed) && spIdParsed > 0
+              ? await storage.getScheduledPaymentById(spIdParsed)
+              : undefined;
+          if (!scheduledPayment && parentEmail) {
+            const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(parentEmail);
+            scheduledPayment = allScheduledPayments.find((p) => p.id === spIdParsed);
+          }
           
           if (scheduledPayment) {
             const spId = parseInt(scheduledPaymentId, 10);
@@ -737,70 +778,77 @@ export const webhookHandler = async (req: Request, res: Response) => {
           });
           
           if (itemsJson && parentEmail) {
-            const items = JSON.parse(itemsJson);
-            console.log('💰 Processing cart payment enrollments:', items.length, 'items for', parentEmail);
+            if (paymentLedgerAlreadySucceeded) {
+              console.log(
+                '↩️ Cart checkout already recorded for PI; skipping duplicate enrollment/payment on payment_intent.succeeded:',
+                paymentIntent.id,
+              );
+            } else {
+              const items = JSON.parse(itemsJson);
+              console.log('💰 Processing cart payment enrollments:', items.length, 'items for', parentEmail);
 
-            // Enrollment matching is shared with checkout.session.completed (see findProgramEnrollmentForCartItem).
-            const updatedEnrollments = await applyCartCheckoutItemsFromWebhook(items, paymentIntent);
+              // Enrollment matching is shared with checkout.session.completed (see findProgramEnrollmentForCartItem).
+              const updatedEnrollments = await applyCartCheckoutItemsFromWebhook(items, paymentIntent);
 
-            console.log(`✅ Updated ${updatedEnrollments.length} enrollments in database for payment ${paymentIntent.id}`);
-            
-            // Create payment record
-            // Get schoolId from enrollment or parent user
-            const parentUserForPayment = await storage.getUserByEmail(parentEmail);
-            const schoolIdForPayment = updatedEnrollments[0]?.schoolId || parentUserForPayment?.schoolId || 1;
-            
-            const payment = {
-              schoolId: schoolIdForPayment,
-              parentId: parentUserForPayment?.id ?? null,
-              stripePaymentIntentId: paymentIntent.id,
-              parentEmail: parentEmail,
-              childName: items[0]?.childName || 'Unknown',
-              className: items.length > 1 ? `${items.length} classes` : (items[0]?.className || 'Unknown'),
-              description: `Cart payment for ${items.length} enrollment${items.length > 1 ? 's' : ''}`,
-              amount: paymentIntent.amount,
-              currency: paymentIntent.currency || 'usd',
-              status: 'completed' as const,
-              stripeChargeId: null as string | null,
-              stripeRefundId: null as string | null,
-              originalPaymentId: null as number | null,
-              enrollmentIds: updatedEnrollments.map((e: any) => e.id),
-              metadata: {
-                itemCount: items.length
-              },
-              paymentDate: new Date()
-            };
-
-            await storage.createPayment(payment);
-            console.log('✅ Payment record created for payment:', paymentIntent.id);
-            
-            // Create payment receipt record for parent documents
-            await createReceiptFromPayment({
-              schoolId: schoolIdForPayment,
-              parentId: parentUserForPayment?.id,
-              parentEmail: parentEmail,
-              amount: paymentIntent.amount,
-              description: payment.description,
-              childName: payment.childName,
-              className: payment.className,
-              enrollmentIds: updatedEnrollments.map((e: any) => e.id)
-            });
-            
-            // Real-time update for cart payments
-            try {
-              const { dataLayer } = await import('./services/dataLayer.js');
+              console.log(`✅ Updated ${updatedEnrollments.length} enrollments in database for payment ${paymentIntent.id}`);
               
-              dataLayer.broadcastPaymentComplete(parentEmail, {
+              // Create payment record
+              // Get schoolId from enrollment or parent user
+              const parentUserForPayment = await storage.getUserByEmail(parentEmail);
+              const schoolIdForPayment = updatedEnrollments[0]?.schoolId || parentUserForPayment?.schoolId || 1;
+              
+              const payment = {
+                schoolId: schoolIdForPayment,
+                parentId: parentUserForPayment?.id ?? null,
+                stripePaymentIntentId: paymentIntent.id,
+                parentEmail: parentEmail,
+                childName: items[0]?.childName || 'Unknown',
+                className: items.length > 1 ? `${items.length} classes` : (items[0]?.className || 'Unknown'),
+                description: `Cart payment for ${items.length} enrollment${items.length > 1 ? 's' : ''}`,
                 amount: paymentIntent.amount,
-                paymentId: paymentIntent.id,
-                description: `Payment for ${items.length} enrollment${items.length > 1 ? 's' : ''}`,
-                timestamp: new Date().toISOString()
+                currency: paymentIntent.currency || 'usd',
+                status: 'completed' as const,
+                stripeChargeId: null as string | null,
+                stripeRefundId: null as string | null,
+                originalPaymentId: null as number | null,
+                enrollmentIds: updatedEnrollments.map((e: any) => e.id),
+                metadata: {
+                  itemCount: items.length
+                },
+                paymentDate: new Date()
+              };
+
+              await storage.createPayment(payment);
+              console.log('✅ Payment record created for payment:', paymentIntent.id);
+              
+              // Create payment receipt record for parent documents
+              await createReceiptFromPayment({
+                schoolId: schoolIdForPayment,
+                parentId: parentUserForPayment?.id,
+                parentEmail: parentEmail,
+                amount: paymentIntent.amount,
+                description: payment.description,
+                childName: payment.childName,
+                className: payment.className,
+                enrollmentIds: updatedEnrollments.map((e: any) => e.id)
               });
               
-              await dataLayer.refreshUserData(parentEmail);
-              console.log('📡 Pushed real-time update for cart payment');
-            } catch (error) {
-              console.error('❌ Failed to push real-time update for cart payment:', error);
+              // Real-time update for cart payments
+              try {
+                const { dataLayer } = await import('./services/dataLayer.js');
+                
+                dataLayer.broadcastPaymentComplete(parentEmail, {
+                  amount: paymentIntent.amount,
+                  paymentId: paymentIntent.id,
+                  description: `Payment for ${items.length} enrollment${items.length > 1 ? 's' : ''}`,
+                  timestamp: new Date().toISOString()
+                });
+                
+                await dataLayer.refreshUserData(parentEmail);
+                console.log('📡 Pushed real-time update for cart payment');
+              } catch (error) {
+                console.error('❌ Failed to push real-time update for cart payment:', error);
+              }
             }
           }
 

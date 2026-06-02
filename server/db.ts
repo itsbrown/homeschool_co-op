@@ -47,8 +47,11 @@ export async function getDb() {
   const now = Date.now();
   const timeSinceLastAttempt = now - lastConnectionAttempt;
 
-  // If we are still within the cooldown window, don't retry
+  // If we are still within the cooldown window, don't retry (except keep test pool alive).
   if (lastConnectionAttempt > 0 && timeSinceLastAttempt < CONNECTION_RETRY_COOLDOWN_MS) {
+    if (process.env.NODE_ENV === 'test' && dbInstance) {
+      return dbInstance;
+    }
     throw new Error("Database connection not available");
   }
 
@@ -95,3 +98,21 @@ export const db = new Proxy({}, {
 
 // Export the client for direct queries if needed
 export const pool = client;
+
+/** Integration tests: drop cached pool between cases so TRUNCATE + writes share one connection. */
+export async function resetDbConnectionStateForTests(): Promise<void> {
+  if (process.env.NODE_ENV !== 'test') {
+    return;
+  }
+  connectionWorking = false;
+  lastConnectionAttempt = 0;
+  if (client) {
+    try {
+      await client.end({ timeout: 2 });
+    } catch {
+      /* ignore */
+    }
+  }
+  client = null;
+  dbInstance = null;
+}

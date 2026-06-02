@@ -3,6 +3,7 @@
  * and mixed credit+card payments (originalAmountCents vs actual PI amount).
  */
 import { describe, expect, it, jest, beforeEach, afterEach } from '@jest/globals';
+import { nanoid } from 'nanoid';
 import { describeIntegration } from './helpers/integrationDb';
 import { storage } from '../storage';
 import { testDb } from './helpers/testDatabase';
@@ -26,8 +27,8 @@ async function seedTwoEnrollmentFixture() {
 
   const child1 = await testDb.createTestChild(parent.id, { schoolId: school.id });
   const child2 = await testDb.createTestChild(parent.id, { schoolId: school.id });
-  const klass1 = await testDb.createTestClass(school.id, { name: 'Math', price: 8000 });
-  const klass2 = await testDb.createTestClass(school.id, { name: 'Science', price: 6000 });
+  const klass1 = await testDb.createTestClass(school.id, { title: 'Math', price: 8000 });
+  const klass2 = await testDb.createTestClass(school.id, { title: 'Science', price: 6000 });
 
   const enr1 = await storage.createProgramEnrollment({
     schoolId: school.id,
@@ -35,7 +36,7 @@ async function seedTwoEnrollmentFixture() {
     classId: klass1.id,
     childId: child1.id,
     childName: `${child1.firstName} ${child1.lastName}`,
-    className: klass1.name,
+    className: klass1.title,
     parentId: parent.id,
     parentEmail: parent.email,
     totalCost: 8000,
@@ -51,7 +52,7 @@ async function seedTwoEnrollmentFixture() {
     classId: klass2.id,
     childId: child2.id,
     childName: `${child2.firstName} ${child2.lastName}`,
-    className: klass2.name,
+    className: klass2.title,
     parentId: parent.id,
     parentEmail: parent.email,
     totalCost: 6000,
@@ -148,6 +149,7 @@ describeIntegration('Scheduled installment — multi-enrollment per row', () => 
 
   it('creates a single payments row referencing all enrollmentIds for the PI', async () => {
     const { school, parent, enr1, enr2 } = await seedTwoEnrollmentFixture();
+    const stripePiId = `pi_multi_pay_${nanoid(10)}`;
 
     const payment = await storage.createPayment({
       schoolId: school.id,
@@ -159,7 +161,7 @@ describeIntegration('Scheduled installment — multi-enrollment per row', () => 
       amount: 4000,
       currency: 'usd',
       status: 'completed',
-      stripePaymentIntentId: 'pi_multi_pay_1',
+      stripePaymentIntentId: stripePiId,
       stripeChargeId: null,
       stripeRefundId: null,
       originalPaymentId: null,
@@ -169,7 +171,7 @@ describeIntegration('Scheduled installment — multi-enrollment per row', () => 
       paymentDate: new Date(),
     } as any);
 
-    const found = await storage.getPaymentByStripeId('pi_multi_pay_1');
+    const found = await storage.getPaymentByStripeId(stripePiId);
     expect(found).toBeTruthy();
     // enrollmentIds persisted on the payments row
     const storedIds = (found as any)?.enrollmentIds;

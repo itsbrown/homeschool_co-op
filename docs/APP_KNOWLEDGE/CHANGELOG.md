@@ -1,5 +1,19 @@
 # App knowledge changelog
 
+## 2026-06-02 (Webhook test mock — no dev-bypass noise)
+
+- **Tests:** `mockStripeConstructEventParsesBody()` in `server/tests/helpers/stripeWebhookTestMock.ts` — integration tests parse webhook JSON in the Stripe mock instead of throwing to force `STRIPE_WEBHOOK_DEV_BYPASS` (eliminates misleading `console.error` in Jest output).
+- **webhook-handler:** Quieter logs in `NODE_ENV=test`; detailed signature debug only in development; production still rejects invalid signatures.
+
+## 2026-06-02 (Payment integration test isolation)
+
+- **Root cause:** fixtures used `klass.name` but classes expose `title` → DB enrollment insert failed silently to mem while reads hit Postgres.
+- **CombinedStorage:** mem fallback when DB update returns no row; merge mem+DB scheduled-payment reads; test DB pool reset between cases; `getDb()` keeps pool alive under test cooldown.
+- **testDatabase:** TRUNCATE when `TEST_DATABASE_URL` is set; `createTestUser` purge by email; `createTestClass` accepts `name` or `title`.
+- **credit-ledger-repair:** `sqlRowValue()` for snake/camel SQL columns; skip invalid `scheduledPaymentId`.
+- **Webhooks:** `payment_intent.succeeded` skips duplicate cart apply when checkout already recorded; `applyCartCheckoutItemsFromWebhook` caps at amount owed.
+- **scheduled-payment-installment-variants:** unique `stripePaymentIntentId` per run (avoids stale `pi_multi_pay_1` rows).
+
 ## 2026-06-02 (Credits-only checkout test fixes)
 
 - **Credits-only fulfill:** `applyCreditCentsToEnrollment` uses `computeEffectiveBalance`; fallback applies remaining class credits via `enrollmentIds` when canonical breakdown line caps are zero.

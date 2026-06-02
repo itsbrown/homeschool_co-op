@@ -184,6 +184,14 @@ function isSafeDatabaseUrlForTestTruncate(url: string): boolean {
   if (process.env.ALLOW_TEST_TRUNCATE === '1') {
     return true;
   }
+  // CI / local integration runs set TEST_DATABASE_URL explicitly (see jest-setup-env.cjs).
+  if (
+    process.env.NODE_ENV === 'test' &&
+    process.env.TEST_DATABASE_URL &&
+    (url === process.env.TEST_DATABASE_URL || process.env.DATABASE_URL === process.env.TEST_DATABASE_URL)
+  ) {
+    return true;
+  }
   try {
     const parsed = new URL(url.replace(/^postgres(ql)?:\/\//, 'postgresql://'));
     const dbName = (parsed.pathname || '').replace(/^\//, '').split('?')[0] || '';
@@ -198,6 +206,36 @@ function isSafeDatabaseUrlForTestTruncate(url: string): boolean {
     return false;
   }
   return false;
+}
+
+/** Remove prior fixture rows tied to a stable test email when TRUNCATE did not run. */
+async function purgeTestFixtureUserByEmail(email: string): Promise<void> {
+  try {
+    const existing = await storage.getUserByEmail(email);
+    if (!existing) {
+      return;
+    }
+    try {
+      const { getDb } = await import('../../db');
+      const { sql } = await import('drizzle-orm');
+      const db = await getDb();
+      if (db) {
+        await db.execute(sql`DELETE FROM scheduled_payments WHERE parent_email = ${email}`);
+        await db.execute(sql`DELETE FROM payments WHERE parent_email = ${email}`);
+        await db.execute(sql`DELETE FROM program_enrollments WHERE parent_email = ${email}`);
+        await db.execute(sql`DELETE FROM children WHERE parent_id = ${existing.id}`);
+      }
+    } catch {
+      /* DB unavailable — mem-only fixtures */
+    }
+    try {
+      await storage.deleteUser(existing.id);
+    } catch {
+      /* FK or read-only — createUser may still fail */
+    }
+  } catch {
+    /* best-effort */
+  }
 }
 
 async function truncatePostgresPublicTablesForTests(): Promise<void> {
@@ -269,6 +307,12 @@ export class TestDatabase {
   async cleanup() {
     // Clear all data from in-memory storage
     storage.clearAll();
+    try {
+      const { resetDbConnectionStateForTests } = await import('../../db');
+      await resetDbConnectionStateForTests();
+    } catch {
+      /* ignore */
+    }
     await truncatePostgresPublicTablesForTests();
 
     // Reset tracking arrays
@@ -299,6 +343,11 @@ export class TestDatabase {
       isActive: overrides.isActive !== undefined ? overrides.isActive : true,
       ...overrides
     };
+
+    // When TRUNCATE is skipped (e.g. Replit dev DB), fixed fixture emails must not block re-seed.
+    if (process.env.NODE_ENV === 'test') {
+      await purgeTestFixtureUserByEmail(userData.email);
+    }
 
     const user = await storage.createUser(userData);
     this.createdRecords.users.push(user.id);
@@ -442,7 +491,7 @@ export class TestDatabase {
 
     const uniqueId = nanoid(8);
     const classData: any = {
-      title: overrides.title || `Test Class ${uniqueId}`,
+      title: overrides.title || overrides.name || `Test Class ${uniqueId}`,
       description: overrides.description || 'Test class description',
       schoolId,
       status: overrides.status || 'active',

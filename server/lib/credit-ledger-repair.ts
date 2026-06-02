@@ -9,6 +9,31 @@ import {
 } from './ensure-scheduled-payment-credits-consumed';
 import { storage } from '../storage';
 
+/** Raw SQL row columns may be snake_case or camelCase depending on driver/drizzle version. */
+function sqlRowValue(row: Record<string, unknown>, snakeKey: string): unknown {
+  if (row[snakeKey] !== undefined && row[snakeKey] !== null) {
+    return row[snakeKey];
+  }
+  const camelKey = snakeKey.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+  return row[camelKey];
+}
+
+/** postgres.js returns an array; some drivers wrap rows in `{ rows }`. */
+function rowsFromExecute(result: unknown): Record<string, unknown>[] {
+  if (Array.isArray(result)) {
+    return result as Record<string, unknown>[];
+  }
+  if (
+    result &&
+    typeof result === 'object' &&
+    'rows' in result &&
+    Array.isArray((result as { rows: unknown }).rows)
+  ) {
+    return (result as { rows: Record<string, unknown>[] }).rows;
+  }
+  return [];
+}
+
 export type MissingCreditLedgerKind = 'scheduled_payment' | 'payment_record' | 'stripe_payment_intent';
 
 export interface MissingCreditLedgerEntry {
@@ -115,18 +140,19 @@ export async function findMissingCreditLedgerEntries(
 
   const entries: MissingCreditLedgerEntry[] = [];
 
-  for (const row of scheduledRows.rows as Record<string, unknown>[]) {
-    const scheduledPaymentId = Number(row.scheduled_payment_id);
-    const userId = Number(row.user_id);
-    const amount = Number(row.amount) || 0;
-    const completionSource = row.completion_source as string | null;
+  for (const row of rowsFromExecute(scheduledRows)) {
+    const scheduledPaymentId = Number(sqlRowValue(row, 'scheduled_payment_id'));
+    const userId = Number(sqlRowValue(row, 'user_id'));
+    const amount = Number(sqlRowValue(row, 'amount')) || 0;
+    const completionSource = sqlRowValue(row, 'completion_source') as string | null;
+    const stripePiId = sqlRowValue(row, 'stripe_payment_intent_id');
     let creditsAppliedCents = amount;
 
     if (
       completionSource === 'stripe_autopay_partial_credits' ||
-      (row.stripe_payment_intent_id && !String(row.stripe_payment_intent_id).startsWith('credit_'))
+      (stripePiId && !String(stripePiId).startsWith('credit_'))
     ) {
-      const piId = String(row.stripe_payment_intent_id || '');
+      const piId = String(stripePiId || '');
       if (piId.startsWith('pi_')) {
         try {
           const stripe = await getStripeClient();
@@ -143,31 +169,37 @@ export async function findMissingCreditLedgerEntries(
       }
     }
 
-    if (creditsAppliedCents <= 0 || !Number.isFinite(userId)) continue;
+    if (creditsAppliedCents <= 0 || !Number.isFinite(userId) || !Number.isFinite(scheduledPaymentId)) {
+      continue;
+    }
 
     entries.push({
       kind: 'scheduled_payment',
       userId,
-      parentEmail: (row.parent_email as string) ?? null,
+      parentEmail: (sqlRowValue(row, 'parent_email') as string) ?? null,
       creditsAppliedCents,
       scheduledPaymentId,
-      paymentIntentId: (row.stripe_payment_intent_id as string) ?? null,
-      installmentNumber: String(row.installment_number ?? '?'),
-      totalInstallments: String(row.total_installments ?? '?'),
+      paymentIntentId: (stripePiId as string) ?? null,
+      installmentNumber: String(sqlRowValue(row, 'installment_number') ?? '?'),
+      totalInstallments: String(sqlRowValue(row, 'total_installments') ?? '?'),
       completionSource,
-      processedAt: row.processed_at ? new Date(String(row.processed_at)) : null,
+      processedAt: sqlRowValue(row, 'processed_at')
+        ? new Date(String(sqlRowValue(row, 'processed_at')))
+        : null,
     });
   }
 
-  for (const row of paymentRows.rows as Record<string, unknown>[]) {
-    const userId = Number(row.user_id);
-    let creditsAppliedCents = Number(row.credits_applied_cents) || 0;
-    const scheduledPaymentId = row.scheduled_payment_id
-      ? Number(row.scheduled_payment_id)
+  for (const row of rowsFromExecute(paymentRows)) {
+    const userId = Number(sqlRowValue(row, 'user_id'));
+    let creditsAppliedCents = Number(sqlRowValue(row, 'credits_applied_cents')) || 0;
+    const scheduledPaymentIdRaw = sqlRowValue(row, 'scheduled_payment_id');
+    const scheduledPaymentId = scheduledPaymentIdRaw
+      ? Number(scheduledPaymentIdRaw)
       : undefined;
-    const paymentIntentId = (row.stripe_payment_intent_id as string) ?? null;
+    const paymentIntentId = (sqlRowValue(row, 'stripe_payment_intent_id') as string) ?? null;
+    const creditOnlyCheckout = sqlRowValue(row, 'credit_only_checkout');
 
-    if (creditsAppliedCents <= 0 && row.credit_only_checkout && paymentIntentId) {
+    if (creditsAppliedCents <= 0 && creditOnlyCheckout && paymentIntentId) {
       const pay = await storage.getPaymentByStripeId(paymentIntentId);
       const meta = pay?.metadata as Record<string, unknown> | undefined;
       creditsAppliedCents =
@@ -186,9 +218,9 @@ export async function findMissingCreditLedgerEntries(
     entries.push({
       kind: scheduledPaymentId ? 'scheduled_payment' : 'payment_record',
       userId,
-      parentEmail: (row.parent_email as string) ?? null,
+      parentEmail: (sqlRowValue(row, 'parent_email') as string) ?? null,
       creditsAppliedCents,
-      paymentId: Number(row.payment_id),
+      paymentId: Number(sqlRowValue(row, 'payment_id')),
       scheduledPaymentId,
       paymentIntentId,
     });

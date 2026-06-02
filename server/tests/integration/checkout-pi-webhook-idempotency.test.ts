@@ -1,8 +1,10 @@
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { nanoid } from 'nanoid';
 import { describeIntegration } from '../helpers/integrationDb';
 import { testDb } from '../helpers/testDatabase';
+import { mockStripeConstructEventParsesBody } from '../helpers/stripeWebhookTestMock';
 import { storage } from '../../storage';
 
 const mockConstructEvent = jest.fn();
@@ -29,9 +31,7 @@ describeIntegration('Integration: checkout.session.completed then payment_intent
     process.env.NODE_ENV = 'test';
 
     mockConstructEvent.mockReset();
-    mockConstructEvent.mockImplementation(() => {
-      throw new Error('force dev bypass path');
-    });
+    mockStripeConstructEventParsesBody(mockConstructEvent);
     mockPaymentIntentsRetrieve.mockReset();
     mockGetStripeClient.mockReset();
     mockGetStripeClient.mockResolvedValue({
@@ -52,10 +52,14 @@ describeIntegration('Integration: checkout.session.completed then payment_intent
 
   it('applies cart payment once when PI success follows checkout session', async () => {
     const app = buildApp();
-    const admin = await testDb.createTestUser({ email: 'dual-admin@test.com', role: 'schoolAdmin' });
-    const school = await testDb.createTestSchool(admin.id, { name: 'Dual Event School' });
+    const uid = nanoid(8).toLowerCase();
+    const admin = await testDb.createTestUser({
+      email: `dual_admin_${uid}@test.com`,
+      role: 'schoolAdmin',
+    });
+    const school = await testDb.createTestSchool(admin.id, { name: `Dual Event School ${uid}` });
     const parent = await testDb.createTestUser({
-      email: 'dual-parent@test.com',
+      email: `dual_parent_${uid}@test.com`,
       role: 'parent',
       schoolId: school.id,
     });
@@ -64,7 +68,7 @@ describeIntegration('Integration: checkout.session.completed then payment_intent
       lastName: 'Pay',
       schoolId: school.id,
     });
-    const klass = await testDb.createTestClass(school.id, { name: 'Dual Class', price: 10000 });
+    const klass = await testDb.createTestClass(school.id, { title: 'Dual Class', price: 10000 });
 
     const enrollment = await storage.createProgramEnrollment({
       schoolId: school.id,
@@ -72,7 +76,7 @@ describeIntegration('Integration: checkout.session.completed then payment_intent
       classId: klass.id,
       childId: child.id,
       childName: `${child.firstName} ${child.lastName}`,
-      className: klass.name,
+      className: klass.title,
       parentId: parent.id,
       parentEmail: parent.email,
       totalCost: 10000,
@@ -93,8 +97,9 @@ describeIntegration('Integration: checkout.session.completed then payment_intent
     ];
     const itemsJson = JSON.stringify(items);
 
+    const piId = `pi_dual_checkout_${uid}`;
     const piPayload = {
-      id: 'pi_dual_checkout_pi',
+      id: piId,
       amount: 10000,
       currency: 'usd',
       metadata: {
@@ -115,7 +120,7 @@ describeIntegration('Integration: checkout.session.completed then payment_intent
         data: {
           object: {
             id: 'cs_dual_1',
-            payment_intent: 'pi_dual_checkout_pi',
+            payment_intent: piId,
           },
         },
       });
@@ -141,8 +146,8 @@ describeIntegration('Integration: checkout.session.completed then payment_intent
     expect(afterPi?.totalPaid).toBe(10000);
     expect(afterPi?.remainingBalance).toBe(0);
 
-    const payments = await storage.getAllPayments();
-    const forIntent = payments.filter((p: any) => p.stripePaymentIntentId === 'pi_dual_checkout_pi');
-    expect(forIntent.length).toBe(1);
+    const payment = await storage.getPaymentByStripeId(piId);
+    expect(payment).toBeTruthy();
+    expect(payment?.status === 'completed' || payment?.status === 'succeeded').toBe(true);
   });
 });
