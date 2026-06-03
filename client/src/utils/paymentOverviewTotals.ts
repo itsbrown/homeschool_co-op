@@ -3,6 +3,43 @@
  * so families on biweekly/custom plans see total left to pay, not $0 outstanding.
  */
 
+export type BillingSummaryForOutstanding = {
+  enrollmentBalance?: number;
+  totalBalance?: number;
+  enrollmentDetails?: Array<{ balance?: number }>;
+};
+
+/** Prefer /api/billing/summary balances over cart-filtered enrollments. */
+export function resolveEnrollmentOutstandingForOverview(input: {
+  billingSummary?: BillingSummaryForOutstanding | null;
+  cartOutstandingCents: number;
+}): number {
+  if (input.billingSummary != null) {
+    if (typeof input.billingSummary.enrollmentBalance === 'number') {
+      return Math.max(0, Math.round(input.billingSummary.enrollmentBalance));
+    }
+    const fromDetails = (input.billingSummary.enrollmentDetails ?? []).reduce(
+      (sum, row) => sum + Math.max(0, Math.round(row.balance ?? 0)),
+      0,
+    );
+    if (fromDetails > 0) {
+      return fromDetails;
+    }
+    if (typeof input.billingSummary.totalBalance === 'number') {
+      return Math.max(0, Math.round(input.billingSummary.totalBalance));
+    }
+  }
+  return Math.max(0, Math.round(input.cartOutstandingCents));
+}
+
+export function countBillingOutstandingEnrollments(
+  billingSummary?: BillingSummaryForOutstanding | null,
+): number {
+  return (billingSummary?.enrollmentDetails ?? []).filter(
+    (row) => (row.balance ?? 0) > 0,
+  ).length;
+}
+
 export interface UpcomingPaymentForOverview {
   amount?: number | null;
   dueDate?: Date | string | null;

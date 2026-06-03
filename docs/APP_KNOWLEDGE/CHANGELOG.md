@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-06-02 (Payments Overview uses billing summary balance)
+
+- **PaymentManagement Overview:** `resolveEnrollmentOutstandingForOverview()` prefers `/api/billing/summary` balances over cart-filtered enrollments so families with cancelled scheduled rows still see total owed and **Pay in full** (fixes portal dead-end e.g. biweekly balance with no Upcoming rows).
+- **diagnose-parent-payments.ts:** Fixed `credits` schema import; added effective balance, payments table, portal parity (cart exclusion vs actionable scheduled).
+
 ## 2026-06-02 (Webhook test mock — no dev-bypass noise)
 
 - **Tests:** `mockStripeConstructEventParsesBody()` in `server/tests/helpers/stripeWebhookTestMock.ts` — integration tests parse webhook JSON in the Stripe mock instead of throwing to force `STRIPE_WEBHOOK_DEV_BYPASS` (eliminates misleading `console.error` in Jest output).
@@ -27,6 +32,10 @@
 - **Credits:** Volunteer credits apply to membership first (`allocateVolunteerCreditsWaterfall`); credits-only cart reordered in `cart-credits-only-checkout.ts`; checkout PI metadata `creditAllocation` from `stripe-payment-plans.ts`.
 - **Verification:** `membership_waterfall` checks in `post-payment-verification.ts` / `verify-membership-waterfall.ts`; `payments.metadata.allocationBreakdown` written on fulfill.
 - **Prod script:** `server/scripts/repair-heather-jacks-membership-first-production.ts` — Heather Jacks enrollment #449 ($125 membership + $14.58 class from first PI; 11 biweeklies on original dates 2–12).
+
+## 2026-06-01 (Jasmine Klimovich — Spring billing cancelled)
+
+- **Prod:** Cancelled scheduled payments **#432–433** ($650 × 2) for removed Spring enr **#384** (Elliana did not attend). Enr **#384** no longer on file; Winter **#181–182** unchanged (paid). Membership **#143** reconciled to enrolled/paid (member_id already set). Email: `jasmine-klimovich-spring-cancel.json`.
 
 ## 2026-06-01 (Cart checkout spinner recovery)
 

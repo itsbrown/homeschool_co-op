@@ -1,24 +1,25 @@
 /**
  * Diagnostic Script: Trace a parent's payment data through the system
- * Run with: npx tsx server/scripts/diagnose-parent-payments.ts peachy8001@gmail.com
- * 
- * This script identifies:
- * 1. Parent's user record
- * 2. All enrollments and their payment plans
- * 3. All scheduled payments and their statuses
- * 4. Any discrepancies between enrollment settings and scheduled payment records
+ *
+ *   node scripts/with-prod-env.mjs npx tsx server/scripts/diagnose-parent-payments.ts parent@example.com
+ *
+ * Reports enrollments, scheduled payments, membership, credits, payments,
+ * and portal parity (cart exclusion vs billing summary balance).
  */
 
 import { getDb } from '../db';
-import { 
+import { storage } from '../storage';
+import { enrollmentShouldExcludeFromCart } from '../../shared/enrollment-cart-eligibility';
+import { resolveEnrollmentEffectiveBalance } from '../lib/enrollment-effective-balance';
+import {
   users,
   programEnrollments,
   scheduledPayments,
-  stripePaymentHistory,
+  payments,
   membershipEnrollments,
-  userCredits
+  credits,
 } from '../../shared/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc, or } from 'drizzle-orm';
 
 async function diagnoseParentPayments(parentEmail: string) {
   const db = await getDb();
@@ -63,6 +64,9 @@ async function diagnoseParentPayments(parentEmail: string) {
     console.log(`   Total Cost: $${((enrollment.totalCost || 0) / 100).toFixed(2)}`);
     console.log(`   Total Paid: $${((enrollment.totalPaid || 0) / 100).toFixed(2)}`);
     console.log(`   Remaining Balance: $${((enrollment.remainingBalance || 0) / 100).toFixed(2)}`);
+    console.log(
+      `   Effective Balance: $${((enrollment.effectiveBalance ?? resolveEnrollmentEffectiveBalance(enrollment)) / 100).toFixed(2)}`,
+    );
     console.log(`   Program Dates: ${enrollment.programStartDate} to ${enrollment.programEndDate}`);
     
     // Get scheduled payments for this enrollment
@@ -126,35 +130,88 @@ async function diagnoseParentPayments(parentEmail: string) {
     console.log('');
   }
   
-  // 4. Get credits
-  const credits = await db.select().from(userCredits)
-    .where(eq(userCredits.userId, parent.id));
-  
-  console.log(`\n💰 USER CREDITS (${credits.length} total):`);
+  // 4. Unified credits ledger
+  const creditRows = await db
+    .select()
+    .from(credits)
+    .where(eq(credits.userId, parent.id));
+
+  console.log(`\n💰 CREDITS (${creditRows.length} total):`);
   console.log('-'.repeat(80));
   let totalAvailable = 0;
-  for (const credit of credits) {
-    const available = (credit.amountCents || 0) - (credit.consumedAmountCents || 0);
-    if (available > 0) {
+  for (const credit of creditRows) {
+    const available = Math.max(
+      0,
+      (credit.creditAmountCents || 0) - (credit.usedAmountCents || 0),
+    );
+    if (credit.status === 'approved' || credit.status === 'partially_used') {
       totalAvailable += available;
     }
-    console.log(`   Type: ${credit.creditType} | Amount: $${((credit.amountCents || 0) / 100).toFixed(2)} | Consumed: $${((credit.consumedAmountCents || 0) / 100).toFixed(2)} | Status: ${credit.status}`);
+    console.log(
+      `   ${credit.title || credit.creditType} | $${((credit.creditAmountCents || 0) / 100).toFixed(2)} | used $${((credit.usedAmountCents || 0) / 100).toFixed(2)} | ${credit.status}`,
+    );
   }
-  console.log(`   TOTAL AVAILABLE: $${(totalAvailable / 100).toFixed(2)}`);
-  
-  // 5. Get payment history
-  const paymentHistory = await db.select().from(stripePaymentHistory)
-    .where(eq(stripePaymentHistory.userId, parent.id))
-    .orderBy(desc(stripePaymentHistory.createdAt))
-    .limit(10);
-  
-  console.log(`\n💳 RECENT PAYMENT HISTORY (last 10):`);
+  console.log(`   TOTAL AVAILABLE (approved/partial): $${(totalAvailable / 100).toFixed(2)}`);
+
+  // 5. payments table (authoritative receipts)
+  const paymentRows = await db
+    .select()
+    .from(payments)
+    .where(
+      or(eq(payments.parentId, parent.id), eq(payments.parentEmail, parentEmail)),
+    )
+    .orderBy(desc(payments.createdAt))
+    .limit(15);
+
+  console.log(`\n💳 PAYMENTS TABLE (last 15):`);
   console.log('-'.repeat(80));
-  for (const payment of paymentHistory) {
-    const date = payment.createdAt ? new Date(payment.createdAt).toISOString().split('T')[0] : 'N/A';
-    console.log(`   ${date} | $${((payment.amount || 0) / 100).toFixed(2)} | ${payment.status} | ${payment.paymentIntentId?.substring(0, 20)}...`);
+  for (const payment of paymentRows) {
+    const date = payment.createdAt
+      ? new Date(payment.createdAt).toISOString().split('T')[0]
+      : 'N/A';
+    const pi = payment.stripePaymentIntentId?.substring(0, 24) ?? '—';
+    console.log(
+      `   ${date} | $${((payment.amount || 0) / 100).toFixed(2)} | ${payment.status} | ${pi}`,
+    );
   }
-  
+
+  // 6. Portal parity (matches parent Payments UI)
+  const allScheduled = await storage.getScheduledPaymentsByParentEmail(parentEmail);
+  const actionableScheduled = allScheduled.filter((p) =>
+    ['pending', 'failed', 'overdue'].includes(String(p.status).toLowerCase()),
+  );
+
+  let billingStyleBalanceCents = 0;
+  for (const enrollment of enrollments) {
+    billingStyleBalanceCents += Math.max(
+      0,
+      resolveEnrollmentEffectiveBalance(enrollment),
+    );
+  }
+
+  console.log(`\n🖥️  PORTAL PARITY:`);
+  console.log('-'.repeat(80));
+  console.log(
+    `   Billing-summary style enrollment balance: $${(billingStyleBalanceCents / 100).toFixed(2)}`,
+  );
+  console.log(
+    `   Actionable scheduled payments (pending/failed/overdue): ${actionableScheduled.length}`,
+  );
+
+  for (const enrollment of enrollments) {
+    const eff = resolveEnrollmentEffectiveBalance(enrollment);
+    if (eff <= 0) continue;
+    const excluded = enrollmentShouldExcludeFromCart(enrollment, allScheduled);
+    console.log(
+      `   Enrollment #${enrollment.id} (${enrollment.childName}): $${(eff / 100).toFixed(2)} owed | cart/upcoming excluded=${excluded}`,
+    );
+    if (excluded && actionableScheduled.length === 0) {
+      console.log(
+        `      ⚠️ DEAD END: balance owed but excluded from cart and no upcoming installments`,
+      );
+    }
+  }
+
   console.log('\n' + '='.repeat(80));
   console.log('🏁 DIAGNOSTIC COMPLETE');
   console.log('='.repeat(80));

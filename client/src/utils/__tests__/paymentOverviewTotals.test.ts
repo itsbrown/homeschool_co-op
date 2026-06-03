@@ -1,6 +1,8 @@
 import {
   computeNetTotalRemainingCents,
   computePaymentOverviewTotals,
+  resolveEnrollmentOutstandingForOverview,
+  countBillingOutstandingEnrollments,
 } from '../paymentOverviewTotals';
 
 describe('computePaymentOverviewTotals', () => {
@@ -46,6 +48,40 @@ describe('computePaymentOverviewTotals', () => {
 
     expect(overview.totalRemainingCents).toBe(12_500);
     expect(overview.planRemainingCents).toBe(0);
+  });
+});
+
+describe('resolveEnrollmentOutstandingForOverview', () => {
+  it('prefers billing summary enrollment balance over cart filter ($0 cart)', () => {
+    const cents = resolveEnrollmentOutstandingForOverview({
+      billingSummary: {
+        enrollmentBalance: 141_500,
+        enrollmentDetails: [
+          { balance: 70_750 },
+          { balance: 70_750 },
+        ],
+      },
+      cartOutstandingCents: 0,
+    });
+    expect(cents).toBe(141_500);
+  });
+
+  it('falls back to cart outstanding when billing summary is not loaded', () => {
+    const cents = resolveEnrollmentOutstandingForOverview({
+      billingSummary: null,
+      cartOutstandingCents: 12_500,
+    });
+    expect(cents).toBe(12_500);
+  });
+});
+
+describe('countBillingOutstandingEnrollments', () => {
+  it('counts enrollment detail rows with positive balance', () => {
+    expect(
+      countBillingOutstandingEnrollments({
+        enrollmentDetails: [{ balance: 100 }, { balance: 0 }, { balance: 50 }],
+      }),
+    ).toBe(2);
   });
 });
 

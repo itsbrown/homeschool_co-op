@@ -54,6 +54,8 @@ import { computeManualPayDisplay, getEnrollmentEffectiveBalance } from "@/utils/
 import {
   computeNetTotalRemainingCents,
   computePaymentOverviewTotals,
+  resolveEnrollmentOutstandingForOverview,
+  countBillingOutstandingEnrollments,
 } from "@/utils/paymentOverviewTotals";
 import { resolveUpcomingEnrollmentCoverageLabel } from "@/utils/enrollmentCoverageLabel";
 import {
@@ -546,7 +548,9 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
     },
   });
 
-  const { data: billingSummary } = useQuery<{
+  const { data: billingSummary, isLoading: isLoadingBillingSummary } = useQuery<{
+    totalBalance?: number;
+    enrollmentBalance?: number;
     enrollmentDetails?: Array<{
       enrollmentId: number;
       childName: string;
@@ -767,13 +771,42 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
     });
   }, [payments, searchQuery, filterStatus]);
   
-  // Calculate outstanding balances from enrollments (same line items as cart)
+  // Cart-eligible outstanding (may omit installment-plan rows excluded from checkout)
   const outstandingBalances = React.useMemo(() => {
     if (!enrollments) return [];
     const list = Array.isArray(enrollments) ? enrollments : [];
     const lineItems = filterEnrollmentsToCartLineItems(list);
     return lineItems.filter((e) => getEnrollmentEffectiveBalance(e) > 0);
   }, [enrollments]);
+
+  const cartOutstandingCents = React.useMemo(
+    () =>
+      outstandingBalances.reduce(
+        (total: number, enrollment: { effectiveBalance?: number }) =>
+          total + getEnrollmentEffectiveBalance(enrollment),
+        0,
+      ),
+    [outstandingBalances],
+  );
+
+  const enrollmentOutstandingCents = React.useMemo(
+    () =>
+      resolveEnrollmentOutstandingForOverview({
+        billingSummary,
+        cartOutstandingCents,
+      }),
+    [billingSummary, cartOutstandingCents],
+  );
+
+  const billingOutstandingCount = React.useMemo(
+    () => countBillingOutstandingEnrollments(billingSummary),
+    [billingSummary],
+  );
+
+  const hasPayableBalanceWithoutUpcoming =
+    enrollmentOutstandingCents > 0 &&
+    payAllInFullTarget != null &&
+    (dbScheduledPayments?.length ?? 0) === 0;
 
   // Group payments by status for the overview tab, including outstanding balances
   const paymentStats = React.useMemo(() => {
@@ -796,16 +829,14 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
       return acc;
     }, { paid: 0, succeeded: 0, pending: 0, failed: 0, refunded: 0, canceled: 0, total: 0, totalPaid: 0, totalPending: 0, totalOutstanding: 0, outstandingCount: 0, successfulCount: 0 });
     
-    // Add outstanding balances
-    stats.totalOutstanding = outstandingData.reduce(
-      (total: number, enrollment: any) =>
-        total + getEnrollmentEffectiveBalance(enrollment),
-      0,
-    );
-    stats.outstandingCount = outstandingData.length;
+    stats.totalOutstanding = enrollmentOutstandingCents;
+    stats.outstandingCount =
+      billingOutstandingCount > 0
+        ? billingOutstandingCount
+        : outstandingData.length;
     
     return stats;
-  }, [payments, outstandingBalances]);
+  }, [payments, outstandingBalances, enrollmentOutstandingCents, billingOutstandingCount]);
 
   const upcomingForOverview = React.useMemo(() => {
     const pendingFromHistory = (payments || [])
@@ -844,17 +875,12 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
   }, [payments, scheduledPayments, dbScheduledPayments]);
 
   const paymentOverview = React.useMemo(() => {
-    const enrollmentOutstanding = outstandingBalances.reduce(
-      (total: number, enrollment: { effectiveBalance?: number }) =>
-        total + getEnrollmentEffectiveBalance(enrollment),
-      0,
-    );
     return computePaymentOverviewTotals({
-      enrollmentOutstandingCents: enrollmentOutstanding,
+      enrollmentOutstandingCents,
       upcomingPayments: upcomingForOverview,
       paidSoFarCents: paymentStats.totalPaid || 0,
     });
-  }, [outstandingBalances, upcomingForOverview, paymentStats.totalPaid]);
+  }, [enrollmentOutstandingCents, upcomingForOverview, paymentStats.totalPaid]);
 
   const netTotalRemainingCents = React.useMemo(
     () => computeNetTotalRemainingCents(paymentOverview, totalAvailableCents),
@@ -862,7 +888,11 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
   );
 
   const overviewLoading =
-    isLoading || isLoadingEnrollments || isLoadingScheduled || isLoadingDbScheduled;
+    isLoading ||
+    isLoadingEnrollments ||
+    isLoadingBillingSummary ||
+    isLoadingScheduled ||
+    isLoadingDbScheduled;
   
   // Format currency amount
   const formatCurrency = (amount: number) => {
@@ -982,16 +1012,23 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                       <span>You&apos;re all caught up — no tuition or installments remaining.</span>
                     )}
                   </div>
-                  {paymentOverview.totalRemainingCents > 0 && (
+                  {(paymentOverview.totalRemainingCents > 0 || payAllInFullTarget) && (
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setActivePaymentTab("upcoming")}
-                      >
-                        View upcoming payments
-                      </Button>
+                      {hasPayableBalanceWithoutUpcoming ? (
+                        <p className="w-full text-sm text-muted-foreground">
+                          Your balance is not on an upcoming installment schedule. Use{" "}
+                          <span className="font-medium text-foreground">Pay in full</span> below.
+                        </p>
+                      ) : paymentOverview.upcomingInstallmentCount > 0 ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActivePaymentTab("upcoming")}
+                        >
+                          View upcoming payments
+                        </Button>
+                      ) : null}
                       {payAllInFullTarget && (
                         <Button
                           type="button"
