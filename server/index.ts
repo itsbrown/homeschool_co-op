@@ -36,6 +36,8 @@ import cartRouter from "./api/cart";
 import progressRouter from "./api/progress";
 import progressInsightsRouter from "./api/progress-insights";
 import locationEnrollmentsRouter from "./api/location-enrollments";
+import { getDb } from "./db";
+import { getNormalizedDatabaseUrl } from "./lib/database-url";
 
 // 🔒 PRODUCTION SAFETY: Verify NODE_ENV is set and log startup environment
 const currentEnv = process.env.NODE_ENV || 'development';
@@ -82,6 +84,29 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '
 // These are applied to all routes EXCEPT the webhook which is handled above
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+
+app.get('/api/health', async (_req, res) => {
+  const hasDatabaseUrl = Boolean(getNormalizedDatabaseUrl());
+  const hasSupabase =
+    Boolean(process.env.SUPABASE_URL) && Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  let dbOk = false;
+  let dbError: string | null = null;
+  if (hasDatabaseUrl) {
+    try {
+      await getDb();
+      dbOk = true;
+    } catch (err) {
+      dbError = err instanceof Error ? err.message : String(err);
+    }
+  }
+  res.status(dbOk ? 200 : 503).json({
+    ok: dbOk && hasSupabase,
+    db: dbOk ? 'connected' : dbError || 'not configured',
+    hasDatabaseUrl,
+    hasSupabase,
+    nodeEnv: process.env.NODE_ENV || 'development',
+  });
+});
 
 // Apply fileUpload middleware only to file upload routes
 app.use('/api/school-admin/contact-import', fileUpload({

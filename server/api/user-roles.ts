@@ -135,9 +135,25 @@ type AuthenticatedRequest = ExpressRequest;
  */
 userRolesRouter.get('/roles', supabaseAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.id;
-    
+    let userId = req.user?.id ?? null;
+
+    // Auth middleware may pass degraded mode (DB blip during JWT verify) — resolve by email.
+    if (!userId && req.user?.email) {
+      try {
+        const dbUser = await storage.getUserByEmail(req.user.email);
+        userId = dbUser?.id ?? null;
+      } catch (lookupErr) {
+        console.error('GET /api/user/roles: email lookup failed:', lookupErr);
+      }
+    }
+
     if (!userId) {
+      if (req.user?.degradedDbMode) {
+        return res.status(503).json({
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The service is temporarily unavailable. Please try again shortly.',
+        });
+      }
       return res.status(401).json({ error: 'User not authenticated' });
     }
 

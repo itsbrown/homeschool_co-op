@@ -10,6 +10,8 @@ import {
 let dbInstance: any = null;
 let client: any = null;
 let connectionWorking = false;
+/** After a successful connect, failed reconnects use cooldown; startup failures retry immediately. */
+let hadSuccessfulConnection = false;
 
 // Cooldown tracking: retry connection at most once every 30 seconds
 let lastConnectionAttempt: number = 0;
@@ -47,8 +49,12 @@ export async function getDb() {
   const now = Date.now();
   const timeSinceLastAttempt = now - lastConnectionAttempt;
 
-  // If we are still within the cooldown window, don't retry (except keep test pool alive).
-  if (lastConnectionAttempt > 0 && timeSinceLastAttempt < CONNECTION_RETRY_COOLDOWN_MS) {
+  // Cooldown only after we've previously connected — avoid locking out login on cold start.
+  if (
+    hadSuccessfulConnection &&
+    lastConnectionAttempt > 0 &&
+    timeSinceLastAttempt < CONNECTION_RETRY_COOLDOWN_MS
+  ) {
     if (process.env.NODE_ENV === 'test' && dbInstance) {
       return dbInstance;
     }
@@ -73,6 +79,7 @@ export async function getDb() {
     client = candidateClient;
     dbInstance = drizzle(client, { schema });
     connectionWorking = true;
+    hadSuccessfulConnection = true;
     console.log("Database connection to PostgreSQL created successfully");
     console.log("✅ Database connection test successful");
     return dbInstance;

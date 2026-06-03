@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from "react";
 import { normalizeRoleCasing, resolveBootstrapRoleFromRolesApi } from "@/lib/role-casing";
 import { useAuth } from "@/components/SupabaseProvider";
+import { supabase } from "@/components/SupabaseProvider";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, handleExpiredSession, setServiceUnavailable } from "@/lib/queryClient";
@@ -26,6 +27,35 @@ export class AuthExpiredError extends Error {
 // Maximum retry attempts for role loading (for newly registered users)
 const MAX_ROLE_RETRY_ATTEMPTS = 3;
 const ROLE_RETRY_DELAY_MS = 1500;
+
+async function fetchUserRolesWithAuth(): Promise<Response> {
+  let token = localStorage.getItem('supabase_token');
+  let response = await fetch('/api/user/roles', {
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+  });
+
+  if (response.status !== 401) {
+    return response;
+  }
+
+  // One refresh + retry before treating as expired (Replit cold start / race after sign-in).
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+    const refreshed = data?.session?.access_token;
+    if (!error && refreshed) {
+      localStorage.setItem('supabase_token', refreshed);
+      response = await fetch('/api/user/roles', {
+        headers: { Authorization: `Bearer ${refreshed}` },
+      });
+    }
+  } catch (refreshErr) {
+    console.warn('roles bootstrap: session refresh failed', refreshErr);
+  }
+
+  return response;
+}
 
 interface UserRole {
   id: number;
@@ -94,12 +124,7 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
     queryKey: ['/api/user/roles', user?.email],
     queryFn: async () => {
       console.log('🔍 Fetching user roles from database...');
-      const token = localStorage.getItem('supabase_token');
-      const response = await fetch('/api/user/roles', {
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` })
-        }
-      });
+      const response = await fetchUserRolesWithAuth();
 
       // Stale/expired session: trigger centralized recovery and throw a marker
       // error so the query stops retrying and the dashboard exits its loading

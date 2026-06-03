@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-06-03 (Login loop — roles bootstrap + DB cold start)
+
+- **GET /api/user/roles:** resolve `userId` by email when JWT auth succeeds but DB id was missing; return 503 (not 401) in degraded DB mode.
+- **db.ts:** connection cooldown applies only after a prior successful connect — startup failures retry immediately (fixes 30s login lockout on Replit cold start).
+- **RoleContext:** refresh Supabase session and retry `/api/user/roles` once before session-expired logout.
+- **GET /api/health:** reports DB + Supabase secret presence for Replit diagnostics.
+
 ## 2026-06-02 (Payments Overview uses billing summary balance)
 
 - **PaymentManagement Overview:** `resolveEnrollmentOutstandingForOverview()` prefers `/api/billing/summary` balances over cart-filtered enrollments so families with cancelled scheduled rows still see total owed and **Pay in full** (fixes portal dead-end e.g. biweekly balance with no Upcoming rows).
