@@ -12,7 +12,7 @@ export function useAuth() {
     error 
   } = useSupabase();
 
-  const isAuthenticated = !!user && !!session;
+  const isAuthenticated = !!user;
 
   // Debug logging
   console.log('Auth state:', { 

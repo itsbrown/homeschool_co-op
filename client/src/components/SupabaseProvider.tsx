@@ -162,6 +162,12 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
       email,
       password,
     });
+    // Eagerly sync session so /api/user/roles has a Bearer token before onAuthStateChange fires.
+    if (data?.session) {
+      setSession(data.session);
+      setUser(data.session.user);
+      localStorage.setItem("supabase_token", data.session.access_token);
+    }
     return { data, error };
   };
 
