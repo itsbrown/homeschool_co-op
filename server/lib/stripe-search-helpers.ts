@@ -91,3 +91,64 @@ export async function discoverStripeCustomerIdsByEmail(
   }
   return Array.from(ids);
 }
+
+/** Resolve DB-linked + Stripe email-search customer IDs for a parent (deduped). */
+export async function resolveStripeCustomerIdsForParentEmail(
+  storage: { getStripeCustomerIdsByParentEmail: (email: string) => Promise<string[]> },
+  stripe: { customers: { search: (p: Record<string, unknown>) => Promise<any> } },
+  parentEmail: string,
+): Promise<string[]> {
+  const ids = new Set<string>();
+  for (const id of await storage.getStripeCustomerIdsByParentEmail(parentEmail)) {
+    if (id) ids.add(id);
+  }
+  for (const id of await discoverStripeCustomerIdsByEmail(stripe, parentEmail)) {
+    ids.add(id);
+  }
+  return Array.from(ids);
+}
+
+type PaymentIntentOwnershipFields = {
+  customer?: string | { id: string } | null;
+  metadata?: Record<string, string | undefined> | null;
+  receipt_email?: string | null;
+};
+
+/**
+ * True when PI metadata email, receipt_email, or customer id matches this parent.
+ * Always union DB customer ids with Stripe email search before calling.
+ */
+export function paymentIntentBelongsToParent(
+  pi: PaymentIntentOwnershipFields,
+  parentEmail: string,
+  customerIds: Iterable<string>,
+): boolean {
+  const normalized = normalizeEmailForLookup(parentEmail);
+  if (!normalized) return false;
+
+  const customerSet = new Set(customerIds);
+  const meta = pi.metadata ?? {};
+  for (const key of ['parentEmail', 'userEmail'] as const) {
+    const raw = meta[key]?.trim();
+    if (raw && normalizeEmailForLookup(raw) === normalized) {
+      return true;
+    }
+  }
+
+  if (pi.receipt_email && normalizeEmailForLookup(pi.receipt_email) === normalized) {
+    return true;
+  }
+
+  const customerRef = pi.customer;
+  const customerId =
+    typeof customerRef === 'string'
+      ? customerRef
+      : customerRef && typeof customerRef === 'object' && 'id' in customerRef
+        ? String(customerRef.id)
+        : null;
+  if (customerId && customerSet.has(customerId)) {
+    return true;
+  }
+
+  return false;
+}

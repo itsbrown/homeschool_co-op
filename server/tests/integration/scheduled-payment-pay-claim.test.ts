@@ -22,6 +22,14 @@ jest.mock('../../config/stripe', () => ({
   getStripePublishableKey: jest.fn(async () => 'pk_test_mock'),
 }));
 
+jest.mock('../../lib/stripe-search-helpers', () => {
+  const actual = jest.requireActual('../../lib/stripe-search-helpers') as object;
+  return {
+    ...actual,
+    resolveStripeCustomerIdsForParentEmail: jest.fn(async () => ['cus_test_parent']),
+  };
+});
+
 async function loadScheduledRow(parentEmail: string, id: number) {
   const rows = await storage.getScheduledPaymentsByParentEmail(parentEmail);
   return rows.find((r) => r.id === id);
@@ -62,6 +70,8 @@ describeWithDb('Integration: scheduled-payments /pay parent claim', () => {
       status: 'requires_payment_method',
       amount: 5000,
       currency: 'usd',
+      metadata: { parentEmail: parent.email },
+      customer: 'cus_test_parent',
     });
     mockGetStripeClient.mockReset();
     mockGetStripeClient.mockResolvedValue({

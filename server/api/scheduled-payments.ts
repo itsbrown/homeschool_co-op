@@ -20,7 +20,9 @@ import { computeEffectiveBalance } from '@shared/schema';
 import {
   resolveParentManualPayIntent,
   shouldClearStaleScheduledPaymentIntent,
+  pickStripeCustomerIdForParentPay,
 } from '../lib/scheduled-payment-parent-pay';
+import { resolveStripeCustomerIdsForParentEmail } from '../lib/stripe-search-helpers';
 
 const router = Router();
 
@@ -415,6 +417,13 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
     });
 
     const stripe = await getStripeClient();
+    const parentUser = await storage.getUserByEmail(userEmail);
+    const resolvedCustomerIds = await resolveStripeCustomerIdsForParentEmail(storage, stripe, userEmail);
+    const stripeCtx = { parentEmail: userEmail, customerIds: resolvedCustomerIds };
+    const stripeCustomerId = pickStripeCustomerIdForParentPay(
+      parentUser?.stripeCustomerId,
+      resolvedCustomerIds,
+    );
 
     const payIntentResolution = await resolveParentManualPayIntent(
       {
@@ -426,6 +435,7 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       },
       parentUserId,
       stripe,
+      stripeCtx,
     );
 
     if (payIntentResolution.action === 'resume') {
@@ -456,6 +466,7 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
           stripePaymentIntentId: scheduledPayment.stripePaymentIntentId,
         },
         stripe,
+        stripeCtx,
       )
     ) {
       await storage.updateScheduledPayment(numericPaymentId, {
@@ -571,6 +582,8 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       paymentIntent = await stripe.paymentIntents.create({
         amount: decision.chargeAmount,
         currency: 'usd',
+        ...(stripeCustomerId ? { customer: stripeCustomerId } : {}),
+        receipt_email: userEmail,
         metadata: buildScheduledPaymentIntentMetadata({
           scheduledPaymentId: numericPaymentId,
           parentEmail: userEmail,

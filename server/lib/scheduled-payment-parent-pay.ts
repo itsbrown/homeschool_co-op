@@ -1,4 +1,5 @@
 import type Stripe from 'stripe';
+import { paymentIntentBelongsToParent } from './stripe-search-helpers';
 
 export type ScheduledPaymentPayRow = {
   id: number;
@@ -6,6 +7,11 @@ export type ScheduledPaymentPayRow = {
   chargedBy?: string | null;
   parentId?: number | null;
   stripePaymentIntentId?: string | null;
+};
+
+export type ParentPayStripeContext = {
+  parentEmail: string;
+  customerIds: string[];
 };
 
 const RESUMABLE_PI_STATUSES = new Set([
@@ -19,6 +25,10 @@ export type ParentManualPayIntentResolution =
   | { action: 'release_and_retry' }
   | { action: 'not_applicable' };
 
+function piOwnedByParent(pi: Stripe.PaymentIntent, ctx: ParentPayStripeContext): boolean {
+  return paymentIntentBelongsToParent(pi, ctx.parentEmail, ctx.customerIds);
+}
+
 /**
  * When a parent re-opens Pay Now while their installment is still `processing`
  * with an in-flight parent_manual PI, return the existing client secret instead
@@ -28,6 +38,7 @@ export async function resolveParentManualPayIntent(
   row: ScheduledPaymentPayRow,
   parentUserId: number,
   stripe: Stripe,
+  ctx: ParentPayStripeContext,
 ): Promise<ParentManualPayIntentResolution> {
   const status = String(row.status ?? '');
   const chargedBy = row.chargedBy ?? null;
@@ -43,6 +54,12 @@ export async function resolveParentManualPayIntent(
 
   try {
     const pi = await stripe.paymentIntents.retrieve(piId);
+    if (!piOwnedByParent(pi, ctx)) {
+      console.warn(
+        `[scheduled-payment-parent-pay] PI ${piId} on scheduled ${row.id} does not match parent ${ctx.parentEmail} / customer ids — clearing`,
+      );
+      return { action: 'release_and_retry' };
+    }
     if (pi.status === 'succeeded') {
       return { action: 'not_applicable' };
     }
@@ -74,6 +91,7 @@ export async function resolveParentManualPayIntent(
 export async function shouldClearStaleScheduledPaymentIntent(
   row: ScheduledPaymentPayRow,
   stripe: Stripe,
+  ctx: ParentPayStripeContext,
 ): Promise<boolean> {
   const status = String(row.status ?? '');
   if (!['pending', 'failed', 'overdue'].includes(status)) {
@@ -87,6 +105,12 @@ export async function shouldClearStaleScheduledPaymentIntent(
 
   try {
     const pi = await stripe.paymentIntents.retrieve(piId);
+    if (!piOwnedByParent(pi, ctx)) {
+      console.warn(
+        `[scheduled-payment-parent-pay] clearing unowned stale PI ${piId} on scheduled ${row.id}`,
+      );
+      return true;
+    }
     if (pi.status === 'succeeded') {
       return false;
     }
@@ -110,4 +134,15 @@ export async function shouldClearStaleScheduledPaymentIntent(
   }
 
   return false;
+}
+
+/** Prefer users.stripe_customer_id, else first resolved id from DB + Stripe email search. */
+export function pickStripeCustomerIdForParentPay(
+  userStripeCustomerId: string | null | undefined,
+  resolvedCustomerIds: string[],
+): string | undefined {
+  if (userStripeCustomerId?.startsWith('cus_')) {
+    return userStripeCustomerId;
+  }
+  return resolvedCustomerIds.find((id) => id.startsWith('cus_'));
 }
