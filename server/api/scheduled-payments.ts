@@ -16,6 +16,11 @@ import {
   filterScheduledPaymentsUntilFirstPaid,
 } from '../lib/checkout-upcoming-payments';
 import { formatEnrollmentCoverageLabel } from '../lib/enrollment-coverage-label';
+import { computeEffectiveBalance } from '@shared/schema';
+import {
+  resolveParentManualPayIntent,
+  shouldClearStaleScheduledPaymentIntent,
+} from '../lib/scheduled-payment-parent-pay';
 
 const router = Router();
 
@@ -35,13 +40,39 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
     });
 
     const afterFirstPaid = await filterScheduledPaymentsUntilFirstPaid(filtered);
+
+    const payableScheduled = [];
+    for (const payment of afterFirstPaid) {
+      if (!payment.enrollmentId) {
+        payableScheduled.push(payment);
+        continue;
+      }
+      const enrollment = await storage.getProgramEnrollmentById(payment.enrollmentId);
+      if (!enrollment) {
+        payableScheduled.push(payment);
+        continue;
+      }
+      const owed = computeEffectiveBalance(
+        enrollment.totalCost ?? 0,
+        enrollment.totalPaid ?? 0,
+        enrollment.compAmountCents ?? 0,
+      );
+      if (owed > 0) {
+        payableScheduled.push(payment);
+      } else {
+        console.log(
+          `📊 Skipping scheduled payment ${payment.id} — enrollment ${payment.enrollmentId} effective balance ${owed}`,
+        );
+      }
+    }
+
     const checkoutDueRows = await buildCheckoutFirstInstallmentDueRows(userEmail);
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
     console.log(
-      `📊 Upcoming for ${userEmail}: ${checkoutDueRows.length} checkout-due, ${afterFirstPaid.length} scheduled (filtered from ${filtered.length} pending rows)`,
+      `📊 Upcoming for ${userEmail}: ${checkoutDueRows.length} checkout-due, ${payableScheduled.length} scheduled (filtered from ${filtered.length} pending rows)`,
     );
 
     const mapScheduledRow = async (payment: (typeof afterFirstPaid)[0]) => {
@@ -90,7 +121,7 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
       };
     };
 
-    const enrichedScheduled = await Promise.all(afterFirstPaid.map(mapScheduledRow));
+    const enrichedScheduled = await Promise.all(payableScheduled.map(mapScheduledRow));
     const enrichedPayments = [
       ...checkoutDueRows,
       ...enrichedScheduled,
@@ -383,6 +414,63 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       metadata: scheduledPayment.metadata,
     });
 
+    const stripe = await getStripeClient();
+
+    const payIntentResolution = await resolveParentManualPayIntent(
+      {
+        id: scheduledPayment.id,
+        status: scheduledPayment.status,
+        chargedBy: (scheduledPayment as { chargedBy?: string | null }).chargedBy ?? null,
+        parentId: scheduledPayment.parentId,
+        stripePaymentIntentId: scheduledPayment.stripePaymentIntentId,
+      },
+      parentUserId,
+      stripe,
+    );
+
+    if (payIntentResolution.action === 'resume') {
+      console.log(`♻️ Resuming parent Pay Now PI ${payIntentResolution.paymentIntentId} for scheduled ${numericPaymentId}`);
+      return res.json({
+        success: true,
+        mode: 'stripe' as const,
+        clientSecret: payIntentResolution.clientSecret,
+        paymentIntentId: payIntentResolution.paymentIntentId,
+        resumed: true,
+      });
+    }
+
+    if (payIntentResolution.action === 'release_and_retry') {
+      await storage.releaseScheduledPaymentParentClaim(numericPaymentId, parentUserId).catch(() => {});
+      const refreshedRows = await storage.getScheduledPaymentsByParentEmail(userEmail);
+      const refreshed = refreshedRows.find((p) => p.id === numericPaymentId);
+      if (refreshed) {
+        Object.assign(scheduledPayment, refreshed);
+      }
+    }
+
+    if (
+      await shouldClearStaleScheduledPaymentIntent(
+        {
+          id: scheduledPayment.id,
+          status: scheduledPayment.status,
+          stripePaymentIntentId: scheduledPayment.stripePaymentIntentId,
+        },
+        stripe,
+      )
+    ) {
+      await storage.updateScheduledPayment(numericPaymentId, {
+        stripePaymentIntentId: null,
+        chargedBy: null,
+        failureReason: null,
+        retryCount: 0,
+      });
+      const refreshedRows = await storage.getScheduledPaymentsByParentEmail(userEmail);
+      const refreshed = refreshedRows.find((p) => p.id === numericPaymentId);
+      if (refreshed) {
+        Object.assign(scheduledPayment, refreshed);
+      }
+    }
+
     const claimedRow = await storage.claimScheduledPaymentForParentCharge(numericPaymentId, parentUserId);
     if (!claimedRow) {
       return res.status(409).json({
@@ -478,7 +566,6 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    const stripe = await getStripeClient();
     let paymentIntent: Stripe.PaymentIntent;
     try {
       paymentIntent = await stripe.paymentIntents.create({
