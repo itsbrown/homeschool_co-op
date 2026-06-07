@@ -114,9 +114,14 @@ export function membershipCentsForThisPaymentIntent(
   };
 }
 
+type PaymentIntentAmountAndMetadata = {
+  amount: number;
+  metadata?: Record<string, string | undefined> | null;
+};
+
 /** Gross cents allocated (card + credits) for a PaymentIntent. */
 export function allocationGrossCentsFromPaymentIntent(
-  paymentIntent: Pick<{ amount: number; metadata?: Record<string, string | undefined> | null }>,
+  paymentIntent: PaymentIntentAmountAndMetadata,
 ): number {
   const amountCents =
     typeof paymentIntent.amount === 'number' && Number.isInteger(paymentIntent.amount)
