@@ -13,12 +13,22 @@ import { storage } from '../../storage';
 const describeWithDb = process.env.TEST_DATABASE_URL ? describe : describe.skip;
 
 const mockStripePaymentIntentsCreate = jest.fn();
+const mockStripePaymentIntentsRetrieve = jest.fn();
+const mockStripePaymentIntentsCancel = jest.fn();
 const mockGetStripeClient = jest.fn();
 
 jest.mock('../../config/stripe', () => ({
   getStripeClient: mockGetStripeClient,
   getStripePublishableKey: jest.fn(async () => 'pk_test_mock'),
 }));
+
+jest.mock('../../lib/stripe-search-helpers', () => {
+  const actual = jest.requireActual('../../lib/stripe-search-helpers') as object;
+  return {
+    ...actual,
+    resolveStripeCustomerIdsForParentEmail: jest.fn(async () => ['cus_test_parent']),
+  };
+});
 
 async function loadScheduledRow(parentEmail: string, id: number) {
   const rows = await storage.getScheduledPaymentsByParentEmail(parentEmail);
@@ -52,9 +62,24 @@ describeWithDb('Integration: scheduled-payments /pay parent claim', () => {
       amount: 5000,
       currency: 'usd',
     });
+    mockStripePaymentIntentsRetrieve.mockReset();
+    mockStripePaymentIntentsCancel.mockReset();
+    mockStripePaymentIntentsRetrieve.mockResolvedValue({
+      id: 'pi_test_sched_claim',
+      client_secret: 'pi_test_sched_claim_secret',
+      status: 'requires_payment_method',
+      amount: 5000,
+      currency: 'usd',
+      metadata: { parentEmail: parent.email },
+      customer: 'cus_test_parent',
+    });
     mockGetStripeClient.mockReset();
     mockGetStripeClient.mockResolvedValue({
-      paymentIntents: { create: mockStripePaymentIntentsCreate },
+      paymentIntents: {
+        create: mockStripePaymentIntentsCreate,
+        retrieve: mockStripePaymentIntentsRetrieve,
+        cancel: mockStripePaymentIntentsCancel,
+      },
     });
 
     const admin = await testDb.createTestUser({
@@ -162,7 +187,7 @@ describeWithDb('Integration: scheduled-payments /pay parent claim', () => {
     expect(row!.stripePaymentIntentId).toBe('pi_test_sched_claim');
   });
 
-  it('second /pay for the same installment returns 409 INSTALLMENT_NOT_AVAILABLE', async () => {
+  it('second /pay for the same installment resumes the in-flight PI', async () => {
     api.clearAuth();
     api.setTestUserEmail(parent.email);
 
@@ -170,9 +195,11 @@ describeWithDb('Integration: scheduled-payments /pay parent claim', () => {
     expect(first.status).toBe(200);
 
     const second = await api.post('/api/scheduled-payments/pay', payBody());
-    expect(second.status).toBe(409);
-    expect(second.body.success).toBe(false);
-    expect(second.body.error).toBe('INSTALLMENT_NOT_AVAILABLE');
+    expect(second.status).toBe(200);
+    expect(second.body.success).toBe(true);
+    expect(second.body.resumed).toBe(true);
+    expect(second.body.clientSecret).toBe('pi_test_sched_claim_secret');
+    expect(mockStripePaymentIntentsCreate).toHaveBeenCalledTimes(1);
   });
 
   it('releases claim when Stripe paymentIntents.create fails', async () => {

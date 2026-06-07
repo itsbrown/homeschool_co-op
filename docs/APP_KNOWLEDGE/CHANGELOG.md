@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-06-07 (Pay Now idempotency + prod installment reset)
+
+- **`INSTALLMENT_NOT_AVAILABLE`:** `/api/scheduled-payments/pay` resumes in-flight `processing` + `parent_manual` PaymentIntents on retry; clears stale PIs before reclaim (`server/lib/scheduled-payment-parent-pay.ts`). Stripe PI ownership verified via **parent email + customer id** (DB-linked + Stripe email search, same as payment history).
+- **`/upcoming`:** Omits scheduled rows when linked enrollment `effective_balance <= 0`.
+- **Prod:** Cancelled Jessica Hutchins orphan SPs **370/378**; reset failed autopay + stale `parent_manual` rows to `pending`.
+
 ## 2026-06-03 (Login loop — roles bootstrap + DB cold start)
 
 - **GET /api/user/roles:** resolve `userId` by email when JWT auth succeeds but DB id was missing; return 503 (not 401) in degraded DB mode.

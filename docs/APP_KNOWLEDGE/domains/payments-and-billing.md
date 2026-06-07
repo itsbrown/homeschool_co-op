@@ -123,6 +123,12 @@ Pattern: dedicated script under `server/scripts/apply-*-credits-production.ts` (
 
 Dry-run first: `--dry-run`.
 
+## Pay Now installment claims (`INSTALLMENT_NOT_AVAILABLE`)
+
+`POST /api/scheduled-payments/pay` claims a row (`pending`/`failed`/`overdue` → `processing`). Retrying while `processing` returned **409 `INSTALLMENT_NOT_AVAILABLE`**.
+
+**Fix (2026-06-07):** `server/lib/scheduled-payment-parent-pay.ts` — resume existing `parent_manual` PI (`resumed: true` in response); cancel/clear stale PIs before reclaim. **Stripe:** `resolveStripeCustomerIdsForParentEmail` (DB customer ids + Stripe email search) and `paymentIntentBelongsToParent` (metadata email, receipt_email, customer id). New Pay Now PIs attach `customer` + `receipt_email`. `/upcoming` hides rows when enrollment `effective_balance <= 0`.
+
 ## Account correction email
 
 After ledger fix, notify parent:
