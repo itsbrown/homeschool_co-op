@@ -5,7 +5,10 @@ import { storage } from '../storage';
 import { users } from '../../shared/schema';
 import { generateMemberId } from '../utils/membership';
 import { resolveMembershipReserveForPaymentIntent } from '../lib/resolve-membership-reserve-for-payment';
-import type { PaymentAllocationBreakdown } from '../lib/persist-payment-allocation-breakdown';
+import {
+  readAllocationBreakdownFromPayment,
+  type PaymentAllocationBreakdown,
+} from '../lib/persist-payment-allocation-breakdown';
 
 /**
  * Apply membership enrollment create/update when a cart PaymentIntent includes
@@ -57,8 +60,53 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
           membershipCents: 0,
           classPoolCents: resolved.classPoolCents,
           grossCents: resolved.allocationGrossCents,
+          paymentIntentId: paymentIntent.id,
         }
       : null;
+  }
+
+  const existingEnrollment = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
+    parentUserId,
+    membershipSchoolId,
+    membershipYear,
+  );
+
+  const paymentRow = await storage.getPaymentByStripeId(paymentIntent.id);
+  const persistedBreakdown = readAllocationBreakdownFromPayment(paymentRow);
+  if (
+    existingEnrollment?.notes?.includes(paymentIntent.id) ||
+    persistedBreakdown?.paymentIntentId === paymentIntent.id
+  ) {
+    console.log(
+      `🎫 Membership fulfillment already recorded for PI ${paymentIntent.id} — skipping (idempotent)`,
+    );
+    return (
+      persistedBreakdown ?? {
+        membershipCents: 0,
+        classPoolCents: resolved?.classPoolCents ?? 0,
+        grossCents: resolved?.allocationGrossCents ?? piAmount,
+        paymentIntentId: paymentIntent.id,
+      }
+    );
+  }
+
+  const priorPaid = existingEnrollment?.amountPaid ?? 0;
+  const remainingMembershipOwed = Math.max(0, cartMembershipTotalCents - priorPaid);
+  const incrementCents = Math.min(membershipPortionThisPaymentCents, remainingMembershipOwed);
+
+  if (incrementCents <= 0) {
+    console.log('🎫 Skipping membership fulfillment — no remaining membership owed for this PI', {
+      paymentIntentId: paymentIntent.id,
+      priorPaid,
+      cartMembershipTotalCents,
+      membershipPortionThisPaymentCents,
+    });
+    return {
+      membershipCents: 0,
+      classPoolCents: resolved?.classPoolCents ?? 0,
+      grossCents: resolved?.allocationGrossCents ?? piAmount,
+      paymentIntentId: paymentIntent.id,
+    };
   }
 
   console.log('🎫 Processing membership payment:', {
@@ -66,6 +114,7 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
     membershipSchoolId,
     cartMembershipTotalCents,
     membershipPortionThisPaymentCents,
+    incrementCents,
     membershipYear,
   });
 
@@ -82,20 +131,14 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
       console.log(`🎫 User ${parentUserId} already has Member ID: ${existingUser[0].memberId}`);
     }
 
-    const existingEnrollment = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
-      parentUserId,
-      membershipSchoolId,
-      membershipYear,
-    );
-
     const startDate = new Date();
     const expirationDate = new Date(startDate);
     expirationDate.setFullYear(expirationDate.getFullYear() + 1);
 
     const applyMembershipPayment = (
-      priorPaid: number,
+      priorAmountPaid: number,
     ): { amountPaid: number; remainingBalance: number; status: 'enrolled' | 'pending_payment' } => {
-      const amountPaid = priorPaid + membershipPortionThisPaymentCents;
+      const amountPaid = priorAmountPaid + incrementCents;
       const remainingBalance = Math.max(0, cartMembershipTotalCents - amountPaid);
       return {
         amountPaid,
@@ -110,34 +153,24 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
 
     if (existingEnrollment) {
       const ledger = applyMembershipPayment(existingEnrollment.amountPaid ?? 0);
-      if (
-        existingEnrollment.status === 'enrolled' &&
-        ledger.remainingBalance <= 0 &&
-        (existingEnrollment.amountPaid ?? 0) >= cartMembershipTotalCents
-      ) {
-        console.log(
-          `🎫 Membership enrollment ${existingEnrollment.id} already fully paid for user ${parentUserId} - skipping (idempotent)`,
-        );
-      } else {
-        await storage.updateMembershipEnrollment(existingEnrollment.id, {
-          status: ledger.status,
-          amount: cartMembershipTotalCents,
-          amountPaid: ledger.amountPaid,
-          remainingBalance: ledger.remainingBalance,
-          totalAmount: cartMembershipTotalCents,
-          balanceDue: ledger.remainingBalance,
-          stripeCustomerId: (paymentIntent.customer as string) || null,
-          startDate,
-          renewalDate: expirationDate,
-          endDate: expirationDate,
-          expirationDate,
-          paymentMethod: 'other',
-          notes: membershipNote,
-        });
-        console.log(
-          `🎫 ✅ Updated membership enrollment ${existingEnrollment.id} for user ${parentUserId} (paid=${ledger.amountPaid}, balance=${ledger.remainingBalance})`,
-        );
-      }
+      await storage.updateMembershipEnrollment(existingEnrollment.id, {
+        status: ledger.status,
+        amount: cartMembershipTotalCents,
+        amountPaid: ledger.amountPaid,
+        remainingBalance: ledger.remainingBalance,
+        totalAmount: cartMembershipTotalCents,
+        balanceDue: ledger.remainingBalance,
+        stripeCustomerId: (paymentIntent.customer as string) || null,
+        startDate,
+        renewalDate: expirationDate,
+        endDate: expirationDate,
+        expirationDate,
+        paymentMethod: 'other',
+        notes: membershipNote,
+      });
+      console.log(
+        `🎫 ✅ Updated membership enrollment ${existingEnrollment.id} for user ${parentUserId} (paid=${ledger.amountPaid}, balance=${ledger.remainingBalance})`,
+      );
     } else {
       const ledger = applyMembershipPayment(0);
       await storage.createMembershipEnrollment({
@@ -204,9 +237,10 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
       }
     }
     return {
-      membershipCents: membershipPortionThisPaymentCents,
+      membershipCents: incrementCents,
       classPoolCents: resolved?.classPoolCents ?? 0,
       grossCents: resolved?.allocationGrossCents ?? piAmount,
+      paymentIntentId: paymentIntent.id,
     };
   } catch (membershipError) {
     console.error('❌ Error processing membership payment:', membershipError);

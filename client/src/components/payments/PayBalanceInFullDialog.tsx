@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { refreshPostPaymentState } from "@/lib/postPaymentRefresh";
+import { finalizePaymentAfterStripeSuccess } from "@/lib/finalizePaymentAfterStripeSuccess";
 
 export type PayInFullTarget = {
   enrollmentIds: number[];
@@ -24,11 +24,13 @@ export type PayInFullTarget = {
 
 function PayInFullForm({
   amountCents,
+  enrollmentIds,
   onSuccess,
   onCancel,
   onError,
 }: {
   amountCents: number;
+  enrollmentIds: number[];
   onSuccess: () => void;
   onCancel: () => void;
   onError: (message: string) => void;
@@ -53,7 +55,10 @@ function PayInFullForm({
         return;
       }
       if (paymentIntent?.status === "succeeded") {
-        await refreshPostPaymentState(queryClient);
+        await finalizePaymentAfterStripeSuccess(queryClient, {
+          paymentIntentId: paymentIntent.id,
+          enrollmentIds,
+        });
         onSuccess();
       } else {
         onError("Payment did not complete. Check your payment history.");
@@ -183,6 +188,7 @@ export function PayBalanceInFullDialog({
           <Elements stripe={stripePromise} options={{ clientSecret }}>
             <PayInFullForm
               amountCents={target.totalAmountCents}
+              enrollmentIds={target.enrollmentIds}
               onSuccess={handleSuccess}
               onCancel={onClose}
               onError={(message) => {

@@ -3465,4 +3465,143 @@ router.post('/setup-public-form-scenario', async (req: Request, res: Response) =
   }
 });
 
+/**
+ * POST /api/test/setup-progress-scenario
+ * Seeds school + educator + parent + child for NY | Progress report Playwright.
+ */
+router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
+  try {
+    const { ensureQuarterlyReportTables } = await import(
+      '../tests/helpers/ensureQuarterlyReportTables'
+    );
+    const { buildFullSkillChecksForBand, currentSchoolYearLabel } = await import(
+      '../tests/helpers/quarterlyReportTestHelpers'
+    );
+    const { resolveProgressReportBand } = await import('../lib/resolve-progress-report-band');
+
+    await ensureQuarterlyReportTables();
+
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    const bcrypt = await import('bcryptjs');
+    const password = 'TestPassword123!';
+    const schoolYear = currentSchoolYearLabel();
+    const quarter = 'fall';
+
+    const admin = await testDb.createTestUser({
+      email: `progress_admin_${uniqueId}@test.com`,
+      username: `progressadmin_${uniqueId}`,
+      name: 'Progress Test Admin',
+      role: 'schoolAdmin',
+    });
+    await storage.updateUser(admin.id, { password: await bcrypt.hash(password, 10) });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Progress School ${uniqueId}`,
+      registrationCode: `PRG${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    const educatorEmail = `progress_ed_${uniqueId}@test.com`;
+    const educator = await testDb.createTestUser({
+      email: educatorEmail,
+      username: `progressed_${uniqueId}`,
+      name: 'Progress Test Educator',
+      role: 'educator',
+      schoolId: school.id,
+    });
+    await storage.updateUser(educator.id, { password: await bcrypt.hash(password, 10) });
+
+    const parentEmail = `progress_parent_${uniqueId}@test.com`;
+    const parent = await testDb.createTestUser({
+      email: parentEmail,
+      username: `progressparent_${uniqueId}`,
+      name: 'Progress Test Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    await storage.updateUser(parent.id, { password: await bcrypt.hash(password, 10) });
+
+    const child = await storage.createChild({
+      parentId: parent.id,
+      parentEmail,
+      firstName: 'Progress',
+      lastName: `E2E${uniqueId}`,
+      birthdate: '2018-09-01',
+      gradeLevel: 'Kindergarten',
+      schoolId: school.id,
+    });
+
+    let educatorSupabaseLinked = false;
+    let parentSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuth === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      educatorSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: educator.id,
+        email: educatorEmail,
+        password,
+        role: 'educator',
+        schoolId: school.id,
+        displayName: educator.name || 'Progress Test Educator',
+      });
+      parentSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: parent.id,
+        email: parentEmail,
+        password,
+        role: 'parent',
+        schoolId: school.id,
+        displayName: parent.name || 'Progress Test Parent',
+      });
+    }
+
+    if (req.body?.withCompleteRubric === true) {
+      const band = resolveProgressReportBand(child.gradeLevel);
+      await storage.upsertQuarterlyProgressMeta(child.id, school.id, {
+        schoolYear,
+        quarter,
+        quarterLabel: `Fall ${schoolYear}`,
+        asaCoopHours: 48,
+        homeInstructionHours: 180,
+        phonogramCount: 14,
+        approvedNarrative: 'E2E seed: phonics, counting, and handwriting covered this quarter.',
+        notesObservations: 'Strong co-op participation.',
+      });
+      const skillChecks = buildFullSkillChecksForBand(band);
+      await storage.saveQuarterlySkillChecks(child.id, school.id, schoolYear, quarter, skillChecks);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        supabaseLinked: educatorSupabaseLinked && parentSupabaseLinked,
+        educatorSupabaseLinked,
+        parentSupabaseLinked,
+        school: { id: school.id, name: school.name, registrationCode: school.registrationCode },
+        educator: { id: educator.id, email: educatorEmail, password },
+        parent: { id: parent.id, email: parentEmail, password },
+        child: {
+          id: child.id,
+          firstName: child.firstName,
+          lastName: child.lastName,
+          gradeLevel: child.gradeLevel,
+        },
+        schoolYear,
+        quarter,
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-progress-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup progress scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 export default router;

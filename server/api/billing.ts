@@ -1105,219 +1105,112 @@ router.post('/pay-balance', async (req, res) => {
   }
 });
 
-// Confirm payment and update enrollment statuses
-router.post('/confirm-payment', async (req, res) => {
+// Legacy endpoint — replaced by POST /api/billing/fulfill-payment-intent (Stripe retrieve + finalize).
+router.post('/confirm-payment', async (_req, res) => {
+  return res.status(410).json({
+    error: 'confirm-payment is deprecated. Use POST /api/billing/fulfill-payment-intent with paymentIntentId.',
+  });
+});
+
+/**
+ * Client-side fulfillment fallback when Stripe webhooks are delayed or unavailable (e.g. Replit dev).
+ * Verifies ownership, then delegates to finalizeSucceededPaymentIntent (single idempotent path).
+ */
+router.post('/fulfill-payment-intent', async (req, res) => {
   try {
-    const { paymentIntentId, enrollmentIds, amount, paymentDate } = req.body;
-
-    console.log('💳 Confirming payment:', paymentIntentId, 'for enrollments:', enrollmentIds);
-
-    // Extract user email from Supabase token
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Authorization header missing' });
     }
 
     const token = authHeader.split(' ')[1];
-    
-    // Verify the Supabase token
     const supabase = createClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
-
     const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error || !user) {
-      console.log('❌ Supabase auth error:', error);
+    if (error || !user?.email) {
       return res.status(401).json({ error: 'Invalid authentication token' });
     }
 
-    const userEmail = user.email;
-    if (!userEmail) {
-      return res.status(401).json({ error: 'User email not found' });
+    const { paymentIntentId } = req.body ?? {};
+    if (typeof paymentIntentId !== 'string' || !paymentIntentId.startsWith('pi_')) {
+      return res.status(400).json({ error: 'paymentIntentId is required' });
     }
 
-    if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0 || enrollmentIds.some((id: unknown) => !Number.isInteger(id))) {
+    const stripe = await getStripeClient();
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    if (paymentIntent.status !== 'succeeded') {
       return res.status(400).json({
-        success: false,
-        error: 'enrollmentIds must be a non-empty array of integer IDs'
+        error: `PaymentIntent status is ${paymentIntent.status}, not succeeded`,
       });
     }
 
-    // Get user's children to verify ownership and block unauthorized requests before detail validation.
+    const metaEmail =
+      typeof paymentIntent.metadata?.parentEmail === 'string'
+        ? paymentIntent.metadata.parentEmail.trim().toLowerCase()
+        : '';
+    const userEmail = user.email.trim().toLowerCase();
+    if (metaEmail && metaEmail !== userEmail) {
+      return res.status(403).json({ error: 'Payment does not belong to this account' });
+    }
+
+    let enrollmentIds: number[] = [];
+    try {
+      enrollmentIds = JSON.parse(paymentIntent.metadata?.enrollmentIds || '[]');
+    } catch {
+      enrollmentIds = [];
+    }
+
+    if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
+      return res.status(400).json({ error: 'No enrollmentIds on PaymentIntent metadata' });
+    }
+
     const userChildren = await getChildrenForAuthenticatedParent(storage, {
-      email: userEmail,
+      email: user.email,
       supabaseId: user.id,
     });
-    const userChildIds = new Set(userChildren.map(child => child.id));
+    const userChildIds = new Set(userChildren.map((c) => c.id));
     const targetEnrollments = await Promise.all(
-      enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id))
+      enrollmentIds.map((id: number) => storage.getProgramEnrollmentById(id)),
     );
-    const validEnrollments = targetEnrollments.filter((enrollment): enrollment is NonNullable<typeof enrollment> =>
-      !!enrollment && userChildIds.has(enrollment.childId)
+    const validEnrollments = targetEnrollments.filter(
+      (enrollment): enrollment is NonNullable<typeof enrollment> =>
+        !!enrollment && userChildIds.has(enrollment.childId),
     );
     if (validEnrollments.length !== enrollmentIds.length) {
-      return res.status(403).json({
-        success: false,
-        error: 'One or more enrollments are not owned by this user'
-      });
+      return res.status(403).json({ error: 'One or more enrollments are not owned by this user' });
     }
 
-    // Server-authoritative amount from persisted enrollment balances.
-    const authoritativeTotalAmount = validEnrollments.reduce((sum, enrollment) => {
-      return sum + getAuthoritativeRemainingBalanceCents(enrollment);
-    }, 0);
-    if (authoritativeTotalAmount <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No outstanding balance found for selected enrollments'
-      });
-    }
+    const { finalizeSucceededPaymentIntent } = await import(
+      '../lib/finalize-succeeded-payment-intent'
+    );
+    const result = await finalizeSucceededPaymentIntent(paymentIntentId);
 
-    const advisoryAmount = parseAdvisoryAmountCents(amount);
-    if (advisoryAmount.malformed) {
-      console.warn('⚠️ Malformed confirm-payment amount diverged from server-computed amount:', {
-        clientAmount: amount,
-        authoritativeAmount: authoritativeTotalAmount
-      });
-      return sendRecoverableDivergence(res, {
-        operation: 'billing_confirm_payment',
-        authoritativeAmountCents: authoritativeTotalAmount,
-        clientAmountRaw: amount,
-        clientAmountParsed: advisoryAmount.parsed,
-        malformed: true,
-      });
-    } else if (advisoryAmount.parsed !== null && advisoryAmount.parsed !== authoritativeTotalAmount) {
-      console.warn('⚠️ confirm-payment amount mismatch diverged from server-computed amount:', {
-        clientAmount: advisoryAmount.parsed,
-        authoritativeAmount: authoritativeTotalAmount
-      });
-      return sendRecoverableDivergence(res, {
-        operation: 'billing_confirm_payment',
-        authoritativeAmountCents: authoritativeTotalAmount,
-        clientAmountRaw: amount,
-        clientAmountParsed: advisoryAmount.parsed,
-        malformed: false,
-      });
-    }
-
-    const updatedEnrollments: any[] = [];
-    for (const enrollment of validEnrollments) {
-      const amountForEnrollment = getAuthoritativeRemainingBalanceCents(enrollment);
-      const updatedTotalPaid = (enrollment.totalPaid || 0) + amountForEnrollment;
-      const updatedRemainingBalance = Math.max(0, (enrollment.totalCost || 0) - updatedTotalPaid);
-      console.log(`🔄 Updating enrollment ${enrollment.id} from status '${enrollment.status}' to 'completed'`);
-
-      await storage.updateProgramEnrollment(enrollment.id, {
-        status: 'completed',
-        totalPaid: updatedTotalPaid,
-        remainingBalance: updatedRemainingBalance,
-        notes: enrollment.notes ? `${enrollment.notes}\nPayment of $${amountForEnrollment / 100} received on ${new Date().toISOString()}` : `Payment of $${amountForEnrollment / 100} received on ${new Date().toISOString()}`
-      });
-
-      updatedEnrollments.push({
-        ...enrollment,
-        status: 'completed' as const,
-        totalPaid: updatedTotalPaid,
-        remainingBalance: updatedRemainingBalance,
-        amountAppliedCents: amountForEnrollment,
-      });
-      console.log('✅ Updated enrollment:', enrollment.id, 'status to completed, amount paid:', amountForEnrollment);
-    }
-
-    // Get child and class details for payment record
-    let childName = 'Multiple Children';
-    let className = 'Multiple Classes';
-    
-    if (updatedEnrollments.length === 1) {
-      const enrollment = updatedEnrollments[0];
-      const child = enrollment.childId ? await storage.getChildById(enrollment.childId) : null;
-      const classDetails = enrollment.classId ? await storage.getClassById(enrollment.classId) : null;
-      childName = child ? `${child.firstName} ${child.lastName}` : 'Unknown Child';
-      className = classDetails?.title || classDetails?.description || 'Unknown Class';
-    }
-
-    // Get parent and school info for payment record
-    const parentUser = await storage.getUserByEmail(userEmail);
-    const schoolId = updatedEnrollments[0]?.schoolId || parentUser?.schoolId;
-    
-    // Create payment record
-    const paymentRecord: InsertPayment = {
-      stripePaymentIntentId: paymentIntentId,
-      parentEmail: userEmail,
-      childName: childName,
-      className: className,
-      amount: authoritativeTotalAmount,
-      currency: 'usd',
-      status: 'completed' as const,
-      description: `Payment for ${enrollmentIds.length} enrollment(s)`,
-      schoolId: schoolId || 0,
-      parentId: parentUser?.id || null,
-      stripeChargeId: null,
-      stripeRefundId: null,
-      originalPaymentId: null,
-      paymentMethod: 'stripe' as const,
-      enrollmentIds: enrollmentIds,
-      paymentDate: paymentDate ? new Date(paymentDate) : null,
-      metadata: {
-        enrollmentIds: enrollmentIds,
-        paymentDate: paymentDate
-      }
-    };
-
-    let createdPayment: any;
-    try {
-      createdPayment = await storage.createPayment(paymentRecord);
-    } catch (error) {
-      console.log('⚠️ Payment record creation failed, continuing with email...');
-      createdPayment = { 
-        ...paymentRecord, 
-        id: Date.now(), 
-        createdAt: new Date(), 
-        updatedAt: new Date()
-      };
-    }
-
-    // Send confirmation email
-    try {
-      const { sendPaymentConfirmationEmail } = await import('../lib/email-service');
-      
-      const enrollmentDetails = await Promise.all(updatedEnrollments.map(async (enrollment) => {
-        const child = enrollment.childId ? await storage.getChildById(enrollment.childId) : null;
-        const classDetails = enrollment.classId ? await storage.getClassById(enrollment.classId) : null;
-        return {
-          childName: child ? `${child.firstName} ${child.lastName}` : 'Unknown Child',
-          className: classDetails?.title || classDetails?.description || 'Unknown Class',
-          price: classDetails?.price || 0,
-          amountPaid: enrollment.amountAppliedCents || 0,
-        };
-      }));
-
-      const emailSent = await sendPaymentConfirmationEmail({
-        parentEmail: userEmail,
-        parentName: user.user_metadata?.full_name || 'Parent',
-        payment: createdPayment,
-        enrollmentDetails: enrollmentDetails,
-      });
-
-      console.log('📧 Confirmation email sent:', emailSent);
-    } catch (emailError) {
-      console.error('❌ Error sending confirmation email:', emailError);
-    }
-
-    res.json({
-      success: true,
-      message: 'Payment confirmed and enrollments updated',
-      updatedEnrollments: updatedEnrollments.length,
-      paymentId: createdPayment.id
+    console.log('✅ fulfill-payment-intent:', {
+      paymentIntentId,
+      parentEmail: user.email,
+      ...result,
     });
 
+    return res.json({
+      success: true,
+      appliedCents: result.appliedCents,
+      creditsConsumedCents: result.creditsConsumedCents,
+      paymentId: result.paymentId,
+      scheduledRowsCreated: result.scheduledRowsCreated,
+      confirmationEmailSent: result.confirmationEmailSent,
+    });
   } catch (error) {
-    console.error('❌ Error confirming payment:', error);
-    res.status(500).json({
+    console.error('❌ Error fulfilling payment intent:', error);
+    const message = error instanceof Error ? error.message : 'Failed to fulfill payment';
+    const status =
+      message.includes('not succeeded') || message.includes('enrollmentIds')
+        ? 400
+        : 500;
+    return res.status(status).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to confirm payment'
+      error: message,
     });
   }
 });

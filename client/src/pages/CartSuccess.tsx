@@ -6,7 +6,7 @@ import { CheckCircle, ArrowRight, Calendar, CreditCard, Loader2, AlertCircle } f
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { refreshPostPaymentState } from '@/lib/postPaymentRefresh';
+import { finalizePaymentAfterStripeSuccess } from '@/lib/finalizePaymentAfterStripeSuccess';
 import { useAuth } from '@/components/SupabaseProvider';
 import { useCart } from '@/contexts/CartContext';
 import { trackPurchase } from '@/lib/analytics';
@@ -65,6 +65,11 @@ export default function CartSuccess() {
           const pendingAutoPay = localStorage.getItem('pendingAutoPay') === 'true';
           console.log(`💳 Payment plan: ${selectedPaymentPlan}`);
           
+          await finalizePaymentAfterStripeSuccess(queryClient, {
+            paymentIntentId: paymentIntent,
+            enrollmentIds: enrollmentIds.length > 0 ? enrollmentIds : undefined,
+          });
+
           // CRITICAL: Confirm enrollments in database (update status from pending_payment to enrolled)
           // This ensures cart will be empty when refetched since items are no longer pending
           try {
@@ -133,9 +138,6 @@ export default function CartSuccess() {
             // Continue anyway - cart already cleared in localStorage
           }
           
-          // Refresh all payment/membership caches so "Pay now" state converges immediately.
-          await refreshPostPaymentState(queryClient);
-
           const shouldSyncCard =
             pendingAutoPay || selectedPaymentPlan === 'biweekly';
           try {

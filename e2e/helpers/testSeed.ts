@@ -207,6 +207,43 @@ export async function postSetupPublicFormScenario(
   return { response, json };
 }
 
+export type SetupProgressScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    educatorSupabaseLinked?: boolean;
+    parentSupabaseLinked?: boolean;
+    school: { id: number; name: string; registrationCode: string };
+    educator: { id: number; email: string; password: string };
+    parent: { id: number; email: string; password: string };
+    child: { id: number; firstName: string; lastName: string; gradeLevel: string };
+    schoolYear: string;
+    quarter: string;
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupProgressScenario(
+  request: APIRequestContext,
+  body: { linkSupabaseAuth?: boolean; withCompleteRubric?: boolean } = {},
+): Promise<{ response: APIResponse; json: SetupProgressScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-progress-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupProgressScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupProgressScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export async function postSeedUpcomingScheduledPayment(
   request: APIRequestContext,
   body: { enrollmentId: number; amountCents?: number; paymentPlan?: string },
