@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Calendar, DollarSign, User, ArrowRight } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { queryClient } from '@/lib/queryClient';
+import { finalizePaymentAfterStripeSuccess } from '@/lib/finalizePaymentAfterStripeSuccess';
 import { refreshPostPaymentState } from '@/lib/postPaymentRefresh';
 
 export default function PaymentSuccess() {
@@ -15,28 +16,48 @@ export default function PaymentSuccess() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Get payment details from URL parameters
-    const urlParams = new URLSearchParams(searchParams);
-    const paymentIntentId = urlParams.get('payment_intent');
-    const amount = urlParams.get('amount');
-    const paymentDate = urlParams.get('date');
-    const enrollmentIds = urlParams.get('enrollments');
+    const run = async () => {
+      const urlParams = new URLSearchParams(searchParams);
+      const paymentIntentId = urlParams.get('payment_intent');
+      const amount = urlParams.get('amount');
+      const paymentDate = urlParams.get('date');
+      const enrollmentsParam = urlParams.get('enrollments');
+      let parsedEnrollmentIds: number[] = [];
 
-    if (paymentIntentId && amount) {
-      setPaymentDetails({
-        paymentIntentId,
-        amount: parseInt(amount),
-        paymentDate: paymentDate || new Date().toISOString(),
-        enrollmentIds: enrollmentIds ? JSON.parse(enrollmentIds) : []
-      });
-    }
+      if (enrollmentsParam) {
+        try {
+          parsedEnrollmentIds = JSON.parse(enrollmentsParam);
+        } catch {
+          parsedEnrollmentIds = [];
+        }
+      }
 
-    // Invalidate queries to refresh billing data
-    refreshPostPaymentState(queryClient).catch((error) => {
-      console.error('Failed to refresh post-payment state:', error);
-    });
-    
-    setIsLoading(false);
+      if (paymentIntentId && amount) {
+        setPaymentDetails({
+          paymentIntentId,
+          amount: parseInt(amount),
+          paymentDate: paymentDate || new Date().toISOString(),
+          enrollmentIds: parsedEnrollmentIds,
+        });
+      }
+
+      try {
+        if (paymentIntentId?.startsWith('pi_')) {
+          await finalizePaymentAfterStripeSuccess(queryClient, {
+            paymentIntentId,
+            enrollmentIds: parsedEnrollmentIds.length > 0 ? parsedEnrollmentIds : undefined,
+          });
+        } else {
+          await refreshPostPaymentState(queryClient);
+        }
+      } catch (error) {
+        console.error('Failed to refresh post-payment state:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void run();
   }, [searchParams]);
 
   const formatCurrency = (amount: number) => {

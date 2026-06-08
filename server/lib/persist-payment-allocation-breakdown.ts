@@ -5,6 +5,8 @@ export type PaymentAllocationBreakdown = {
   membershipCents: number;
   classPoolCents: number;
   grossCents: number;
+  /** Stripe PI id — written once so webhook replays skip duplicate membership application. */
+  paymentIntentId?: string;
 };
 
 /** Merge allocation breakdown into payments.metadata for post-payment verification. */
@@ -29,7 +31,10 @@ export async function persistPaymentAllocationBreakdown(
   await storage.updatePayment(payment.id, {
     metadata: {
       ...existingMeta,
-      allocationBreakdown: breakdown,
+      allocationBreakdown: {
+        ...breakdown,
+        paymentIntentId: breakdown.paymentIntentId ?? stripePaymentIntentId,
+      },
     },
   });
 }

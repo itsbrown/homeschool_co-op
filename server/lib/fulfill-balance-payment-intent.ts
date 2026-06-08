@@ -2,7 +2,7 @@ import type Stripe from 'stripe';
 import { storage } from '../storage';
 import { applyClassPoolToEnrollments } from './apply-class-pool-to-enrollments';
 import { parseBalanceIntentCredits } from './balance-payment-metadata';
-import { fulfillMembershipFromCartPaymentIntent } from '../services/fulfill-membership-payment-intent';
+import { applyMembershipFulfillmentFromCartPaymentIntent } from '../services/membership-fulfill-from-cart-intent';
 import { persistPaymentAllocationBreakdown } from './persist-payment-allocation-breakdown';
 import { resolveMembershipReserveForPaymentIntent } from './resolve-membership-reserve-for-payment';
 
@@ -21,7 +21,7 @@ export async function fulfillBalancePaymentIntent(
   enrollmentIds: number[],
   options?: { paymentHistoryId?: number | null },
 ): Promise<FulfillBalancePaymentIntentResult> {
-  const membershipBreakdown = await fulfillMembershipFromCartPaymentIntent(paymentIntent);
+  const membershipBreakdown = await applyMembershipFulfillmentFromCartPaymentIntent(paymentIntent);
 
   const enrollmentApply = await applyClassPoolToEnrollments(paymentIntent, enrollmentIds);
 
@@ -33,6 +33,7 @@ export async function fulfillBalancePaymentIntent(
           membershipCents: resolved.membershipPortionThisPaymentCents,
           classPoolCents: resolved.classPoolCents,
           grossCents: resolved.allocationGrossCents,
+          paymentIntentId: paymentIntent.id,
         }
       : null);
 

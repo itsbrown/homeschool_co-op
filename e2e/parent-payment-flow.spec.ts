@@ -8,6 +8,7 @@ import {
 import {
   postSetupCartScenario,
   postSeedUpcomingScheduledPayment,
+  testApiToken,
 } from "./helpers/testSeed";
 
 test.describe.configure({ mode: "serial" });
@@ -37,6 +38,35 @@ test.describe("parent payment journey (DB seed + Supabase login)", () => {
     await fillStripePaymentElement(page);
     await page.getByTestId("button-checkout-submit").click();
     await page.waitForURL(/\/cart\/success/, { timeout: 120_000 });
+
+    // Ledger must clear via interactive fulfill (CartSuccess → fulfill-payment-intent),
+    // not webhook — Replit dev often has no stripe listen.
+    const enrollmentId = json.data!.enrollment!.id;
+    const totalCost = json.data!.enrollment!.totalCost ?? json.data!.class?.price ?? 0;
+    await expect
+      .poll(
+        async () => {
+          const probe = await request.get(`/api/test/program-enrollment/${enrollmentId}`, {
+            headers: { "X-Test-Token": testApiToken() },
+          });
+          if (!probe.ok()) return null;
+          return probe.json() as Promise<{
+            remainingBalance?: number;
+            totalPaid?: number;
+            status?: string;
+          } | null>;
+        },
+        { timeout: 30_000 },
+      )
+      .toMatchObject({
+        remainingBalance: 0,
+        status: "enrolled",
+      });
+    const finalRow = await request.get(`/api/test/program-enrollment/${enrollmentId}`, {
+      headers: { "X-Test-Token": testApiToken() },
+    });
+    const finalEnrollment = (await finalRow.json()) as { totalPaid?: number };
+    expect(finalEnrollment.totalPaid ?? 0).toBeGreaterThanOrEqual(totalCost);
   });
 
   test("register child, choose biweekly at checkout, first payment reaches success", async ({

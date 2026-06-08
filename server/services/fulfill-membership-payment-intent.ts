@@ -1,4 +1,5 @@
 import type Stripe from 'stripe';
+import type { PaymentAllocationBreakdown } from '../lib/persist-payment-allocation-breakdown';
 import { applyMembershipFulfillmentFromCartPaymentIntent } from './membership-fulfill-from-cart-intent';
 
 /**
@@ -7,7 +8,7 @@ import { applyMembershipFulfillmentFromCartPaymentIntent } from './membership-fu
  * Safe to call on the verified /api/stripe/webhook path; errors are logged, not thrown.
  */
 export async function fulfillMembershipFromCartPaymentIntent(
-  paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'customer' | 'metadata'>,
-): Promise<void> {
-  await applyMembershipFulfillmentFromCartPaymentIntent(paymentIntent);
+  paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'customer' | 'metadata' | 'amount'>,
+): Promise<PaymentAllocationBreakdown | null> {
+  return applyMembershipFulfillmentFromCartPaymentIntent(paymentIntent);
 }
