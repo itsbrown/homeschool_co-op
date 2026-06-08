@@ -20,4 +20,14 @@ if [ -n "$DATABASE_URL" ]; then
   fi
 fi
 
-npm run db:push
+# Initialize the schema using the app's own idempotent migrations instead of
+# `npm run db:push` (drizzle-kit). db:push diffs the schema, can prompt
+# interactively (stdin is closed in post-merge → EOF/fail), and has aborted
+# with a ZodError during introspection. init-db is idempotent and never
+# prompts; verify-core-schema then fails the post-merge if tables are missing.
+if [ -n "$DATABASE_URL" ]; then
+  npx tsx scripts/init-db.ts
+  node scripts/verify-core-schema.mjs
+else
+  echo "post-merge: DATABASE_URL not set; skipping init-db + schema verify." >&2
+fi
