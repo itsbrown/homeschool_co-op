@@ -1,6 +1,6 @@
 # Student progress & assessments
 
-**Last updated:** 2026-05-26
+**Last updated:** 2026-06-07
 
 ## Two lanes
 
@@ -29,15 +29,34 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 - **Reading bridge:** Creating a `student_assessment` with a `curriculum_book` linked to `progress_track_id` updates current + optional log when session resolvable.
 - **Default subjects:** `ensureProgressSubjectsForSchool` seeds math, science, reading, etc. on first catalog read.
 - **AI:** `GET /api/progress/insights/summary/:childId` caches in `child_progress_insights`; invalidated on progress writes. Parent concierge tool `get_child_progress`.
-- **Reports:** `GET /api/progress/report/:childId` (staff) — JSON bundle for export (PDF later).
+- **Reports:** NY IHIP quarterly template (`template=ny-ihip-quarterly`): preview JSON, draft PDF, `POST .../generate` → immutable `quarterly_progress_reports` snapshot; parents download via `snapshotId` only.
 
 ## Tests
 
 | File | Type |
 |------|------|
 | `server/tests/progress-log-validation.test.ts` | Zod hybrid rules (always runs) |
-| `server/tests/integration/assessments-api.test.ts` | DB smoke (`TEST_DATABASE_URL`) |
+| `server/tests/ny-ihip-template.test.ts` | Verbatim ASA PDF strings |
+| `server/tests/progress-report-pdf.test.ts` | PDF generation smoke |
+| `server/tests/email-service-sendgrid.test.ts` | SendGrid routing + attachment |
+| `server/tests/integration/f14-quarterly-report.integration.test.ts` | Full quarter workflow (`TEST_DATABASE_URL`) |
 | `server/tests/integration/progress-api.test.ts` | DB smoke (`TEST_DATABASE_URL`) |
+
+**Run validation bundle:**
+
+```bash
+npm run test:server -- --testPathPatterns="f14-quarterly-report|email-service-sendgrid|ny-ihip-template|progress-report-pdf|progress-log-validation"
+```
+
+**Live SendGrid smoke (optional):**
+
+```bash
+RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your@email.com
+```
+
+| File | Type |
+|------|------|
+| `e2e/quarterly-progress-report-wizard.spec.ts` | Educator wizard save/finalize + parent PDF (`setup-progress-scenario`, Supabase) |
 | `e2e/authenticated/educator-progress-tab.spec.ts` | Opt-in with `E2E_EDUCATOR_EMAIL` |
 | `e2e/authenticated/parent-progress-hub.spec.ts` | Opt-in with `E2E_PARENT_EMAIL` |
 
@@ -48,17 +67,19 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 - `ParentProgressPage` reading tab links to `/parent/assessments` (do not nest `MyAssessmentsPage` — double shell).
 - Admin progress catalog uses same `/api/progress/subjects` as educators; subject **create** is admin-only.
 
-## Still partial / later
+## NY | Progress report (IHIP-aligned)
 
-- F-14-04 PDF export (JSON report endpoint exists).
-- `curriculum_books.progress_track_id` admin UI on book dialog (column + bridge logic exist).
-- Full integration suite for log upsert, bridge, insights rate limit (needs `TEST_DATABASE_URL`).
-- In-app `assessment_sessions` UI not built.
+- Template data: `server/data/ny-ihip-progress-report-template.ts` (verbatim ASA PDF; version `2026-05-asa-v1`).
+- Band resolver: `server/lib/resolve-progress-report-band.ts` from `children.gradeLevel`.
+- Rubric tables: `quarterly_progress_meta`, `quarterly_skill_checks`, snapshots in `quarterly_progress_reports`.
+- Educator UI: `QuarterlyReportWizard` on progress log form; admin book → `progressTrackId` on `/school-admin/assessments`.
+- Reference PDF: `docs/templates/` (copy ASA source PDF when committed).
 
 ## Key files
 
-- `shared/schema.ts` — enums + progress/assessment tables
-- `server/lib/assessment-progress-db.ts` — CRUD + bridge + insights cache
+- `shared/schema.ts` — enums + progress/assessment + quarterly tables
+- `server/lib/assessment-progress-db.ts` — CRUD + bridge + insights + quarterly
+- `server/lib/build-student-progress-report.ts`, `server/services/progressReportPdf.ts`
 - `server/api/progress.ts`, `progress-insights.ts`, `assessments.ts`, `lexile.ts`
 - `client/src/components/educator/ProgressLogForm.tsx`, `ProgressLogTab.tsx`, `ProgressQuickLogDialog.tsx`
 - `client/src/pages/parent/ParentProgressPage.tsx`

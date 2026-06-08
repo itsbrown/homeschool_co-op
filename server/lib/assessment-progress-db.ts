@@ -12,9 +12,13 @@ import {
   studentProgressCurrent,
   studentProgressLog,
   childProgressInsights,
+  quarterlyProgressMeta,
+  quarterlySkillChecks,
+  quarterlyProgressReports,
   children,
   programEnrollments,
   sessions,
+  assessmentSessions,
   type InsertAssessmentType,
   type InsertCurriculumBook,
   type InsertStudentAssessment,
@@ -765,4 +769,344 @@ export async function saveProgressInsightCache(
     model,
     generatedAt: new Date(),
   });
+}
+
+// ---------- Progress track catalog ----------
+
+export async function getProgressTrackCatalog(schoolId: number): Promise<
+  Array<{ id: number; name: string; subjectId: number; subjectKey: string; subjectLabel: string }>
+> {
+  const db = await getDb();
+  await ensureProgressSubjectsForSchool(schoolId);
+  const rows = await db
+    .select({
+      id: progressTracks.id,
+      name: progressTracks.name,
+      subjectId: progressSubjects.id,
+      subjectKey: progressSubjects.key,
+      subjectLabel: progressSubjects.label,
+    })
+    .from(progressTracks)
+    .innerJoin(progressSubjects, eq(progressTracks.subjectId, progressSubjects.id))
+    .where(and(eq(progressTracks.schoolId, schoolId), eq(progressTracks.isActive, true)))
+    .orderBy(progressSubjects.sortOrder, progressTracks.name);
+  return rows;
+}
+
+// ---------- Assessment sessions (school-scoped in-app runs) ----------
+
+export async function getAssessmentSessionsForSchool(
+  schoolId: number,
+  filters?: { childId?: number; status?: string },
+): Promise<(typeof assessmentSessions.$inferSelect)[]> {
+  const db = await getDb();
+  const conditions = [eq(assessmentSessions.schoolId, schoolId)];
+  if (filters?.childId) conditions.push(eq(assessmentSessions.childId, filters.childId));
+  if (filters?.status) conditions.push(eq(assessmentSessions.status, filters.status));
+  return db
+    .select()
+    .from(assessmentSessions)
+    .where(and(...conditions))
+    .orderBy(desc(assessmentSessions.startedAt));
+}
+
+export async function getAssessmentSessionById(id: number): Promise<typeof assessmentSessions.$inferSelect | undefined> {
+  const db = await getDb();
+  const [row] = await db.select().from(assessmentSessions).where(eq(assessmentSessions.id, id)).limit(1);
+  return row;
+}
+
+export async function createAssessmentSession(
+  data: typeof assessmentSessions.$inferInsert,
+): Promise<typeof assessmentSessions.$inferSelect> {
+  const db = await getDb();
+  const [row] = await db.insert(assessmentSessions).values(data).returning();
+  return row;
+}
+
+export async function updateAssessmentSession(
+  id: number,
+  data: Partial<typeof assessmentSessions.$inferInsert>,
+): Promise<typeof assessmentSessions.$inferSelect | undefined> {
+  const db = await getDb();
+  const [row] = await db
+    .update(assessmentSessions)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(assessmentSessions.id, id))
+    .returning();
+  return row;
+}
+
+// ---------- Quarterly IHIP rubric & snapshots ----------
+
+export async function getQuarterlyProgressMeta(
+  childId: number,
+  schoolId: number,
+  schoolYear: string,
+  quarter: string,
+): Promise<typeof quarterlyProgressMeta.$inferSelect | undefined> {
+  const db = await getDb();
+  const [row] = await db
+    .select()
+    .from(quarterlyProgressMeta)
+    .where(
+      and(
+        eq(quarterlyProgressMeta.childId, childId),
+        eq(quarterlyProgressMeta.schoolId, schoolId),
+        eq(quarterlyProgressMeta.schoolYear, schoolYear),
+        eq(quarterlyProgressMeta.quarter, quarter),
+      ),
+    )
+    .limit(1);
+  return row;
+}
+
+export async function upsertQuarterlyProgressMeta(
+  childId: number,
+  schoolId: number,
+  data: {
+    schoolYear: string;
+    quarter: string;
+    quarterLabel?: string | null;
+    asaCoopHours?: number | null;
+    homeInstructionHours?: number | null;
+    draftNarrative?: string | null;
+    approvedNarrative?: string | null;
+    notesObservations?: string | null;
+    phonogramCount?: number | null;
+    mathLevelLabel?: string | null;
+    mathFallPercent?: number | null;
+    mathWinterPercent?: number | null;
+    mathSpringPercent?: number | null;
+    approvedBy?: number | null;
+    approvedAt?: Date | null;
+  },
+): Promise<typeof quarterlyProgressMeta.$inferSelect> {
+  const db = await getDb();
+  const existing = await getQuarterlyProgressMeta(childId, schoolId, data.schoolYear, data.quarter);
+  if (existing) {
+    const [row] = await db
+      .update(quarterlyProgressMeta)
+      .set({
+        quarterLabel: data.quarterLabel ?? existing.quarterLabel,
+        asaCoopHours: data.asaCoopHours ?? existing.asaCoopHours,
+        homeInstructionHours: data.homeInstructionHours ?? existing.homeInstructionHours,
+        draftNarrative: data.draftNarrative ?? existing.draftNarrative,
+        approvedNarrative: data.approvedNarrative ?? existing.approvedNarrative,
+        notesObservations: data.notesObservations ?? existing.notesObservations,
+        phonogramCount: data.phonogramCount ?? existing.phonogramCount,
+        mathLevelLabel: data.mathLevelLabel ?? existing.mathLevelLabel,
+        mathFallPercent: data.mathFallPercent ?? existing.mathFallPercent,
+        mathWinterPercent: data.mathWinterPercent ?? existing.mathWinterPercent,
+        mathSpringPercent: data.mathSpringPercent ?? existing.mathSpringPercent,
+        approvedBy: data.approvedBy ?? existing.approvedBy,
+        approvedAt: data.approvedAt ?? existing.approvedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(quarterlyProgressMeta.id, existing.id))
+      .returning();
+    return row;
+  }
+  const [row] = await db
+    .insert(quarterlyProgressMeta)
+    .values({
+      schoolId,
+      childId,
+      schoolYear: data.schoolYear,
+      quarter: data.quarter,
+      quarterLabel: data.quarterLabel,
+      asaCoopHours: data.asaCoopHours,
+      homeInstructionHours: data.homeInstructionHours,
+      draftNarrative: data.draftNarrative,
+      approvedNarrative: data.approvedNarrative,
+      notesObservations: data.notesObservations,
+      phonogramCount: data.phonogramCount,
+      mathLevelLabel: data.mathLevelLabel,
+      mathFallPercent: data.mathFallPercent,
+      mathWinterPercent: data.mathWinterPercent,
+      mathSpringPercent: data.mathSpringPercent,
+      approvedBy: data.approvedBy,
+      approvedAt: data.approvedAt,
+    })
+    .returning();
+  return row;
+}
+
+export async function getQuarterlySkillChecks(
+  childId: number,
+  schoolId: number,
+  schoolYear: string,
+  quarter: string,
+): Promise<(typeof quarterlySkillChecks.$inferSelect)[]> {
+  const db = await getDb();
+  return db
+    .select()
+    .from(quarterlySkillChecks)
+    .where(
+      and(
+        eq(quarterlySkillChecks.childId, childId),
+        eq(quarterlySkillChecks.schoolId, schoolId),
+        eq(quarterlySkillChecks.schoolYear, schoolYear),
+        eq(quarterlySkillChecks.quarter, quarter),
+      ),
+    );
+}
+
+export async function saveQuarterlySkillChecks(
+  childId: number,
+  schoolId: number,
+  schoolYear: string,
+  quarter: string,
+  checks: Array<{ skillKey: string; term: string; status: string }>,
+): Promise<void> {
+  const db = await getDb();
+  for (const c of checks) {
+    const [existing] = await db
+      .select()
+      .from(quarterlySkillChecks)
+      .where(
+        and(
+          eq(quarterlySkillChecks.childId, childId),
+          eq(quarterlySkillChecks.schoolYear, schoolYear),
+          eq(quarterlySkillChecks.quarter, quarter),
+          eq(quarterlySkillChecks.skillKey, c.skillKey),
+          eq(quarterlySkillChecks.term, c.term),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      await db
+        .update(quarterlySkillChecks)
+        .set({ status: c.status, updatedAt: new Date() })
+        .where(eq(quarterlySkillChecks.id, existing.id));
+    } else {
+      await db.insert(quarterlySkillChecks).values({
+        schoolId,
+        childId,
+        schoolYear,
+        quarter,
+        skillKey: c.skillKey,
+        term: c.term,
+        status: c.status,
+      });
+    }
+  }
+}
+
+export function skillChecksToMap(
+  rows: (typeof quarterlySkillChecks.$inferSelect)[],
+): Record<string, Record<string, 'unchecked' | 'consistent' | 'na'>> {
+  const map: Record<string, Record<string, 'unchecked' | 'consistent' | 'na'>> = {};
+  for (const r of rows) {
+    if (!map[r.skillKey]) map[r.skillKey] = {};
+    map[r.skillKey][r.term] = r.status as 'unchecked' | 'consistent' | 'na';
+  }
+  return map;
+}
+
+export async function buildStudentProgressReport(
+  childId: number,
+  schoolId: number,
+  options: {
+    schoolYear: string;
+    quarter: string;
+    bandOverride?: import('./resolve-progress-report-band').ProgressReportBand;
+    mentorName?: string | null;
+    sessionId?: number;
+  },
+): Promise<import('./build-student-progress-report').StudentProgressReportDto | null> {
+  const child = await getChildByIdForSchool(childId, schoolId);
+  if (!child) return null;
+
+  const meta = await getQuarterlyProgressMeta(childId, schoolId, options.schoolYear, options.quarter);
+  const skillRows = await getQuarterlySkillChecks(childId, schoolId, options.schoolYear, options.quarter);
+  const current = await getStudentProgressCurrent(childId, schoolId);
+  const logs = await getStudentProgressLog(childId, schoolId, options.sessionId);
+  const assessments = await getStudentAssessmentsByChildId(childId);
+
+  const { buildStudentProgressReport: build } = await import('./build-student-progress-report');
+
+  return build(child, {
+    schoolYear: options.schoolYear,
+    quarter: options.quarter,
+    bandOverride: options.bandOverride,
+    mentorName: options.mentorName,
+    meta: meta
+      ? {
+          quarterLabel: meta.quarterLabel,
+          asaCoopHours: meta.asaCoopHours,
+          homeInstructionHours: meta.homeInstructionHours,
+          approvedNarrative: meta.approvedNarrative,
+          draftNarrative: meta.draftNarrative,
+          notesObservations: meta.notesObservations,
+          phonogramCount: meta.phonogramCount,
+          mathLevelLabel: meta.mathLevelLabel,
+          mathFallPercent: meta.mathFallPercent,
+          mathWinterPercent: meta.mathWinterPercent,
+          mathSpringPercent: meta.mathSpringPercent,
+        }
+      : null,
+    skillChecks: skillChecksToMap(skillRows),
+    current,
+    logs,
+    assessments: assessments.map((a) => ({
+      score: a.score,
+      assessmentDate: a.assessmentDate,
+      lesson: a.lesson,
+    })),
+  });
+}
+
+export async function saveQuarterlyProgressSnapshot(
+  childId: number,
+  schoolId: number,
+  schoolYear: string,
+  quarter: string,
+  band: string,
+  templateVersion: string,
+  payloadJson: object,
+  generatedBy: number,
+  pdfSha256?: string | null,
+): Promise<typeof quarterlyProgressReports.$inferSelect> {
+  const db = await getDb();
+  const [row] = await db
+    .insert(quarterlyProgressReports)
+    .values({
+      schoolId,
+      childId,
+      schoolYear,
+      quarter,
+      band,
+      templateVersion,
+      payloadJson,
+      generatedBy,
+      pdfSha256: pdfSha256 ?? null,
+    })
+    .returning();
+  return row;
+}
+
+export async function getQuarterlyProgressSnapshots(
+  childId: number,
+  schoolId: number,
+): Promise<(typeof quarterlyProgressReports.$inferSelect)[]> {
+  const db = await getDb();
+  return db
+    .select()
+    .from(quarterlyProgressReports)
+    .where(and(eq(quarterlyProgressReports.childId, childId), eq(quarterlyProgressReports.schoolId, schoolId)))
+    .orderBy(desc(quarterlyProgressReports.generatedAt));
+}
+
+export async function getQuarterlyProgressSnapshotById(
+  id: number,
+  schoolId: number,
+): Promise<typeof quarterlyProgressReports.$inferSelect | undefined> {
+  const db = await getDb();
+  const [row] = await db
+    .select()
+    .from(quarterlyProgressReports)
+    .where(and(eq(quarterlyProgressReports.id, id), eq(quarterlyProgressReports.schoolId, schoolId)))
+    .limit(1);
+  return row;
 }

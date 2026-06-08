@@ -59,6 +59,7 @@ interface CurriculumBook {
   description: string | null;
   totalLessons: number | null;
   gradeLevel: string | null;
+  progressTrackId: number | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -147,7 +148,15 @@ export default function AssessmentManagementPage() {
     description: '',
     totalLessons: '',
     gradeLevel: '',
+    progressTrackId: '' as string,
     isActive: true,
+  });
+
+  const { data: progressTrackCatalog = [] } = useQuery<
+    { id: number; name: string; subjectLabel: string }[]
+  >({
+    queryKey: ['/api/progress/tracks/catalog'],
+    enabled: !!user?.email && isBookDialogOpen,
   });
   
   const [assessmentFilters, setAssessmentFilters] = useState({
@@ -326,6 +335,7 @@ export default function AssessmentManagementPage() {
       description: '',
       totalLessons: '',
       gradeLevel: '',
+      progressTrackId: '',
       isActive: true,
     });
   };
@@ -352,6 +362,7 @@ export default function AssessmentManagementPage() {
       description: book.description || '',
       totalLessons: book.totalLessons?.toString() || '',
       gradeLevel: book.gradeLevel || '',
+      progressTrackId: book.progressTrackId ? String(book.progressTrackId) : '',
       isActive: book.isActive,
     });
     setIsBookDialogOpen(true);
@@ -388,6 +399,7 @@ export default function AssessmentManagementPage() {
       description: bookForm.description || null,
       totalLessons: bookForm.totalLessons ? parseInt(bookForm.totalLessons) : null,
       gradeLevel: bookForm.gradeLevel || null,
+      progressTrackId: bookForm.progressTrackId ? parseInt(bookForm.progressTrackId, 10) : null,
       isActive: bookForm.isActive,
     };
 
@@ -901,6 +913,28 @@ export default function AssessmentManagementPage() {
                     data-testid="input-book-grade"
                   />
                 </div>
+              </div>
+              <div>
+                <Label>Curriculum progress track (optional)</Label>
+                <Select
+                  value={bookForm.progressTrackId || 'none'}
+                  onValueChange={(v) => setBookForm({ ...bookForm, progressTrackId: v === 'none' ? '' : v })}
+                >
+                  <SelectTrigger data-testid="select-book-progress-track">
+                    <SelectValue placeholder="Link reading scores to progress" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {progressTrackCatalog.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.subjectLabel} — {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  When set, reading assessment scores update this student&apos;s curriculum progress.
+                </p>
               </div>
               <div className="flex items-center space-x-2">
                 <Switch

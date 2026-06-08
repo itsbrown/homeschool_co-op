@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Info, Loader2, Plus } from 'lucide-react';
+import QuarterlyReportWizard from '@/components/educator/QuarterlyReportWizard';
 
 const formSchema = z.object({
   childId: z.number({ required_error: 'Select a student' }).int().positive(),
@@ -431,6 +432,15 @@ export default function ProgressLogForm({ fixedChildId, fixedChildName, onSucces
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {childId && (
+          <div className="pt-6 border-t mt-6">
+            <QuarterlyReportWizard
+              childId={childId}
+              childName={fixedChildName || 'Student'}
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

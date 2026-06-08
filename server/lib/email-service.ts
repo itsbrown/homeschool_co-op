@@ -1,20 +1,44 @@
 
 import * as brevo from '@getbrevo/brevo';
+import sgMail from '@sendgrid/mail';
 import type { Payment } from '@shared/schema';
 import { getDb } from '../db';
 import { emailLog } from '@shared/schema';
 
 const EMAIL_TIMEOUT_MS = 10_000;
 
+type EmailProvider = 'sendgrid' | 'brevo' | 'none';
+
 // Single shared Brevo API instance — the only place where Brevo is initialized.
-// All other files must import getBrevoApiInstance() from this module.
 let apiInstance: brevo.TransactionalEmailsApi | null = null;
 if (process.env.BREVO_API_KEY) {
   apiInstance = new brevo.TransactionalEmailsApi();
   apiInstance.setApiKey(brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
   console.log('✅ Brevo initialized for email service');
-} else {
-  console.warn('⚠️ BREVO_API_KEY not found - email service will not be available');
+}
+
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  console.log('✅ SendGrid initialized for email service');
+} else if (!apiInstance) {
+  console.warn('⚠️ No SENDGRID_API_KEY or BREVO_API_KEY — email service unavailable');
+}
+
+function resolveEmailProvider(): EmailProvider {
+  const forced = process.env.EMAIL_PROVIDER?.toLowerCase();
+  if (forced === 'brevo') return apiInstance ? 'brevo' : 'none';
+  if (forced === 'sendgrid') return process.env.SENDGRID_API_KEY ? 'sendgrid' : 'none';
+  if (process.env.SENDGRID_API_KEY) return 'sendgrid';
+  if (apiInstance) return 'brevo';
+  return 'none';
+}
+
+function defaultSenderEmail(): string {
+  return (
+    process.env.SENDGRID_FROM_EMAIL ||
+    process.env.BREVO_SENDER_EMAIL ||
+    'support@americanseekersacademy.com'
+  );
 }
 
 /** Returns the shared Brevo API instance for use by other modules. */
@@ -493,32 +517,71 @@ export async function sendPaymentReceipt(data: {
   }
 }
 
-// Generic email sending function for other use cases
-export async function sendEmail(
+async function sendViaSendGrid(
   to: string,
   toName: string,
   subject: string,
   htmlContent: string,
-  textContent?: string,
-  emailType: string = 'generic'
+  textContent: string | undefined,
+  emailType: string,
+  attachments?: { filename: string; content: Buffer; type: string }[],
+): Promise<boolean> {
+  try {
+    const msg: sgMail.MailDataRequired = {
+      to: { email: to, name: toName },
+      from: { email: defaultSenderEmail(), name: 'American Seekers Academy' },
+      subject,
+      html: htmlContent,
+      text: textContent,
+      category: emailType,
+      attachments: attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content.toString('base64'),
+        type: a.type,
+        disposition: 'attachment',
+      })),
+    };
+    await withTimeout(sgMail.send(msg), `${emailType}:${to}`);
+    console.log('✅ Email sent successfully via SendGrid to:', to);
+    await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'sent' });
+    return true;
+  } catch (error: any) {
+    const isTimeout = error?.message?.startsWith('timeout:');
+    if (isTimeout) {
+      await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'timeout', error: 'Timed out after 10s' });
+    } else {
+      console.error('❌ Failed to send email via SendGrid:', error?.response?.body || error.message || error);
+      await logEmailAttempt({
+        recipientEmail: to,
+        type: emailType,
+        subject,
+        status: 'failed',
+        error: error?.response?.body?.errors?.[0]?.message || error.message || String(error),
+      });
+    }
+    return false;
+  }
+}
+
+async function sendViaBrevo(
+  to: string,
+  toName: string,
+  subject: string,
+  htmlContent: string,
+  textContent: string | undefined,
+  emailType: string,
 ): Promise<boolean> {
   if (!apiInstance) {
-    console.log('📧 Brevo not configured, skipping email send');
     await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'failed', error: 'Brevo not configured' });
     return false;
   }
 
   const sendSmtpEmail = new brevo.SendSmtpEmail();
   sendSmtpEmail.to = [{ email: to, name: toName }];
-  sendSmtpEmail.sender = { 
-    email: process.env.BREVO_SENDER_EMAIL || 'support@americanseekersacademy.com', 
-    name: 'American Seekers Academy' 
-  };
+  sendSmtpEmail.sender = { email: defaultSenderEmail(), name: 'American Seekers Academy' };
   sendSmtpEmail.subject = subject;
   sendSmtpEmail.htmlContent = htmlContent;
-  if (textContent) {
-    sendSmtpEmail.textContent = textContent;
-  }
+  if (textContent) sendSmtpEmail.textContent = textContent;
 
   try {
     const result = await withTimeout(apiInstance.sendTransacEmail(sendSmtpEmail), `${emailType}:${to}`);
@@ -529,19 +592,79 @@ export async function sendEmail(
   } catch (error: any) {
     const isTimeout = error?.message?.startsWith('timeout:');
     const isIpBlocked = error?.body?.code === 'unauthorized' || error?.statusCode === 401;
-
     if (isTimeout) {
-      console.error(`[Email timeout] ${emailType} email to ${to} timed out after 10s`);
       await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'timeout', error: 'Timed out after 10s' });
     } else if (isIpBlocked) {
-      console.error(`[Email blocked] Brevo rejected ${emailType} email to ${to}: IP not whitelisted`);
       await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'failed', error: 'Brevo IP not whitelisted' });
     } else {
-      console.error('❌ Failed to send email via Brevo:', error.message || error);
       await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'failed', error: error.message || String(error) });
     }
     return false;
   }
+}
+
+// Generic email sending function for other use cases
+export async function sendEmail(
+  to: string,
+  toName: string,
+  subject: string,
+  htmlContent: string,
+  textContent?: string,
+  emailType: string = 'generic',
+  attachments?: { filename: string; content: Buffer; type: string }[],
+): Promise<boolean> {
+  const provider = resolveEmailProvider();
+  if (provider === 'none') {
+    console.log('📧 Email provider not configured, skipping send');
+    await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'failed', error: 'Email provider not configured' });
+    return false;
+  }
+  if (provider === 'sendgrid') {
+    return sendViaSendGrid(to, toName, subject, htmlContent, textContent, emailType, attachments);
+  }
+  if (attachments?.length) {
+    console.warn('[email] Attachments require SendGrid; Brevo path does not support this send');
+    await logEmailAttempt({ recipientEmail: to, type: emailType, subject, status: 'failed', error: 'Attachments require SendGrid' });
+    return false;
+  }
+  return sendViaBrevo(to, toName, subject, htmlContent, textContent, emailType);
+}
+
+export async function sendProgressReportEmail(data: {
+  parentEmail: string;
+  parentName: string;
+  childName: string;
+  quarter: string;
+  schoolYear: string;
+  pdfBuffer: Buffer;
+}): Promise<boolean> {
+  const { parentEmail, parentName, childName, quarter, schoolYear, pdfBuffer } = data;
+  const subject = `NY | Progress report — ${childName} (${quarter} ${schoolYear})`;
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background-color: #4F46E5; padding: 24px; text-align: center;">
+        <h1 style="color: white; margin: 0;">NY | Progress report</h1>
+        <p style="color: #E0E7FF; margin: 8px 0 0 0;">American Seekers Academy</p>
+      </div>
+      <div style="padding: 24px;">
+        <p>Hi ${parentName},</p>
+        <p>Your child's <strong>NY | Progress report</strong> for <strong>${childName}</strong> (${quarter} ${schoolYear}) is attached.</p>
+        <p style="color: #6B7280; font-size: 14px;">Keep a copy for your homeschool quarterly filing. This report is aligned to NY IHIP guidance — list instructors as Parent(s) on district forms.</p>
+        <p>Best regards,<br>American Seekers Academy</p>
+      </div>
+    </div>
+  `;
+  const textContent = `NY | Progress report for ${childName} (${quarter} ${schoolYear}) is attached. Keep a copy for your homeschool quarterly filing.`;
+  const safeName = childName.replace(/[^a-zA-Z0-9-_]/g, '_');
+  return sendEmail(
+    parentEmail,
+    parentName,
+    subject,
+    htmlContent,
+    textContent,
+    'progress_report',
+    [{ filename: `NY-Progress-Report-${safeName}-${quarter}-${schoolYear}.pdf`, content: pdfBuffer, type: 'application/pdf' }],
+  );
 }
 
 // Account Invite Email using Brevo
