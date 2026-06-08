@@ -193,5 +193,13 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
+  },
+  "overrides": {
+    "es5-ext": "0.10.56",
+    "protobufjs": "7.6.2",
+    "basic-ftp": "5.3.1",
+    "fast-xml-parser": "4.5.6",
+    "handlebars": "4.7.9",
+    "form-data": "^4.0.4"
   }
 }
