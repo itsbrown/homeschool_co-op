@@ -7,14 +7,56 @@
  */
 
 import { storage } from "../storage";
-import { sendScheduledPaymentReminder } from "../lib/email-service";
 import { AUTOPAY_METRIC_NOTIFICATIONS_TOTAL, buildAutoPayNotificationLabels } from "./autopay-observability";
+import {
+  groupReminderItemsByParent,
+  sendConsolidatedFamilyPaymentReminderEmail,
+  type FamilyReminderLineItem,
+} from "../lib/consolidated-family-reminder";
 
 export const AUTOPAY_PRECHARGE_WINDOW_HOURS = 20;
 
 export type AutoPayNotificationType = "pre_charge" | "credit_covered_skip";
 
 export type AutoPayNotifyResult = { sent: boolean; reason: string };
+
+type PreChargeEmailCandidate = FamilyReminderLineItem & {
+  parentEmail: string;
+  parentId: number;
+};
+
+const preChargeEmailBatch: PreChargeEmailCandidate[] = [];
+
+/** Queue pre-charge email line items; call flushPreChargeEmailBatch after the autopay scan. */
+export function queuePreChargeEmailCandidate(candidate: PreChargeEmailCandidate): void {
+  preChargeEmailBatch.push(candidate);
+}
+
+/** Send one consolidated pre-charge email per parent for queued items. */
+export async function flushPreChargeEmailBatch(): Promise<void> {
+  if (preChargeEmailBatch.length === 0) return;
+
+  const batch = preChargeEmailBatch.splice(0, preChargeEmailBatch.length);
+  const groups = groupReminderItemsByParent(batch);
+
+  for (const group of groups.values()) {
+    try {
+      await sendConsolidatedFamilyPaymentReminderEmail({
+        parentEmail: group[0]!.parentEmail,
+        lineItems: group,
+        daysUntilDue: 1,
+        schoolName: group[0]!.schoolName,
+      });
+    } catch (e) {
+      console.warn("[autopay-notifications] pre_charge consolidated email failed:", e);
+    }
+  }
+}
+
+/** @internal Test helper */
+export function clearPreChargeEmailBatchForTests(): void {
+  preChargeEmailBatch.length = 0;
+}
 
 function dedupeMarker(type: AutoPayNotificationType, scheduledPaymentId: number, dueAt: Date): string {
   const day = dueAt.toISOString().slice(0, 10);
@@ -69,6 +111,7 @@ export async function maybeEmitPreChargeNotification(params: {
   childName?: string;
   className?: string;
   schoolName?: string;
+  schoolId?: number;
   installmentNumber?: number;
   totalInstallments?: number;
   now?: Date;
@@ -105,24 +148,17 @@ export async function maybeEmitPreChargeNotification(params: {
     return { sent: false, reason: "error" };
   }
 
-  const daysApprox = Math.max(1, Math.ceil(h / 24));
-  try {
-    await sendScheduledPaymentReminder({
-      parentEmail: email,
-      childName: params.childName ?? "Student",
-      className: params.className ?? "Class",
-      schoolName: params.schoolName ?? "Homeschool co-op",
-      amount: params.amountCents,
-      dueDate: params.dueAt,
-      daysUntilDue: daysApprox,
-      paymentId: params.scheduledPaymentId,
-      installmentNumber: params.installmentNumber ?? 1,
-      totalInstallments: params.totalInstallments ?? 1,
-      urgency: "high",
-    });
-  } catch (e) {
-    console.warn("[autopay-notifications] pre_charge email skipped:", e);
-  }
+  queuePreChargeEmailCandidate({
+    parentEmail: email,
+    parentId: params.parentId,
+    scheduledPaymentId: params.scheduledPaymentId,
+    childName: params.childName ?? "Student",
+    className: params.className ?? "Class",
+    amountCents: params.amountCents,
+    dueDate: params.dueAt,
+    schoolId: params.schoolId ?? 1,
+    schoolName: params.schoolName ?? "American Seekers Academy",
+  });
 
   logMetric("pre_charge", "sent");
   return { sent: true, reason: "sent" };

@@ -22,9 +22,62 @@
 
 import { storage } from '../storage';
 import { getStripeClient } from '../config/stripe';
-import { sendScheduledPaymentReminder } from '../lib/email-service';
+import {
+  groupReminderItemsByParent,
+  sendConsolidatedFamilyPaymentReminderEmail,
+  type FamilyReminderLineItem,
+} from '../lib/consolidated-family-reminder';
 
 export const AUTOPAY_MAX_RETRIES = 3;
+
+type AutoPayFailureEmailCandidate = FamilyReminderLineItem & {
+  parentEmail: string;
+};
+
+const autoPayFailureEmailBatch: AutoPayFailureEmailCandidate[] = [];
+
+function queueAutoPayFailureEmail(
+  scheduledPayment: { id: number; amount?: number; scheduledDate?: Date | string | null; schoolId?: number; enrollmentId?: number | null },
+  parent: { email: string },
+  enrollment: { childName?: string | null; className?: string | null; schoolId?: number } | null,
+): void {
+  autoPayFailureEmailBatch.push({
+    parentEmail: parent.email,
+    scheduledPaymentId: scheduledPayment.id,
+    childName: enrollment?.childName || 'Your child',
+    className: enrollment?.className || 'your class',
+    amountCents: scheduledPayment.amount || 0,
+    dueDate: new Date(scheduledPayment.scheduledDate || Date.now()),
+    schoolId: scheduledPayment.schoolId ?? enrollment?.schoolId ?? 1,
+    schoolName: 'American Seekers Academy',
+  });
+}
+
+async function flushAutoPayFailureEmails(): Promise<void> {
+  if (autoPayFailureEmailBatch.length === 0) return;
+
+  const batch = autoPayFailureEmailBatch.splice(0, autoPayFailureEmailBatch.length);
+  const groups = groupReminderItemsByParent(batch);
+
+  for (const group of groups.values()) {
+    try {
+      await sendConsolidatedFamilyPaymentReminderEmail({
+        parentEmail: group[0]!.parentEmail,
+        lineItems: group,
+        daysUntilDue: -1,
+        schoolName: group[0]!.schoolName,
+      });
+    } catch (emailErr: unknown) {
+      const message = emailErr instanceof Error ? emailErr.message : String(emailErr);
+      console.error('[AutoPay] Failed to send consolidated failure email:', message);
+    }
+  }
+}
+
+/** @internal Test helper */
+export function clearAutoPayFailureEmailBatchForTests(): void {
+  autoPayFailureEmailBatch.length = 0;
+}
 
 async function notifyAutoPayFailure(scheduledPayment: any, parent: any, errMessage: string): Promise<void> {
   try {
@@ -60,21 +113,9 @@ async function notifyAutoPayFailure(scheduledPayment: any, parent: any, errMessa
       ? await storage.getProgramEnrollmentById(scheduledPayment.enrollmentId)
       : null;
 
-    await sendScheduledPaymentReminder({
-      parentEmail: parent.email,
-      childName: enrollment?.childName || 'Your child',
-      className: enrollment?.className || 'your class',
-      schoolName: 'American Seekers Academy',
-      amount: scheduledPayment.amount || 0,
-      dueDate: new Date(scheduledPayment.scheduledDate || Date.now()),
-      daysUntilDue: -1,
-      paymentId: scheduledPayment.id,
-      installmentNumber: scheduledPayment.installmentNumber || 1,
-      totalInstallments: scheduledPayment.totalInstallments || 1,
-      urgency: 'critical',
-    });
+    queueAutoPayFailureEmail(scheduledPayment, parent, enrollment);
   } catch (emailErr: any) {
-    console.error('[AutoPay] Failed to send failure email:', emailErr.message);
+    console.error('[AutoPay] Failed to queue failure email:', emailErr.message);
   }
 }
 
@@ -324,9 +365,8 @@ async function recoverStuckProcessingPayments(): Promise<void> {
 
 /**
  * Send advance notifications to parents whose auto-pay will charge tomorrow.
- * Deduped by lastReminderSentAt — won't send twice within 20 hours.
- * Uses getUpcomingAutoPayScheduledPayments() instead of getAllScheduledPayments() + in-JS filter
- * to avoid loading all payments into memory on large datasets.
+ * One consolidated email per parent (not one per enrollment).
+ * Deduped by lastReminderSentAt — won't send twice within 20 hours per scheduled row.
  */
 async function sendPreChargeNotifications(): Promise<void> {
   try {
@@ -340,6 +380,14 @@ async function sendPreChargeNotifications(): Promise<void> {
     if (upcomingPayments.length === 0) return;
     console.log(`[AutoPay] Pre-charge notifications: ${upcomingPayments.length} payment(s) due tomorrow`);
 
+    type PreChargeEligible = {
+      sp: (typeof upcomingPayments)[number];
+      parent: NonNullable<Awaited<ReturnType<typeof storage.getUser>>>;
+      lineItem: FamilyReminderLineItem;
+    };
+
+    const eligible: PreChargeEligible[] = [];
+
     for (const sp of upcomingPayments) {
       try {
         const parent = sp.parentId ? await storage.getUser(sp.parentId) : null;
@@ -347,7 +395,6 @@ async function sendPreChargeNotifications(): Promise<void> {
         if (!parent.autoPayEnabled) continue;
         if (!parent.stripeDefaultPaymentMethodId) continue;
 
-        // Dedup: skip if already notified within the last 20 hours
         if (sp.lastReminderSentAt) {
           const hoursSinceLastReminder = (Date.now() - new Date(sp.lastReminderSentAt).getTime()) / 3600000;
           if (hoursSinceLastReminder < 20) continue;
@@ -356,127 +403,100 @@ async function sendPreChargeNotifications(): Promise<void> {
         const enrollment = sp.enrollmentId
           ? await storage.getProgramEnrollmentById(sp.enrollmentId)
           : null;
-        const childName = enrollment?.childName || 'Your child';
-        const className = enrollment?.className || 'your class';
-        const amountDisplay = `$${(sp.amount / 100).toFixed(2)}`;
 
-        // Estimate credit reduction for reminder (read-only, no reservation)
-        let estimatedCredits: number | undefined;
-        let estimatedNetCharge: number | undefined;
-
-        {
-          try {
-            const availableCredits = await storage.getAvailableCredits(parent.id);
-            const totalAvailable = availableCredits.reduce(
-              (sum: number, c: any) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)), 0
-            );
-            if (totalAvailable > 0) {
-              const maxForPartial = sp.amount - 50;
-              if (totalAvailable >= sp.amount) {
-                estimatedCredits = sp.amount;
-                estimatedNetCharge = 0;
-              } else if (totalAvailable <= maxForPartial) {
-                estimatedCredits = totalAvailable;
-                estimatedNetCharge = sp.amount - totalAvailable;
-              } else if (maxForPartial > 0) {
-                estimatedCredits = maxForPartial;
-                estimatedNetCharge = 50;
-              }
-            }
-          } catch (creditErr: any) {
-            console.error(`[AutoPay] Could not fetch credits for reminder ${sp.id}:`, creditErr.message);
-          }
-        }
-
-        let inAppContent: string;
-        if (estimatedCredits !== undefined && estimatedNetCharge !== undefined) {
-          if (estimatedNetCharge === 0) {
-            inAppContent = `Your ${amountDisplay} auto-payment for ${className} is scheduled for tomorrow. Your credits will fully cover this payment — no card charge!`;
-          } else {
-            inAppContent = `Your ${amountDisplay} auto-payment for ${className} is scheduled for tomorrow. $${(estimatedCredits / 100).toFixed(2)} in credits will apply, so your estimated card charge is $${(estimatedNetCharge / 100).toFixed(2)}.`;
-          }
-        } else {
-          inAppContent = `Your ${amountDisplay} auto-payment for ${className} is scheduled for tomorrow. Make sure your payment method is up to date.`;
-        }
-
-        // In-app notification (senderId = parent.id per notifyAutoPayFailure convention)
-        try {
-          const notification = await storage.createNotification({
-            senderId: parent.id,
-            schoolId: sp.schoolId,
-            type: 'in_app',
-            priority: 'normal',
-            subject: 'Auto-payment scheduled for tomorrow',
-            content: inAppContent,
-            targetType: 'individual',
-            targetData: { userId: parent.id },
-            targetUserIds: [parent.id],
-            status: 'sending',
-            scheduledFor: null,
-            expiresAt: null,
-          });
-
-          if (notification?.id) {
-            await storage.createNotificationRecipient({
-              notificationId: notification.id,
-              recipientId: parent.id,
-              deliveryType: 'in_app',
-              status: 'delivered',
-            });
-          }
-        } catch (notifErr: any) {
-          console.error(`[AutoPay] Failed to create pre-charge notification for payment ${sp.id}:`, notifErr.message);
-        }
-
-        // Email reminder
-        try {
-          await sendScheduledPaymentReminder({
-            parentEmail: parent.email,
-            childName,
-            className,
-            schoolName: 'American Seekers Academy',
-            amount: sp.amount,
+        eligible.push({
+          sp,
+          parent,
+          lineItem: {
+            scheduledPaymentId: sp.id,
+            childName: enrollment?.childName || 'Your child',
+            className: enrollment?.className || 'your class',
+            amountCents: sp.amount,
             dueDate: new Date(sp.scheduledDate),
-            daysUntilDue: 1,
-            paymentId: sp.id,
-            installmentNumber: sp.installmentNumber || 1,
-            totalInstallments: sp.totalInstallments || 1,
-            urgency: 'warning',
-            estimatedCredits,
-            estimatedNetCharge,
-          });
-        } catch (emailErr: any) {
-          console.error(`[AutoPay] Pre-charge email failed for payment ${sp.id}:`, emailErr.message);
-        }
+            schoolId: sp.schoolId ?? enrollment?.schoolId ?? 1,
+            schoolName: 'American Seekers Academy',
+          },
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[AutoPay] Error evaluating pre-charge for payment ${sp.id}:`, message);
+      }
+    }
 
-        // Update reminder tracking fields
+    const groups = groupReminderItemsByParent(
+      eligible.map((e) => ({ ...e, parentEmail: e.parent.email })),
+    );
+
+    for (const group of groups.values()) {
+      const { parent } = group[0]!;
+      const lineItems = group.map((g) => g.lineItem);
+      const totalCents = lineItems.reduce((sum, item) => sum + item.amountCents, 0);
+      const totalDisplay = `$${(totalCents / 100).toFixed(2)}`;
+      const itemSummary = lineItems
+        .map((item) => `${item.childName} — ${item.className} (${(item.amountCents / 100).toFixed(2)})`)
+        .join('; ');
+
+      const inAppContent =
+        lineItems.length === 1
+          ? `Your ${totalDisplay} auto-payment for ${lineItems[0]!.className} is scheduled for tomorrow. Make sure your payment method is up to date.`
+          : `You have ${lineItems.length} auto-payments totaling ${totalDisplay} scheduled for tomorrow (${itemSummary}). Make sure your payment method is up to date.`;
+
+      try {
+        const notification = await storage.createNotification({
+          senderId: parent.id,
+          schoolId: group[0]!.sp.schoolId,
+          type: 'in_app',
+          priority: 'normal',
+          subject: 'Auto-payment scheduled for tomorrow',
+          content: inAppContent,
+          targetType: 'individual',
+          targetData: { userId: parent.id },
+          targetUserIds: [parent.id],
+          status: 'sending',
+          scheduledFor: null,
+          expiresAt: null,
+        });
+
+        if (notification?.id) {
+          await storage.createNotificationRecipient({
+            notificationId: notification.id,
+            recipientId: parent.id,
+            deliveryType: 'in_app',
+            status: 'delivered',
+          });
+        }
+      } catch (notifErr: unknown) {
+        const message = notifErr instanceof Error ? notifErr.message : String(notifErr);
+        console.error(`[AutoPay] Failed to create pre-charge notification for ${parent.email}:`, message);
+      }
+
+      try {
+        await sendConsolidatedFamilyPaymentReminderEmail({
+          parentEmail: parent.email,
+          lineItems,
+          daysUntilDue: 1,
+          schoolName: lineItems[0]!.schoolName,
+        });
+      } catch (emailErr: unknown) {
+        const message = emailErr instanceof Error ? emailErr.message : String(emailErr);
+        console.error(`[AutoPay] Pre-charge consolidated email failed for ${parent.email}:`, message);
+      }
+
+      for (const entry of group) {
+        const { sp } = entry;
         await storage.updateScheduledPayment(sp.id, {
           reminderCount: (sp.reminderCount ?? 0) + 1,
           lastReminderSentAt: new Date(),
         });
-
-        // Write audit log
-        try {
-          await storage.createPaymentReminderLog({
-            schoolId: sp.schoolId,
-            scheduledPaymentId: sp.id,
-            parentEmail: sp.parentEmail,
-            amountCents: sp.amount,
-            reminderType: '1_day_before',
-            status: 'sent',
-            isManual: false,
-          } as any);
-        } catch (logErr: any) {
-          console.error(`[AutoPay] Failed to write reminder log for payment ${sp.id}:`, logErr.message);
-        }
-
-        console.log(`[AutoPay] Pre-charge notification sent for payment ${sp.id} to ${parent.email}`);
-      } catch (err: any) {
-        console.error(`[AutoPay] Error sending pre-charge notification for payment ${sp.id}:`, err.message);
       }
+
+      console.log(
+        `[AutoPay] Pre-charge notification sent (${lineItems.length} item(s)) to ${parent.email}`,
+      );
     }
-  } catch (err: any) {
-    console.error('[AutoPay] Error in sendPreChargeNotifications:', err.message);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[AutoPay] Error in sendPreChargeNotifications:', message);
   }
 }
 
@@ -870,6 +890,8 @@ async function processAutoPayments(): Promise<void> {
     console.log(`[AutoPay] Run complete — charged: ${charged}, skipped: ${skipped}, failed: ${failed}`);
   } catch (err: any) {
     console.error('[AutoPay] Fatal error during auto-pay processing:', err);
+  } finally {
+    await flushAutoPayFailureEmails();
   }
 }
 
