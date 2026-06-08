@@ -13,7 +13,11 @@
  */
 
 import { storage } from '../storage';
-import { sendScheduledPaymentReminder, sendOverduePaymentNotice } from '../lib/email-service';
+import {
+  groupReminderItemsByParent,
+  sendConsolidatedFamilyPaymentReminderEmail,
+  type FamilyReminderLineItem,
+} from '../lib/consolidated-family-reminder';
 import { getDb } from '../db';
 import { getStripeClient } from '../config/stripe';
 import { scheduledPayments, type InsertPayment } from '../../shared/schema';
@@ -34,6 +38,7 @@ import {
 import {
   maybeEmitCreditCoveredSkipNotification,
   maybeEmitPreChargeNotification,
+  flushPreChargeEmailBatch,
 } from "./autopay-notifications";
 import { resolveScheduledPaymentEnrollmentIds } from "../lib/scheduled-payment-intent-metadata";
 import { splitCentsEvenly } from "../api/billing";
@@ -455,12 +460,14 @@ export async function processAutoPayExecutionPath(now: Date = new Date()): Promi
       let childName: string | undefined;
       let className: string | undefined;
       let schoolName: string | undefined;
+      let schoolId: number | undefined;
       if (enrollmentId != null) {
         const labels = await resolvePaymentLabelsForEnrollment(enrollmentId);
         childName = labels.childName;
         className = labels.className;
         const enr = await storage.getProgramEnrollmentById(enrollmentId);
         if (enr?.schoolId) {
+          schoolId = enr.schoolId;
           const school = await storage.getSchool(enr.schoolId);
           schoolName = school?.name ?? undefined;
         }
@@ -474,6 +481,7 @@ export async function processAutoPayExecutionPath(now: Date = new Date()): Promi
         childName,
         className,
         schoolName,
+        schoolId,
         installmentNumber: candidate.installmentNumber ?? undefined,
         totalInstallments: candidate.totalInstallments ?? undefined,
         now,
@@ -494,6 +502,8 @@ export async function processAutoPayExecutionPath(now: Date = new Date()): Promi
     });
   }
 
+  await flushPreChargeEmailBatch();
+
   return results;
 }
 
@@ -512,7 +522,7 @@ function daysUntilDue(dueDate: Date): number {
 /**
  * Determine if a reminder should be sent based on days until due and reminder count
  */
-function shouldSendReminder(daysUntil: number, reminderCount: number): boolean {
+export function shouldSendReminder(daysUntil: number, reminderCount: number): boolean {
   // Map days to expected reminder count to prevent duplicate sends
   const reminderSchedule: Record<number, number> = {
     7: 0,  // 7 days before = first reminder (count 0)
@@ -527,95 +537,51 @@ function shouldSendReminder(daysUntil: number, reminderCount: number): boolean {
   return expectedReminders !== undefined && reminderCount === expectedReminders;
 }
 
-/**
- * Get reminder message based on days until due
- */
-function getReminderMessage(daysUntil: number, amount: number, childName: string, className: string): {
-  subject: string;
-  message: string;
-  urgency: 'low' | 'medium' | 'high' | 'critical';
-} {
-  const formattedAmount = `$${(amount / 100).toFixed(2)}`;
-  
-  if (daysUntil >= 7) {
-    return {
-      subject: `Upcoming Payment Reminder - ${className}`,
-      message: `Your payment of ${formattedAmount} for ${childName}'s enrollment in ${className} is due in 7 days.`,
-      urgency: 'low'
-    };
-  } else if (daysUntil >= 3) {
-    return {
-      subject: `Payment Due Soon - ${className}`,
-      message: `Your payment of ${formattedAmount} for ${childName}'s enrollment in ${className} is due in 3 days.`,
-      urgency: 'medium'
-    };
-  } else if (daysUntil === 1) {
-    return {
-      subject: `Payment Due Tomorrow - ${className}`,
-      message: `Your payment of ${formattedAmount} for ${childName}'s enrollment in ${className} is due tomorrow.`,
-      urgency: 'medium'
-    };
-  } else if (daysUntil === 0) {
-    return {
-      subject: `Payment Due Today - ${className}`,
-      message: `Your payment of ${formattedAmount} for ${childName}'s enrollment in ${className} is due today.`,
-      urgency: 'high'
-    };
-  } else if (daysUntil === -1) {
-    return {
-      subject: `Payment Overdue - ${className}`,
-      message: `Your payment of ${formattedAmount} for ${childName}'s enrollment in ${className} was due yesterday. Please make your payment as soon as possible.`,
-      urgency: 'high'
-    };
-  } else {
-    return {
-      subject: `FINAL NOTICE: Payment Overdue - ${className}`,
-      message: `Your payment of ${formattedAmount} for ${childName}'s enrollment in ${className} is ${Math.abs(daysUntil)} days overdue. Please make your payment immediately to avoid enrollment suspension.`,
-      urgency: 'critical'
-    };
-  }
-}
+type ScheduledReminderCandidate = FamilyReminderLineItem & {
+  parentEmail: string;
+  daysUntil: number;
+  reminderCount: number;
+  status: string;
+};
 
 /**
- * Process and send reminders for all pending scheduled payments
+ * Process and send reminders for all pending scheduled payments.
+ * One consolidated email per parent per reminder tier (not one per enrollment).
  */
 export async function processScheduledPaymentReminders(): Promise<ReminderResult[]> {
   console.log('📧 Processing scheduled payment reminders...');
   const results: ReminderResult[] = [];
   
   try {
-    // Get all scheduled payments
     const allScheduledPayments = await storage.getAllScheduledPayments();
-    
-    // Filter to only pending payments
     const pendingPayments = allScheduledPayments.filter(p => 
       p.status === 'pending' || p.status === 'overdue'
     );
     
     console.log(`📋 Found ${pendingPayments.length} pending scheduled payments to check`);
-    
+
+    const candidates: ScheduledReminderCandidate[] = [];
+
     for (const payment of pendingPayments) {
       const daysUntil = daysUntilDue(new Date(payment.scheduledDate));
       const reminderCount = payment.reminderCount || 0;
-      
-      // Check if we should send a reminder
+
       if (!shouldSendReminder(daysUntil, reminderCount)) {
         continue;
       }
-      
-      // Get enrollment details for the reminder
+
       let childName = 'Student';
       let className = 'Class';
-      let schoolName = 'School';
-      
+      let schoolName = 'American Seekers Academy';
+      let schoolId = payment.schoolId ?? 1;
+
       if (payment.enrollmentId) {
         const enrollment = await storage.getEnrollmentById(payment.enrollmentId);
         if (enrollment) {
           childName = enrollment.childName || 'Student';
           className = enrollment.className || 'Class';
-          
-          // Get school name
           if (enrollment.schoolId) {
+            schoolId = enrollment.schoolId;
             const school = await storage.getSchool(enrollment.schoolId);
             if (school) {
               schoolName = school.name;
@@ -623,65 +589,69 @@ export async function processScheduledPaymentReminders(): Promise<ReminderResult
           }
         }
       }
-      
-      const reminderInfo = getReminderMessage(daysUntil, payment.amount, childName, className);
-      
-      const result: ReminderResult = {
-        scheduledPaymentId: payment.id,
+
+      candidates.push({
         parentEmail: payment.parentEmail,
-        reminderType: daysUntil < 0 ? 'overdue' : daysUntil === 0 ? 'due_today' : 'upcoming',
+        scheduledPaymentId: payment.id,
+        childName,
+        className,
+        amountCents: payment.amount,
+        dueDate: new Date(payment.scheduledDate),
+        schoolId,
+        schoolName,
+        daysUntil,
+        reminderCount,
+        status: payment.status,
+      });
+    }
+
+    const groups = groupReminderItemsByParent(candidates, (c) => String(c.daysUntil));
+
+    for (const group of groups.values()) {
+      const daysUntil = group[0]!.daysUntil;
+      const parentEmail = group[0]!.parentEmail;
+      const reminderType: ReminderResult['reminderType'] =
+        daysUntil < 0 ? 'overdue' : daysUntil === 0 ? 'due_today' : 'upcoming';
+
+      const groupResults: ReminderResult[] = group.map((c) => ({
+        scheduledPaymentId: c.scheduledPaymentId,
+        parentEmail: c.parentEmail,
+        reminderType,
         daysUntilDue: daysUntil,
-        sent: false
-      };
-      
+        sent: false,
+      }));
+
       try {
-        // Send the appropriate email
-        if (daysUntil < 0) {
-          await sendOverduePaymentNotice({
-            parentEmail: payment.parentEmail,
-            childName,
-            className,
-            schoolName,
-            amount: payment.amount,
-            daysOverdue: Math.abs(daysUntil),
-            paymentId: payment.id,
-            dueDate: new Date(payment.scheduledDate),
-            installmentNumber: payment.installmentNumber,
-            totalInstallments: payment.totalInstallments
-          });
-        } else {
-          await sendScheduledPaymentReminder({
-            parentEmail: payment.parentEmail,
-            childName,
-            className,
-            schoolName,
-            amount: payment.amount,
-            dueDate: new Date(payment.scheduledDate),
-            daysUntilDue: daysUntil,
-            paymentId: payment.id,
-            installmentNumber: payment.installmentNumber,
-            totalInstallments: payment.totalInstallments,
-            urgency: reminderInfo.urgency
-          });
+        const sent = await sendConsolidatedFamilyPaymentReminderEmail({
+          parentEmail,
+          lineItems: group,
+          daysUntilDue: daysUntil,
+          schoolName: group[0]!.schoolName,
+        });
+
+        if (sent) {
+          for (const c of group) {
+            await storage.updateScheduledPaymentReminderCount(c.scheduledPaymentId, c.reminderCount + 1);
+            if (daysUntil < 0 && c.status !== 'overdue') {
+              await storage.updateScheduledPaymentStatus(c.scheduledPaymentId, 'overdue');
+            }
+          }
+          for (const r of groupResults) {
+            r.sent = true;
+          }
+          console.log(
+            `✅ Sent consolidated ${reminderType} reminder (${group.length} item(s)) to ${parentEmail}`,
+          );
         }
-        
-        // Update reminder count
-        await storage.updateScheduledPaymentReminderCount(payment.id, reminderCount + 1);
-        
-        // Mark as overdue if past due date
-        if (daysUntil < 0 && payment.status !== 'overdue') {
-          await storage.updateScheduledPaymentStatus(payment.id, 'overdue');
-        }
-        
-        result.sent = true;
-        console.log(`✅ Sent ${result.reminderType} reminder for payment ${payment.id} to ${payment.parentEmail}`);
-        
       } catch (emailError) {
-        result.error = emailError instanceof Error ? emailError.message : String(emailError);
-        console.error(`❌ Failed to send reminder for payment ${payment.id}:`, result.error);
+        const message = emailError instanceof Error ? emailError.message : String(emailError);
+        for (const r of groupResults) {
+          r.error = message;
+        }
+        console.error(`❌ Failed consolidated reminder for ${parentEmail}:`, message);
       }
-      
-      results.push(result);
+
+      results.push(...groupResults);
     }
     
     console.log(`📧 Reminder processing complete: ${results.filter(r => r.sent).length} sent, ${results.filter(r => !r.sent).length} failed`);

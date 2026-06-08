@@ -10,8 +10,12 @@ jest.mock("../storage", () => ({
   },
 }));
 
-jest.mock("../lib/email-service", () => ({
-  sendScheduledPaymentReminder: jest.fn(async () => true),
+jest.mock("../lib/consolidated-family-reminder", () => ({
+  queuePreChargeEmailCandidate: jest.fn(),
+  flushPreChargeEmailBatch: jest.fn(async () => undefined),
+  clearPreChargeEmailBatchForTests: jest.fn(),
+  groupReminderItemsByParent: jest.fn(),
+  sendConsolidatedFamilyPaymentReminderEmail: jest.fn(async () => true),
 }));
 
 describe("autopay-notifications", () => {
