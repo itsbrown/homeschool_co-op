@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { finalizePaymentAfterStripeSuccess } from '@/lib/finalizePaymentAfterStripeSuccess';
 import { CreditCard, AlertCircle, CheckCircle, DollarSign, Calendar, User, Loader2, History, Gift } from 'lucide-react';
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import { useLocation } from 'wouter';
@@ -25,9 +26,10 @@ console.log('🔑 Stripe publishable key check:', STRIPE_PUBLISHABLE_KEY ? 'Pres
 console.log('🔑 Stripe publishable key starts with:', STRIPE_PUBLISHABLE_KEY ? STRIPE_PUBLISHABLE_KEY.substring(0, 15) + '...' : 'N/A');
 
 // Simple payment form component
-function SimplePaymentForm({ onSuccess, onError }: { 
-  onSuccess: () => void; 
-  onError: (error: string) => void; 
+function SimplePaymentForm({ onSuccess, onError, enrollmentIds }: { 
+  onSuccess: (paymentIntentId: string) => void; 
+  onError: (error: string) => void;
+  enrollmentIds?: number[];
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -53,7 +55,11 @@ function SimplePaymentForm({ onSuccess, onError }: {
     if (error) {
       onError(error.message || 'Payment failed');
     } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-      onSuccess();
+      await finalizePaymentAfterStripeSuccess(queryClient, {
+        paymentIntentId: paymentIntent.id,
+        enrollmentIds,
+      });
+      onSuccess(paymentIntent.id);
     }
 
     setIsProcessing(false);
@@ -742,12 +748,15 @@ function UpcomingPaymentsTab({
             <CardContent>
               <Elements stripe={stripePromise} options={{ clientSecret }}>
                 <SimplePaymentForm 
-                  onSuccess={() => {
+                  enrollmentIds={
+                    currentPayment?.enrollmentId
+                      ? [currentPayment.enrollmentId]
+                      : currentPayment?.enrollmentIds
+                  }
+                  onSuccess={(paymentIntentId) => {
                     console.log('✅ Scheduled payment completed');
+                    const paidPayment = currentPayment;
                     
-                    void queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
-                    void queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
-                    void queryClient.invalidateQueries({ queryKey: ['parent-credits'] });
                     void refetchUpcoming();
                     
                     // Hide the payment form
@@ -757,10 +766,14 @@ function UpcomingPaymentsTab({
                     
                     // Navigate to payment success page
                     const successParams = new URLSearchParams({
-                      payment_intent: `scheduled_${Date.now()}`,
-                      amount: String(currentPayment?.amount || 0), // Use actual payment amount
+                      payment_intent: paymentIntentId,
+                      amount: String(paidPayment?.amount || 0),
                       date: new Date().toISOString(),
-                      enrollments: JSON.stringify(currentPayment?.enrollmentIds || [])
+                      enrollments: JSON.stringify(
+                        paidPayment?.enrollmentId
+                          ? [paidPayment.enrollmentId]
+                          : paidPayment?.enrollmentIds || [],
+                      ),
                     });
                     
                     navigate(`/payment-success?${successParams.toString()}`);
@@ -899,34 +912,10 @@ function PaymentForm({
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         console.log('✅ Payment successful:', paymentIntent.id);
         
-        // Update enrollment statuses and send confirmation email
-        try {
-          console.log('🔄 Updating enrollment statuses and sending confirmation...');
-          console.log('🔄 Enrollment IDs to update:', enrollmentIds);
-          
-          const token = localStorage.getItem('supabase_token');
-          const confirmResponse = await fetch('/api/billing/confirm-payment', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              paymentIntentId: paymentIntent.id,
-              enrollmentIds: enrollmentIds,
-              amount: totalAmount,
-              paymentDate: new Date().toISOString(),
-            })
-          });
-          
-          if (confirmResponse.ok) {
-            console.log('✅ Payment confirmation and enrollment update successful');
-          } else {
-            console.warn('⚠️ Payment confirmation failed:', await confirmResponse.text());
-          }
-        } catch (error) {
-          console.error('❌ Error confirming payment:', error);
-        }
+        await finalizePaymentAfterStripeSuccess(queryClient, {
+          paymentIntentId: paymentIntent.id,
+          enrollmentIds,
+        });
 
         // Call the success callback with payment details
         onPaymentSuccess({

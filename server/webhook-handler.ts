@@ -14,10 +14,7 @@ import {
 } from './lib/balance-payment-metadata';
 import { applyClassPoolToEnrollments } from './lib/apply-class-pool-to-enrollments';
 import { findProgramEnrollmentForCartItem } from './lib/cart-checkout-enrollment-match';
-import {
-  consumeCreditsFromPaymentIntentMetadata,
-  fulfillBalancePaymentIntent,
-} from './lib/fulfill-balance-payment-intent';
+import { finalizeSucceededPaymentIntent } from './lib/finalize-succeeded-payment-intent';
 import { resolveScheduledPaymentEnrollmentIds } from './lib/scheduled-payment-intent-metadata';
 import { ensureScheduledPaymentCreditsConsumed } from './lib/ensure-scheduled-payment-credits-consumed';
 import { schedulePostPaymentVerificationIfEnabled } from './services/post-payment-verification-schedule';
@@ -635,40 +632,20 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.log('💰 Processing payment for enrollments:', enrollmentIds, 'payment type:', paymentType);
           
           if (enrollmentIds.length > 0 && parentEmail) {
-            if (hadPreexistingPendingPayment || paymentLedgerAlreadySucceeded) {
-              const replay = await fulfillBalancePaymentIntent(paymentIntent, enrollmentIds, {
-                paymentHistoryId: existingPayment?.id,
-              });
-              console.log('💰 Balance payment replay fulfillment:', {
-                paymentIntentId: paymentIntent.id,
-                appliedCents: replay.enrollmentApply.appliedCents,
-                creditsConsumedCents: replay.creditsConsumedCents,
-                creditsSkipped: replay.creditsSkippedAlreadyApplied,
-              });
-              const { StripePaymentPlanService } = await import(
-                './services/stripe-payment-plans.js'
-              );
-              const planService = new StripePaymentPlanService(storage as any);
-              await planService.persistRemainingScheduledPaymentsAfterFirstCheckoutPayment(
-                paymentIntent,
-              );
-            } else {
-              // processBalancePayment() already performs membership fulfillment.
-              // Do not call it here as well, or the same PI can double-apply membership cents.
-              // Calculate payment amount in dollars (Stripe amount is in cents)
-              const totalAmount = paymentIntent.amount / 100;
-
-              const { processBalancePayment } = await import('./api/billing.js');
-              await processBalancePayment(paymentIntent, parentEmail, enrollmentIds, totalAmount);
-
-              const { StripePaymentPlanService } = await import(
-                './services/stripe-payment-plans.js'
-              );
-              const planService = new StripePaymentPlanService(storage as any);
-              await planService.persistRemainingScheduledPaymentsAfterFirstCheckoutPayment(
-                paymentIntent,
-              );
-            }
+            const finalized = await finalizeSucceededPaymentIntent(paymentIntent, enrollmentIds, {
+              persistScheduledPayments: true,
+              skipConfirmationEmail: true,
+            });
+            console.log('💰 Balance payment finalized:', {
+              paymentIntentId: paymentIntent.id,
+              hadPreexistingPendingPayment,
+              paymentLedgerAlreadySucceeded,
+              createdPaymentRecord: finalized.createdPaymentRecord,
+              appliedCents: finalized.fulfillment.enrollmentApply.appliedCents,
+              creditsConsumedCents: finalized.fulfillment.creditsConsumedCents,
+              creditsSkipped: finalized.fulfillment.creditsSkippedAlreadyApplied,
+              scheduledRowsCreated: finalized.scheduledRowsCreated,
+            });
 
             const shouldVaultCheckoutCard =
               paymentIntent.metadata?.savePaymentMethodForAutoPay === 'true' ||
@@ -703,9 +680,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }
           
           console.log('✅ Balance payment processed for:', paymentIntent.id);
-          
-          // Note: Real-time update is already sent at the end of processBalancePayment function
-          // No need to duplicate it here
           
           // Send email receipt for balance payment
           try {
