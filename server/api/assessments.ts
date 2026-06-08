@@ -5,6 +5,7 @@ import {
   insertAssessmentTypeSchema, 
   insertCurriculumBookSchema, 
   insertStudentAssessmentSchema,
+  insertAssessmentSessionSchema,
   scoreFormatEnum,
   assessmentCategoryEnum
 } from '../../shared/schema';
@@ -228,6 +229,13 @@ router.post('/types/:typeId/books', supabaseAuth, requireSchoolContext, async (r
       ...req.body,
       assessmentTypeId: typeId
     });
+
+    if (validatedData.progressTrackId != null) {
+      const track = await storage.getProgressTrackById(validatedData.progressTrackId);
+      if (!track || track.schoolId !== schoolId) {
+        return res.status(400).json({ message: 'progressTrackId must belong to your school' });
+      }
+    }
     
     const book = await storage.createCurriculumBook(validatedData);
     res.status(201).json(book);
@@ -261,6 +269,13 @@ router.patch('/books/:id', supabaseAuth, requireSchoolContext, async (req: Reque
     }
     
     const { id: _, assessmentTypeId: __, createdAt: ___, ...safeData } = req.body;
+
+    if (safeData.progressTrackId != null) {
+      const track = await storage.getProgressTrackById(safeData.progressTrackId);
+      if (!track || track.schoolId !== schoolId) {
+        return res.status(400).json({ message: 'progressTrackId must belong to your school' });
+      }
+    }
     
     const updated = await storage.updateCurriculumBook(id, safeData);
     res.json(updated);
@@ -496,6 +511,55 @@ router.get('/parent/my-children', supabaseAuth, async (req: Request, res: Respon
   } catch (error) {
     console.error('Error fetching parent assessments:', error);
     res.status(500).json({ message: 'Failed to fetch assessments' });
+  }
+});
+
+// ==================== IN-APP ASSESSMENT SESSIONS (school-scoped) ====================
+
+router.get('/sessions', supabaseAuth, requireSchoolContext, async (req: Request, res: Response) => {
+  try {
+    const schoolId = (req.user as any).schoolId;
+    const childId = req.query.childId ? parseInt(req.query.childId as string) : undefined;
+    const status = req.query.status as string | undefined;
+    const rows = await storage.getAssessmentSessionsForSchool(schoolId, { childId, status });
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching assessment sessions:', error);
+    res.status(500).json({ message: 'Failed to fetch assessment sessions' });
+  }
+});
+
+router.post('/sessions', supabaseAuth, requireSchoolContext, async (req: Request, res: Response) => {
+  try {
+    const schoolId = (req.user as any).schoolId;
+    const data = insertAssessmentSessionSchema.parse({ ...req.body, schoolId });
+    const child = await storage.getChildByIdForSchool(data.childId, schoolId);
+    if (!child) return res.status(404).json({ message: 'Student not found' });
+    const row = await storage.createAssessmentSession(data);
+    res.status(201).json(row);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
+    console.error('Error creating assessment session:', error);
+    res.status(500).json({ message: 'Failed to create assessment session' });
+  }
+});
+
+router.patch('/sessions/:id', supabaseAuth, requireSchoolContext, async (req: Request, res: Response) => {
+  try {
+    const schoolId = (req.user as any).schoolId;
+    const id = parseInt(req.params.id);
+    const existing = await storage.getAssessmentSessionById(id);
+    if (!existing || existing.schoolId !== schoolId) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+    const { schoolId: _, id: __, createdAt: ___, ...safeData } = req.body;
+    const updated = await storage.updateAssessmentSession(id, safeData);
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating assessment session:', error);
+    res.status(500).json({ message: 'Failed to update assessment session' });
   }
 });
 

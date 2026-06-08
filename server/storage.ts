@@ -7976,6 +7976,67 @@ export class MemStorage implements IStorage {
       ensureProgressSubjectsForSchool(schoolId: number) {
         return this.requireApDb().ensureProgressSubjectsForSchool(schoolId);
       }
+      getQuarterlyProgressMeta(
+        childId: number,
+        schoolId: number,
+        schoolYear: string,
+        quarter: string,
+      ) {
+        return this.requireApDb().getQuarterlyProgressMeta(childId, schoolId, schoolYear, quarter);
+      }
+      upsertQuarterlyProgressMeta(
+        childId: number,
+        schoolId: number,
+        data: Parameters<DatabaseStorage['upsertQuarterlyProgressMeta']>[2],
+      ) {
+        return this.requireApDb().upsertQuarterlyProgressMeta(childId, schoolId, data);
+      }
+      getQuarterlySkillChecks(
+        childId: number,
+        schoolId: number,
+        schoolYear: string,
+        quarter: string,
+      ) {
+        return this.requireApDb().getQuarterlySkillChecks(childId, schoolId, schoolYear, quarter);
+      }
+      saveQuarterlySkillChecks(
+        childId: number,
+        schoolId: number,
+        schoolYear: string,
+        quarter: string,
+        checks: Parameters<DatabaseStorage['saveQuarterlySkillChecks']>[4],
+      ) {
+        return this.requireApDb().saveQuarterlySkillChecks(childId, schoolId, schoolYear, quarter, checks);
+      }
+      saveQuarterlyProgressSnapshot(
+        childId: number,
+        schoolId: number,
+        schoolYear: string,
+        quarter: string,
+        band: string,
+        templateVersion: string,
+        payloadJson: object,
+        generatedBy: number,
+        pdfSha256?: string | null,
+      ) {
+        return this.requireApDb().saveQuarterlyProgressSnapshot(
+          childId,
+          schoolId,
+          schoolYear,
+          quarter,
+          band,
+          templateVersion,
+          payloadJson,
+          generatedBy,
+          pdfSha256,
+        );
+      }
+      getQuarterlyProgressSnapshots(childId: number, schoolId: number) {
+        return this.requireApDb().getQuarterlyProgressSnapshots(childId, schoolId);
+      }
+      getQuarterlyProgressSnapshotById(id: number, schoolId: number) {
+        return this.requireApDb().getQuarterlyProgressSnapshotById(id, schoolId);
+      }
       getAssessmentSessionsForSchool(
         schoolId: number,
         filters?: Parameters<DatabaseStorage['getAssessmentSessionsForSchool']>[1],
@@ -7994,9 +8055,9 @@ export class MemStorage implements IStorage {
       buildStudentProgressReport(
         childId: number,
         schoolId: number,
-        sessionId?: number,
+        options: Parameters<DatabaseStorage['buildStudentProgressReport']>[2],
       ) {
-        return this.requireApDb().buildStudentProgressReport(childId, schoolId, sessionId);
+        return this.requireApDb().buildStudentProgressReport(childId, schoolId, options);
       }
 
       // Clear all data from storage (for testing)

@@ -114,6 +114,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 |------|---------|----------------|---------------|
 | [`e2e/school-code-registration.spec.ts`](../e2e/school-code-registration.spec.ts) | `npm run test:e2e -- e2e/school-code-registration.spec.ts` | `/register/:code` UI + live signup | `POST /api/test/setup-registration-scenario` |
 | [`e2e/session-enrollment-flow.spec.ts`](../e2e/session-enrollment-flow.spec.ts) | `npm run test:e2e -- e2e/session-enrollment-flow.spec.ts` | Parent session wizard + `POST /api/session-enrollments` | `setup-session-enrollment-scenario` |
+| [`e2e/quarterly-progress-report-wizard.spec.ts`](../e2e/quarterly-progress-report-wizard.spec.ts) | `npm run test:e2e -- e2e/quarterly-progress-report-wizard.spec.ts` | Educator NY \| Progress report wizard (save rubric, finalize) + parent PDF download | `setup-progress-scenario` |
 | [`e2e/credit-management-parent-lookup.spec.ts`](../e2e/credit-management-parent-lookup.spec.ts) | `npm run test:e2e -- e2e/credit-management-parent-lookup.spec.ts` | School-admin parent search / manual credit | `setup-credit-lookup-scenario` |
 | [`e2e/parent-profile-credits-tab.spec.ts`](../e2e/parent-profile-credits-tab.spec.ts) | `npm run test:e2e -- e2e/parent-profile-credits-tab.spec.ts` | Admin parent profile Credits tab | `setup-cart-scenario` (`linkSupabaseAuthAdmin`) |
 
@@ -156,6 +157,7 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `POST /api/test/setup-session-enrollment-scenario` | `session-enrollment-flow` |
 | `POST /api/test/setup-cart-scenario` | Payment, credits, membership, profile credits |
 | `POST /api/test/setup-credit-lookup-scenario` | `credit-management-parent-lookup` |
+| `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard` |
 | `POST /api/test/seed-upcoming-scheduled-payment` | `parent-payment-flow` (installment test) |
 
 Implementation: [`server/api/test.ts`](../server/api/test.ts). Helpers: [`server/tests/helpers/`](../server/tests/helpers/).

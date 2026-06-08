@@ -63,6 +63,7 @@ export default function StudentSearchSelect({ value, onSelect, placeholder = 'Se
           className="w-full justify-between h-10 font-normal"
           disabled={disabled || isLoading}
           style={{ fontSize: '16px' }}
+          data-testid="select-progress-student"
         >
           {isLoading ? (
             <span className="flex items-center gap-2 text-muted-foreground">

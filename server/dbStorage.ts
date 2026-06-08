@@ -4372,4 +4372,18 @@ export class DatabaseStorage implements IStorage {
   getProgressInsightCache = apDb.getProgressInsightCache;
   saveProgressInsightCache = apDb.saveProgressInsightCache;
   ensureProgressSubjectsForSchool = apDb.ensureProgressSubjectsForSchool;
+  getProgressTrackCatalog = apDb.getProgressTrackCatalog;
+  getAssessmentSessionsForSchool = apDb.getAssessmentSessionsForSchool;
+  getAssessmentSessionById = apDb.getAssessmentSessionById;
+  createAssessmentSession = apDb.createAssessmentSession;
+  updateAssessmentSession = apDb.updateAssessmentSession;
+  getQuarterlyProgressMeta = apDb.getQuarterlyProgressMeta;
+  upsertQuarterlyProgressMeta = apDb.upsertQuarterlyProgressMeta;
+  getQuarterlySkillChecks = apDb.getQuarterlySkillChecks;
+  saveQuarterlySkillChecks = apDb.saveQuarterlySkillChecks;
+  skillChecksToMap = apDb.skillChecksToMap;
+  buildStudentProgressReport = apDb.buildStudentProgressReport;
+  saveQuarterlyProgressSnapshot = apDb.saveQuarterlyProgressSnapshot;
+  getQuarterlyProgressSnapshots = apDb.getQuarterlyProgressSnapshots;
+  getQuarterlyProgressSnapshotById = apDb.getQuarterlyProgressSnapshotById;
 }

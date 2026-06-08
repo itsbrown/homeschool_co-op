@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-06-07 (NY IHIP quarterly progress reports)
+
+- **Quarterly reports:** Educator `QuarterlyReportWizard` on progress log form; NY IHIP template (`ny-ihip-progress-report-template.ts`), draft PDF preview, immutable `quarterly_progress_reports` snapshots; parent download via `snapshotId`.
+- **Schema:** `quarterly_progress_meta`, `quarterly_skill_checks`, `quarterly_progress_reports` in `shared/schema.ts`; init-db seeds rubric tables.
+- **Email:** SendGrid provider in `email-service.ts` for progress-report attachments (`@sendgrid/mail`).
+- **Tests:** `f14-quarterly-report.integration.test.ts`, `ny-ihip-template.test.ts`, `progress-report-pdf.test.ts`, `email-service-sendgrid.test.ts`; E2E `quarterly-progress-report-wizard.spec.ts`.
+
 ## 2026-06-07 (Pay Now idempotency + prod installment reset)
 
 - **`INSTALLMENT_NOT_AVAILABLE`:** `/api/scheduled-payments/pay` resumes in-flight `processing` + `parent_manual` PaymentIntents on retry; clears stale PIs before reclaim (`server/lib/scheduled-payment-parent-pay.ts`). Stripe PI ownership verified via **parent email + customer id** (DB-linked + Stripe email search, same as payment history).

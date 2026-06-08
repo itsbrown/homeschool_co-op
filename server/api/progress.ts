@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { createHash } from 'crypto';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { storage } from '../storage';
 import { supabaseAuth, requireSchoolContext } from '../middleware/supabase-auth';
@@ -6,9 +8,26 @@ import {
   insertProgressSubjectSchema,
   insertProgressTrackSchema,
   insertStudentProgressLogBodySchema,
+  quarterlyRubricBodySchema,
+  generateQuarterlyReportBodySchema,
 } from '../../shared/schema';
+import { generateProgressReportPdf } from '../services/progressReportPdf';
+import { sendProgressReportEmail } from '../lib/email-service';
+import type { StudentProgressReportDto } from '../lib/build-student-progress-report';
+import type { ProgressReportBand } from '../lib/resolve-progress-report-band';
 
 const router = Router();
+
+const reportRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  validate: false,
+  keyGenerator: (req: Request) => {
+    const user = (req as any).user;
+    return user?.id ? `report_${user.id}` : 'report_anon';
+  },
+  message: { message: 'Too many report requests. Please wait a moment.' },
+});
 
 const ALLOWED_STAFF = ['schoolAdmin', 'admin', 'educator', 'teacher', 'superAdmin'];
 
@@ -179,28 +198,261 @@ router.get('/log/recent', supabaseAuth, requireSchoolContext, staffOnly, async (
   }
 });
 
-router.get('/report/:childId', supabaseAuth, requireSchoolContext, staffOnly, async (req: Request, res: Response) => {
+router.get('/tracks/catalog', supabaseAuth, requireSchoolContext, staffOnly, async (req: Request, res: Response) => {
+  try {
+    const schoolId = (req.user as any).schoolId;
+    const catalog = await storage.getProgressTrackCatalog(schoolId);
+    res.json(catalog);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: 'Failed to fetch track catalog' });
+  }
+});
+
+router.get('/report/:childId/snapshots', supabaseAuth, requireSchoolContext, async (req: Request, res: Response) => {
   try {
     const schoolId = (req.user as any).schoolId;
     const childId = parseInt(req.params.childId);
-    const sessionId = req.query.sessionId ? parseInt(req.query.sessionId as string) : undefined;
+    const role = (req.user as any).role || (req.user as any).activeRole;
+    const userId = (req.user as any).id;
+
     const child = await storage.getChildByIdForSchool(childId, schoolId);
     if (!child) return res.status(404).json({ message: 'Student not found' });
 
-    const current = await storage.getStudentProgressCurrent(childId, schoolId);
-    const logs = await storage.getStudentProgressLog(childId, schoolId, sessionId);
-    const assessments = await storage.getStudentAssessmentsByChildId(childId);
+    if (!ALLOWED_STAFF.includes(role)) {
+      const parentChildren = await storage.getChildrenByParentId(userId);
+      if (!parentChildren.some((c) => c.id === childId)) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+    }
+
+    const snapshots = await storage.getQuarterlyProgressSnapshots(childId, schoolId);
+    res.json(
+      snapshots.map((s) => ({
+        id: s.id,
+        schoolYear: s.schoolYear,
+        quarter: s.quarter,
+        band: s.band,
+        templateVersion: s.templateVersion,
+        generatedAt: s.generatedAt,
+      })),
+    );
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: 'Failed to list report snapshots' });
+  }
+});
+
+router.put('/quarterly-rubric/:childId', supabaseAuth, requireSchoolContext, staffOnly, async (req: Request, res: Response) => {
+  try {
+    const schoolId = (req.user as any).schoolId;
+    const childId = parseInt(req.params.childId);
+    const child = await storage.getChildByIdForSchool(childId, schoolId);
+    if (!child) return res.status(404).json({ message: 'Student not found' });
+
+    const body = quarterlyRubricBodySchema.parse(req.body);
+    const meta = await storage.upsertQuarterlyProgressMeta(childId, schoolId, {
+      schoolYear: body.schoolYear,
+      quarter: body.quarter,
+      quarterLabel: body.quarterLabel,
+      asaCoopHours: body.asaCoopHours,
+      homeInstructionHours: body.homeInstructionHours,
+      draftNarrative: body.draftNarrative,
+      approvedNarrative: body.approvedNarrative,
+      notesObservations: body.notesObservations,
+      phonogramCount: body.phonogramCount,
+      mathLevelLabel: body.mathLevelLabel,
+      mathFallPercent: body.mathFallPercent,
+      mathWinterPercent: body.mathWinterPercent,
+      mathSpringPercent: body.mathSpringPercent,
+      approvedBy: body.approvedNarrative ? (req.user as any).id : undefined,
+      approvedAt: body.approvedNarrative ? new Date() : undefined,
+    });
+
+    if (body.skillChecks?.length) {
+      await storage.saveQuarterlySkillChecks(childId, schoolId, body.schoolYear, body.quarter, body.skillChecks);
+    }
+
+    res.json({ success: true, meta });
+  } catch (e) {
+    if (e instanceof z.ZodError) return res.status(400).json({ message: 'Validation error', errors: e.errors });
+    console.error(e);
+    res.status(500).json({ message: 'Failed to save quarterly rubric' });
+  }
+});
+
+router.get('/report/:childId', supabaseAuth, requireSchoolContext, reportRateLimit, async (req: Request, res: Response) => {
+  try {
+    const schoolId = (req.user as any).schoolId;
+    const childId = parseInt(req.params.childId);
+    const role = (req.user as any).role || (req.user as any).activeRole;
+    const userId = (req.user as any).id;
+    const format = (req.query.format as string) || 'json';
+    const snapshotId = req.query.snapshotId ? parseInt(req.query.snapshotId as string) : undefined;
+    const includeGuide = req.query.includeGuide === 'true';
+    const draft = req.query.draft === 'true';
+
+    const child = await storage.getChildByIdForSchool(childId, schoolId);
+    if (!child) return res.status(404).json({ message: 'Student not found' });
+
+    const isStaff = ALLOWED_STAFF.includes(role);
+    if (!isStaff) {
+      const parentChildren = await storage.getChildrenByParentId(userId);
+      if (!parentChildren.some((c) => c.id === childId)) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      if (!snapshotId) {
+        return res.status(403).json({ message: 'Parents can only download finalized reports' });
+      }
+    }
+
+    let report: StudentProgressReportDto | null = null;
+
+    if (snapshotId) {
+      const snap = await storage.getQuarterlyProgressSnapshotById(snapshotId, schoolId);
+      if (!snap || snap.childId !== childId) return res.status(404).json({ message: 'Report snapshot not found' });
+      report = snap.payloadJson as StudentProgressReportDto;
+    } else {
+      const schoolYear =
+        (req.query.schoolYear as string) || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
+      const quarter = (req.query.quarter as string) || 'fall';
+      const sessionId = req.query.sessionId ? parseInt(req.query.sessionId as string) : undefined;
+      report = await storage.buildStudentProgressReport(childId, schoolId, {
+        schoolYear,
+        quarter,
+        bandOverride: req.query.band as ProgressReportBand | undefined,
+        mentorName: (req.query.mentorName as string) || undefined,
+        sessionId,
+      });
+    }
+
+    if (!report) return res.status(404).json({ message: 'Could not build report' });
+
+    if (format === 'pdf') {
+      const pdf = await generateProgressReportPdf(report, { includeGuide });
+      const safeName = report.header.studentName.replace(/[^a-zA-Z0-9-_]/g, '_');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="NY-Progress-Report-${safeName}-${report.quarter}-${report.schoolYear}.pdf"`);
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.send(pdf);
+    }
 
     res.json({
-      generatedAt: new Date().toISOString(),
-      child: { id: child.id, firstName: child.firstName, lastName: child.lastName, gradeLevel: child.gradeLevel },
-      current,
-      sessionLogs: logs,
-      readingAssessments: assessments.slice(0, 20),
+      ...report,
+      isDraft: !!draft || !snapshotId,
     });
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: 'Failed to generate report' });
+  }
+});
+
+router.post('/report/:childId/generate', supabaseAuth, requireSchoolContext, staffOnly, reportRateLimit, async (req: Request, res: Response) => {
+  try {
+    const schoolId = (req.user as any).schoolId;
+    const userId = (req.user as any).id;
+    const childId = parseInt(req.params.childId);
+    const body = generateQuarterlyReportBodySchema.parse(req.body);
+
+    const child = await storage.getChildByIdForSchool(childId, schoolId);
+    if (!child) return res.status(404).json({ message: 'Student not found' });
+
+    const meta = await storage.getQuarterlyProgressMeta(childId, schoolId, body.schoolYear, body.quarter);
+    if (!meta?.approvedNarrative?.trim()) {
+      return res.status(400).json({
+        message: 'Approve the quarterly narrative before generating a district report',
+      });
+    }
+
+    const report = await storage.buildStudentProgressReport(childId, schoolId, {
+      schoolYear: body.schoolYear,
+      quarter: body.quarter,
+      bandOverride: body.band,
+      mentorName: body.mentorName,
+    });
+    if (!report) return res.status(404).json({ message: 'Could not build report' });
+
+    if (report.completeness.percent < 50) {
+      return res.status(400).json({
+        message: 'Report completeness is too low for district submission',
+        completeness: report.completeness,
+      });
+    }
+
+    const pdf = await generateProgressReportPdf(report, { includeGuide: body.includeGuide });
+    const pdfSha256 = createHash('sha256').update(pdf).digest('hex');
+
+    const snapshot = await storage.saveQuarterlyProgressSnapshot(
+      childId,
+      schoolId,
+      body.schoolYear,
+      body.quarter,
+      report.band,
+      report.templateVersion,
+      report,
+      userId,
+      pdfSha256,
+    );
+
+    res.status(201).json({
+      snapshotId: snapshot.id,
+      pdfSha256,
+      completeness: report.completeness,
+      band: report.band,
+    });
+  } catch (e) {
+    if (e instanceof z.ZodError) return res.status(400).json({ message: 'Validation error', errors: e.errors });
+    console.error(e);
+    res.status(500).json({ message: 'Failed to finalize report' });
+  }
+});
+
+const emailReportBodySchema = z.object({
+  snapshotId: z.number().int().positive(),
+});
+
+router.post('/report/:childId/email', supabaseAuth, requireSchoolContext, staffOnly, reportRateLimit, async (req: Request, res: Response) => {
+  try {
+    const schoolId = (req.user as any).schoolId;
+    const childId = parseInt(req.params.childId);
+    const { snapshotId } = emailReportBodySchema.parse(req.body);
+
+    const child = await storage.getChildByIdForSchool(childId, schoolId);
+    if (!child) return res.status(404).json({ message: 'Student not found' });
+
+    const snap = await storage.getQuarterlyProgressSnapshotById(snapshotId, schoolId);
+    if (!snap || snap.childId !== childId) {
+      return res.status(404).json({ message: 'Report snapshot not found' });
+    }
+
+    const parent = await storage.getUser(child.parentId);
+    if (!parent?.email) {
+      return res.status(400).json({ message: 'Parent email not found for this student' });
+    }
+
+    const report = snap.payloadJson as StudentProgressReportDto;
+    const pdf = await generateProgressReportPdf(report, { includeGuide: false });
+    const parentName = `${parent.firstName || ''} ${parent.lastName || ''}`.trim() || 'Parent';
+    const childName = `${child.firstName} ${child.lastName}`;
+
+    const sent = await sendProgressReportEmail({
+      parentEmail: parent.email,
+      parentName,
+      childName,
+      quarter: snap.quarter,
+      schoolYear: snap.schoolYear,
+      pdfBuffer: pdf,
+    });
+
+    if (!sent) {
+      return res.status(503).json({ message: 'Email could not be sent. Check SendGrid configuration.' });
+    }
+
+    res.json({ success: true, sentTo: parent.email });
+  } catch (e) {
+    if (e instanceof z.ZodError) return res.status(400).json({ message: 'Validation error', errors: e.errors });
+    console.error(e);
+    res.status(500).json({ message: 'Failed to email report' });
   }
 });
 

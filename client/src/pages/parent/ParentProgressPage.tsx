@@ -5,7 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, TrendingUp, BookOpen } from 'lucide-react';
+import { Loader2, TrendingUp, BookOpen, FileDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { downloadProgressReportPdf } from '@/lib/downloadProgressReport';
+import { useToast } from '@/hooks/use-toast';
 import { safeFormatDate } from '@/utils/safeFormatDate';
 import { Link } from 'wouter';
 
@@ -34,6 +37,60 @@ function ProgressSummaryCard({ childId }: { childId: number }) {
         </ul>
       )}
     </div>
+  );
+}
+
+function FinalizedReportsCard({ childId }: { childId: number }) {
+  const { toast } = useToast();
+  const { data: snapshots = [], isLoading } = useQuery<
+    { id: number; schoolYear: string; quarter: string; generatedAt: string }[]
+  >({
+    queryKey: ['/api/progress/report', childId, 'snapshots'],
+    queryFn: async () => {
+      const res = await fetch(`/api/progress/report/${childId}/snapshots`, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!childId,
+  });
+
+  if (isLoading) return null;
+  if (!snapshots.length) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Finalized NY | Progress reports from your mentor will appear here for download.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {snapshots.map((s) => (
+        <li key={s.id} className="flex items-center justify-between gap-2 text-sm">
+          <span>
+            {s.quarter.charAt(0).toUpperCase() + s.quarter.slice(1)} {s.schoolYear}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid={`button-download-report-${s.id}`}
+            onClick={() =>
+              downloadProgressReportPdf({
+                childId,
+                schoolYear: s.schoolYear,
+                quarter: s.quarter,
+                snapshotId: s.id,
+              }).catch((e) =>
+                toast({ title: 'Download failed', description: e.message, variant: 'destructive' }),
+              )
+            }
+          >
+            <FileDown className="h-3 w-3 mr-1" />
+            PDF
+          </Button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -118,6 +175,18 @@ export default function ParentProgressPage() {
                 </Card>
               ))}
             </div>
+
+            {activeChildId && (
+              <Card data-testid="parent-progress-reports-card">
+                <CardHeader>
+                  <CardTitle className="text-lg">NY | Progress report</CardTitle>
+                  <CardDescription>District-ready PDFs finalized by your ASA mentor</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <FinalizedReportsCard childId={activeChildId} />
+                </CardContent>
+              </Card>
+            )}
 
             <Tabs defaultValue="overview">
               <TabsList>

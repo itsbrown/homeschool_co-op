@@ -3126,3 +3126,100 @@ export const insertStudentProgressLogBodySchema = z.object({
   (d) => !!(d.lessonNumber || (d.unitLabel && d.unitLabel.trim()) || (d.topicsCovered && d.topicsCovered.trim())),
   { message: "Enter a lesson number, unit/chapter, or topics covered", path: ["topicsCovered"] },
 );
+
+// ==================== NY IHIP QUARTERLY REPORTS ====================
+
+export const progressQuarterEnum = ['fall', 'winter', 'spring', 'summer'] as const;
+export const skillCheckStatusEnum = ['unchecked', 'consistent', 'na'] as const;
+
+export const quarterlyProgressMeta = pgTable('quarterly_progress_meta', {
+  id: serial('id').primaryKey(),
+  schoolId: integer('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+  childId: integer('child_id').notNull().references(() => children.id, { onDelete: 'cascade' }),
+  schoolYear: text('school_year').notNull(),
+  quarter: text('quarter').notNull(),
+  quarterLabel: text('quarter_label'),
+  asaCoopHours: doublePrecision('asa_coop_hours'),
+  homeInstructionHours: doublePrecision('home_instruction_hours'),
+  draftNarrative: text('draft_narrative'),
+  approvedNarrative: text('approved_narrative'),
+  notesObservations: text('notes_observations'),
+  phonogramCount: integer('phonogram_count'),
+  mathLevelLabel: text('math_level_label'),
+  mathFallPercent: integer('math_fall_percent'),
+  mathWinterPercent: integer('math_winter_percent'),
+  mathSpringPercent: integer('math_spring_percent'),
+  approvedBy: integer('approved_by').references(() => users.id),
+  approvedAt: timestamp('approved_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const quarterlySkillChecks = pgTable('quarterly_skill_checks', {
+  id: serial('id').primaryKey(),
+  schoolId: integer('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+  childId: integer('child_id').notNull().references(() => children.id, { onDelete: 'cascade' }),
+  schoolYear: text('school_year').notNull(),
+  quarter: text('quarter').notNull(),
+  skillKey: text('skill_key').notNull(),
+  term: text('term').notNull(),
+  status: text('status').notNull().default('unchecked'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const quarterlyProgressReports = pgTable('quarterly_progress_reports', {
+  id: serial('id').primaryKey(),
+  schoolId: integer('school_id').notNull().references(() => schools.id, { onDelete: 'cascade' }),
+  childId: integer('child_id').notNull().references(() => children.id, { onDelete: 'cascade' }),
+  schoolYear: text('school_year').notNull(),
+  quarter: text('quarter').notNull(),
+  band: text('band').notNull(),
+  templateVersion: text('template_version').notNull(),
+  payloadJson: jsonb('payload_json').notNull(),
+  pdfSha256: text('pdf_sha256'),
+  generatedBy: integer('generated_by').notNull().references(() => users.id),
+  generatedAt: timestamp('generated_at').defaultNow().notNull(),
+});
+
+export const insertQuarterlyProgressMetaSchema = createInsertSchema(quarterlyProgressMeta).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  approvedBy: true,
+  approvedAt: true,
+});
+
+export const quarterlyRubricBodySchema = z.object({
+  schoolYear: z.string().min(4).max(20),
+  quarter: z.enum(['fall', 'winter', 'spring', 'summer']),
+  quarterLabel: z.string().max(120).optional().nullable(),
+  asaCoopHours: z.number().min(0).optional().nullable(),
+  homeInstructionHours: z.number().min(0).optional().nullable(),
+  draftNarrative: z.string().max(4000).optional().nullable(),
+  approvedNarrative: z.string().max(4000).optional().nullable(),
+  notesObservations: z.string().max(4000).optional().nullable(),
+  phonogramCount: z.number().int().min(0).max(200).optional().nullable(),
+  mathLevelLabel: z.string().max(80).optional().nullable(),
+  mathFallPercent: z.number().int().min(0).max(100).optional().nullable(),
+  mathWinterPercent: z.number().int().min(0).max(100).optional().nullable(),
+  mathSpringPercent: z.number().int().min(0).max(100).optional().nullable(),
+  skillChecks: z
+    .array(
+      z.object({
+        skillKey: z.string().min(1).max(80),
+        term: z.enum(['fall', 'winter', 'spring']),
+        status: z.enum(['unchecked', 'consistent', 'na']),
+      }),
+    )
+    .optional(),
+});
+
+export const generateQuarterlyReportBodySchema = z.object({
+  schoolYear: z.string().min(4).max(20),
+  quarter: z.enum(['fall', 'winter', 'spring', 'summer']),
+  quarterLabel: z.string().max(120).optional().nullable(),
+  band: z.enum(['early', 'lower', 'mid', 'upper', 'secondary']).optional(),
+  includeGuide: z.boolean().optional(),
+  mentorName: z.string().max(120).optional().nullable(),
+});
