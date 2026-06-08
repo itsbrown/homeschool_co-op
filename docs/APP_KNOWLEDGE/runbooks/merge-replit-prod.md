@@ -39,6 +39,8 @@ node scripts/post-merge-replit-check.mjs
 
 Both SQL files are idempotent (`IF NOT EXISTS`). **Never** `db:push` on shared/prod DBs.
 
+Post-merge hook (`scripts/post-merge.sh`) runs `node scripts/run-init-db.mjs` (strict `initializeDatabase`) then `post-merge-replit-check.mjs`.
+
 **Smoke test**
 
 - [ ] School-code registration (valid code → school + user)

@@ -3217,8 +3217,13 @@ async function runMigrations() {
   console.log('✅ Migration completed: payment_verification_logs table');
 }
 
+export type InitializeDatabaseOptions = {
+  /** When true, rethrow on failure (post-merge / CI). Default: swallow and fall back to file storage. */
+  strict?: boolean;
+};
+
 // Initialize database tables
-export async function initializeDatabase() {
+export async function initializeDatabase(options?: InitializeDatabaseOptions) {
   try {
     console.log('Initializing database...');
     
@@ -3253,6 +3258,9 @@ export async function initializeDatabase() {
     console.log('Database/storage initialization complete.');
   } catch (error) {
     console.error('Error during initialization:', error);
+    if (options?.strict) {
+      throw error;
+    }
     console.log('Continuing with file-based storage as fallback');
   }
 }

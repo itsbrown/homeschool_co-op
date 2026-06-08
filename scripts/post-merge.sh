@@ -20,4 +20,7 @@ if [ -n "$DATABASE_URL" ]; then
   fi
 fi
 
-npm run db:push
+# Idempotent schema via init-db (never db:push on shared/prod DBs).
+node scripts/run-init-db.mjs
+
+node scripts/post-merge-replit-check.mjs
