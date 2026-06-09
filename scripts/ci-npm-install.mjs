@@ -1,55 +1,61 @@
 #!/usr/bin/env node
 /**
- * Reliable dependency install for GitHub Actions.
- * npm ci can hit "Exit handler never called" and leave node_modules without
- * devDependencies (drizzle-kit, vite, playwright). Fall back to npm install.
+ * Dependency install for GitHub Actions.
+ * npm 10 on ubuntu-latest can log "Exit handler never called" and exit non-zero
+ * while leaving node_modules mostly populated — verify packages, then fill gaps.
  */
 import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
-const requiredBins = ['drizzle-kit', 'vite', 'playwright', 'tsx'];
 const env = { ...process.env, NODE_ENV: 'development' };
 
-function verify() {
-  const missing = requiredBins.filter((name) => !existsSync(resolve(root, 'node_modules', '.bin', name)));
-  if (missing.length > 0) {
-    throw new Error(`node_modules/.bin missing: ${missing.join(', ')}`);
-  }
-}
-
-function run(cmd) {
-  execSync(cmd, { cwd: root, stdio: 'inherit', env });
-}
-
-try {
-  run('npm cache clean --force');
-} catch {
-  /* best-effort */
-}
-
-const attempts = [
-  'npm ci --no-audit --no-fund',
-  'npm install --no-audit --no-fund',
+const requiredBins = ['drizzle-kit', 'vite', 'playwright', 'tsx'];
+const devPin = [
+  'drizzle-kit@^0.30.4',
+  'vite@^5.4.14',
+  'tsx@^4.19.1',
+  '@playwright/test@^1.60.0',
 ];
 
-let lastErr;
-for (let i = 0; i < attempts.length; i++) {
-  if (i > 0) {
-    console.warn(`[ci-npm-install] retry ${i + 1}: ${attempts[i]}`);
-    run('rm -rf node_modules');
-  }
+function run(cmd, { allowFail = false } = {}) {
   try {
-    run(attempts[i]);
-    verify();
-    process.exit(0);
-  } catch (err) {
-    lastErr = err;
-    console.warn(`[ci-npm-install] ${attempts[i]} failed:`, err instanceof Error ? err.message : err);
+    execSync(cmd, { cwd: root, stdio: 'inherit', env });
+    return true;
+  } catch {
+    if (!allowFail) return false;
+    return false;
   }
 }
 
-console.error('[ci-npm-install] All install attempts failed.');
-if (lastErr) throw lastErr;
-process.exit(1);
+function missingBins() {
+  return requiredBins.filter((name) => !existsSync(resolve(root, 'node_modules', '.bin', name)));
+}
+
+function ensureBins() {
+  const missing = missingBins();
+  if (missing.length === 0) return;
+
+  console.warn(`[ci-npm-install] filling missing bins: ${missing.join(', ')}`);
+  run(`npm install --no-audit --no-fund --save-dev ${devPin.join(' ')}`, { allowFail: true });
+
+  const still = missingBins();
+  if (still.length > 0) {
+    throw new Error(`node_modules/.bin still missing: ${still.join(', ')}`);
+  }
+}
+
+run('npm cache clean --force', { allowFail: true });
+
+// Pin npm 9 — fewer "Exit handler never called" reports on large trees.
+run('npm install -g npm@9.9.3', { allowFail: true });
+
+if (!run('npm ci --no-audit --no-fund', { allowFail: true })) {
+  console.warn('[ci-npm-install] npm ci failed — rm node_modules and npm install');
+  run('rm -rf node_modules', { allowFail: true });
+  run('npm install --no-audit --no-fund', { allowFail: true });
+}
+
+ensureBins();
+console.log('[ci-npm-install] OK');

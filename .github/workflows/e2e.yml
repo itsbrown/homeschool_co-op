@@ -30,7 +30,6 @@ jobs:
           --health-retries 5
 
     env:
-      NODE_ENV: test
       DATABASE_URL: postgresql://test:test@localhost:5432/asa_test
       TEST_DATABASE_URL: postgresql://test:test@localhost:5432/asa_test
       PAYMENT_PROCESSOR_ENABLED: "true"
@@ -58,6 +57,7 @@ jobs:
 
       - name: Run Playwright
         env:
+          NODE_ENV: test
           # Optional: add these repo secrets to run `e2e/authenticated/**` in CI (real Supabase + parent user).
           E2E_PARENT_EMAIL: ${{ secrets.E2E_PARENT_EMAIL }}
           E2E_PARENT_PASSWORD: ${{ secrets.E2E_PARENT_PASSWORD }}

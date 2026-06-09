@@ -26,7 +26,6 @@ jobs:
           --health-retries 5
 
     env:
-      NODE_ENV: test
       DATABASE_URL: postgresql://test:test@localhost:5432/asa_test
       TEST_DATABASE_URL: postgresql://test:test@localhost:5432/asa_test
       PAYMENT_PROCESSOR_ENABLED: "true"
@@ -50,7 +49,11 @@ jobs:
         run: node scripts/ci-db-push.mjs
 
       - name: Typecheck (payments scope)
+        env:
+          NODE_ENV: test
         run: npm run check:payments
 
       - name: Test (payments subset)
+        env:
+          NODE_ENV: test
         run: npm run test:payments
