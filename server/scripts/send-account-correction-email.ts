@@ -153,14 +153,14 @@ async function main() {
     if (preview.htmlContent.length > 2000) {
       console.log('\n... [truncated] ...');
     }
-    if (!process.env.BREVO_API_KEY) {
-      console.log('\nNote: BREVO_API_KEY is not set — use dry-run or configure Brevo to send.');
+    if (!process.env.SENDGRID_API_KEY && !process.env.BREVO_API_KEY) {
+      console.log('\nNote: SENDGRID_API_KEY / BREVO_API_KEY not set — use dry-run or configure email in .env.prod.');
     }
     return;
   }
 
-  if (!process.env.BREVO_API_KEY) {
-    console.error('\nBREVO_API_KEY is not configured. Re-run with --dry-run or add BREVO_API_KEY to .env.prod.');
+  if (!process.env.SENDGRID_API_KEY && !process.env.BREVO_API_KEY) {
+    console.error('\nSENDGRID_API_KEY or BREVO_API_KEY is required. Re-run with --dry-run or add keys to .env.prod.');
     process.exit(1);
   }
 
