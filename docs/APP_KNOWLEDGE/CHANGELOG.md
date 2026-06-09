@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-06-09 (Spring 2026 prod ops scripts + audit archive)
+
+- **Scripts (ledger already applied on prod):** `rebalance-nina-resser-spring`, `prep-batch-pay-email-parents`, `cancel-failed-scheduled-for-parent`, `fix-spring-schedules-june-2026` (dry-run only), grace/verryluz one-offs, `deep-search-parent-payments-window`.
+- **Audit:** `docs/audit/spring-pay-reminder-*.json` and correction receipts for June 2026 spring collections.
+- **Email:** `send-account-correction-email.ts` accepts SendGrid or Brevo.
+
 ## 2026-06-09 (CI lockfile — Replit registry URLs)
 
 - **Root cause:** `package-lock.json` had 19 `package-firewall.replit.local` resolved URLs (from Replit overrides); GitHub Actions `npm ci` failed with `EAI_AGAIN`.
