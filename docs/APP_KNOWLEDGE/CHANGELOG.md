@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-06-09 (CI npm install hardening)
+
+- **CI:** `scripts/ci-npm-install.mjs` falls back to `npm install` when `npm ci` hits "Exit handler never called"; disables setup-node npm cache; verifies `drizzle-kit`/`vite` bins before db push.
+
 ## 2026-06-08 (CI / quality gaps — E2E DB, payments Postgres, quarterly verify)
 
 - **E2E CI:** `.github/workflows/e2e.yml` now provisions Postgres + `ci-db-push`, passes `DATABASE_URL` to Playwright `webServer`, uses `npm run playwright:install:deps`.
