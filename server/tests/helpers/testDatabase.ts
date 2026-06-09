@@ -500,6 +500,8 @@ export class TestDatabase {
       capacity: overrides.capacity || 20,
       locationId: overrides.locationId || null,
       categoryId: overrides.categoryId || null,
+      /** Postgres `classes.category` is NOT NULL; mem-only tests omitted this and broke DB integration. */
+      category: overrides.category || overrides.title || `Test Category ${uniqueId}`,
       ...overrides
     };
 

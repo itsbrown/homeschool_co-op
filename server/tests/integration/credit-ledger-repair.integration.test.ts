@@ -47,8 +47,8 @@ describeIntegration('Integration: credit ledger repair', () => {
     const klass = await testDb.createTestClass(school.id, { price: 4000 });
     const enrollment = await storage.createProgramEnrollment({
       schoolId: school.id,
-      classType: 'school_class',
-      classId: klass.id,
+      classType: 'marketplace',
+      marketplaceClassId: klass.id,
       childId: child.id,
       childName: 'Test Child',
       className: klass.title,

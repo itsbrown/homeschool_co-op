@@ -65,6 +65,9 @@ jobs:
       - name: Verify F001 schema
         run: node scripts/verify-f001-schema.mjs
 
+      - name: Verify quarterly report schema
+        run: node scripts/verify-quarterly-schema.mjs
+
       - name: Production-path integration (registration / locations)
         run: npm run test:server -- --runInBand --testPathPatterns=production-path --no-cache --forceExit
 

@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-06-08 (CI / quality gaps — E2E DB, payments Postgres, quarterly verify)
+
+- **E2E CI:** `.github/workflows/e2e.yml` now provisions Postgres + `ci-db-push`, passes `DATABASE_URL` to Playwright `webServer`, uses `npm run playwright:install:deps`.
+- **Payments CI:** Same Postgres service + schema push so `credit-ledger-repair.integration` runs against real rows.
+- **credit-ledger-repair test:** Use `classType: marketplace` + `marketplaceClassId`; `testDb.createTestClass` now sets required `category` for Postgres `classes` inserts.
+- **Post-merge:** `scripts/verify-quarterly-schema.mjs` checks `quarterly_*` tables; wired into `post-merge.sh` and `post-merge-replit-check.mjs`.
+
 ## 2026-06-07 (NY IHIP quarterly progress reports)
 
 - **Quarterly reports:** Educator `QuarterlyReportWizard` on progress log form; NY IHIP template (`ny-ihip-progress-report-template.ts`), draft PDF preview, immutable `quarterly_progress_reports` snapshots; parent download via `snapshotId`.

@@ -28,6 +28,7 @@ fi
 if [ -n "$DATABASE_URL" ]; then
   npx tsx scripts/init-db.ts
   node scripts/verify-core-schema.mjs
+  node scripts/verify-quarterly-schema.mjs
 else
   echo "post-merge: DATABASE_URL not set; skipping init-db + schema verify." >&2
 fi
