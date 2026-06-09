@@ -27,6 +27,15 @@ const supabaseAnonKey = envOr("SUPABASE_ANON_KEY", defaultSupabaseAnonKey);
 
 const webServerEnv = {
   ...process.env,
+  NODE_ENV: envOr("NODE_ENV", "test"),
+  DATABASE_URL: envOr(
+    "DATABASE_URL",
+    "postgresql://test:test@localhost:5432/asa_test",
+  ),
+  TEST_DATABASE_URL: envOr(
+    "TEST_DATABASE_URL",
+    envOr("DATABASE_URL", "postgresql://test:test@localhost:5432/asa_test"),
+  ),
   SUPABASE_URL: supabaseUrl,
   SUPABASE_ANON_KEY: supabaseAnonKey,
   SUPABASE_SERVICE_ROLE_KEY: envOr(

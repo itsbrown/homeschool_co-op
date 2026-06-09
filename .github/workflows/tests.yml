@@ -27,7 +27,6 @@ jobs:
           --health-retries 5
 
     env:
-      NODE_ENV: test
       DATABASE_URL: postgresql://test:test@localhost:5432/asa_test
       TEST_DATABASE_URL: postgresql://test:test@localhost:5432/asa_test
       TEST_BASE_URL: http://localhost:5000
@@ -47,10 +46,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: node scripts/ci-npm-install.mjs
 
       # Catches missing npm deps (e.g. qrcode) before db:push / dev server — same resolution as Replit after npm ci
       - name: Verify client bundle
@@ -65,7 +63,12 @@ jobs:
       - name: Verify F001 schema
         run: node scripts/verify-f001-schema.mjs
 
+      - name: Verify quarterly report schema
+        run: node scripts/verify-quarterly-schema.mjs
+
       - name: Production-path integration (registration / locations)
+        env:
+          NODE_ENV: test
         run: npm run test:server -- --runInBand --testPathPatterns=production-path --no-cache --forceExit
 
       - name: Start dev server
@@ -88,6 +91,8 @@ jobs:
       # Full test:server (700+ HTTP/Stripe integration tests) needs secrets and is
       # covered by Payments CI + local dev; it is not a merge gate for this job.
       - name: Run client unit tests (jsdom)
+        env:
+          NODE_ENV: test
         run: npm run test:client -- --forceExit
 
       - name: Upload dev server log

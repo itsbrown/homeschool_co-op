@@ -51,9 +51,10 @@ function runScript(name) {
 
 const coreOk = runScript('verify-core-schema.mjs');
 const f001Ok = runScript('verify-f001-schema.mjs');
+const quarterlyOk = runScript('verify-quarterly-schema.mjs');
 
 console.log('\n--- Summary ---');
-if (coreOk && f001Ok) {
+if (coreOk && f001Ok && quarterlyOk) {
   console.log('Schema OK — no additive SQL required unless smoke tests still fail.');
   console.log('If locations/API errors: server/migrations/locations-schema-align.sql');
   console.log('If F001/session features missing: server/migrations/f001-phase1-schema.sql');
@@ -65,6 +66,9 @@ if (coreOk && f001Ok) {
   if (!f001Ok) {
     console.log('F001 schema missing → run server/migrations/f001-phase1-schema.sql only if you use session mode');
   }
+  if (!quarterlyOk) {
+    console.log('Quarterly report schema missing → run: npx tsx scripts/init-db.ts');
+  }
 }
 
-process.exit(coreOk && f001Ok ? 0 : 1);
+process.exit(coreOk && f001Ok && quarterlyOk ? 0 : 1);

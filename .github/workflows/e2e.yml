@@ -12,26 +12,53 @@ on:
 jobs:
   playwright:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: asa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/asa_test
+      TEST_DATABASE_URL: postgresql://test:test@localhost:5432/asa_test
+      PAYMENT_PROCESSOR_ENABLED: "true"
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET || 'whsec_test_payment_flow_harness' }}
+      STRIPE_WEBHOOK_DEV_BYPASS: "false"
+      STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      TESTING_STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: node scripts/ci-npm-install.mjs
+
+      - name: Push schema to test database
+        run: node scripts/ci-db-push.mjs
 
       - name: Install Playwright Chromium and OS libraries
         run: |
-          # Headless tests use chromium-headless-shell; its deps are separate from chromium.
-          npx playwright install --with-deps chromium chromium-headless-shell
-          npx playwright install-deps chromium-headless-shell --dry-run
+          node scripts/run-playwright.mjs install --with-deps chromium chromium-headless-shell
 
       - name: Run Playwright
         env:
+          NODE_ENV: test
           # Optional: add these repo secrets to run `e2e/authenticated/**` in CI (real Supabase + parent user).
           E2E_PARENT_EMAIL: ${{ secrets.E2E_PARENT_EMAIL }}
           E2E_PARENT_PASSWORD: ${{ secrets.E2E_PARENT_PASSWORD }}
