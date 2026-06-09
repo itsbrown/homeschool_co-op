@@ -45,7 +45,7 @@ try {
 }
 
 try {
-  execSync('npx drizzle-kit push --force', {
+  execSync('npm run db:push -- --force', {
     stdio: 'inherit',
     env: process.env,
     cwd: root,
