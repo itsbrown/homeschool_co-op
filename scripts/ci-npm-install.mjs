@@ -46,6 +46,7 @@ function ensureBins() {
   }
 }
 
+run('node scripts/normalize-lockfile-registry.mjs', { allowFail: true });
 run('npm cache clean --force', { allowFail: true });
 
 // Pin npm 9 — fewer "Exit handler never called" reports on large trees.

@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-06-09 (CI lockfile — Replit registry URLs)
+
+- **Root cause:** `package-lock.json` had 19 `package-firewall.replit.local` resolved URLs (from Replit overrides); GitHub Actions `npm ci` failed with `EAI_AGAIN`.
+- **Fix:** Rewrote to `registry.npmjs.org`; `scripts/normalize-lockfile-registry.mjs` runs before CI install.
+
 ## 2026-06-09 (CI npm install hardening)
 
 - **CI:** `scripts/ci-npm-install.mjs` falls back to `npm install` when `npm ci` hits "Exit handler never called"; disables setup-node npm cache; verifies `drizzle-kit`/`vite` bins before db push.
