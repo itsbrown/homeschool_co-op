@@ -53,7 +53,8 @@ jobs:
         run: node scripts/ci-db-push.mjs
 
       - name: Install Playwright Chromium and OS libraries
-        run: npm run playwright:install:deps
+        run: |
+          node scripts/run-playwright.mjs install --with-deps chromium chromium-headless-shell
 
       - name: Run Playwright
         env:
