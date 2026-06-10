@@ -54,6 +54,7 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 | Tests pass but Replit fails | Mem/file storage fallback | Fix `DATABASE_URL`; verify Postgres |
 | Locations on wrong school | `users.school_id` ≠ admin school | Use `resolve-school-id`; fix data with SQL |
 | Registration dropdown empty, admin sees campuses | Locations `school_id` ≠ registration-code school | `node scripts/diagnose-location-school-alignment.mjs CODE`; align with `server/scripts/align-locations-to-registration-school.sql` |
+| Can't pick campus on phone / dropdown won't scroll | Radix Select `popper` viewport height = trigger height | Registration page uses native `<select>` for campus; other selects use `position="item-aligned"` |
 | “No campuses configured” with valid code | Zero `is_active` rows for that school | Add campuses in Location Management for the school that owns the code |
 | POST /api/locations 400 | `code` validated before derive | Derive code before `insertLocationSchema.parse` |
 | associate-school 500 on Replit | Self-HTTP or wrong storage | `associate-parent-school.ts` direct storage |

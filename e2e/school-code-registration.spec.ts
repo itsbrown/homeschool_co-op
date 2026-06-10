@@ -50,9 +50,8 @@ test.describe("school-code parent registration", () => {
 
     const locationSelect = page.getByTestId("registration-location-select");
     await expect(locationSelect).toBeVisible({ timeout: 15_000 });
-    await locationSelect.click();
     const firstCampus = locationsOnSchool[0]?.name ?? "Brighton";
-    await page.getByRole("option", { name: firstCampus }).click();
+    await locationSelect.selectOption({ label: new RegExp(firstCampus, "i") });
 
     await page.getByTestId("registration-parent-first-name").fill("E2E");
     await page.getByLabel("Last Name").first().fill("Parent");
