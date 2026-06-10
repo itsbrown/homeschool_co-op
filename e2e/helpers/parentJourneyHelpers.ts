@@ -41,8 +41,7 @@ export async function registerParentWithChildren(
 
   const locationSelect = page.getByTestId("registration-location-select");
   await expect(locationSelect).toBeVisible({ timeout: 15_000 });
-  await locationSelect.click();
-  await page.getByRole("option", { name: campusName }).click();
+  await locationSelect.selectOption({ label: new RegExp(campusName, "i") });
 
   await page.getByTestId("registration-parent-first-name").fill("E2E");
   await page.getByLabel("Last Name").first().fill("Journey");

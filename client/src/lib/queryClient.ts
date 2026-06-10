@@ -51,6 +51,22 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/** Extract a human-readable message from apiRequest / throwIfResNotOk errors. */
+export function parseApiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
+  if (!(error instanceof Error)) return fallback;
+  const match = error.message.match(/^\d+:\s*([\s\S]*)$/);
+  const body = match?.[1]?.trim() ?? error.message;
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed.message === 'string' && parsed.message.length > 0) {
+      return parsed.message;
+    }
+  } catch {
+    // body was plain text
+  }
+  return body || fallback;
+}
+
 /**
  * Safely parse JSON response, detecting HTML responses that indicate routing issues
  */

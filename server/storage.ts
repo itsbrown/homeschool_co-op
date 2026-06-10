@@ -481,6 +481,7 @@ export interface IStorage {
   getUserLocationById(id: number): Promise<UserLocation | undefined>;
   getUserLocationsByUserId(userId: number): Promise<UserLocation[]>;
   getUserLocationsByLocationId(locationId: number): Promise<UserLocation[]>;
+  getUserLocationByUserAndLocation(userId: number, locationId: number): Promise<UserLocation | undefined>;
   createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation>;
   updateUserLocation(id: number, userLocation: Partial<InsertUserLocation>): Promise<UserLocation | undefined>;
   deleteUserLocation(id: number): Promise<void>;
@@ -488,6 +489,7 @@ export interface IStorage {
   // School-wide permission methods
   getUserSchoolPermissionById(id: number): Promise<UserSchoolPermission | undefined>;
   getUserSchoolPermissionByUserAndSchool(userId: number, schoolId: number): Promise<UserSchoolPermission | undefined>;
+  getUserSchoolPermissionRowByUserAndSchool(userId: number, schoolId: number): Promise<UserSchoolPermission | undefined>;
   getUserSchoolPermissionsBySchoolId(schoolId: number): Promise<UserSchoolPermission[]>;
   createUserSchoolPermission(permission: InsertUserSchoolPermission): Promise<UserSchoolPermission>;
   updateUserSchoolPermission(id: number, permission: Partial<InsertUserSchoolPermission>): Promise<UserSchoolPermission | undefined>;
@@ -3906,6 +3908,16 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async getUserLocationByUserAndLocation(
+    userId: number,
+    locationId: number,
+  ): Promise<UserLocation | undefined> {
+    return Array.from(this.userLocationsStore.values()).find(
+      (userLocation) =>
+        userLocation.userId === userId && userLocation.locationId === locationId,
+    );
+  }
+
   async createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation> {
     const id = this.userLocationIdCounter++;
     const now = new Date();
@@ -6861,6 +6873,13 @@ export class MemStorage implements IStorage {
         return this.dbStorage.getUserLocationsByLocationId(locationId);
       }
 
+      async getUserLocationByUserAndLocation(
+        userId: number,
+        locationId: number,
+      ): Promise<UserLocation | undefined> {
+        return this.dbStorage.getUserLocationByUserAndLocation(userId, locationId);
+      }
+
       async createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation> {
         return this.dbStorage.createUserLocation(userLocation);
       }
@@ -6882,6 +6901,13 @@ export class MemStorage implements IStorage {
         schoolId: number,
       ): Promise<UserSchoolPermission | undefined> {
         return this.dbStorage.getUserSchoolPermissionByUserAndSchool(userId, schoolId);
+      }
+
+      async getUserSchoolPermissionRowByUserAndSchool(
+        userId: number,
+        schoolId: number,
+      ): Promise<UserSchoolPermission | undefined> {
+        return this.dbStorage.getUserSchoolPermissionRowByUserAndSchool(userId, schoolId);
       }
 
       async getUserSchoolPermissionsBySchoolId(schoolId: number): Promise<UserSchoolPermission[]> {

@@ -129,6 +129,41 @@ Dry-run first: `--dry-run`.
 
 **Fix (2026-06-07):** `server/lib/scheduled-payment-parent-pay.ts` — resume existing `parent_manual` PI (`resumed: true` in response); cancel/clear stale PIs before reclaim. **Stripe:** `resolveStripeCustomerIdsForParentEmail` (DB customer ids + Stripe email search) and `paymentIntentBelongsToParent` (metadata email, receipt_email, customer id). New Pay Now PIs attach `customer` + `receipt_email`. `/upcoming` hides rows when enrollment `effective_balance <= 0`.
 
+### Stuck parent Pay Now audit & auto-heal (2026-06-01)
+
+Abandoned Pay Now attempts can leave `scheduled_payments` in `processing` + `charged_by: parent_manual` (or `failed` with a stale PI id), blocking retries with **409 `INSTALLMENT_NOT_AVAILABLE`**.
+
+| Layer | What it does |
+|-------|----------------|
+| **On 409** | `scheduled-payments.ts` logs `error_logs` with `error_code: INSTALLMENT_NOT_AVAILABLE` and `metadata.flag: stuck_parent_manual_installment`; attempts inline recovery via `recoverParentManualClaimForPay` before returning 409. |
+| **Fleet audit (manual)** | `server/scripts/audit-stuck-parent-manual-installments.ts` — lists all stuck rows on owing enrollments. |
+| **Single parent release** | `server/scripts/release-stuck-parent-manual-scheduled-payment.ts --email …` |
+| **Cron auto-heal** | `payment-flow-monitor` (~15m on Reserved VM) — signal `stuck_parent_manual`, releases rows older than **15m** (never charges a card). |
+| **Admin health** | `GET /api/admin/payment-health` — latest monitor snapshot includes `stuck_parent_manual` and `installment_not_available_spike`. |
+
+```bash
+# Prod audit (dry run)
+node scripts/with-prod-env.mjs npx tsx server/scripts/audit-stuck-parent-manual-installments.ts
+
+# Include processing rows even if under 15m (immediate diagnostic)
+node scripts/with-prod-env.mjs npx tsx server/scripts/audit-stuck-parent-manual-installments.ts --include-recent-processing
+
+# Release all matches (prod)
+CONFIRM_RELEASE_STUCK=1 node scripts/with-prod-env.mjs npx tsx server/scripts/audit-stuck-parent-manual-installments.ts --apply
+```
+
+Shared logic: `server/lib/stuck-parent-manual-installments.ts`. Unit tests: `server/tests/stuck-parent-manual-installments.test.ts`.
+
+**Query recent flags in prod:**
+
+```sql
+SELECT id, user_email, message, metadata, created_at
+FROM error_logs
+WHERE error_code = 'INSTALLMENT_NOT_AVAILABLE'
+ORDER BY created_at DESC
+LIMIT 50;
+```
+
 ## Account correction email
 
 After ledger fix, notify parent:
@@ -202,6 +237,8 @@ Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current ba
 | PI reconcile | `server/scripts/reconcile-payment-intent-to-enrollments.ts` |
 | **Post-payment verify (Phase A)** | `server/services/post-payment-verification.ts`, `payment_verification_logs`; flag `POST_PAYMENT_VERIFY_ENABLED` — see [`post-payment-verification-pipeline.md`](../../plans/post-payment-verification-pipeline.md) |
 | **Stripe ↔ DB audit (email)** | `server/scripts/inspect-parent-stripe-by-email.ts` |
+| **Stuck Pay Now audit** | `server/lib/stuck-parent-manual-installments.ts`, `server/scripts/audit-stuck-parent-manual-installments.ts` |
+| **Payment flow monitor** | `server/services/payment-flow-monitor.ts` |
 | Payment patterns skill | `.agents/skills/asa-payment-patterns/SKILL.md` |
 | Credit skill | `.agents/skills/asa-credit-system/SKILL.md` |
 

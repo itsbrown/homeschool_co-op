@@ -54,6 +54,7 @@ Prod requires **deploy** of upload-attachment + `file_upload` UI before resume u
 |---------|--------|-----|
 | `/api/test/*` returns HTML | Stale process on :5000 without test routes | `node scripts/free-port-5000.mjs`; `CI=true npm run test:e2e` |
 | Public slug 404 | Form not active or not `accessLevel: public` | Clone/provision; set active + public |
+| Upload **401** `No token provided` on prod | Running build **before** public `upload-attachment` route; request hits `router.use(jwtCheck)` fallback | Redeploy `main` (includes PR #17 / `e620a7cf`+); verify anonymous `POST …/upload-attachment` ≠ 401 |
 | Upload 500 on prod | Old deploy or storage misconfigured | Deploy attachment code; check object storage |
 | Template seed FK error | `school_id = 1` missing on prod | Templates use first school in DB (`isTemplate` only) |
 

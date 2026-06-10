@@ -73,6 +73,21 @@ const defaultChildValues = (): ParentRegistrationForm["children"][number] => ({
   gender: "",
 });
 
+function formatRegistrationLocationLabel(location: {
+  name: string;
+  activationStatus?: string | null;
+  activationThreshold?: number | null;
+  eligibleStudentCount?: number;
+}): string {
+  if (
+    location.activationThreshold != null &&
+    location.activationStatus === "collecting"
+  ) {
+    return `${location.name} (opening soon — ${location.eligibleStudentCount ?? 0}/${location.activationThreshold} students)`;
+  }
+  return location.name;
+}
+
 interface School {
   id: number;
   name: string;
@@ -176,12 +191,13 @@ export default function RegistrationLandingPage() {
     }
   }, [code, toast, setLocation, form]);
 
-  // Update default location when locations are loaded
+  // Pre-select the first campus once locations finish loading.
   useEffect(() => {
-    if (locations.length > 0 && !form.getValues("location")) {
-      form.setValue("location", locations[0].id.toString());
+    if (locationsLoading || locations.length === 0) return;
+    if (!form.getValues("location")) {
+      form.setValue("location", locations[0].id.toString(), { shouldValidate: true });
     }
-  }, [locations, form]);
+  }, [locations, locationsLoading, form]);
 
   const onSubmit = async (data: ParentRegistrationForm) => {
     try {
@@ -497,50 +513,60 @@ export default function RegistrationLandingPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Preferred Location</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value || undefined}
-                        >
-                          <FormControl>
-                            <SelectTrigger
-                              style={{ fontSize: '16px' }}
-                              data-testid="registration-location-select"
-                            >
-                              <SelectValue placeholder="Select location" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
+                        <FormControl>
+                          <select
+                            id="registration-location"
+                            data-testid="registration-location-select"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            style={{ fontSize: "16px" }}
+                            value={field.value || ""}
+                            onChange={(e) => field.onChange(e.target.value)}
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                            disabled={
+                              locationsLoading ||
+                              locationsError ||
+                              locations.length === 0
+                            }
+                          >
                             {locationsLoading ? (
-                              <SelectItem value="_loading" disabled>Loading locations…</SelectItem>
+                              <option value="">Loading locations…</option>
                             ) : locationsError ? (
-                              <SelectItem value="_error" disabled>
+                              <option value="">
                                 {locationsErrorDetail instanceof Error
                                   ? locationsErrorDetail.message
                                   : "Could not load locations"}
-                              </SelectItem>
+                              </option>
                             ) : locations.length > 0 ? (
-                              locations.map((location: {
-                                id: number;
-                                name: string;
-                                activationStatus?: string | null;
-                                activationThreshold?: number | null;
-                                eligibleStudentCount?: number;
-                              }) => (
-                                <SelectItem key={location.id} value={location.id.toString()}>
-                                  {location.name}
-                                  {location.activationThreshold != null &&
-                                  location.activationStatus === "collecting"
-                                    ? ` (opening soon — ${location.eligibleStudentCount ?? 0}/${location.activationThreshold} students)`
-                                    : ""}
-                                </SelectItem>
-                              ))
+                              <>
+                                <option value="" disabled>
+                                  Select location
+                                </option>
+                                {locations.map((location) => (
+                                  <option key={location.id} value={location.id.toString()}>
+                                    {formatRegistrationLocationLabel(location)}
+                                  </option>
+                                ))}
+                              </>
                             ) : (
-                              <SelectItem value="_none" disabled>
+                              <option value="">
                                 No campuses configured — contact your school
-                              </SelectItem>
+                              </option>
                             )}
-                          </SelectContent>
-                        </Select>
+                          </select>
+                        </FormControl>
+                        {locations.length > 1 && !locationsLoading && !locationsError ? (
+                          <FormDescription>
+                            Choose the campus where you plan to attend classes.
+                          </FormDescription>
+                        ) : null}
+                        {locationsError ? (
+                          <p className="text-sm text-destructive">
+                            We couldn&apos;t load campuses. Refresh the page or contact your school
+                            administrator.
+                          </p>
+                        ) : null}
                         <FormMessage />
                       </FormItem>
                     )}
@@ -662,7 +688,7 @@ export default function RegistrationLandingPage() {
                                     <SelectValue placeholder="Select grade" />
                                   </SelectTrigger>
                                 </FormControl>
-                                <SelectContent>
+                                <SelectContent position="item-aligned" className="max-h-60">
                                   {signupChildGradeOptions.map((g) => (
                                     <SelectItem key={g} value={g}>
                                       {g}
@@ -691,7 +717,7 @@ export default function RegistrationLandingPage() {
                                   <SelectValue placeholder="Prefer not to say" />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent>
+                              <SelectContent position="item-aligned" className="max-h-60">
                                 <SelectItem value="male">Male</SelectItem>
                                 <SelectItem value="female">Female</SelectItem>
                               </SelectContent>
@@ -722,7 +748,13 @@ export default function RegistrationLandingPage() {
                   type="submit"
                   className="w-full"
                   size="lg"
-                  disabled={form.formState.isSubmitting}
+                  disabled={
+                    form.formState.isSubmitting ||
+                    locationsLoading ||
+                    locationsError ||
+                    locations.length === 0 ||
+                    !form.watch("location")
+                  }
                   data-testid="registration-submit"
                 >
                   Create account &amp; student profiles

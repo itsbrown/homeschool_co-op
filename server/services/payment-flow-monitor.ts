@@ -27,6 +27,11 @@ import {
   type AutoPayAlertTier,
 } from "./autopay-observability";
 import { AUTOPAY_MAX_RETRY_ATTEMPTS } from "./autopay-policy";
+import {
+  findStuckParentManualInstallments,
+  releaseAllStuckParentManualInstallments,
+  PARENT_MANUAL_STUCK_MINUTES,
+} from "../lib/stuck-parent-manual-installments";
 
 /** Look-back window for "recent" failed/error signals. */
 const RECENT_WINDOW_MINUTES = 24 * 60;
@@ -55,7 +60,13 @@ function classifyCountSeverity(count: number, warnAt: number, criticalAt: number
 }
 
 export interface PaymentFlowHealthSignal {
-  key: "stuck_processing" | "retry_exhausted" | "balance_sync_gap" | "payment_error_spike";
+  key:
+    | "stuck_processing"
+    | "stuck_parent_manual"
+    | "retry_exhausted"
+    | "balance_sync_gap"
+    | "payment_error_spike"
+    | "installment_not_available_spike";
   tier: AutoPayAlertTier;
   count: number;
   detail: string;
@@ -70,6 +81,9 @@ export interface PaymentFlowHealthSnapshot {
     cancelled: number;
     capped: boolean;
     errors: number;
+    parentManualEligible: number;
+    parentManualReleased: number;
+    parentManualErrors: number;
   };
   notified: boolean;
   webhookDispatched: boolean;
@@ -151,6 +165,20 @@ async function countRecentPaymentErrors(): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
+async function countRecentInstallmentNotAvailable(): Promise<number> {
+  const db = await getDb();
+  const cutoff = new Date(Date.now() - PAYMENT_ERROR_SPIKE_WINDOW_MINUTES * 60_000);
+  const [row] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(sql`error_logs`)
+    .where(
+      sql`error_type = 'payment'
+        AND error_code = 'INSTALLMENT_NOT_AVAILABLE'
+        AND created_at >= ${cutoff}`,
+    );
+  return Number(row?.n ?? 0);
+}
+
 /** Cancel stale pending/overdue installments for already-paid enrollments. */
 async function autoHealStaleInstallments(rows: StaleHealRow[]): Promise<{
   cancelled: number;
@@ -201,13 +229,16 @@ async function notifyAdmins(snapshot: PaymentFlowHealthSnapshot): Promise<boolea
     const healLine = snapshot.autoHeal.cancelled > 0
       ? ` Auto-healed ${snapshot.autoHeal.cancelled} stale installment(s).`
       : "";
+    const parentManualLine = snapshot.autoHeal.parentManualReleased > 0
+      ? ` Released ${snapshot.autoHeal.parentManualReleased} stuck parent Pay Now installment(s).`
+      : "";
 
     const notification = await storage.createNotification({
       senderId,
       type: "in_app",
       priority: snapshot.overallTier === "critical" ? "high" : "normal",
       subject: `Payment flow health: ${snapshot.overallTier.toUpperCase()}`,
-      content: `${summary}.${healLine}`.slice(0, 1000),
+      content: `${summary}.${healLine}${parentManualLine}`.slice(0, 1000),
       targetType: "role",
       targetData: { role: "schoolAdmin", overallTier: snapshot.overallTier },
       scheduledFor: null,
@@ -294,10 +325,18 @@ export async function runPaymentFlowMonitor(
   let stuck = 0;
   let retryExhausted = 0;
   let paymentErrors = 0;
+  let installmentNotAvailable = 0;
   let staleRows: StaleHealRow[] = [];
+  let stuckParentManual = 0;
 
   try {
-    [stuck, retryExhausted, paymentErrors, staleRows] = await Promise.all([
+    const stuckParentManualRows = await findStuckParentManualInstallments().catch((e) => {
+      console.error("[payment-flow-monitor] stuck-parent-manual query failed:", e);
+      return [];
+    });
+    stuckParentManual = stuckParentManualRows.length;
+
+    [stuck, retryExhausted, paymentErrors, installmentNotAvailable, staleRows] = await Promise.all([
       countStuckProcessing().catch((e) => {
         console.error("[payment-flow-monitor] stuck-processing query failed:", e);
         return 0;
@@ -308,6 +347,10 @@ export async function runPaymentFlowMonitor(
       }),
       countRecentPaymentErrors().catch((e) => {
         console.error("[payment-flow-monitor] payment-error query failed:", e);
+        return 0;
+      }),
+      countRecentInstallmentNotAvailable().catch((e) => {
+        console.error("[payment-flow-monitor] installment-not-available query failed:", e);
         return 0;
       }),
       findStaleZeroBalanceInstallments().catch((e) => {
@@ -323,8 +366,10 @@ export async function runPaymentFlowMonitor(
   const cappedHeal = eligibleHeal > MAX_AUTO_HEAL_PER_RUN;
 
   const stuckTier = classifyProcessingBacklogSeverity(stuck);
+  const stuckParentManualTier = classifyCountSeverity(stuckParentManual, 1, 5);
   const retryTier = classifyRetryExhaustedBatchSeverity(retryExhausted);
   const errorTier = classifyCountSeverity(paymentErrors, 3, 10);
+  const installmentNotAvailableTier = classifyCountSeverity(installmentNotAvailable, 2, 8);
   // Even one fully-paid enrollment with an open installment risks a double-charge.
   const syncGapTier = classifyCountSeverity(eligibleHeal, 1, 10);
 
@@ -332,12 +377,34 @@ export async function runPaymentFlowMonitor(
     ? await autoHealStaleInstallments(staleRows)
     : { cancelled: 0, errors: 0 };
 
+  const parentManualHeal =
+    autoHeal && stuckParentManual > 0
+      ? await releaseAllStuckParentManualInstallments({ maxRows: MAX_AUTO_HEAL_PER_RUN }).catch((e) => {
+          console.error("[payment-flow-monitor] parent-manual auto-heal failed:", e);
+          return { released: 0, skipped: 0, errors: stuckParentManual, rows: [] };
+        })
+      : { released: 0, skipped: 0, errors: 0, rows: [] };
+
+  if (parentManualHeal.released > 0) {
+    for (const row of parentManualHeal.rows.filter((r) => r.action === "released")) {
+      console.log(
+        `[payment-flow-monitor] auto-heal: released stuck parent_manual scheduled_payment ${row.id} (${row.parentEmail})`,
+      );
+    }
+  }
+
   const signals: PaymentFlowHealthSignal[] = [
     {
       key: "stuck_processing",
       tier: stuckTier,
       count: stuck,
       detail: `${stuck} installment(s) stuck in 'processing' > ${AUTOPAY_PROCESSING_STUCK_MINUTES}m`,
+    },
+    {
+      key: "stuck_parent_manual",
+      tier: stuckParentManualTier,
+      count: stuckParentManual,
+      detail: `${stuckParentManual} parent Pay Now installment(s) stuck (processing > ${PARENT_MANUAL_STUCK_MINUTES}m or failed + stale PI)`,
     },
     {
       key: "retry_exhausted",
@@ -357,6 +424,12 @@ export async function runPaymentFlowMonitor(
       count: paymentErrors,
       detail: `${paymentErrors} high/critical payment error(s) in last ${PAYMENT_ERROR_SPIKE_WINDOW_MINUTES}m`,
     },
+    {
+      key: "installment_not_available_spike",
+      tier: installmentNotAvailableTier,
+      count: installmentNotAvailable,
+      detail: `${installmentNotAvailable} INSTALLMENT_NOT_AVAILABLE error(s) in last ${PAYMENT_ERROR_SPIKE_WINDOW_MINUTES}m`,
+    },
   ];
 
   const overallTier = maxTier(...signals.map((s) => s.tier));
@@ -370,6 +443,9 @@ export async function runPaymentFlowMonitor(
       cancelled: heal.cancelled,
       capped: cappedHeal,
       errors: heal.errors,
+      parentManualEligible: stuckParentManual,
+      parentManualReleased: parentManualHeal.released,
+      parentManualErrors: parentManualHeal.errors,
     },
     notified: false,
     webhookDispatched: false,
@@ -411,8 +487,8 @@ export async function runPaymentFlowMonitor(
 
   console.log(
     `[payment-flow-monitor] tier=${overallTier} ` +
-      `stuck=${stuck} retryCap=${retryExhausted} syncGap=${eligibleHeal} ` +
-      `errors=${paymentErrors} healed=${heal.cancelled} (${snapshot.durationMs}ms)`,
+      `stuck=${stuck} parentManual=${stuckParentManual} retryCap=${retryExhausted} syncGap=${eligibleHeal} ` +
+      `errors=${paymentErrors} ina=${installmentNotAvailable} healed=${heal.cancelled} parentManualReleased=${parentManualHeal.released} (${snapshot.durationMs}ms)`,
   );
 
   return snapshot;

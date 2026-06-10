@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearch, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -297,7 +297,7 @@ function ScheduledPaymentDialog({
         const data = await response.json();
 
         if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Failed to initialize payment');
+          throw new Error(data.message || data.error || 'Failed to initialize payment');
         }
 
         if (data.mode === 'credits_only') {
@@ -482,6 +482,7 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [payInFullTarget, setPayInFullTarget] = useState<PayInFullTarget | null>(null);
   const [selectedPaymentForDialog, setSelectedPaymentForDialog] = useState<any>(null);
+  const payInFullAutoOpenedRef = useRef(false);
 
   const searchString = useSearch();
   const [activePaymentTab, setActivePaymentTab] = useState(
@@ -597,6 +598,20 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
       subtitle: "Pay entire remaining balance",
     };
   }, [payInFullOffers]);
+
+  useEffect(() => {
+    const raw = searchString.startsWith("?") ? searchString.slice(1) : searchString;
+    const params = new URLSearchParams(raw);
+    if (params.get("payInFull") !== "1" || payInFullAutoOpenedRef.current) {
+      return;
+    }
+    if (isLoadingBillingSummary || !payAllInFullTarget) {
+      return;
+    }
+    payInFullAutoOpenedRef.current = true;
+    setActivePaymentTab("overview");
+    setPayInFullTarget(payAllInFullTarget);
+  }, [searchString, isLoadingBillingSummary, payAllInFullTarget]);
 
   // Get subscription schedules for upcoming payments tab (Stripe-managed)
   const { data: scheduledPayments, isLoading: isLoadingScheduled } = useQuery({
@@ -1008,8 +1023,14 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                           } left)`}
                       </span>
                     )}
-                    {paymentOverview.totalRemainingCents === 0 && (
+                    {paymentOverview.totalRemainingCents === 0 && !payAllInFullTarget && (
                       <span>You&apos;re all caught up — no tuition or installments remaining.</span>
+                    )}
+                    {paymentOverview.totalRemainingCents === 0 && payAllInFullTarget && (
+                      <span>
+                        Your biweekly plan has no upcoming installments — use Pay in full below to
+                        close your remaining balance.
+                      </span>
                     )}
                   </div>
                   {(paymentOverview.totalRemainingCents > 0 || payAllInFullTarget) && (

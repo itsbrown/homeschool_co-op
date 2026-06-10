@@ -33,13 +33,23 @@ export type FamilyBalanceEmailPayload = {
   overdueAmountCents: number;
 };
 
-export function getParentPaymentDeepLink(options?: { schoolId?: number; source?: string }): string {
+export function getParentPaymentDeepLink(options?: {
+  schoolId?: number;
+  source?: string;
+  /** Opens Payments → Pay in full dialog (one-shot balance checkout). */
+  payInFull?: boolean;
+}): string {
   const base = (process.env.APP_URL || 'https://accounts.americanseekersacademy.com').replace(/\/$/, '');
   const params = new URLSearchParams();
   if (options?.schoolId) params.set('schoolId', String(options.schoolId));
   params.set('ref', options?.source || 'collections_reminder');
-  const billingPath = `/billing?${params.toString()}`;
-  return `${base}/login?returnTo=${encodeURIComponent(billingPath)}`;
+  if (options?.payInFull) {
+    params.set('payInFull', '1');
+  }
+  const path = options?.payInFull
+    ? `/payments?${params.toString()}`
+    : `/billing?${params.toString()}`;
+  return `${base}/login?returnTo=${encodeURIComponent(path)}`;
 }
 
 /**
