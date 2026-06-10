@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, parseApiErrorMessage } from '@/lib/queryClient';
 import { useAuth } from '@/components/SupabaseProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,6 +71,7 @@ interface SchoolUser {
   lastName?: string;
   role?: string;
   isActive?: boolean;
+  locationId?: number | null;
 }
 
 const permissionLabels: Record<string, { label: string; icon: typeof FileText; description: string }> = {
@@ -220,9 +221,12 @@ export default function StaffPermissionsPage() {
   const unassignedUsers = useMemo(
     () =>
       (schoolUsers ?? []).filter(
-        (u) => !assignedUserIds.has(u.id) && u.isActive !== false,
+        (u) =>
+          !assignedUserIds.has(u.id) &&
+          u.isActive !== false &&
+          !(selectedLocationId != null && u.locationId === selectedLocationId),
       ),
-    [schoolUsers, assignedUserIds],
+    [schoolUsers, assignedUserIds, selectedLocationId],
   );
 
   const unassignedSchoolWideUsers = useMemo(
@@ -240,10 +244,6 @@ export default function StaffPermissionsPage() {
         locationId,
         accessLevel: 'view',
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || 'Failed to grant location access');
-      }
       return res.json();
     },
     onSuccess: () => {
@@ -258,7 +258,7 @@ export default function StaffPermissionsPage() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to grant location access',
+        description: parseApiErrorMessage(error, 'Failed to grant location access'),
         variant: 'destructive',
       });
     },
@@ -270,10 +270,6 @@ export default function StaffPermissionsPage() {
         userId,
         accessLevel: 'view',
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || 'Failed to grant school-wide access');
-      }
       return res.json();
     },
     onSuccess: () => {
@@ -287,7 +283,7 @@ export default function StaffPermissionsPage() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to grant school-wide access',
+        description: parseApiErrorMessage(error, 'Failed to grant school-wide access'),
         variant: 'destructive',
       });
     },

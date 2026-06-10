@@ -4387,26 +4387,54 @@ router.post("/user-locations", supabaseAuth, requireSchoolContext, async (req: a
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Check if assignment already exists
-    const existingAssignments = await storage.getUserLocationsByLocationId(locationId);
-    const alreadyAssigned = existingAssignments.some(ul => ul.userId === userId);
-    if (alreadyAssigned) {
-      return res.status(409).json({ message: "User is already assigned to this location" });
+    // Idempotent grant: parents often already have user_locations from registration.
+    const existingAssignment = await storage.getUserLocationByUserAndLocation(userId, locationId);
+    if (existingAssignment?.isActive) {
+      console.log(`ℹ️ User ${userId} already assigned to location ${locationId} — returning existing row`);
+      return res.status(200).json({
+        id: existingAssignment.id,
+        userId: existingAssignment.userId,
+        userName: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim() || targetUser.email,
+        userEmail: targetUser.email,
+        locationId: existingAssignment.locationId,
+        locationName: location.name,
+        accessLevel: existingAssignment.accessLevel,
+        canViewReports: existingAssignment.canViewReports,
+        canManageStaff: existingAssignment.canManageStaff,
+        canManageClasses: existingAssignment.canManageClasses,
+        canManageStudents: existingAssignment.canManageStudents,
+        canSendNotifications: existingAssignment.canSendNotifications,
+        canViewParentContacts: existingAssignment.canViewParentContacts,
+        isActive: existingAssignment.isActive,
+      });
     }
 
-    // Create the user_location record with default permissions
-    const userLocation = await storage.createUserLocation({
-      userId,
-      locationId,
-      accessLevel,
-      canViewReports: false,
-      canManageStaff: false,
-      canManageClasses: false,
-      canManageStudents: false,
-      canSendNotifications: false,
-      canViewParentContacts: false,
-      isActive: true,
-    });
+    let userLocation: Awaited<ReturnType<typeof storage.createUserLocation>>;
+    if (existingAssignment && !existingAssignment.isActive) {
+      const reactivated = await storage.updateUserLocation(existingAssignment.id, {
+        isActive: true,
+        accessLevel,
+      });
+      if (!reactivated) {
+        return res.status(500).json({ message: "Failed to reactivate location assignment" });
+      }
+      userLocation = reactivated;
+      console.log(`♻️ Reactivated user ${userId} at location ${locationId}`);
+    } else {
+      // Create the user_location record with default permissions
+      userLocation = await storage.createUserLocation({
+        userId,
+        locationId,
+        accessLevel,
+        canViewReports: false,
+        canManageStaff: false,
+        canManageClasses: false,
+        canManageStudents: false,
+        canSendNotifications: false,
+        canViewParentContacts: false,
+        isActive: true,
+      });
+    }
 
     // Also sync the user's profile location_id to match
     await storage.updateUser(userId, { locationId });
@@ -4511,23 +4539,51 @@ router.post("/user-school-permissions", supabaseAuth, requireSchoolContext, asyn
       return res.status(404).json({ message: "User not found" });
     }
 
-    const existing = await storage.getUserSchoolPermissionByUserAndSchool(userId, schoolId);
-    if (existing) {
-      return res.status(409).json({ message: "User already has school-wide access" });
+    const existing = await storage.getUserSchoolPermissionRowByUserAndSchool(userId, schoolId);
+    if (existing?.isActive) {
+      console.log(`ℹ️ User ${userId} already has school-wide access — returning existing row`);
+      return res.status(200).json({
+        id: existing.id,
+        userId: existing.userId,
+        userName: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim() || targetUser.email,
+        userEmail: targetUser.email,
+        schoolId: existing.schoolId,
+        accessLevel: existing.accessLevel,
+        canViewReports: existing.canViewReports,
+        canManageStaff: existing.canManageStaff,
+        canManageClasses: existing.canManageClasses,
+        canManageStudents: existing.canManageStudents,
+        canSendNotifications: existing.canSendNotifications,
+        canViewParentContacts: existing.canViewParentContacts,
+        isActive: existing.isActive,
+      });
     }
 
-    const row = await storage.createUserSchoolPermission({
-      userId,
-      schoolId,
-      accessLevel,
-      canViewReports: false,
-      canManageStaff: false,
-      canManageClasses: false,
-      canManageStudents: false,
-      canSendNotifications: false,
-      canViewParentContacts: false,
-      isActive: true,
-    });
+    let row: Awaited<ReturnType<typeof storage.createUserSchoolPermission>>;
+    if (existing && !existing.isActive) {
+      const reactivated = await storage.updateUserSchoolPermission(existing.id, {
+        isActive: true,
+        accessLevel,
+      });
+      if (!reactivated) {
+        return res.status(500).json({ message: "Failed to reactivate school-wide access" });
+      }
+      row = reactivated;
+      console.log(`♻️ Reactivated school-wide access for user ${userId}`);
+    } else {
+      row = await storage.createUserSchoolPermission({
+        userId,
+        schoolId,
+        accessLevel,
+        canViewReports: false,
+        canManageStaff: false,
+        canManageClasses: false,
+        canManageStudents: false,
+        canSendNotifications: false,
+        canViewParentContacts: false,
+        isActive: true,
+      });
+    }
 
     clearPermissionCache(userId, undefined, schoolId);
 

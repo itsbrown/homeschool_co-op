@@ -85,6 +85,7 @@ Covers public API, `upload-attachment`, and browser resume upload (uses in-memor
 | Issue | Fix |
 |-------|-----|
 | 404 on `/forms/mentor-application` | Run provision script or clone template; ensure `is_active` |
+| Upload **401** `No token provided` | Prod build predates public `upload-attachment` — redeploy `main` |
 | Upload 500 | Deploy attachment code; prod needs object storage configured |
 | Template missing | `seed-form-templates.ts` on that DB |
 | Wrong school branding | Form `school_id` must match the school you intend |

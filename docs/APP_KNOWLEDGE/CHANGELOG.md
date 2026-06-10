@@ -1,5 +1,41 @@
 # App knowledge changelog
 
+## 2026-06-09 (Mentor application — resume upload blocked on prod)
+
+- **Symptom:** Public `/forms/mentor-application` loads but applicants cannot submit; required resume upload fails.
+- **Cause:** `POST /api/custom-forms/forms/13/upload-attachment` returns **401** `No token provided` on prod (stale deploy without public upload route); `main` has the fix since PR #17 (`e620a7cf`, 2026-05-31).
+- **Form:** ASA prod `custom_forms` id **13**, field **105** `Resume (PDF or Word)` required `file_upload`.
+- **Fix:** Redeploy production from current `main`; verify anonymous upload returns 200/400 (not 401).
+
+- **Symptom:** Parent dashboard showed **$0 / "No payments due"** for `beigel.shaley@gmail.com` while DB had **$1,054.17** on Spring enr **351**.
+- **Cause:** Dashboard used cart-eligible enrollments only (`stripe_managed` excluded) + all biweekly installments cancelled → no upcoming rows; billing summary ($1,054.17) was not consulted.
+- **Fix:** `ParentDashboard.tsx` falls back to `/api/billing/summary` when cart/upcoming are empty but enrollment balance remains.
+- **Ops:** Recreate pending scheduled payments or use **Pay in full** on `/payments` until deploy.
+
+## 2026-06-01 (Stuck parent Pay Now — audit, flag, auto-heal)
+
+- **Symptom:** Recurring **409 `INSTALLMENT_NOT_AVAILABLE`** when parents retry Pay Now after abandoning checkout (`processing` + `parent_manual` or `failed` + stale PI).
+- **Audit:** `server/scripts/audit-stuck-parent-manual-installments.ts` + shared lib `server/lib/stuck-parent-manual-installments.ts`.
+- **Auto:** Pay endpoint logs `error_logs` (`error_code: INSTALLMENT_NOT_AVAILABLE`, `metadata.flag: stuck_parent_manual_installment`) and attempts inline recovery; `payment-flow-monitor` adds `stuck_parent_manual` signal + safe auto-release every ~15m.
+- **Tests:** `server/tests/stuck-parent-manual-installments.test.ts`.
+
+## 2026-06-10 (Verryluz Pagan — stuck installment INSTALLMENT_NOT_AVAILABLE)
+
+- **Symptom:** Pay Now showed `INSTALLMENT_NOT_AVAILABLE` for Chaska Spring balance ($383.12).
+- **Cause:** `scheduled_payments` id **518** stuck in `processing` + `parent_manual` after an abandoned card attempt; claim blocked retries and row dropped off Upcoming list.
+- **Prod fix:** `release-stuck-parent-manual-scheduled-payment.ts --email verryluzpagan@yahoo.com --apply` → reset id 518 to `pending`.
+- **Code:** Pay endpoint retries after releasing stuck `parent_manual` claims; upcoming list includes in-flight parent_manual rows; Pay Now toast uses `message` not raw error code.
+
+## 2026-06-01 (Registration location picker — mobile fix)
+
+- **Bug:** Parents reported trouble selecting a campus on `/register/:code`. Radix `SelectContent` used `position="popper"`, constraining the dropdown viewport to trigger height (~40px) — hard to scroll on phones, especially with multiple campuses.
+- **Fix:** Registration **Preferred Location** uses native `<select>` (16px font, iOS-safe). Grade/gender selects use `position="item-aligned"`. Submit disabled until campuses load and a location is chosen.
+
+## 2026-06-01 (Staff permissions grant — idempotent POST)
+
+- **Bug:** Granting location access returned `409 User is already assigned to this location` for parents who already had `user_locations` from registration; toast showed raw `409: {"message":…}`.
+- **Fix:** `POST /api/school-admin/user-locations` and `POST /user-school-permissions` are idempotent (return existing or reactivate inactive rows). Staff Permissions UI excludes users whose profile `locationId` matches the selected campus from the grant list; errors use `parseApiErrorMessage`.
+
 ## 2026-06-09 (Spring 2026 prod ops scripts + audit archive)
 
 - **Scripts (ledger already applied on prod):** `rebalance-nina-resser-spring`, `prep-batch-pay-email-parents`, `cancel-failed-scheduled-for-parent`, `fix-spring-schedules-june-2026` (dry-run only), grace/verryluz one-offs, `deep-search-parent-payments-window`.

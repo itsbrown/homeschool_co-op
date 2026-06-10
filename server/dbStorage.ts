@@ -2565,6 +2565,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(userLocations.assignedAt));
   }
 
+  async getUserLocationByUserAndLocation(
+    userId: number,
+    locationId: number,
+  ): Promise<UserLocation | undefined> {
+    const db = await getDb();
+    const [row] = await db
+      .select()
+      .from(userLocations)
+      .where(and(eq(userLocations.userId, userId), eq(userLocations.locationId, locationId)))
+      .limit(1);
+    return row;
+  }
+
   async createUserLocation(userLocation: InsertUserLocation): Promise<UserLocation> {
     const db = await getDb();
     const [newUserLocation] = await db
@@ -2619,6 +2632,23 @@ export class DatabaseStorage implements IStorage {
           eq(userSchoolPermissions.userId, userId),
           eq(userSchoolPermissions.schoolId, schoolId),
           eq(userSchoolPermissions.isActive, true),
+        ),
+      );
+    return row;
+  }
+
+  async getUserSchoolPermissionRowByUserAndSchool(
+    userId: number,
+    schoolId: number,
+  ): Promise<UserSchoolPermission | undefined> {
+    const db = await getDb();
+    const [row] = await db
+      .select()
+      .from(userSchoolPermissions)
+      .where(
+        and(
+          eq(userSchoolPermissions.userId, userId),
+          eq(userSchoolPermissions.schoolId, schoolId),
         ),
       );
     return row;
