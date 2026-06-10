@@ -221,12 +221,9 @@ export default function StaffPermissionsPage() {
   const unassignedUsers = useMemo(
     () =>
       (schoolUsers ?? []).filter(
-        (u) =>
-          !assignedUserIds.has(u.id) &&
-          u.isActive !== false &&
-          !(selectedLocationId != null && u.locationId === selectedLocationId),
+        (u) => !assignedUserIds.has(u.id) && u.isActive !== false,
       ),
-    [schoolUsers, assignedUserIds, selectedLocationId],
+    [schoolUsers, assignedUserIds],
   );
 
   const unassignedSchoolWideUsers = useMemo(
