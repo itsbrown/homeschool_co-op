@@ -23,6 +23,10 @@ import {
   pickStripeCustomerIdForParentPay,
 } from '../lib/scheduled-payment-parent-pay';
 import { resolveStripeCustomerIdsForParentEmail } from '../lib/stripe-search-helpers';
+import {
+  isRecoverableStuckParentManualRow,
+  recoverParentManualClaimForPay,
+} from '../lib/stuck-parent-manual-installments';
 
 const router = Router();
 
@@ -38,7 +42,12 @@ router.get('/upcoming', supabaseAuth, async (req: any, res) => {
 
     const filtered = allScheduledPayments.filter((p) => {
       const s = String(p.status);
-      return s === 'pending' || s === 'failed' || s === 'overdue';
+      return (
+        s === 'pending' ||
+        s === 'failed' ||
+        s === 'overdue' ||
+        (s === 'processing' && p.chargedBy === 'parent_manual')
+      );
     });
 
     const afterFirstPaid = await filterScheduledPaymentsUntilFirstPaid(filtered);
@@ -482,8 +491,65 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    const claimedRow = await storage.claimScheduledPaymentForParentCharge(numericPaymentId, parentUserId);
+    let claimedRow = await storage.claimScheduledPaymentForParentCharge(numericPaymentId, parentUserId);
     if (!claimedRow) {
+      const stuckRow = await storage.getScheduledPaymentById(numericPaymentId);
+      if (
+        stuckRow &&
+        stuckRow.parentId === parentUserId &&
+        isRecoverableStuckParentManualRow(stuckRow)
+      ) {
+        console.warn(
+          `♻️ Recovering stuck parent_manual claim on scheduled ${numericPaymentId} before retry`,
+        );
+        await recoverParentManualClaimForPay(
+          {
+            id: stuckRow.id,
+            parentId: stuckRow.parentId,
+            parentEmail: stuckRow.parentEmail,
+            stripePaymentIntentId: stuckRow.stripePaymentIntentId,
+            status: String(stuckRow.status),
+          },
+          stripe,
+        );
+        claimedRow = await storage.claimScheduledPaymentForParentCharge(numericPaymentId, parentUserId);
+      }
+    }
+    if (!claimedRow) {
+      const finalRow = await storage.getScheduledPaymentById(numericPaymentId);
+      void storage
+        .createErrorLog({
+          errorType: 'payment',
+          severity: 'medium',
+          message: `INSTALLMENT_NOT_AVAILABLE for scheduled_payment ${numericPaymentId}`,
+          errorCode: 'INSTALLMENT_NOT_AVAILABLE',
+          route: '/api/scheduled-payments/pay',
+          method: 'POST',
+          userId: parentUserId,
+          userEmail,
+          schoolId: scheduledPayment.schoolId ?? null,
+          stackTrace: null,
+          url: null,
+          ipAddress: req.ip || (req.headers['x-forwarded-for'] as string) || null,
+          userAgent: req.headers['user-agent'] || null,
+          requestBody: null,
+          metadata: {
+            scheduledPaymentId: numericPaymentId,
+            enrollmentId: scheduledPayment.enrollmentId,
+            status: finalRow?.status ?? scheduledPayment.status,
+            chargedBy: finalRow?.chargedBy ?? (scheduledPayment as { chargedBy?: string }).chargedBy,
+            stripePaymentIntentId:
+              finalRow?.stripePaymentIntentId ?? scheduledPayment.stripePaymentIntentId,
+            failureReason: finalRow?.failureReason ?? scheduledPayment.failureReason,
+            flag: 'stuck_parent_manual_installment',
+          },
+          status: 'new',
+          notificationSent: false,
+        } as any)
+        .catch((logErr: unknown) => {
+          console.error('[scheduled-payments/pay] failed to log INSTALLMENT_NOT_AVAILABLE:', logErr);
+        });
+
       return res.status(409).json({
         success: false,
         error: 'INSTALLMENT_NOT_AVAILABLE',

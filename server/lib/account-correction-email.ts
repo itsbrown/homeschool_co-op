@@ -100,7 +100,14 @@ export async function buildAccountCorrectionEmailPreview(
   const balancePayload = await buildFamilyBalanceEmailPayload(schoolId, parentEmail);
   const school = await storage.getSchool(schoolId);
   const schoolName = balancePayload?.schoolName || school?.name || 'American Seekers Academy';
-  const paymentUrl = getParentPaymentDeepLink({ schoolId, source: 'account_correction' });
+  const hasBalance = balancePayload != null && balancePayload.lineItems.length > 0;
+  const totalAmountCents = balancePayload?.totalAmountCents ?? 0;
+  const hasOverdue = (balancePayload?.overdueCount ?? 0) > 0;
+  const paymentUrl = getParentPaymentDeepLink({
+    schoolId,
+    source: 'account_correction',
+    payInFull: hasBalance,
+  });
 
   const summaryHtml = correctionSummary
     .map(
@@ -109,10 +116,6 @@ export async function buildAccountCorrectionEmailPreview(
     )
     .join('');
   const summaryText = correctionSummary.map((p) => `- ${p}`).join('\n');
-
-  const hasBalance = balancePayload != null && balancePayload.lineItems.length > 0;
-  const totalAmountCents = balancePayload?.totalAmountCents ?? 0;
-  const hasOverdue = (balancePayload?.overdueCount ?? 0) > 0;
 
   const subject = hasBalance
     ? `Account Update: Your balance is now ${formatCurrency(totalAmountCents)} — ${schoolName}`
@@ -189,17 +192,17 @@ Your account is currently paid in full — no outstanding balance is showing.
 
             <h3 style="margin: 28px 0 12px 0; color: #374151;">How to Pay</h3>
             <p style="margin: 0 0 12px 0; color: #374151;">
-              Sign in to your parent account and open the billing page to pay online with a card.
-              You can pay the full balance or make a partial payment toward any enrollment.
+              Sign in with this email and use the button below to pay your remaining balance in one secure payment.
+              A check brought to the office is still welcome if you prefer.
             </p>
 
             <div style="text-align: center; margin: 32px 0;">
               <a href="${paymentUrl}"
                  style="background-color: #4F46E5; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
-                 Sign In &amp; Pay Online
+                 Sign In &amp; Pay in Full
               </a>
               <p style="margin: 12px 0 0 0; font-size: 13px; color: #6B7280;">
-                You may be asked to sign in first; then you can pay from your billing page.
+                After sign-in, the Pay in full option opens on your Payments page.
               </p>
             </div>
 

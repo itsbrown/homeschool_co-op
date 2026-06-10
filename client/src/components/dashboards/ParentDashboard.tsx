@@ -27,6 +27,7 @@ import {
   type ParentMemberIdResponse,
 } from "@/lib/parent-member-id";
 import { getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
+import { resolveEnrollmentOutstandingForOverview } from "@/utils/paymentOverviewTotals";
 import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { Input } from "@/components/ui/input";
@@ -292,10 +293,37 @@ export default function ParentDashboard() {
 
   const nextScheduledPayment = upcomingPaymentsData?.payments?.[0] ?? null;
 
+  const { data: billingSummary, isLoading: billingSummaryLoading } = useQuery<{
+    totalBalance?: number;
+    enrollmentBalance?: number;
+    enrollmentDetails?: Array<{ balance?: number }>;
+  }>({
+    queryKey: ["billing-summary"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/billing/summary");
+      if (!response.ok) {
+        throw new Error("Failed to load billing summary");
+      }
+      return response.json();
+    },
+    enabled: !!session,
+    staleTime: 30_000,
+  });
+
+  /** Authoritative owed cents (includes stripe_managed rows excluded from cart). */
+  const billingOutstandingCents = resolveEnrollmentOutstandingForOverview({
+    billingSummary,
+    cartOutstandingCents: 0,
+  });
+
   const hasCartCheckoutDue =
     outstandingEnrollmentCount > 0 ||
     outstandingMembershipCount > 0 ||
     outstandingNetDueCents > 0;
+
+  /** Plan balance with no cart/upcoming row — e.g. cancelled stuck installments. */
+  const hasBillingBalanceOnly =
+    billingOutstandingCents > 0 && !hasCartCheckoutDue && !nextScheduledPayment;
 
   const buildUnpaidEnrollmentForPay = useCallback(
     (enrollment: any): UnpaidEnrollment | null => {
@@ -1018,10 +1046,28 @@ export default function ParentDashboard() {
                       </>
                     )}
                   </>
+                ) : hasBillingBalanceOnly ? (
+                  <>
+                    <div
+                      className="text-2xl font-bold text-orange-600"
+                      data-testid="text-billing-balance-dashboard"
+                    >
+                      {formatCurrency(billingOutstandingCents)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Spring balance due — pay from Payments
+                    </p>
+                    <Button className="mt-3 w-full h-11" asChild data-testid="button-pay-billing-balance-dashboard">
+                      <Link href="/payments?payInFull=1">
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Pay in full ({formatCurrency(billingOutstandingCents)})
+                      </Link>
+                    </Button>
+                  </>
                 ) : (
                   <>
                     <div className="text-2xl font-bold">
-                      {isLoadingUnpaid || upcomingPaymentsLoading
+                      {isLoadingUnpaid || upcomingPaymentsLoading || billingSummaryLoading
                         ? "…"
                         : formatCurrency(0)}
                     </div>
