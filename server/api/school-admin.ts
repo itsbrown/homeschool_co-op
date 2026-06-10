@@ -6119,6 +6119,31 @@ router.put('/users/:id', supabaseAuth, requireSchoolContext, async (req: any, re
     const updatedUser = await storage.updateUser(userId, userData);
     console.log(`✅ API: Updated user: ${userData.email || existingUser.email} for school ${schoolId}`);
 
+    if (req.body.locationId !== undefined) {
+      const rawLocationId = req.body.locationId;
+      let parsedLocationId: number | null = null;
+      if (rawLocationId !== '' && rawLocationId !== null && rawLocationId !== undefined) {
+        const parsed =
+          typeof rawLocationId === 'string' ? parseInt(rawLocationId, 10) : Number(rawLocationId);
+        parsedLocationId = Number.isFinite(parsed) ? parsed : null;
+      }
+      try {
+        const { syncUserLocationForSchool } = await import('../lib/sync-user-location-for-school');
+        await syncUserLocationForSchool(userId, Number(schoolId), parsedLocationId);
+        console.log(
+          `📍 Synced user_locations for user ${userId} at school ${schoolId} → location ${parsedLocationId ?? 'none'}`,
+        );
+      } catch (locationSyncErr) {
+        console.error(`⚠️ Failed to sync user_locations for user ${userId}:`, locationSyncErr);
+        return res.status(400).json({
+          message:
+            locationSyncErr instanceof Error
+              ? locationSyncErr.message
+              : 'Failed to sync location permissions for this user',
+        });
+      }
+    }
+
     // Also update password in Supabase if it was changed
     if (plainTextPassword && existingUser.email) {
       try {

@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-06-10 (Staff Permissions — profile location vs user_locations drift)
+
+- **Symptom:** Users page shows campus (e.g. Brighton) but Staff Permissions says user lacks location / hides them from grant list.
+- **Cause:** Users page reads `users.location_id`; permissions use `user_locations`. Grant picker wrongly excluded anyone whose profile location matched the selected campus (assumed access already existed). `PUT /api/school-admin/users/:id` updated profile only — no `user_locations` sync.
+- **Fix:** Remove profile-location filter from grant list; `syncUserLocationForSchool` on user edit; `server/lib/sync-user-location-for-school.ts`.
+
 ## 2026-06-09 (Mentor application — resume upload blocked on prod)
 
 - **Symptom:** Public `/forms/mentor-application` loads but applicants cannot submit; required resume upload fails.
