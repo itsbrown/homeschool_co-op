@@ -1,5 +1,22 @@
 # App knowledge changelog
 
+## 2026-06-13 (Shaley Beigel — manual check not on enrollment)
+
+- **Symptom:** Admin manual payment **#343** ($1,054.17 check) visible in payment history; enr **#351** still showed $1,054.17 owed.
+- **Cause:** `payments` row created; `program_enrollments.total_paid` not updated (legacy manual path / generated `effective_balance` column on full-object update).
+- **Fix (prod):** Set enr **#351** → $1,300 paid / $0 balance; SP **#542** completed.
+
+## 2026-06-11 (Denise Parga — Venmo pay in full)
+
+- **$691.00 Venmo** recorded for Andrea Parga Spring 2026 (enrollment **#315**); payment **#342**; scheduled payment **#516** marked completed; balance **$0**.
+
+## 2026-06-09 (INSTALLMENT_NOT_AVAILABLE — prod scale investigation)
+
+- **User report:** Many parents see `INSTALLMENT_NOT_AVAILABLE` on Pay Now.
+- **Mechanism:** Abandoned Pay Now leaves installment `processing` + `parent_manual`; reclaim fails with 409 until release/resume.
+- **Prod (ASA):** `error_logs` has **0** `INSTALLMENT_NOT_AVAILABLE` rows → pay-endpoint logging + auto-heal likely **not deployed** (same stale prod as mentor upload 401). **1** stuck `processing` row now; **43** cancelled installments on **8** still-owing families (manual Spring schedule cleanups).
+- **Fix:** Redeploy `main`; run `audit-stuck-parent-manual-installments.ts`; confirm `ENABLE_BACKGROUND_JOBS` on Reserved VM for 15m auto-release.
+
 ## 2026-06-10 (Staff Permissions — profile location vs user_locations drift)
 
 - **Symptom:** Users page shows campus (e.g. Brighton) but Staff Permissions says user lacks location / hides them from grant list.
@@ -12,6 +29,8 @@
 - **Cause:** `POST /api/custom-forms/forms/13/upload-attachment` returns **401** `No token provided` on prod (stale deploy without public upload route); `main` has the fix since PR #17 (`e620a7cf`, 2026-05-31).
 - **Form:** ASA prod `custom_forms` id **13**, field **105** `Resume (PDF or Word)` required `file_upload`.
 - **Fix:** Redeploy production from current `main`; verify anonymous upload returns 200/400 (not 401).
+
+## 2026-06-09 (Shaley Beigel — dashboard $0 while balance owed)
 
 - **Symptom:** Parent dashboard showed **$0 / "No payments due"** for `beigel.shaley@gmail.com` while DB had **$1,054.17** on Spring enr **351**.
 - **Cause:** Dashboard used cart-eligible enrollments only (`stripe_managed` excluded) + all biweekly installments cancelled → no upcoming rows; billing summary ($1,054.17) was not consulted.

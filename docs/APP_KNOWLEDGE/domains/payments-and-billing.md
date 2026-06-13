@@ -127,6 +127,8 @@ Dry-run first: `--dry-run`.
 
 `POST /api/scheduled-payments/pay` claims a row (`pending`/`failed`/`overdue` → `processing`). Retrying while `processing` returned **409 `INSTALLMENT_NOT_AVAILABLE`**.
 
+**Why parents see it often (Spring 2026):** Each abandoned Pay Now (closed tab, declined card, 3DS timeout) leaves `scheduled_payments` in `processing` + `charged_by: parent_manual`. The next click cannot reclaim until the row is released or the in-flight Stripe PI is resumed. Biweekly families generate many Pay Now attempts near session end. **Prod symptom:** raw error code in the UI when `data.error` is shown before `data.message`; `error_logs` rows with `error_code = INSTALLMENT_NOT_AVAILABLE` appear only after the June 2026 pay-endpoint logging deploy.
+
 **Fix (2026-06-07):** `server/lib/scheduled-payment-parent-pay.ts` — resume existing `parent_manual` PI (`resumed: true` in response); cancel/clear stale PIs before reclaim. **Stripe:** `resolveStripeCustomerIdsForParentEmail` (DB customer ids + Stripe email search) and `paymentIntentBelongsToParent` (metadata email, receipt_email, customer id). New Pay Now PIs attach `customer` + `receipt_email`. `/upcoming` hides rows when enrollment `effective_balance <= 0`.
 
 ### Stuck parent Pay Now audit & auto-heal (2026-06-01)

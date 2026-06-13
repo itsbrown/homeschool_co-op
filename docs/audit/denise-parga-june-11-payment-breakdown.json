@@ -1,0 +1,10 @@
+{
+  "summary": [
+    "We reviewed your account after your payment on June 11, 2026. Here is what happened.",
+    "Camila (Seekers | Brighton): Your payment completed successfully. You paid $261.50 on your card plus $190.00 in approved credits ($60 volunteer credit and $130 sibling discount). That totals $451.50 and Camila's Spring enrollment is now paid in full.",
+    "Andrea (Yankee Doodle | Brighton): A separate Pay Now attempt for Andrea's remaining balance did not finish — it was started but canceled before your card was charged, so no payment was recorded for Andrea.",
+    "Why you may only see one payment in your history: Payment history shows card charges only. The $190.00 in credits applied to Camila's payment does not appear as a separate line item, even though it counted toward her balance.",
+    "Current balance: Camila $0.00 (paid in full). Andrea $691.00 still due. You have $0.00 in credits remaining — Andrea's balance will be paid by card only.",
+    "Next step: Sign in at Payments → Pay Now for Andrea's $691.00 (or use Pay in Full for that enrollment). Please use a debit or credit card directly — not Stripe Link — if you have had trouble before. Your 2026 membership is paid in full. Reply to this email if anything still looks wrong after refreshing the page."
+  ]
+}

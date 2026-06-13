@@ -1,0 +1,8 @@
+{
+  "summary": [
+    "We cleared a stuck payment attempt on Chaska's Spring balance ($383.12). Your last try used Stripe Link, which could not complete on that checkout — please use a debit or credit card instead (not Link or Apple Pay if prompted).",
+    "Sign in and pay: open Payments, click Pay Now on Chaska's row, and enter your card details. Or use Pay in Full from the same page if you prefer one checkout.",
+    "Easton's Spring enrollment is already paid in full. Only Chaska's $383.12 remains.",
+    "If you still see an error after refreshing the page, reply to this email and we'll help right away."
+  ]
+}
