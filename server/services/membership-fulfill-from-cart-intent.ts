@@ -9,6 +9,7 @@ import {
   readAllocationBreakdownFromPayment,
   type PaymentAllocationBreakdown,
 } from '../lib/persist-payment-allocation-breakdown';
+import { shouldSkipMembershipFulfillmentForPaymentIntent } from '../lib/membership-fulfillment-idempotency';
 
 /**
  * Apply membership enrollment create/update when a cart PaymentIntent includes
@@ -74,8 +75,13 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
   const paymentRow = await storage.getPaymentByStripeId(paymentIntent.id);
   const persistedBreakdown = readAllocationBreakdownFromPayment(paymentRow);
   if (
-    existingEnrollment?.notes?.includes(paymentIntent.id) ||
-    persistedBreakdown?.paymentIntentId === paymentIntent.id
+    shouldSkipMembershipFulfillmentForPaymentIntent({
+      paymentIntentId: paymentIntent.id,
+      existingEnrollment,
+      persistedBreakdown,
+      cartMembershipTotalCents,
+      membershipPortionThisPaymentCents,
+    })
   ) {
     console.log(
       `🎫 Membership fulfillment already recorded for PI ${paymentIntent.id} — skipping (idempotent)`,
@@ -87,6 +93,17 @@ export async function applyMembershipFulfillmentFromCartPaymentIntent(
         grossCents: resolved?.allocationGrossCents ?? piAmount,
         paymentIntentId: paymentIntent.id,
       }
+    );
+  }
+
+  if (existingEnrollment?.notes?.includes(paymentIntent.id)) {
+    console.warn(
+      `🎫 Membership notes reference PI ${paymentIntent.id} but ledger is unpaid — re-applying membership fulfillment`,
+      {
+        membershipId: existingEnrollment.id,
+        amountPaid: existingEnrollment.amountPaid,
+        remainingBalance: existingEnrollment.remainingBalance,
+      },
     );
   }
 

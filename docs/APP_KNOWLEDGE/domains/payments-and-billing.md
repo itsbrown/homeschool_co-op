@@ -255,4 +255,13 @@ Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current ba
 | Audit query shows huge total owed | JOIN inflation with `payments` | Aggregate enrollments only |
 | Parent says paid; DB shows balance | Webhook miss; trust Stripe email search first | `inspect-parent-stripe-by-email.ts` → reconcile missed PI |
 | Parent says paid; no `stripe_customer_id` on user | Customer id may live in enrollment `metadata.stripeCustomerId` | Email search finds all Stripe customers; check PI metadata |
+### Zoryana Tsygyrlash — membership checkout ledger (2026-06-13)
+
+- **Symptom:** Stripe PI included `membershipAmount` ($125) but `membership_enrollments.amount_paid` stayed $0; notes referenced PI.
+- **Root cause:** Idempotency in `applyMembershipFulfillmentFromCartPaymentIntent` treated `notes.includes(paymentIntentId)` as fulfilled even when ledger still showed full balance owed — webhook/client retries skipped membership increment (poison pill).
+- **Fix:** `server/lib/membership-fulfillment-idempotency.ts` — skip only when ledger or `allocationBreakdown` confirms payment; re-apply when note stamped but unpaid.
+- **Audit:** `server/scripts/audit-stuck-membership-checkout-ledger.ts`
+- **Tests:** `server/tests/membership-fulfillment-idempotency.test.ts`, integration poison-pill case in `fulfill-payment-intent.integration.test.ts`
+
 | Membership `amount_paid` jumps by 2x on first checkout installment | Membership fulfillment called twice for same PI in webhook path (`webhook-handler` + `processBalancePayment`) | Ensure one fulfillment call per PI; audit `membership_enrollments` rows where checkout-note `updated_at > created_at` |
+| Checkout PI in membership `notes` but `amount_paid` still $0 | Idempotency poison pill — retries skipped fulfillment | Deploy fix; audit script; replay `fulfill-payment-intent` or Stripe webhook |

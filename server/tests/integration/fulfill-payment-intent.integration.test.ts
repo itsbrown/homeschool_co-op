@@ -368,4 +368,46 @@ describeIntegration('Integration: fulfill-payment-intent (interactive primary pa
     );
     expect(paymentRows).toHaveLength(1);
   });
+
+  it('re-applies membership when notes reference PI but ledger is still unpaid', async () => {
+    const { parent, school, year, paymentIntentObject } = await setupMembershipCartFixture();
+
+    await storage.createMembershipEnrollment({
+      schoolId: school.id,
+      parentUserId: parent.id,
+      membershipYear: year,
+      membershipTier: 'basic',
+      amount: 2000,
+      amountPaid: 0,
+      remainingBalance: 2000,
+      totalAmount: 2000,
+      balanceDue: 2000,
+      status: 'pending_payment',
+      stripeSubscriptionId: null,
+      stripeCustomerId: null,
+      startDate: null,
+      renewalDate: null,
+      dueDate: new Date(),
+      endDate: new Date(),
+      expirationDate: new Date(),
+      gracePeriodEnd: null,
+      paymentMethod: 'other',
+      notes: `Stripe payment via cart checkout (${paymentIntentObject.id})`,
+    } as any);
+
+    const fulfillRes = await request(billingApp)
+      .post(fulfillEndpoint)
+      .set(authHeader)
+      .send({ paymentIntentId: paymentIntentObject.id });
+
+    expect(fulfillRes.status).toBe(200);
+    const membership = await storage.getMembershipEnrollmentByParentAndSchoolAndYear(
+      parent.id,
+      school.id,
+      year,
+    );
+    expect(membership!.amountPaid).toBe(2000);
+    expect(membership!.remainingBalance).toBe(0);
+    expect(membership!.status).toBe('enrolled');
+  });
 });

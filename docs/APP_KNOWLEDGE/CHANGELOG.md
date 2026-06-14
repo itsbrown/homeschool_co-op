@@ -6,6 +6,19 @@
 - **Cause:** `payments` row created; `program_enrollments.total_paid` not updated (legacy manual path / generated `effective_balance` column on full-object update).
 - **Fix (prod):** Set enr **#351** → $1,300 paid / $0 balance; SP **#542** completed.
 
+## 2026-06-13 (Membership checkout waterfall — idempotency poison pill fix)
+
+- **Bug:** `applyMembershipFulfillmentFromCartPaymentIntent` skipped retries when `notes` contained PI id but `amount_paid` was still 0 (Zoryana-class checkout).
+- **Fix:** `membership-fulfillment-idempotency.ts`; webhook `itemsJson` branch routes `hasMembership` + `enrollmentIds` through `finalizeSucceededPaymentIntent`; legacy `stripe-webhook` direct handler delegates to same path.
+- **Audit:** `audit-stuck-membership-checkout-ledger.ts`
+
+## 2026-06-13 (Zoryana Tsygyrlash — membership checkout ledger + orphan child)
+
+- **$125 membership** from checkout PI `pi_3Te2akGhVuNOnUs71jPQxrxo` applied to membership **#419** (`enrolled`, $0 balance).
+- **Stripe customer** linked on parent **#175** (`cus_Ucuyb2aajWPjFr`).
+- **Orphan child #197** (“E T”) removed — no enrollments; real profile is **Elianna #198**.
+- **Location:** parent profile + enrollment **#513** + `user_locations` set to **Brighton** (location **3**).
+
 ## 2026-06-11 (Denise Parga — Venmo pay in full)
 
 - **$691.00 Venmo** recorded for Andrea Parga Spring 2026 (enrollment **#315**); payment **#342**; scheduled payment **#516** marked completed; balance **$0**.

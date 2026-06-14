@@ -743,15 +743,32 @@ export const webhookHandler = async (req: Request, res: Response) => {
           const itemsJson = paymentIntent.metadata.itemsJson;
           const paymentType = paymentIntent.metadata.paymentType;
           const parentEmail = paymentIntent.metadata.parentEmail;
-          
-          console.log('💰 Processing cart checkout payment:', {
-            paymentType,
-            parentEmail,
-            hasItemsJson: !!itemsJson,
-            paymentIntentId: paymentIntent.id
-          });
-          
-          if (itemsJson && parentEmail) {
+          const hasMembership = paymentIntent.metadata.hasMembership === 'true';
+
+          let enrollmentIdsFromMeta: number[] = [];
+          try {
+            const parsed = JSON.parse(paymentIntent.metadata.enrollmentIds || '[]') as unknown;
+            if (Array.isArray(parsed)) {
+              enrollmentIdsFromMeta = parsed
+                .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id) && id > 0);
+            }
+          } catch {
+            enrollmentIdsFromMeta = [];
+          }
+
+          // v2 checkout (enrollmentIds + membership): unified membership-first waterfall
+          if (hasMembership && enrollmentIdsFromMeta.length > 0 && parentEmail) {
+            const finalized = await finalizeSucceededPaymentIntent(paymentIntent, enrollmentIdsFromMeta, {
+              persistScheduledPayments: true,
+              skipConfirmationEmail: true,
+            });
+            console.log('💰 Membership cart checkout finalized via waterfall:', {
+              paymentIntentId: paymentIntent.id,
+              appliedCents: finalized.fulfillment.enrollmentApply.appliedCents,
+              createdPaymentRecord: finalized.createdPaymentRecord,
+            });
+          } else if (itemsJson && parentEmail) {
             if (paymentLedgerAlreadySucceeded) {
               console.log(
                 '↩️ Cart checkout already recorded for PI; skipping duplicate enrollment/payment on payment_intent.succeeded:',

@@ -5,10 +5,6 @@ import { getDb } from '../db';
 import { membershipEnrollments } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 import { getStripeClient } from '../config/stripe';
-import { fulfillMembershipFromCartPaymentIntent } from '../services/fulfill-membership-payment-intent';
-import { enrollmentPoolCentsForBalanceIntent } from '../lib/balance-payment-metadata';
-import { resolveMembershipReserveForPaymentIntent } from '../lib/resolve-membership-reserve-for-payment';
-import { splitCentsEvenly } from '../api/billing';
 
 const router = express.Router();
 
@@ -237,103 +233,23 @@ async function handlePaymentFailure(invoice: any) {
 async function handleDirectPaymentSuccess(paymentIntent: any) {
   try {
     console.log('💳 Processing direct payment success:', paymentIntent.id);
-    console.log('🔍 Payment metadata:', paymentIntent.metadata);
-
-    await fulfillMembershipFromCartPaymentIntent(paymentIntent);
-    
     const parentEmail = paymentIntent.metadata.parentEmail;
-    const enrollmentIds = paymentIntent.metadata.enrollmentIds;
-    const paymentType = paymentIntent.metadata.paymentType;
-    
-    if (!parentEmail || !enrollmentIds) {
-      console.log('⚠️ Missing required metadata for direct payment:', { parentEmail, enrollmentIds, paymentType });
+    const enrollmentIdsRaw = paymentIntent.metadata.enrollmentIds;
+    if (!parentEmail || !enrollmentIdsRaw) {
+      console.log('⚠️ Missing required metadata for direct payment:', {
+        parentEmail,
+        enrollmentIds: enrollmentIdsRaw,
+      });
       return;
     }
-    
-    const enrollmentIdList = JSON.parse(enrollmentIds);
-    const amountCents = typeof paymentIntent.amount === 'number' ? paymentIntent.amount : 0;
-    const resolved = await resolveMembershipReserveForPaymentIntent(paymentIntent);
-    const membershipCents = resolved?.membershipPortionThisPaymentCents ?? 0;
-    const grossCents = resolved?.allocationGrossCents ?? amountCents;
-    const enrollmentTotal = resolved?.classPoolCents ?? enrollmentPoolCentsForBalanceIntent(grossCents, membershipCents);
-    const allocation = splitCentsEvenly(enrollmentTotal, enrollmentIdList.length);
 
-    console.log(
-      `💰 Processing payment for ${enrollmentIdList.length} enrollments, class pool ${enrollmentTotal}c (membership reserved ${membershipCents}c)`
-    );
-
-    const enrollments = [];
-
-    for (let i = 0; i < enrollmentIdList.length; i++) {
-      const enrollmentId = enrollmentIdList[i];
-      const perEnrollmentAmount = allocation[i];
-      try {
-        const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
-        if (enrollment) {
-          enrollments.push(enrollment);
-
-          const currentPaid = enrollment.totalPaid || 0;
-          const newTotalPaid = currentPaid + perEnrollmentAmount;
-          const newBalance = Math.max(0, enrollment.totalCost - newTotalPaid);
-
-          await storage.updateProgramEnrollment(enrollment.id, {
-            totalPaid: newTotalPaid,
-            remainingBalance: newBalance,
-            paymentStatus: newBalance === 0 ? 'completed' : 'stripe_managed',
-            paymentSystemVersion: 'v2_stripe',
-            status: 'enrolled'
-          });
-          console.log(`✅ Updated enrollment ${enrollmentId}: paid=${newTotalPaid}, balance=${newBalance}`);
-        }
-      } catch (error) {
-        console.error(`❌ Error updating enrollment ${enrollmentId}:`, error);
-      }
-    }
-    
-    // Build child and class names from actual enrollments
-    let childName = 'Child';
-    let className = 'Class';
-    let schoolId = 0;
-    
-    if (enrollments.length === 1) {
-      childName = enrollments[0].childName || 'Child';
-      className = enrollments[0].className || 'Class';
-      schoolId = enrollments[0].schoolId || 0;
-    } else if (enrollments.length > 1) {
-      const childNames = [...new Set(enrollments.map(e => e.childName).filter(Boolean))];
-      const classNames = [...new Set(enrollments.map(e => e.className).filter(Boolean))];
-      schoolId = enrollments[0].schoolId || 0; // Use first enrollment's school
-      
-      childName = childNames.length === 1 ? childNames[0] : `${childNames.length} children`;
-      className = classNames.length === 1 ? classNames[0] : `${classNames.length} classes`;
-    }
-    
-    // Create payment record with actual enrollment data
-    const payment = {
-      schoolId,
-      parentId: null, // Will be set later if needed
-      stripePaymentIntentId: paymentIntent.id,
-      parentEmail: parentEmail,
-      childName: childName,
-      className: className,
-      description: `Direct payment for ${className}`,
-      amount: totalAmount,
-      currency: paymentIntent.currency || 'usd',
-      status: 'completed' as const,
-      stripeChargeId: null,
-      stripeRefundId: null,
-      originalPaymentId: null,
-      paymentDate: new Date(),
-      enrollmentIds: enrollmentIdList,
-      metadata: {
-        paymentType: 'direct_payment',
-        enrollmentCount: enrollmentIdList.length
-      }
-    };
-    
-    await storage.createPayment(payment);
-    console.log('✅ Payment record created for direct payment:', paymentIntent.id, 'Child:', childName, 'Class:', className);
-    
+    const enrollmentIdList = JSON.parse(enrollmentIdsRaw) as number[];
+    const { finalizeSucceededPaymentIntent } = await import('../lib/finalize-succeeded-payment-intent');
+    await finalizeSucceededPaymentIntent(paymentIntent, enrollmentIdList, {
+      persistScheduledPayments: true,
+      skipConfirmationEmail: true,
+    });
+    console.log('✅ Direct payment finalized via membership waterfall:', paymentIntent.id);
   } catch (error) {
     console.error('❌ Error handling direct payment success:', error);
   }
