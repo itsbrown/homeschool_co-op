@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-06-15 (Checkout agreement gate — stale cache after sign)
+
+- **Symptom:** Parent signs membership agreement from checkout, returns to payment, alert still shows and checkout stays blocked.
+- **Cause:** `CartCheckout` cached agreement status under `agreement-status-checkout` with 30s `staleTime`; `MembershipAgreementPage` only invalidated `agreement-status` on sign success.
+- **Fix:** Unified query key `['agreement-status', schoolId]`, `refetchOnMount: 'always'` on checkout, invalidate all `agreement-status` queries after sign / "Already signed → Continue".
+
 ## 2026-06-14 (Payment fulfillment hardening — interactive primary, webhook backup)
 
 - **Architecture:** Browser calls `POST /api/billing/fulfill-payment-intent` after Stripe success; server retrieves PI and runs `finalizeSucceededPaymentIntent` (balance/cart) or `finalizeSucceededScheduledPaymentIntent` (Pay Now). Webhook replays the same modules idempotently.

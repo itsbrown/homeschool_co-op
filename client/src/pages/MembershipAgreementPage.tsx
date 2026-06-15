@@ -106,7 +106,7 @@ export default function MembershipAgreementPage() {
         description: 'Your membership agreement has been recorded. Proceeding to payment...',
       });
       
-      queryClient.invalidateQueries({ queryKey: ['agreement-status', schoolId] });
+      queryClient.invalidateQueries({ queryKey: ['agreement-status'] });
       queryClient.invalidateQueries({ queryKey: ['parent-documents'] });
       
       setTimeout(() => {
@@ -313,7 +313,12 @@ Downloaded on: ${new Date().toLocaleString()}
             </div>
           </CardContent>
           <CardFooter>
-            <Button onClick={() => navigate(returnUrl)}>
+            <Button
+              onClick={() => {
+                queryClient.invalidateQueries({ queryKey: ['agreement-status'] });
+                navigate(returnUrl);
+              }}
+            >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Continue
             </Button>

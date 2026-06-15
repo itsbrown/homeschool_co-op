@@ -388,7 +388,7 @@ export default function CartCheckout() {
     hasSigned: boolean;
     requiresNewSignature: boolean;
   }>({
-    queryKey: ['agreement-status-checkout', agreementSchoolId],
+    queryKey: ['agreement-status', agreementSchoolId],
     queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
       const res = await fetch(`/api/parent/agreements/check/${agreementSchoolId}`, {
@@ -401,7 +401,7 @@ export default function CartCheckout() {
       return res.json();
     },
     enabled: !!agreementSchoolId && isAuthenticated,
-    staleTime: 30_000,
+    refetchOnMount: 'always',
   });
 
   const mustSignAgreement = agreementStatus?.requiresNewSignature === true;
