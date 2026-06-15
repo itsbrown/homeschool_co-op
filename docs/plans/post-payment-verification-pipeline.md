@@ -1,6 +1,6 @@
 # Post-payment verification pipeline (architecture plan)
 
-**Status:** Phase A implemented (read-only; enable with `POST_PAYMENT_VERIFY_ENABLED=true` on webhook worker). Phases B–D not implemented.  
+**Status:** Phase A implemented (read-only; enable with `POST_PAYMENT_VERIFY_ENABLED=true` on webhook worker). **Phase B** auto-fix implemented behind `POST_PAYMENT_VERIFY_AUTO_FIX=true` (off until burn-in). Phases C–D not implemented.  
 **Last updated:** 2026-06-01  
 **Related:** [`payment-flow-monitor.ts`](../../server/services/payment-flow-monitor.ts), [`payments-and-billing.md`](../APP_KNOWLEDGE/domains/payments-and-billing.md), [`AUTOPAY_PRODUCTION_CHECKLIST.md`](../AUTOPAY_PRODUCTION_CHECKLIST.md)
 
