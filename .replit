@@ -42,6 +42,10 @@ ERROR_NOTIFICATION_EMAIL = "errors@americanseekersacademy.com"
 APP_URL = "https://accounts.americanseekersacademy.com"
 PAYMENT_PROCESSOR_ENABLED = "true"
 BALANCE_AWARE_ALLOCATION = "false"
+# Post-payment verification (Phase A read-only). Set on worker that processes Stripe webhooks.
+POST_PAYMENT_VERIFY_ENABLED = "true"
+# Phase B auto-fix: enable only after 1–2 week burn-in on payment_verification_logs (keep false until then).
+POST_PAYMENT_VERIFY_AUTO_FIX = "false"
 
 [postMerge]
 path = "scripts/post-merge.sh"
