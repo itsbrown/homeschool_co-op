@@ -58,6 +58,8 @@ import {
   countBillingOutstandingEnrollments,
 } from "@/utils/paymentOverviewTotals";
 import { resolveUpcomingEnrollmentCoverageLabel } from "@/utils/enrollmentCoverageLabel";
+import { finalizePaymentAfterStripeSuccess } from "@/lib/finalizePaymentAfterStripeSuccess";
+import { refreshPostPaymentState } from "@/lib/postPaymentRefresh";
 import {
   PayBalanceInFullDialog,
   type PayInFullTarget,
@@ -101,7 +103,7 @@ function ScheduledPaymentForm({
   onCancel,
   amount
 }: { 
-  onSuccess: () => void; 
+  onSuccess: (paymentIntentId: string) => void; 
   onError: (error: string) => void;
   onCancel: () => void;
   amount: number;
@@ -139,7 +141,7 @@ function ScheduledPaymentForm({
         onError(error.message || 'Payment failed');
         setIsProcessing(false);
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
-        onSuccess();
+        onSuccess(paymentIntent.id);
       } else if (paymentIntent && paymentIntent.status === 'requires_action') {
         onError('Additional verification required. Please try again.');
         setIsProcessing(false);
@@ -321,19 +323,16 @@ function ScheduledPaymentDialog({
     void run();
   }, [isOpen, payment.id, payment.amount, payment.description, applyCredits, totalAvailableCents, creditsOnlySuccess, fetchNonce]);
 
-  const handleSuccess = () => {
+  const handleSuccess = async (paymentIntentId?: string) => {
+    if (paymentIntentId) {
+      await finalizePaymentAfterStripeSuccess(queryClient, { paymentIntentId });
+    } else {
+      await refreshPostPaymentState(queryClient);
+    }
     toast({
       title: "Payment Successful",
       description: "Your payment has been processed successfully.",
     });
-    // Invalidate queries to refresh data
-    queryClient.invalidateQueries({ queryKey: ['/api/payment-history'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments'] });
-    queryClient.invalidateQueries({ queryKey: ['scheduled-payments-upcoming'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/scheduled-payments/upcoming'] });
-    queryClient.invalidateQueries({ queryKey: ['parent-credits'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/parent/credits'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/credits/me'] });
     onSuccess();
     onClose();
   };

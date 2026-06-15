@@ -1182,6 +1182,27 @@ router.post('/fulfill-payment-intent', async (req, res) => {
       return res.status(403).json({ error: 'One or more enrollments are not owned by this user' });
     }
 
+    const paymentType =
+      paymentIntent.metadata?.paymentType || paymentIntent.metadata?.type || '';
+
+    if (paymentType === 'scheduled_payment') {
+      const { finalizeSucceededScheduledPaymentIntent } = await import(
+        '../lib/finalize-succeeded-scheduled-payment-intent'
+      );
+      const result = await finalizeSucceededScheduledPaymentIntent(paymentIntent);
+      console.log('✅ fulfill-payment-intent (scheduled):', {
+        paymentIntentId,
+        parentEmail: user.email,
+        ...result,
+      });
+      return res.json({
+        success: true,
+        skippedDuplicate: result.skippedDuplicate,
+        paymentId: result.paymentId,
+        scheduledPaymentId: result.scheduledPaymentId,
+      });
+    }
+
     const { finalizeSucceededPaymentIntent } = await import(
       '../lib/finalize-succeeded-payment-intent'
     );

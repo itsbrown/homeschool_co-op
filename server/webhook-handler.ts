@@ -5,7 +5,6 @@ import { sendPaymentReceipt } from './lib/email-service';
 import { getStripeClient } from './config/stripe';
 import { createReceiptFromPayment } from './services/receiptService';
 import { processMembershipStripeEvent } from './api/stripe-webhook';
-import { splitCentsEvenly } from './api/billing';
 import {
   enrollmentPoolCentsForBalanceIntent,
   parseBalanceIntentCredits,
@@ -15,8 +14,7 @@ import {
 import { applyClassPoolToEnrollments } from './lib/apply-class-pool-to-enrollments';
 import { findProgramEnrollmentForCartItem } from './lib/cart-checkout-enrollment-match';
 import { finalizeSucceededPaymentIntent } from './lib/finalize-succeeded-payment-intent';
-import { resolveScheduledPaymentEnrollmentIds } from './lib/scheduled-payment-intent-metadata';
-import { ensureScheduledPaymentCreditsConsumed } from './lib/ensure-scheduled-payment-credits-consumed';
+import { finalizeSucceededScheduledPaymentIntent } from './lib/finalize-succeeded-scheduled-payment-intent';
 import { schedulePostPaymentVerificationIfEnabled } from './services/post-payment-verification-schedule';
 
 // Stripe client will be lazily initialized within the webhook handler
@@ -369,261 +367,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
         }
         
         if (paymentType === 'scheduled_payment') {
-          // Handle scheduled payment completion
-          const scheduledPaymentId = paymentIntent.metadata.scheduledPaymentId;
-          const parentEmail = paymentIntent.metadata.parentEmail;
-          
-          console.log(`💰 Processing completed scheduled payment: ${scheduledPaymentId} for ${parentEmail}`);
-          
-          const spIdParsed = parseInt(String(scheduledPaymentId), 10);
-          let scheduledPayment =
-            Number.isFinite(spIdParsed) && spIdParsed > 0
-              ? await storage.getScheduledPaymentById(spIdParsed)
-              : undefined;
-          if (!scheduledPayment && parentEmail) {
-            const allScheduledPayments = await storage.getScheduledPaymentsByParentEmail(parentEmail);
-            scheduledPayment = allScheduledPayments.find((p) => p.id === spIdParsed);
-          }
-          
-          if (scheduledPayment) {
-            const spId = parseInt(scheduledPaymentId, 10);
-            const creditsAppliedCents =
-              parseInt(String(paymentIntent.metadata.creditsAppliedCents || '0'), 10) || 0;
-            const userIdForCredits = parseInt(String(paymentIntent.metadata.userId || '0'), 10) || 0;
-            const creditHoldSessionId =
-              (paymentIntent.metadata.creditHoldSessionId as string) ||
-              (paymentIntent.metadata.holdSessionId as string) ||
-              '';
-
-            if (creditsAppliedCents > 0 && userIdForCredits > 0) {
-              const creditResult = await ensureScheduledPaymentCreditsConsumed({
-                scheduledPaymentId: spId,
-                userId: userIdForCredits,
-                creditsAppliedCents,
-                creditHoldSessionId: creditHoldSessionId || undefined,
-                installmentNumber: paymentIntent.metadata.installmentNumber,
-                totalInstallments: paymentIntent.metadata.totalInstallments,
-              });
-              console.log(`💰 Scheduled payment ${scheduledPaymentId} credits:`, creditResult);
-              if (
-                creditResult.consumedCents < creditsAppliedCents &&
-                !creditResult.skippedAlreadyApplied
-              ) {
-                throw new Error(
-                  `Credit ledger incomplete for scheduled payment ${scheduledPaymentId}: ` +
-                    `expected ${creditsAppliedCents}c, recorded ${creditResult.consumedCents}c`
-                );
-              }
-            }
-
-            if (String(scheduledPayment.status) === 'completed') {
-              console.log(
-                `ℹ️ Scheduled payment ${scheduledPaymentId} already completed; skipping duplicate ledger application for PI ${paymentIntent.id}`,
-              );
-              break;
-            }
-            const completionSrc =
-              paymentIntent.metadata.autoPayInitiated === 'true' ? 'stripe_autopay' : 'stripe_checkout';
-            await storage.updateScheduledPayment(spId, {
-              status: 'completed',
-              processedAt: new Date(),
-              completionSource: completionSrc,
+          console.log(
+            `💰 Processing completed scheduled payment: ${paymentIntent.metadata.scheduledPaymentId} for ${paymentIntent.metadata.parentEmail}`,
+          );
+          try {
+            const finalized = await finalizeSucceededScheduledPaymentIntent(paymentIntent, {
+              existingPayment,
             });
-            console.log(`✅ Marked scheduled payment ${scheduledPaymentId} as completed (${completionSrc})`);
-
-            const enrollmentIds = resolveScheduledPaymentEnrollmentIds(
-              scheduledPayment,
-              paymentIntent.metadata as Record<string, string | undefined>,
-            );
-
-            const originalAmount =
-              parseInt(String(paymentIntent.metadata.originalAmountCents || '0'), 10) ||
-              paymentIntent.amount;
-            const totalPaymentAmount =
-              creditsAppliedCents > 0 ? originalAmount : paymentIntent.amount;
-            const totalCents = Number.isInteger(totalPaymentAmount)
-              ? totalPaymentAmount
-              : Math.round(Number(totalPaymentAmount)) || paymentIntent.amount;
-
-            let childNameForPayment = 'Child';
-            let classNameForPayment = 'Class';
-            let payerLine = `Installment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`;
-            if (enrollmentIds.length === 1) {
-              const enrollmentForLabel = await storage.getProgramEnrollmentById(enrollmentIds[0]!);
-              if (enrollmentForLabel) {
-                payerLine = `${enrollmentForLabel.childName} - ${enrollmentForLabel.className}`;
-                childNameForPayment = enrollmentForLabel.childName || childNameForPayment;
-                classNameForPayment = enrollmentForLabel.className || classNameForPayment;
-              }
-            } else if (enrollmentIds.length > 1) {
-              const parts: string[] = [];
-              for (const eid of enrollmentIds) {
-                const e = await storage.getProgramEnrollmentById(eid);
-                if (e?.childName && e?.className) {
-                  parts.push(`${e.childName} - ${e.className}`);
-                }
-              }
-              payerLine = parts.length > 0 ? parts.join('; ') : payerLine;
-              childNameForPayment = 'Multiple children';
-              classNameForPayment = `${enrollmentIds.length} enrollments`;
-            }
-
-            const parentUser = await storage.getUserByEmail(parentEmail);
-            const schoolId = scheduledPayment.schoolId || parentUser?.schoolId || 1;
-
-            const payment = {
-              schoolId,
-              parentId: parentUser?.id ?? null,
-              parentEmail: parentEmail,
-              childName: childNameForPayment,
-              className: classNameForPayment,
-              description: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`,
-              amount: paymentIntent.amount,
-              currency: paymentIntent.currency || 'usd',
-              status: 'completed' as const,
-              stripePaymentIntentId: paymentIntent.id,
-              stripeChargeId: null as string | null,
-              stripeRefundId: null as string | null,
-              originalPaymentId: null as number | null,
-              enrollmentIds,
-              metadata: {
-                scheduledPaymentId: scheduledPaymentId,
-                installmentNumber: scheduledPayment.installmentNumber,
-                totalInstallments: scheduledPayment.totalInstallments,
-                enrollmentIds: JSON.stringify(enrollmentIds),
-              },
-              paymentDate: new Date()
-            };
-
-            // Persist payments row before enrollment mutation so reconciliation cannot double-apply.
-            if (!existingPayment) {
-              await storage.createPayment(payment);
-              console.log(`✅ Created payment history record for scheduled payment ${scheduledPaymentId}`);
-            }
-
-            console.log('💰 Updating enrollment balance for scheduled payment...', { enrollmentIds });
-
-            if (enrollmentIds.length === 0) {
-              console.error(`❌ Cannot process scheduled payment ${scheduledPaymentId}: no enrollment ids`);
-            } else {
-              const allocation = splitCentsEvenly(Math.max(0, totalCents), enrollmentIds.length);
-              try {
-                for (let i = 0; i < enrollmentIds.length; i++) {
-                  const targetEnrollmentId = enrollmentIds[i];
-                  const shareCents = allocation[i] ?? 0;
-                  const enrollment = await storage.getProgramEnrollmentById(targetEnrollmentId);
-                  if (!enrollment) {
-                    console.error(`❌ Enrollment ${targetEnrollmentId} not found for scheduled payment`);
-                    continue;
-                  }
-                  const currentAmountPaid = enrollment.totalPaid || 0;
-                  const newAmountPaid = currentAmountPaid + shareCents;
-                  const newBalance = Math.max(0, (enrollment.totalCost || 0) - newAmountPaid);
-                  const updatedEnrollment = await storage.updateProgramEnrollment(targetEnrollmentId, {
-                    totalPaid: newAmountPaid,
-                    remainingBalance: newBalance,
-                    paymentStatus: newBalance <= 0 ? 'completed' : 'partial_payment',
-                  });
-                  if (updatedEnrollment) {
-                    console.log(
-                      `✅ Updated enrollment ${targetEnrollmentId}: paid=${newAmountPaid}, balance=${newBalance} (share ${shareCents}c)`,
-                    );
-                  }
-                }
-              } catch (error) {
-                console.error(`❌ Error updating enrollments for scheduled payment ${scheduledPaymentId}:`, error);
-              }
-            }
-            
-            // Create payment receipt record for parent documents
-            await createReceiptFromPayment({
-              schoolId,
-              parentId: parentUser?.id,
-              parentEmail: parentEmail,
-              amount: paymentIntent.amount,
-              description: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments} - ${payment.className}`,
-              childName: payment.childName,
-              className: payment.className,
-              enrollmentIds,
+            console.log('💰 Scheduled payment finalized:', {
+              paymentIntentId: paymentIntent.id,
+              ...finalized,
             });
-            
-            // Send email receipt for scheduled payment
-            try {
-              const parentUser = await storage.getUserByEmail(parentEmail);
-              const parentName = parentUser ? 
-                parentUser.name : 
-                parentEmail.split('@')[0];
-
-              const formatCurrency = (amount: number) => {
-                return new Intl.NumberFormat('en-US', {
-                  style: 'currency',
-                  currency: 'USD',
-                }).format(amount / 100);
-              };
-
-              const formatDate = (date: string) => {
-                return new Intl.DateTimeFormat('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                }).format(new Date(date));
-              };
-
-              await sendPaymentReceipt({
-                parentEmail,
-                parentName,
-                receiptNumber: paymentIntent.id,
-                paymentDate: formatDate(new Date().toISOString()),
-                paymentMethod: 'Credit Card',
-                amount: formatCurrency(paymentIntent.amount),
-                childName: payment.childName,
-                className: payment.className,
-                notes: `Scheduled payment ${scheduledPayment.installmentNumber} of ${scheduledPayment.totalInstallments}`
-              });
-              
-              console.log('📧 Scheduled payment receipt email sent to:', parentEmail);
-            } catch (emailError) {
-              console.error('❌ Failed to send scheduled payment receipt email:', emailError);
-            }
-            
-            // Add small delay to ensure all storage operations are committed
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // 🚀 PUSH REAL-TIME UPDATE TO FRONTEND for scheduled payments - AFTER all updates
-            try {
-              const { dataLayer } = await import('./services/dataLayer.js');
-              
-              // Send specific billing update with new data
-              dataLayer.broadcastBillingUpdate(parentEmail, {
-                type: 'scheduled_payment_complete',
-                paymentId: scheduledPaymentId,
-                amount: paymentIntent.amount,
-                totalBalanceFormatted: `$${(paymentIntent.amount / 100).toFixed(2)}`,
-                timestamp: new Date().toISOString()
-              });
-              
-              // Also send payment complete notification
-              dataLayer.broadcastPaymentComplete(parentEmail, {
-                amount: paymentIntent.amount,
-                paymentId: scheduledPaymentId,
-                description: payerLine,
-                timestamp: new Date().toISOString()
-              });
-              
-              await dataLayer.refreshUserData(parentEmail);
-              console.log('📡 Pushed comprehensive real-time billing update to frontend for scheduled payment AFTER storage commit');
-            } catch (error) {
-              console.error('❌ Failed to push real-time update for scheduled payment:', error);
-            }
-            
-            console.log(`✅ Scheduled payment ${scheduledPaymentId} processing complete`);
-          } else {
-            console.error(`❌ Scheduled payment ${scheduledPaymentId} not found`);
+          } catch (scheduledErr) {
+            console.error('❌ Scheduled payment finalize failed:', scheduledErr);
           }
-          
-          // Break out of switch after processing scheduled payment
           break;
-          
         } else if (paymentType === 'balance_payment' || paymentType === 'three_payments' || !paymentType) {
           console.log('🔍 Processing balance payment, three_payments plan, or fallback payment...');
           // Handle balance payment - update existing enrollments
