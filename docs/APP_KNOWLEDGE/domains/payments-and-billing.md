@@ -42,6 +42,21 @@ Key files: `server/lib/balance-payment-metadata.ts`, `server/lib/resolve-members
 
 Read-only checks after webhook when `POST_PAYMENT_VERIFY_ENABLED=true`. Includes **`membership_waterfall`** (expected vs `membership_enrollments.amount_paid`, `payments.metadata.allocationBreakdown`, proportional regression). Plan: [`docs/plans/post-payment-verification-pipeline.md`](../../plans/post-payment-verification-pipeline.md).
 
+**Phase B auto-fix** (optional, `POST_PAYMENT_VERIFY_AUTO_FIX=true`): on critical `stripe_db_parity` or `enrollment_ledger` checks, replays the same idempotent finalize module as interactive checkout — does **not** re-allocate mis-split historical PIs or reverse credits.
+
+## Interactive fulfillment (primary) vs webhook (backup)
+
+After Stripe `confirmPayment` succeeds in the browser, the client **must** call `POST /api/billing/fulfill-payment-intent` with `{ paymentIntentId }` only (never trust client amounts). The server retrieves the PI from Stripe and runs `finalizeSucceededPaymentIntent` (balance/cart/pay-in-full) or `finalizeSucceededScheduledPaymentIntent` (Pay Now installments).
+
+| Path | Module | When |
+|------|--------|------|
+| **Client primary** | `finalizePaymentAfterStripeSuccess` → `/api/billing/fulfill-payment-intent` | Every interactive checkout surface (CartSuccess, BillingPage, Pay in full, PaymentManagement Pay Now) |
+| **Webhook backup** | Same finalize modules in `webhook-handler.ts` | Delayed/missed client call; autopay off-session (scheduled only) |
+
+Rules: one finalize per succeeded PI; membership apply capped at remaining owed; `payments` row before enrollment mutation on scheduled path; double client+webhook calls are idempotent.
+
+Key files: `server/lib/finalize-succeeded-payment-intent.ts`, `server/lib/finalize-succeeded-scheduled-payment-intent.ts`, `client/src/lib/finalizePaymentAfterStripeSuccess.ts`. Legacy `POST /api/billing/confirm-payment` returns **410**.
+
 ## Prod balance audit (read-only)
 
 ```bash
@@ -236,6 +251,7 @@ Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current ba
 | Batch balance reminders | `server/scripts/send-balance-reminders-batch.ts` |
 | PI reconcile | `server/scripts/reconcile-payment-intent-to-enrollments.ts` |
 | **Post-payment verify (Phase A)** | `server/services/post-payment-verification.ts`, `payment_verification_logs`; flag `POST_PAYMENT_VERIFY_ENABLED` — see [`post-payment-verification-pipeline.md`](../../plans/post-payment-verification-pipeline.md) |
+| **Interactive fulfill (Layer 0)** | `server/lib/finalize-succeeded-payment-intent.ts`, `server/lib/finalize-succeeded-scheduled-payment-intent.ts`, `POST /api/billing/fulfill-payment-intent`, `client/src/lib/finalizePaymentAfterStripeSuccess.ts` |
 | **Stripe ↔ DB audit (email)** | `server/scripts/inspect-parent-stripe-by-email.ts` |
 | **Stuck Pay Now audit** | `server/lib/stuck-parent-manual-installments.ts`, `server/scripts/audit-stuck-parent-manual-installments.ts` |
 | **Payment flow monitor** | `server/services/payment-flow-monitor.ts` |

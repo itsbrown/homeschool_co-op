@@ -1,5 +1,14 @@
 # App knowledge changelog
 
+## 2026-06-14 (Payment fulfillment hardening — interactive primary, webhook backup)
+
+- **Architecture:** Browser calls `POST /api/billing/fulfill-payment-intent` after Stripe success; server retrieves PI and runs `finalizeSucceededPaymentIntent` (balance/cart) or `finalizeSucceededScheduledPaymentIntent` (Pay Now). Webhook replays the same modules idempotently.
+- **Client surfaces wired:** CartSuccess, BillingPage, PaymentSuccess, PayBalanceInFullDialog, PaymentManagement Pay Now (`finalizePaymentAfterStripeSuccess`).
+- **Webhook:** Balance/cart path uses `finalizeSucceededPaymentIntent` only (no `processBalancePayment` duplicate). Scheduled path extracted to shared module.
+- **Phase B:** `POST_PAYMENT_VERIFY_AUTO_FIX=true` replays finalize on critical `stripe_db_parity` / `enrollment_ledger` (missed apply only).
+- **Tests:** `fulfill-payment-intent.integration.test.ts` — fulfill without webhook; client+webhook membership idempotency. E2E `parent-payment-flow.spec.ts` asserts ledger clears without webhook forwarder.
+- **Legacy:** `POST /api/billing/confirm-payment` → 410.
+
 ## 2026-06-10 (Staff Permissions — profile location vs user_locations drift)
 
 - **Symptom:** Users page shows campus (e.g. Brighton) but Staff Permissions says user lacks location / hides them from grant list.

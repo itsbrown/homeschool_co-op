@@ -20,6 +20,49 @@ export function isPostPaymentVerifyEnabled(): boolean {
   return envTruthy('POST_PAYMENT_VERIFY_ENABLED');
 }
 
+export function isPostPaymentVerifyAutoFixEnabled(): boolean {
+  return envTruthy('POST_PAYMENT_VERIFY_AUTO_FIX');
+}
+
+const AUTO_FIXABLE_CRITICAL_KEYS = new Set(['stripe_db_parity', 'enrollment_ledger']);
+
+async function tryAutoFixPaymentIntent(
+  pi: Stripe.PaymentIntent,
+  result: VerificationResult,
+): Promise<void> {
+  if (!isPostPaymentVerifyAutoFixEnabled()) return;
+  if (result.overallStatus !== 'critical') return;
+
+  const fixable = result.checks.some(
+    (c) => c.severity === 'critical' && AUTO_FIXABLE_CRITICAL_KEYS.has(c.key),
+  );
+  if (!fixable) return;
+
+  const paymentType = pi.metadata?.paymentType || pi.metadata?.type || '';
+  try {
+    if (paymentType === 'scheduled_payment') {
+      const { finalizeSucceededScheduledPaymentIntent } = await import(
+        '../lib/finalize-succeeded-scheduled-payment-intent'
+      );
+      await finalizeSucceededScheduledPaymentIntent(pi, {
+        skipReceiptEmail: true,
+        skipRealtimeRefresh: true,
+      });
+    } else {
+      const { finalizeSucceededPaymentIntent } = await import(
+        '../lib/finalize-succeeded-payment-intent'
+      );
+      await finalizeSucceededPaymentIntent(pi, undefined, {
+        skipConfirmationEmail: true,
+        skipRealtimeRefresh: true,
+      });
+    }
+    console.log(`[post-payment-verify] AUTO_FIX replayed finalize for ${pi.id}`);
+  } catch (err) {
+    console.error(`[post-payment-verify] AUTO_FIX failed for ${pi.id}:`, err);
+  }
+}
+
 function scheduleDelayMs(): number {
   const raw = parseInt(process.env.POST_PAYMENT_VERIFY_DELAY_MS ?? '2000', 10);
   return Number.isFinite(raw) && raw >= 0 ? raw : 2000;
@@ -80,6 +123,7 @@ async function runVerification(pi: Stripe.PaymentIntent, stripeEventId?: string)
     dbLookupDelayMs: 500,
   });
   await persistVerificationResult(result);
+  await tryAutoFixPaymentIntent(pi, result);
   console.log(
     `[post-payment-verify] ${result.overallStatus} pi=${result.stripePaymentIntentId} ` +
       `checks=${result.checks.length} (${result.durationMs}ms)`,
