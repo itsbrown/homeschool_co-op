@@ -8,6 +8,7 @@ import { sendPaymentConfirmationEmail } from '../lib/email-service';
 import { createClient } from '@supabase/supabase-js';
 import { dataLayer } from '../services/dataLayer';
 import { getStripeClient } from '../config/stripe';
+import { errorNotificationService } from '../services/error-notification';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import {
   getChildrenForAuthenticatedParent,
@@ -1229,6 +1230,29 @@ router.post('/fulfill-payment-intent', async (req, res) => {
       message.includes('not succeeded') || message.includes('enrollmentIds')
         ? 400
         : 500;
+    if (status >= 500) {
+      try {
+        const errorLog = await storage.createErrorLog({
+          errorType: 'payment',
+          severity: 'high',
+          message: `fulfill-payment-intent failed for ${req.body?.paymentIntentId ?? 'unknown'}: ${message}`,
+          errorCode: 'FULFILL_PAYMENT_INTENT_FAILED',
+          route: '/api/billing/fulfill-payment-intent',
+          method: 'POST',
+          userEmail: null,
+          schoolId: null,
+          stackTrace: error instanceof Error ? error.stack ?? null : null,
+          metadata: {
+            paymentIntentId: req.body?.paymentIntentId ?? null,
+            hasAuthHeader: Boolean(req.headers.authorization),
+          },
+          notificationSent: false,
+        } as any);
+        await errorNotificationService.sendImmediateNotification(errorLog);
+      } catch (logErr) {
+        console.error('❌ Failed to log fulfill-payment-intent failure:', logErr);
+      }
+    }
     return res.status(status).json({
       success: false,
       error: message,

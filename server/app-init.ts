@@ -440,6 +440,7 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   const { startScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
   const { startCreditExpirationJob } = await import('./services/creditExpirationService.js');
   const { startReconciliationJob } = await import('./services/scheduled-payment-reconciliation-job.js');
+  const { startPaymentFlowMonitorJob } = await import('./services/payment-flow-monitor-job.js');
   const { storage } = await import('./storage.js');
 
   await backupService.init();
@@ -450,6 +451,7 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   startScheduledPaymentReminderJob();
   startCreditExpirationJob();
   startReconciliationJob();
+  startPaymentFlowMonitorJob();
 
   const { startAutoPayJob } = await import('./services/auto-pay-scheduler.js');
   startAutoPayJob();

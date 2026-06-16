@@ -6,6 +6,7 @@ import type Stripe from 'stripe';
 import { getDb } from '../db';
 import { paymentVerificationLogs } from '@shared/schema';
 import { storage } from '../storage';
+import { errorNotificationService } from './error-notification';
 import {
   verifyPaymentIntent,
   type VerificationResult,
@@ -91,7 +92,7 @@ async function persistVerificationResult(result: VerificationResult): Promise<vo
     process.env.POST_PAYMENT_VERIFY_LOG_CRITICAL !== 'false';
   if (result.overallStatus === 'critical' && logCritical) {
     try {
-      await storage.createErrorLog({
+      const errorLog = await storage.createErrorLog({
         errorType: 'payment_verification',
         severity: 'high',
         message: `Post-payment verify CRITICAL for ${result.stripePaymentIntentId}: ${result.checks
@@ -110,6 +111,7 @@ async function persistVerificationResult(result: VerificationResult): Promise<vo
         },
         notificationSent: false,
       } as any);
+      await errorNotificationService.sendImmediateNotification(errorLog);
     } catch (logErr) {
       console.error('[post-payment-verify] failed to write error_log:', logErr);
     }
