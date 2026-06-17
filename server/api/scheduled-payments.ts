@@ -3,6 +3,7 @@ import type Stripe from 'stripe';
 import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { getStripeClient } from '../config/stripe';
+import { errorNotificationService } from '../services/error-notification';
 import {
   buildScheduledPaymentIntentMetadata,
   resolveEnrollmentIdsFromScheduledRow,
@@ -520,7 +521,7 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
       void storage
         .createErrorLog({
           errorType: 'payment',
-          severity: 'medium',
+          severity: 'high',
           message: `INSTALLMENT_NOT_AVAILABLE for scheduled_payment ${numericPaymentId}`,
           errorCode: 'INSTALLMENT_NOT_AVAILABLE',
           route: '/api/scheduled-payments/pay',
@@ -546,6 +547,7 @@ router.post('/pay', supabaseAuth, async (req: any, res) => {
           status: 'new',
           notificationSent: false,
         } as any)
+        .then((errorLog) => errorNotificationService.sendImmediateNotification(errorLog))
         .catch((logErr: unknown) => {
           console.error('[scheduled-payments/pay] failed to log INSTALLMENT_NOT_AVAILABLE:', logErr);
         });

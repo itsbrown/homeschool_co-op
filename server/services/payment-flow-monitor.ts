@@ -32,6 +32,7 @@ import {
   releaseAllStuckParentManualInstallments,
   PARENT_MANUAL_STUCK_MINUTES,
 } from "../lib/stuck-parent-manual-installments";
+import { errorNotificationService } from "./error-notification";
 
 /** Look-back window for "recent" failed/error signals. */
 const RECENT_WINDOW_MINUTES = 24 * 60;
@@ -454,7 +455,7 @@ export async function runPaymentFlowMonitor(
 
   if (overallTier !== "ok") {
     try {
-      await storage.createErrorLog({
+      const errorLog = await storage.createErrorLog({
         errorType: "payment",
         severity: overallTier === "critical" ? "high" : "medium",
         message: `Payment-flow monitor: ${overallTier.toUpperCase()} — ${signals
@@ -473,6 +474,7 @@ export async function runPaymentFlowMonitor(
         },
         notificationSent: false,
       } as any);
+      await errorNotificationService.sendImmediateNotification(errorLog);
     } catch (logErr) {
       console.error("[payment-flow-monitor] failed to write error_log:", logErr);
     }

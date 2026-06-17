@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-06-16 (Payment stuck-alert gaps closed)
+
+- **Alerts:** `error-notification.ts` now supports SendGrid (`SENDGRID_API_KEY`) with Brevo fallback; immediate/daily error emails use `ERROR_NOTIFICATION_EMAIL`.
+- **Payment criticals now email immediately:** post-payment verification criticals, payment-flow-monitor warning/critical snapshots, `INSTALLMENT_NOT_AVAILABLE` pay-now failures, and 5xx `/api/billing/fulfill-payment-intent` failures.
+- **Monitoring cadence:** `startPaymentFlowMonitorJob()` is now started from `app-init.ts` (still guarded by `AUTO_PAY_SINGLE_INSTANCE=true` singleton requirement).
+
 ## 2026-06-15 (Checkout agreement gate — stale cache after sign)
 
 - **Symptom:** Parent signs membership agreement from checkout, returns to payment, alert still shows and checkout stays blocked.

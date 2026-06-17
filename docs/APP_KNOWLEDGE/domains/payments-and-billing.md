@@ -44,6 +44,22 @@ Read-only checks after webhook when `POST_PAYMENT_VERIFY_ENABLED=true`. Includes
 
 **Phase B auto-fix** (optional, `POST_PAYMENT_VERIFY_AUTO_FIX=true`): on critical `stripe_db_parity` or `enrollment_ledger` checks, replays the same idempotent finalize module as interactive checkout — does **not** re-allocate mis-split historical PIs or reverse credits.
 
+## Payment stuck-alert coverage
+
+Immediate error email is provider-backed by `server/services/error-notification.ts`:
+
+- Uses **SendGrid first** (`SENDGRID_API_KEY` + `ERROR_NOTIFICATION_EMAIL`), falls back to Brevo if configured.
+- `payment_verification` criticals now call `sendImmediateNotification(...)` after creating `error_logs`.
+- `payment-flow-monitor` warning/critical snapshots now create `error_logs` and trigger immediate error email.
+- `INSTALLMENT_NOT_AVAILABLE` in `POST /api/scheduled-payments/pay` now logs at `high` severity and sends immediate error email.
+- `POST /api/billing/fulfill-payment-intent` now logs server-side 5xx failures (`FULFILL_PAYMENT_INTENT_FAILED`) and sends immediate error email.
+
+Recurring monitor cadence:
+
+- `startPaymentFlowMonitorJob()` is wired in `server/app-init.ts`.
+- Job still requires singleton guard `AUTO_PAY_SINGLE_INSTANCE=true`.
+- Recommended worker env: `ENABLE_BACKGROUND_JOBS=true`, `AUTO_PAY_SINGLE_INSTANCE=true`, `POST_PAYMENT_VERIFY_ENABLED=true`.
+
 ## Interactive fulfillment (primary) vs webhook (backup)
 
 After Stripe `confirmPayment` succeeds in the browser, the client **must** call `POST /api/billing/fulfill-payment-intent` with `{ paymentIntentId }` only (never trust client amounts). The server retrieves the PI from Stripe and runs `finalizeSucceededPaymentIntent` (balance/cart/pay-in-full) or `finalizeSucceededScheduledPaymentIntent` (Pay Now installments).
