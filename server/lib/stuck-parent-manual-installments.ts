@@ -39,6 +39,8 @@ export type FindStuckOptions = {
   processingOlderThanMinutes?: number;
   /** Include `failed` + parent_manual rows that still hold a Stripe PI id. Default true. */
   includeFailedWithPi?: boolean;
+  /** Include `pending`/`overdue` + parent_manual rows that still hold a stale PI id. Default true. */
+  includePendingWithPi?: boolean;
   /** Only rows where enrollment still owes money. Default true. */
   onlyOwingEnrollments?: boolean;
 };
@@ -64,24 +66,38 @@ export async function findStuckParentManualInstallments(
 ): Promise<StuckParentManualRow[]> {
   const processingMinutes = opts.processingOlderThanMinutes ?? PARENT_MANUAL_STUCK_MINUTES;
   const includeFailedWithPi = opts.includeFailedWithPi !== false;
+  const includePendingWithPi = opts.includePendingWithPi !== false;
   const onlyOwing = opts.onlyOwingEnrollments !== false;
   const processingCutoff = new Date(Date.now() - processingMinutes * 60_000);
 
-  const statusClause = includeFailedWithPi
-    ? or(
-        and(
-          eq(scheduledPayments.status, 'processing'),
-          lt(scheduledPayments.updatedAt, processingCutoff),
+  const statusParts = [
+    and(
+      eq(scheduledPayments.status, 'processing'),
+      lt(scheduledPayments.updatedAt, processingCutoff),
+    ),
+  ];
+  if (includeFailedWithPi) {
+    statusParts.push(
+      and(
+        eq(scheduledPayments.status, 'failed'),
+        isNotNull(scheduledPayments.stripePaymentIntentId),
+      ),
+    );
+  }
+  if (includePendingWithPi) {
+    statusParts.push(
+      and(
+        or(
+          eq(scheduledPayments.status, 'pending'),
+          eq(scheduledPayments.status, 'overdue'),
         ),
-        and(
-          eq(scheduledPayments.status, 'failed'),
-          isNotNull(scheduledPayments.stripePaymentIntentId),
-        ),
-      )
-    : and(
-        eq(scheduledPayments.status, 'processing'),
-        lt(scheduledPayments.updatedAt, processingCutoff),
-      );
+        isNotNull(scheduledPayments.stripePaymentIntentId),
+      ),
+    );
+  }
+
+  const statusClause =
+    statusParts.length === 1 ? statusParts[0]! : or(...statusParts);
 
   const db = await getDb();
   const rows = await db
@@ -224,7 +240,7 @@ export async function releaseAllStuckParentManualInstallments(
   return result;
 }
 
-/** Row blocks Pay Now retry until released (processing claim or failed + stale PI). */
+/** Row blocks Pay Now retry until released (processing claim, failed, or pending/overdue + stale PI). */
 export function isRecoverableStuckParentManualRow(row: {
   status?: string | null;
   chargedBy?: string | null;
@@ -233,7 +249,9 @@ export function isRecoverableStuckParentManualRow(row: {
   if (row.chargedBy !== 'parent_manual') return false;
   const status = String(row.status ?? '');
   if (status === 'processing') return true;
-  if (status === 'failed' && row.stripePaymentIntentId) return true;
+  if (row.stripePaymentIntentId) {
+    if (status === 'failed' || status === 'pending' || status === 'overdue') return true;
+  }
   return false;
 }
 
