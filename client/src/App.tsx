@@ -56,6 +56,7 @@ const CartSuccess = lazy(() => import("@/pages/CartSuccess"));
 const MembershipSuccess = lazy(() => import("@/pages/MembershipSuccess"));
 const MembershipAgreementPage = lazy(() => import("@/pages/MembershipAgreementPage"));
 const RegistrationPage = lazy(() => import("@/pages/RegistrationPage").then(m => ({ default: m.RegistrationPage })));
+const ParentEmergencyContactsPage = lazy(() => import("@/pages/parent/ParentEmergencyContactsPage"));
 const ProgramsParentPage = lazy(() => import("@/pages/ProgramsParentPage"));
 const ParentConciergePage = lazy(() => import("@/pages/ParentConciergePage"));
 const ParentClassDetailsPage = lazy(() => import("@/pages/parents/ParentClassDetailsPage"));
@@ -619,6 +620,7 @@ function Router() {
           </Route>
 
       {/* Authenticated registration system routes */}
+      <Route path="/registration/:rest*" component={RegistrationPage} />
       <Route path="/registration" component={RegistrationPage} />
       
       {/* Backward compatibility redirects */}
@@ -632,6 +634,7 @@ function Router() {
       {/* Parent routes */}
       <Route path="/parent/concierge" component={() => <ParentAppShell><ParentConciergePage /></ParentAppShell>} />
       <Route path="/parent/home" component={() => <ParentAppShell><ParentDashboard /></ParentAppShell>} />
+      <Route path="/parent/emergency-contacts" component={ParentEmergencyContactsPage} />
       <Route path="/parent/programs/browse" component={ProgramsBrowseRedirect} />
       <Route path="/parent/programs" component={ProgramsParentPage} />
       <Route path="/parent/programs/:rest*" component={ProgramsParentPage} />

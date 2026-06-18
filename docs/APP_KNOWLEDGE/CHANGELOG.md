@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-06-18 (Parent emergency contacts route)
+
+- **`/parent/emergency-contacts`:** Dedicated parent page + sidebar/mobile nav; `/registration/contacts` redirects here; `/registration/:rest*` sub-routes work again.
+- **API:** `/api/emergency-contacts` uses Supabase `req.user.id` (not session-only); `PATCH` route registered (form uses PATCH).
+
 ## 2026-06-16 (Payment stuck-alert gaps closed)
 
 - **Alerts:** `error-notification.ts` now supports SendGrid (`SENDGRID_API_KEY`) with Brevo fallback; immediate/daily error emails use `ERROR_NOTIFICATION_EMAIL`.
