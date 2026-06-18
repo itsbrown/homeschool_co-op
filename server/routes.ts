@@ -1422,6 +1422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/emergency-contacts/:id', isAuthenticated, emergencyContactsApi.getEmergencyContactById);
   app.post('/api/emergency-contacts', isAuthenticated, emergencyContactsApi.createEmergencyContact);
   app.put('/api/emergency-contacts/:id', isAuthenticated, emergencyContactsApi.updateEmergencyContact);
+  app.patch('/api/emergency-contacts/:id', isAuthenticated, emergencyContactsApi.updateEmergencyContact);
   app.delete('/api/emergency-contacts/:id', isAuthenticated, emergencyContactsApi.deleteEmergencyContact);
 
   // Programs routes

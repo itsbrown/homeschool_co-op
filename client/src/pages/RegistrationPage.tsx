@@ -1,20 +1,19 @@
-import { useState } from "react";
 import { DashboardShell } from "../components/ui/dashboard-shell";
-import { Route, Switch, useLocation } from "wouter";
-import { useAuth } from "@/hooks/useAuth0";
+import { Redirect, Route, Switch } from "wouter";
+import { useAuth } from "@/components/SupabaseProvider";
 import { RegistrationDashboard } from "../components/registration/RegistrationDashboard";
 import { ChildrenManagement } from "../components/registration/ChildrenManagement";
-import { EmergencyContactsManagement } from "../components/registration/EmergencyContactsManagement";
 
 // Registration Page with sub-routes
 export function RegistrationPage() {
-  const { user, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
+  const { isAuthenticated, isLoading } = useAuth();
 
-  // If not authenticated, redirect to login
-  if (!isLoading && !user) {
-    window.location.href = "/login";
+  if (isLoading) {
     return null;
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
   }
 
   return (
@@ -30,9 +29,11 @@ export function RegistrationPage() {
         </div>
 
         <Switch>
-          <Route path="/registration" component={RegistrationDashboard} />
+          <Route path="/registration/contacts">
+            <Redirect to="/parent/emergency-contacts" />
+          </Route>
           <Route path="/registration/children" component={ChildrenManagement} />
-          <Route path="/registration/contacts" component={EmergencyContactsManagement} />
+          <Route path="/registration" component={RegistrationDashboard} />
         </Switch>
       </div>
     </DashboardShell>

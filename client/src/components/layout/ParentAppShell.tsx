@@ -34,6 +34,7 @@ const mobileNavigationItems = [
   { href: "/parent/home", title: "Dashboard", icon: Home },
   { href: "/notifications", title: "Notifications", icon: Bell },
   { href: "/children", title: "My Children", icon: Users },
+  { href: "/parent/emergency-contacts", title: "Emergency Contacts", icon: AlertTriangle },
   { href: "/programs", title: "Programs & Classes", icon: BookOpen },
   { href: "/schedule", title: "Family Schedule", icon: Calendar },
   { href: "/payments", title: "Payments", icon: DollarSign },

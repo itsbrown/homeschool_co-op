@@ -18,6 +18,7 @@ import {
   Bell,
   FolderOpen,
   Shield,
+  ShieldAlert,
   Sparkles,
   GraduationCap,
   Clock,
@@ -276,6 +277,11 @@ export default function ParentSidebar() {
       href: "/children",
       title: "My Children",
       icon: <Users className="h-5 w-5" />,
+    },
+    {
+      href: "/parent/emergency-contacts",
+      title: "Emergency Contacts",
+      icon: <ShieldAlert className="h-5 w-5" />,
     },
     {
       href: "/parent/programs",
