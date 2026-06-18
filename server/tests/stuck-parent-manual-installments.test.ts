@@ -27,6 +27,26 @@ describe('isRecoverableStuckParentManualRow', () => {
     ).toBe(true);
   });
 
+  it('returns true for pending + parent_manual + stale PI id', () => {
+    expect(
+      isRecoverableStuckParentManualRow({
+        status: 'pending',
+        chargedBy: 'parent_manual',
+        stripePaymentIntentId: 'pi_123',
+      }),
+    ).toBe(true);
+  });
+
+  it('returns true for overdue + parent_manual + stale PI id', () => {
+    expect(
+      isRecoverableStuckParentManualRow({
+        status: 'overdue',
+        chargedBy: 'parent_manual',
+        stripePaymentIntentId: 'pi_123',
+      }),
+    ).toBe(true);
+  });
+
   it('returns false for failed parent_manual without PI', () => {
     expect(
       isRecoverableStuckParentManualRow({
@@ -47,7 +67,7 @@ describe('isRecoverableStuckParentManualRow', () => {
     ).toBe(false);
   });
 
-  it('returns false for pending parent_manual', () => {
+  it('returns false for pending parent_manual without PI', () => {
     expect(
       isRecoverableStuckParentManualRow({
         status: 'pending',

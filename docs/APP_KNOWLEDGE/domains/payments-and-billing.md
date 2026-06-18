@@ -162,7 +162,9 @@ Dry-run first: `--dry-run`.
 
 ### Stuck parent Pay Now audit & auto-heal (2026-06-01)
 
-Abandoned Pay Now attempts can leave `scheduled_payments` in `processing` + `charged_by: parent_manual` (or `failed` with a stale PI id), blocking retries with **409 `INSTALLMENT_NOT_AVAILABLE`**.
+Abandoned Pay Now attempts can leave `scheduled_payments` in `processing` + `charged_by: parent_manual` (or `failed` / `pending` / `overdue` with a stale PI id), blocking retries with **409 `INSTALLMENT_NOT_AVAILABLE`**.
+
+**Root cause (2026-06-19):** Autopay stuck-processing reconciliation (`runAutoPayStuckProcessingReconciliation`) previously moved abandoned **parent_manual** rows to `pending` without clearing `charged_by` or `stripe_payment_intent_id`, leaving a zombie row the fleet audit missed. Reconciliation now **skips** `charged_by = parent_manual`; stuck-parent-manual auto-heal also detects `pending`/`overdue` + stale PI.
 
 | Layer | What it does |
 |-------|----------------|

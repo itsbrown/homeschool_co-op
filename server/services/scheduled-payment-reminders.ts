@@ -21,7 +21,7 @@ import {
 import { getDb } from '../db';
 import { getStripeClient } from '../config/stripe';
 import { scheduledPayments, type InsertPayment } from '../../shared/schema';
-import { and, eq, gte, inArray, lt, lte } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lt, lte, ne, or } from 'drizzle-orm';
 import {
   type AutoPayCandidateLike,
   type DueAutoPayQueryCriteria,
@@ -253,7 +253,16 @@ function buildAutoPayReconciliationRepository(
         })
         .from(scheduledPayments)
         .where(
-          and(eq(scheduledPayments.status, criteria.status), lt(scheduledPayments.updatedAt, criteria.updatedBefore)),
+          and(
+            eq(scheduledPayments.status, criteria.status),
+            lt(scheduledPayments.updatedAt, criteria.updatedBefore),
+            // Parent Pay Now claims use `parent_manual`; autopay reconciliation must not
+            // move them to pending while leaving a stale PI (blocks INSTALLMENT_NOT_AVAILABLE).
+            or(
+              isNull(scheduledPayments.chargedBy),
+              ne(scheduledPayments.chargedBy, 'parent_manual'),
+            ),
+          ),
         );
     },
     async markScheduledPaymentCompleted(id, processedAt) {

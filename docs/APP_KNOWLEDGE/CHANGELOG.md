@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-06-19 (Pending parent_manual + stale PI — INSTALLMENT_NOT_AVAILABLE)
+
+- **Symptom:** Pay Now **409 `INSTALLMENT_NOT_AVAILABLE`** after abandoned checkout (Taylor Karnath SP #380, same pattern as Heather Jacks).
+- **Cause:** Autopay reconciliation moved `processing` + `parent_manual` rows to `pending` but left `charged_by` + dead Stripe PI; `findStuckParentManualInstallments` only scanned `processing` (15m+) and `failed`+PI, so cron audit missed `pending`+PI.
+- **Ops:** Released SP #380 on prod (`releaseStuckParentManualInstallment`).
+- **Code:** `findStuckParentManualInstallments` + `isRecoverableStuckParentManualRow` include `pending`/`overdue` + stale PI; autopay reconciliation skips `charged_by = parent_manual`.
+
 ## 2026-06-18 (Parent emergency contacts route)
 
 - **`/parent/emergency-contacts`:** Dedicated parent page + sidebar/mobile nav; `/registration/contacts` redirects here; `/registration/:rest*` sub-routes work again.
