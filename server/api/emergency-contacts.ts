@@ -71,9 +71,11 @@ export const createEmergencyContact = async (req: AuthenticatedRequest, res: Res
     }
 
     const validatedData = insertEmergencyContactSchema.parse(req.body);
+    const email = validatedData.email.trim();
 
     const contact = await storage.createEmergencyContact({
       ...validatedData,
+      email,
       userId,
     });
 
@@ -114,8 +116,12 @@ export const updateEmergencyContact = async (req: AuthenticatedRequest, res: Res
     }
 
     const validatedData = insertEmergencyContactSchema.partial().parse(req.body);
+    const updatePayload = { ...validatedData };
+    if ("email" in updatePayload && typeof updatePayload.email === "string") {
+      updatePayload.email = updatePayload.email.trim();
+    }
 
-    const updatedContact = await storage.updateEmergencyContact(contactId, validatedData);
+    const updatedContact = await storage.updateEmergencyContact(contactId, updatePayload);
     res.json(updatedContact);
   } catch (error: any) {
     if (error instanceof ZodError) {

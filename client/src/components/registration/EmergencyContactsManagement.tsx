@@ -2,15 +2,14 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { EmergencyContactForm } from "./EmergencyContactForm";
+import { EmergencyContactForm, type EmergencyContactRecord } from "./EmergencyContactForm";
 
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +18,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -30,33 +28,26 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  Edit, 
+import {
+  Edit,
   Trash,
   Plus,
   Phone,
   Mail,
-  User,
   CheckCircle,
   XCircle,
-  ShieldAlert
+  ShieldAlert,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-interface EmergencyContact {
-  id: number;
-  firstName: string;
-  lastName: string;
-  relationship: string;
-  phoneNumber: string;
-  email: string | null;
-  isAuthorizedPickup: boolean;
+interface EmergencyContactsManagementProps {
+  /** Hide the section title when the parent page already provides one */
+  embedded?: boolean;
 }
 
-export function EmergencyContactsManagement() {
+export function EmergencyContactsManagement({ embedded = false }: EmergencyContactsManagementProps) {
   const [addContactDialogOpen, setAddContactDialogOpen] = useState(false);
   const [editContactDialogOpen, setEditContactDialogOpen] = useState(false);
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
@@ -66,58 +57,60 @@ export function EmergencyContactsManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch emergency contacts data
-  const { data: contacts, isLoading } = useQuery({
+  const { data: contacts, isLoading } = useQuery<EmergencyContactRecord[]>({
     queryKey: ["/api/emergency-contacts"],
   });
 
-  // Get selected contact data for editing
-  const selectedContact = selectedContactId && Array.isArray(contacts)
-    ? contacts.find((contact: EmergencyContact) => contact.id === selectedContactId) 
+  const contactList = Array.isArray(contacts) ? contacts : [];
+  const selectedContact = selectedContactId
+    ? contactList.find((contact) => contact.id === selectedContactId) ?? null
     : null;
 
-  // Handle adding a new contact
   const handleAddContactSuccess = () => {
     setAddContactDialogOpen(false);
     toast({
-      title: "Success",
-      description: "Emergency contact added successfully",
+      title: "Contact saved",
+      description: "Your emergency contact list has been updated.",
     });
   };
 
-  // Handle editing a contact
   const handleEditContactSuccess = () => {
     setEditContactDialogOpen(false);
     setSelectedContactId(null);
     toast({
-      title: "Success",
-      description: "Emergency contact updated successfully",
+      title: "Contact updated",
+      description: "Your changes have been saved.",
     });
   };
 
-  // Handle deleting a contact
   const handleDeleteContact = async () => {
     if (!selectedContactId) return;
 
     setIsDeleting(true);
     try {
       await apiRequest("DELETE", `/api/emergency-contacts/${selectedContactId}`);
-      
+
+      queryClient.setQueryData<EmergencyContactRecord[]>(
+        ["/api/emergency-contacts"],
+        (existing) =>
+          Array.isArray(existing)
+            ? existing.filter((contact) => contact.id !== selectedContactId)
+            : [],
+      );
+      await queryClient.invalidateQueries({ queryKey: ["/api/emergency-contacts"] });
+
       toast({
-        title: "Success",
-        description: "Emergency contact deleted successfully",
+        title: "Contact removed",
+        description: "The emergency contact has been deleted.",
       });
-      
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ["/api/emergency-contacts"] });
-      
+
       setDeleteDialogOpen(false);
       setSelectedContactId(null);
     } catch (error) {
       console.error("Failed to delete emergency contact:", error);
       toast({
-        title: "Error",
-        description: "Failed to delete emergency contact. Please try again.",
+        title: "Could not delete contact",
+        description: "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -125,12 +118,19 @@ export function EmergencyContactsManagement() {
     }
   };
 
-  // Show loading state if data is still loading
+  const openAddDialog = () => setAddContactDialogOpen(true);
+
+  const addContactButton = (
+    <Button onClick={openAddDialog}>
+      <Plus className="mr-2 h-4 w-4" />
+      Add Contact
+    </Button>
+  );
+
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-4 w-full max-w-md" />
+        <Skeleton className="h-10 w-40 ml-auto" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((n) => (
             <Skeleton key={n} className="h-40 w-full" />
@@ -142,137 +142,91 @@ export function EmergencyContactsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Emergency Contacts</h2>
-          <p className="text-muted-foreground">
-            Manage your emergency contacts for your children
-          </p>
-        </div>
-        
-        <Dialog open={addContactDialogOpen} onOpenChange={setAddContactDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        {!embedded && (
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight">Emergency Contacts</h2>
+            <p className="text-sm text-muted-foreground">
+              People we can reach in an emergency or authorize for pickup
+            </p>
+          </div>
+        )}
+        <div className={embedded ? "sm:ml-auto" : ""}>{addContactButton}</div>
+      </div>
+
+      {contactList.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <ShieldAlert className="h-12 w-12 text-muted-foreground mb-4" />
+            <CardTitle className="text-lg mb-2">No emergency contacts yet</CardTitle>
+            <CardDescription className="max-w-sm mb-6">
+              Add at least one contact so we know who to call or who may pick up your children.
+            </CardDescription>
+            <Button onClick={openAddDialog}>
               <Plus className="mr-2 h-4 w-4" />
               Add Contact
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Add Emergency Contact</DialogTitle>
-              <DialogDescription>
-                Add someone we can contact in case of emergency
-              </DialogDescription>
-            </DialogHeader>
-            <EmergencyContactForm onSuccess={handleAddContactSuccess} />
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {!contacts || (Array.isArray(contacts) && contacts.length === 0) ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>No Emergency Contacts</CardTitle>
-            <CardDescription>
-              You haven't added any emergency contacts yet
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center py-8">
-            <ShieldAlert className="h-16 w-16 text-muted-foreground mb-4" />
-            <p className="text-center text-muted-foreground">
-              Add at least one emergency contact for your children's safety
-            </p>
           </CardContent>
-          <CardFooter className="flex justify-center">
-            <Button onClick={() => setAddContactDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Emergency Contact
-            </Button>
-          </CardFooter>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {Array.isArray(contacts) && contacts.map((contact: EmergencyContact) => (
+          {contactList.map((contact) => (
             <Card key={contact.id}>
               <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <CardTitle>{contact.firstName} {contact.lastName}</CardTitle>
-                  <div className="flex gap-1">
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <CardTitle className="text-lg">
+                      {contact.firstName} {contact.lastName}
+                    </CardTitle>
+                    <CardDescription>{contact.relationship}</CardDescription>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label="Edit contact"
                       onClick={() => {
                         setSelectedContactId(contact.id);
                         setEditContactDialogOpen(true);
                       }}
                     >
                       <Edit className="h-4 w-4" />
-                      <span className="sr-only">Edit</span>
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setSelectedContactId(contact.id);
-                            setDeleteDialogOpen(true);
-                          }}
-                        >
-                          <Trash className="h-4 w-4" />
-                          <span className="sr-only">Delete</span>
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently delete this emergency contact and cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={handleDeleteContact}
-                            disabled={isDeleting}
-                          >
-                            {isDeleting ? "Deleting..." : "Delete"}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Delete contact"
+                      onClick={() => {
+                        setSelectedContactId(contact.id);
+                        setDeleteDialogOpen(true);
+                      }}
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-                <CardDescription>{contact.relationship}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4 opacity-70" />
                   <span className="text-sm">{contact.phoneNumber}</span>
                 </div>
-                
-                {contact.email && (
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 opacity-70" />
-                    <span className="text-sm">{contact.email}</span>
-                  </div>
-                )}
-                
+
                 <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 opacity-70" />
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">Authorized for pickup:</span>
-                    {contact.isAuthorizedPickup ? (
-                      <Badge variant="default" className="flex items-center gap-1">
-                        <CheckCircle className="h-3 w-3" /> Yes
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="flex items-center gap-1">
-                        <XCircle className="h-3 w-3" /> No
-                      </Badge>
-                    )}
-                  </div>
+                  <Mail className="h-4 w-4 opacity-70" />
+                  <span className="text-sm">{contact.email}</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {contact.isAuthorizedPickup ? (
+                    <Badge variant="default" className="flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" /> Authorized for pickup
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <XCircle className="h-3 w-3" /> Not authorized for pickup
+                    </Badge>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -280,39 +234,48 @@ export function EmergencyContactsManagement() {
         </div>
       )}
 
-      {/* Edit Contact Dialog */}
+      <Dialog open={addContactDialogOpen} onOpenChange={setAddContactDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Emergency Contact</DialogTitle>
+            <DialogDescription>
+              Enter contact details for someone we can reach in an emergency.
+            </DialogDescription>
+          </DialogHeader>
+          <EmergencyContactForm onSuccess={handleAddContactSuccess} variant="plain" />
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={editContactDialogOpen} onOpenChange={setEditContactDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Emergency Contact</DialogTitle>
-            <DialogDescription>
-              Update emergency contact information
-            </DialogDescription>
+            <DialogDescription>Update this contact&apos;s information.</DialogDescription>
           </DialogHeader>
           {selectedContact && (
-            <EmergencyContactForm 
+            <EmergencyContactForm
               defaultValues={{
                 firstName: selectedContact.firstName,
                 lastName: selectedContact.lastName,
                 relationship: selectedContact.relationship,
                 phoneNumber: selectedContact.phoneNumber,
-                email: selectedContact.email || "",
+                email: selectedContact.email,
                 isAuthorizedPickup: selectedContact.isAuthorizedPickup,
               }}
               onSuccess={handleEditContactSuccess}
               contactId={selectedContact.id}
+              variant="plain"
             />
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Delete Contact Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>Delete this contact?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this emergency contact and cannot be undone.
+              This removes the emergency contact permanently. You can add them again later if needed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

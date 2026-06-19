@@ -1518,19 +1518,37 @@ export class DatabaseStorage implements IStorage {
     return contact;
   }
 
+  /** IStorage alias — emergency contacts are keyed by parent user id. */
+  async getEmergencyContactById(id: number): Promise<EmergencyContact | undefined> {
+    return this.getEmergencyContact(id);
+  }
+
   async getEmergencyContactsByParent(parentId: number): Promise<EmergencyContact[]> {
     const db = await getDb();
     return await db.select().from(emergencyContacts).where(eq(emergencyContacts.userId, parentId));
   }
 
-  async createEmergencyContact(contact: InsertEmergencyContact): Promise<EmergencyContact> {
+  /** IStorage alias — same as getEmergencyContactsByParent. */
+  async getEmergencyContactsByUserId(userId: number): Promise<EmergencyContact[]> {
+    return this.getEmergencyContactsByParent(userId);
+  }
+
+  async createEmergencyContact(
+    contact: InsertEmergencyContact & { userId: number },
+  ): Promise<EmergencyContact> {
     const db = await getDb();
     const [newContact] = await db
       .insert(emergencyContacts)
       .values({
-        ...contact,
+        userId: contact.userId,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        relationship: contact.relationship,
+        phoneNumber: contact.phoneNumber,
+        email: contact.email?.trim() ? contact.email.trim() : null,
+        isAuthorizedPickup: contact.isAuthorizedPickup ?? false,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .returning();
     return newContact;

@@ -22,14 +22,14 @@ export default function ParentEmergencyContactsPage() {
 
   return (
     <ParentAppShell>
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Emergency Contacts</h2>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-bold tracking-tight">Emergency Contacts</h1>
+          <p className="text-muted-foreground mt-1">
             Add people we can reach in an emergency or authorize for pickup.
           </p>
         </div>
-        <EmergencyContactsManagement />
+        <EmergencyContactsManagement embedded />
       </div>
     </ParentAppShell>
   );

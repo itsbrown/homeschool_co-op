@@ -1,5 +1,17 @@
 # App knowledge changelog
 
+## 2026-06-19 (Emergency contacts UX + required email)
+
+- **Email:** Required on form and API (`insertEmergencyContactSchema`); label no longer says optional.
+- **List refresh:** After save/delete, optimistically update React Query cache then invalidate `/api/emergency-contacts`.
+- **UX:** Removed duplicate page/dialog/card titles on parent emergency contacts; dialog uses plain form layout.
+
+## 2026-06-19 (Emergency contacts save — DatabaseStorage method aliases)
+
+- **Symptom:** Parent “Add Emergency Contact” fails with Admin Notified toast; POST/GET `/api/emergency-contacts` 500 in production.
+- **Cause:** `CombinedStorage` calls `getEmergencyContactsByUserId` / `getEmergencyContactById` but `server/dbStorage.ts` only implemented `getEmergencyContactsByParent` / `getEmergencyContact`; production does not fall back to MemStorage.
+- **Fix:** Added IStorage aliases on `DatabaseStorage`; `createEmergencyContact` now requires `userId` and maps fields explicitly.
+
 ## 2026-06-19 (Pending parent_manual + stale PI — INSTALLMENT_NOT_AVAILABLE)
 
 - **Symptom:** Pay Now **409 `INSTALLMENT_NOT_AVAILABLE`** after abandoned checkout (Taylor Karnath SP #380, same pattern as Heather Jacks).

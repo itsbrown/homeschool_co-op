@@ -621,9 +621,8 @@ export const emergencyContacts = pgTable("emergency_contacts", {
 export const insertEmergencyContactSchema = createInsertSchema(emergencyContacts)
   .omit({ id: true, createdAt: true, updatedAt: true, userId: true })
   .extend({
-    // Set default values for nullable fields
-    email: z.string().nullable().default(null),
-    isAuthorizedPickup: z.boolean().default(false)
+    email: z.string().trim().min(1, { message: "Email is required" }).email({ message: "Please enter a valid email" }),
+    isAuthorizedPickup: z.boolean().default(false),
   });
 export type InsertEmergencyContact = z.infer<typeof insertEmergencyContactSchema>;
 export type EmergencyContact = typeof emergencyContacts.$inferSelect;
