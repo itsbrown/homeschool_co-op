@@ -7,7 +7,8 @@ export type UploadCategory =
   | "knowledgeBase"
   | "fundraiserProducts"
   | "assessments"
-  | "profilePhotos";
+  | "profilePhotos"
+  | "supportScreenshots";
 
 export interface UploadResult {
   objectPath: string;

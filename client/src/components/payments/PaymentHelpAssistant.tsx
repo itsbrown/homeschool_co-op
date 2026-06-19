@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSupabase } from '@/components/SupabaseProvider';
+import { openSupportAssistant } from '@/lib/supportAssistant';
 
 interface Message {
   id: string;
@@ -331,6 +332,20 @@ export default function PaymentHelpAssistant() {
                 <Send className="h-4 w-4" />
               </Button>
             </form>
+            <button
+              type="button"
+              className="mt-2 w-full text-xs text-center text-green-700 hover:text-green-900 hover:underline"
+              onClick={() => {
+                setIsOpen(false);
+                openSupportAssistant({
+                  issueCategory: 'platform',
+                  initialIssue: inputValue.trim() || undefined,
+                });
+              }}
+              data-testid="payment-help-report-issue"
+            >
+              Still stuck? Report an issue with optional screenshot
+            </button>
           </CardContent>
         </Card>
       )}

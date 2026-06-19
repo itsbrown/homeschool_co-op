@@ -1,5 +1,15 @@
 # App knowledge changelog
 
+## 2026-06-19 (Help — issue submission with optional screenshot)
+
+- **UI:** “Need Help?” menu item renamed **Report an Issue** (`AISupportAssistant.tsx`); Payment Help adds “Still stuck?” link. Both floating buttons unchanged.
+- **Form:** Category (`platform` vs `school_policy`), optional screenshot (capture via `html2canvas` or upload → `supportScreenshots` object storage category).
+- **API:** `POST /api/technical-support/report` requires auth; always notifies recipients; AI tips still returned after submit.
+- **Routing:** Platform issues → platform admins (`admin`/`superAdmin`); school policy → school admins for parent’s `schoolId` (in-app + email via `server/lib/support-issue-notifications.ts`).
+- **Persistence:** Postgres table `technical_support_issues` — migration `server/migrations/250-technical-support-issues.sql` (run on prod before deploy).
+- **Admin:** `/admin` Technical Support dashboard shows category + signed screenshot URL; school admins see only their school’s policy tickets.
+- **E2E:** `e2e/help-issue-submission.spec.ts` — `npm run test:e2e -- e2e/help-issue-submission.spec.ts`
+
 ## 2026-06-19 (Membership ledger foundation — reconcile + status job fix)
 
 - **`MembershipStatusService`:** No longer recomputes `amountPaid` from `payments.metadata.membershipId` (missed combined checkout/backfills). Runs `reconcileMembershipLedgerForParent` first; calendar-only status transitions; guards block downgrade of fully paid `enrolled` rows.

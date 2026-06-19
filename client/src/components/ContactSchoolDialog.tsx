@@ -185,7 +185,7 @@ export default function ContactSchoolDialog({ isOpen, onClose }: ContactSchoolDi
               </div>
 
               <p className="text-xs text-gray-500 text-center">
-                For technical issues with the platform, please use the AI Support Assistant.
+                For school policy questions, use Report an Issue → School question / policy, or the contact info above.
               </p>
             </div>
           )}

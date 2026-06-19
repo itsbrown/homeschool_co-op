@@ -190,6 +190,7 @@ export interface IStorage {
   createTechnicalIssue(issue: any): Promise<any>;
   getTechnicalIssue(id: string): Promise<any>;
   getAllTechnicalIssues(): Promise<any[]>;
+  getTechnicalIssuesBySchoolId(schoolId: number): Promise<any[]>;
   updateTechnicalIssue(id: string, updates: any): Promise<any>;
   
   // Notification methods
@@ -4493,6 +4494,12 @@ export class MemStorage implements IStorage {
     return Array.from(this.technicalIssuesStore.values());
   }
 
+  async getTechnicalIssuesBySchoolId(schoolId: number): Promise<any[]> {
+    return Array.from(this.technicalIssuesStore.values()).filter(
+      (issue) => issue.schoolId === schoolId && issue.issueCategory === 'school_policy',
+    );
+  }
+
   async updateTechnicalIssue(id: string, updates: any): Promise<any> {
     const issue = this.technicalIssuesStore.get(id);
     if (issue) {
@@ -7116,18 +7123,37 @@ export class MemStorage implements IStorage {
 
       // Technical Support methods
       async createTechnicalIssue(issue: any): Promise<any> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          return this.dbStorage.createTechnicalIssue(issue);
+        }
         return this.memStorage.createTechnicalIssue(issue);
       }
 
       async getTechnicalIssue(id: string): Promise<any> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          return this.dbStorage.getTechnicalIssue(id);
+        }
         return this.memStorage.getTechnicalIssue(id);
       }
 
       async getAllTechnicalIssues(): Promise<any[]> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          return this.dbStorage.getAllTechnicalIssues();
+        }
         return this.memStorage.getAllTechnicalIssues();
       }
 
+      async getTechnicalIssuesBySchoolId(schoolId: number): Promise<any[]> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          return this.dbStorage.getTechnicalIssuesBySchoolId(schoolId);
+        }
+        return this.memStorage.getTechnicalIssuesBySchoolId(schoolId);
+      }
+
       async updateTechnicalIssue(id: string, updates: any): Promise<any> {
+        if (this.dbStorage instanceof DatabaseStorage) {
+          return this.dbStorage.updateTechnicalIssue(id, updates);
+        }
         return this.memStorage.updateTechnicalIssue(id, updates);
       }
 

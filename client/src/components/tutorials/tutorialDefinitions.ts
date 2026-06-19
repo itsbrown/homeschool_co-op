@@ -189,8 +189,8 @@ export const getHelpTutorial: InteractiveTutorialDefinition = {
     },
     {
       target: "[data-tutorial='ai-support-btn'], [data-testid='btn-ai-support']",
-      title: "AI Technical Support",
-      content: "If you're experiencing technical issues (errors, pages not loading, etc.), choose 'AI Technical Support'. Our system will analyze the issue and provide immediate guidance.",
+      title: "Report an Issue",
+      content: "If you're experiencing technical issues (errors, pages not loading, etc.), choose 'Report an Issue'. Add an optional screenshot; our AI suggests immediate steps while your report goes to the platform team.",
       placement: "left",
       actionText: "Click to try AI Support",
     },

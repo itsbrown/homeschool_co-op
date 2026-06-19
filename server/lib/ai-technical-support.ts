@@ -29,7 +29,7 @@ function getTextContent(content: Anthropic.ContentBlock): string | null {
   return null;
 }
 
-interface TechnicalIssue {
+export interface TechnicalIssue {
   id: string;
   userEmail: string;
   userRole: string;
