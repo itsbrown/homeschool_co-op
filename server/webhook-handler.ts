@@ -16,6 +16,7 @@ import { findProgramEnrollmentForCartItem } from './lib/cart-checkout-enrollment
 import { finalizeSucceededPaymentIntent } from './lib/finalize-succeeded-payment-intent';
 import { finalizeSucceededScheduledPaymentIntent } from './lib/finalize-succeeded-scheduled-payment-intent';
 import { schedulePostPaymentVerificationIfEnabled } from './services/post-payment-verification-schedule';
+import { reconcileMembershipAfterPaymentIntent } from './lib/reconcile-membership-ledger';
 
 // Stripe client will be lazily initialized within the webhook handler
 const RECENT_WEBHOOK_EVENTS_MAX = 1000;
@@ -374,6 +375,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             const finalized = await finalizeSucceededScheduledPaymentIntent(paymentIntent, {
               existingPayment,
             });
+            await reconcileMembershipAfterPaymentIntent(paymentIntent);
             console.log('💰 Scheduled payment finalized:', {
               paymentIntentId: paymentIntent.id,
               ...finalized,
@@ -394,6 +396,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               persistScheduledPayments: true,
               skipConfirmationEmail: true,
             });
+            await reconcileMembershipAfterPaymentIntent(paymentIntent);
             console.log('💰 Balance payment finalized:', {
               paymentIntentId: paymentIntent.id,
               hadPreexistingPendingPayment,

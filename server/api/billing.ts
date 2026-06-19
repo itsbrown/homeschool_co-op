@@ -29,6 +29,10 @@ import {
   totalCentsForBalanceAllocation,
 } from '../lib/balance-payment-metadata';
 import { resolveMembershipReserveForPaymentIntent } from '../lib/resolve-membership-reserve-for-payment';
+import {
+  reconcileMembershipAfterPaymentIntent,
+  runMembershipReconcileForParentUser,
+} from '../lib/reconcile-membership-ledger';
 
 const router = Router();
 const PAY_BALANCE_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -772,6 +776,17 @@ router.get('/summary', async (req, res) => {
 
     console.log('🔍 Getting billing summary for:', userEmail);
 
+    const parentDbUser = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: user.id,
+    });
+    if (parentDbUser?.id) {
+      await runMembershipReconcileForParentUser(
+        parentDbUser.id,
+        parentDbUser.schoolId ?? null,
+      );
+    }
+
     // Get all children for this parent
     const children = await getChildrenForAuthenticatedParent(storage, {
       email: userEmail,
@@ -1191,6 +1206,7 @@ router.post('/fulfill-payment-intent', async (req, res) => {
         '../lib/finalize-succeeded-scheduled-payment-intent'
       );
       const result = await finalizeSucceededScheduledPaymentIntent(paymentIntent);
+      await reconcileMembershipAfterPaymentIntent(paymentIntent);
       console.log('✅ fulfill-payment-intent (scheduled):', {
         paymentIntentId,
         parentEmail: user.email,
@@ -1208,6 +1224,8 @@ router.post('/fulfill-payment-intent', async (req, res) => {
       '../lib/finalize-succeeded-payment-intent'
     );
     const result = await finalizeSucceededPaymentIntent(paymentIntentId);
+
+    await reconcileMembershipAfterPaymentIntent(paymentIntent);
 
     console.log('✅ fulfill-payment-intent:', {
       paymentIntentId,

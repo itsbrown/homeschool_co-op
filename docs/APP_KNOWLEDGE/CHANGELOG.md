@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-06-19 (Membership ledger foundation — reconcile + status job fix)
+
+- **`MembershipStatusService`:** No longer recomputes `amountPaid` from `payments.metadata.membershipId` (missed combined checkout/backfills). Runs `reconcileMembershipLedgerForParent` first; calendar-only status transitions; guards block downgrade of fully paid `enrolled` rows.
+- **`reconcileMembershipLedgerForParent`:** Wired on `GET /api/parent/member-id`, `GET /api/billing/summary`, post-finalize (`fulfill-payment-intent`, webhook), and post-payment AUTO_FIX. Infers `allocationBreakdown` on legacy backfill payment rows when reconcile detects combined cart satisfaction.
+- **Post-payment verify:** `POST_PAYMENT_VERIFY_*` defaults on in production when unset; `.replit` sets `POST_PAYMENT_VERIFY_AUTO_FIX=true`. Membership waterfall criticals trigger reconcile auto-fix.
+- **Tests:** `server/tests/membership-status-service.test.ts`, existing `reconcile-membership-ledger.test.ts`.
+
 ## 2026-06-19 (Emergency contacts UX + required email)
 
 - **Email:** Required on form and API (`insertEmergencyContactSchema`); label no longer says optional.

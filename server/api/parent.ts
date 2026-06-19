@@ -12,6 +12,7 @@ import {
   resolveMembershipOwedForCheckout,
 } from '../utils/cart-pricing';
 import { enrollmentMatchesParent, emailsMatch } from '@shared/parent-identity';
+import { runMembershipReconcileForParentUser } from '../lib/reconcile-membership-ledger';
 
 const router = Router();
 
@@ -699,9 +700,12 @@ router.get('/member-id', jwtCheck, async (req: any, res) => {
       });
     }
 
-    const hasMemberId = parentHasMemberIdForCheckout(user.memberId);
+    await runMembershipReconcileForParentUser(user.id, user.schoolId ?? null);
+
+    const userAfterReconcile = (await storage.getUser(user.id)) ?? user;
+    const hasMemberId = parentHasMemberIdForCheckout(userAfterReconcile.memberId);
     const currentYear = new Date().getFullYear();
-    let schoolId: number | null = user.schoolId ?? null;
+    let schoolId: number | null = userAfterReconcile.schoolId ?? null;
     let schoolName: string | null = null;
     let membershipFeeAmount = 0;
     let membershipRequired = false;
@@ -714,7 +718,7 @@ router.get('/member-id', jwtCheck, async (req: any, res) => {
       membershipFeeAmount = school?.membershipFeeAmount ?? 0;
       membershipRequired = school?.membershipRequired ?? false;
 
-      const memberships = await storage.getMembershipEnrollmentsByParentId(user.id);
+      const memberships = await storage.getMembershipEnrollmentsByParentId(userAfterReconcile.id);
       const latestForSchool = memberships
         .filter(
           (m) =>
@@ -724,7 +728,7 @@ router.get('/member-id', jwtCheck, async (req: any, res) => {
         .sort((a, b) => (b.membershipYear ?? 0) - (a.membershipYear ?? 0))[0];
       membershipStatus = latestForSchool?.status ?? null;
 
-      const resolved = await resolveMembershipOwedForCheckout(user.id, schoolId);
+      const resolved = await resolveMembershipOwedForCheckout(userAfterReconcile.id, schoolId);
       if (resolved) {
         membershipOwedCents = resolved.owedCents;
         membershipFeeAmount = resolved.membershipFeeAmount;
@@ -734,7 +738,7 @@ router.get('/member-id', jwtCheck, async (req: any, res) => {
     }
 
     return res.status(200).json({
-      memberId: user.memberId || null,
+      memberId: userAfterReconcile.memberId || null,
       hasMemberId,
       hasMembership: hasMemberId,
       membershipStatus,

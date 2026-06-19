@@ -17,15 +17,29 @@ function envTruthy(name: string): boolean {
   return v === '1' || v === 'true' || v === 'yes';
 }
 
+function envFalsy(name: string): boolean {
+  const v = process.env[name];
+  return v === '0' || v === 'false' || v === 'no';
+}
+
+/** On by default in production unless explicitly disabled. */
 export function isPostPaymentVerifyEnabled(): boolean {
-  return envTruthy('POST_PAYMENT_VERIFY_ENABLED');
+  if (process.env.POST_PAYMENT_VERIFY_ENABLED !== undefined) {
+    return envTruthy('POST_PAYMENT_VERIFY_ENABLED');
+  }
+  return process.env.NODE_ENV === 'production' && !envFalsy('POST_PAYMENT_VERIFY_ENABLED');
 }
 
+/** On by default in production unless explicitly disabled. */
 export function isPostPaymentVerifyAutoFixEnabled(): boolean {
-  return envTruthy('POST_PAYMENT_VERIFY_AUTO_FIX');
+  if (process.env.POST_PAYMENT_VERIFY_AUTO_FIX !== undefined) {
+    return envTruthy('POST_PAYMENT_VERIFY_AUTO_FIX');
+  }
+  return process.env.NODE_ENV === 'production' && !envFalsy('POST_PAYMENT_VERIFY_AUTO_FIX');
 }
 
-const AUTO_FIXABLE_CRITICAL_KEYS = new Set(['stripe_db_parity', 'enrollment_ledger']);
+const AUTO_FIX_FINALIZE_KEYS = new Set(['stripe_db_parity', 'enrollment_ledger']);
+const AUTO_FIX_MEMBERSHIP_KEYS = new Set(['membership_waterfall']);
 
 async function tryAutoFixPaymentIntent(
   pi: Stripe.PaymentIntent,
@@ -35,7 +49,7 @@ async function tryAutoFixPaymentIntent(
   if (result.overallStatus !== 'critical') return;
 
   const fixable = result.checks.some(
-    (c) => c.severity === 'critical' && AUTO_FIXABLE_CRITICAL_KEYS.has(c.key),
+    (c) => c.severity === 'critical' && AUTO_FIX_FINALIZE_KEYS.has(c.key),
   );
   if (!fixable) return;
 
@@ -59,8 +73,35 @@ async function tryAutoFixPaymentIntent(
       });
     }
     console.log(`[post-payment-verify] AUTO_FIX replayed finalize for ${pi.id}`);
+    const { reconcileMembershipAfterPaymentIntent } = await import(
+      '../lib/reconcile-membership-ledger'
+    );
+    await reconcileMembershipAfterPaymentIntent(pi);
   } catch (err) {
     console.error(`[post-payment-verify] AUTO_FIX failed for ${pi.id}:`, err);
+  }
+}
+
+async function tryMembershipReconcileAutoFix(
+  pi: Stripe.PaymentIntent,
+  result: VerificationResult,
+): Promise<void> {
+  if (!isPostPaymentVerifyAutoFixEnabled()) return;
+  if (result.overallStatus !== 'critical') return;
+
+  const membershipCritical = result.checks.some(
+    (c) => c.severity === 'critical' && AUTO_FIX_MEMBERSHIP_KEYS.has(c.key),
+  );
+  if (!membershipCritical) return;
+
+  try {
+    const { reconcileMembershipAfterPaymentIntent } = await import(
+      '../lib/reconcile-membership-ledger'
+    );
+    await reconcileMembershipAfterPaymentIntent(pi);
+    console.log(`[post-payment-verify] AUTO_FIX membership reconcile for ${pi.id}`);
+  } catch (err) {
+    console.error(`[post-payment-verify] membership AUTO_FIX failed for ${pi.id}:`, err);
   }
 }
 
@@ -126,6 +167,7 @@ async function runVerification(pi: Stripe.PaymentIntent, stripeEventId?: string)
   });
   await persistVerificationResult(result);
   await tryAutoFixPaymentIntent(pi, result);
+  await tryMembershipReconcileAutoFix(pi, result);
   console.log(
     `[post-payment-verify] ${result.overallStatus} pi=${result.stripePaymentIntentId} ` +
       `checks=${result.checks.length} (${result.durationMs}ms)`,
