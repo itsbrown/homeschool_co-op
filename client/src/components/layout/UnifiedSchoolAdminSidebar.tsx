@@ -46,7 +46,8 @@ import {
   HelpCircle,
   LayoutGrid,
   TrendingUp,
-  BadgeCheck
+  BadgeCheck,
+  LifeBuoy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -141,6 +142,7 @@ const adminNavGroups: NavGroup[] = [
       { title: 'Notifications', href: '/schools/notifications', icon: Bell },
       { title: 'Announcements', href: '/schools/announcements', icon: Megaphone },
       { title: 'Notification Tracking', href: '/schools/notification-tracking', icon: BarChart3 },
+      { title: 'Support Issues', href: '/admin/technical-support', icon: LifeBuoy },
     ],
   },
 ];

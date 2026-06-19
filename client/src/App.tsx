@@ -92,6 +92,7 @@ const RolesAndPermissionsPage = lazy(() => import("@/pages/admin/RolesAndPermiss
 const RoleManagementPage = lazy(() => import("@/pages/admin/RoleManagementPage"));
 const FeaturesOverviewPage = lazy(() => import("@/pages/admin/FeaturesOverviewPage"));
 const SystemErrorsPage = lazy(() => import("@/pages/admin/SystemErrorsPage"));
+const TechnicalSupportPage = lazy(() => import("@/pages/admin/TechnicalSupportPage"));
 const VolunteerCreditsPage = lazy(() => import("@/pages/admin/VolunteerCreditsPage"));
 const ChildRegistrationPage = lazy(() => import("@/pages/ChildRegistrationPage"));
 const ChildRegistrationConfirmation = lazy(() => import("@/pages/ChildRegistrationConfirmation"));
@@ -820,6 +821,7 @@ function Router() {
       <Route path="/admin/role-management" component={RoleManagementPage} />
       <Route path="/admin/features" component={FeaturesOverviewPage} />
       <Route path="/admin/system-errors" component={SystemErrorsPage} />
+      <Route path="/admin/technical-support" component={TechnicalSupportPage} />
       <Route path="/admin/volunteer-credits" component={VolunteerCreditsPage} />
       <Route path="/admin/classes/edit/:id" component={ClassCreationPage} />
       <Route path="/admin/classes/:classId/enrollments" component={AdminClassEnrollmentsPage} />
