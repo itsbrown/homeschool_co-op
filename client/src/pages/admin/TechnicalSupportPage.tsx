@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
+import { useAuth } from '@/components/SupabaseProvider';
+import { useRole } from '@/contexts/RoleContext';
+import ParentAppShell from '@/components/layout/ParentAppShell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +50,9 @@ interface TechnicalIssue {
 export default function TechnicalSupportPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { activeRole } = useRole();
   const [selectedIssue, setSelectedIssue] = useState<TechnicalIssue | null>(null);
   const [resolution, setResolution] = useState('');
   const [newStatus, setNewStatus] = useState<string>('');
@@ -150,10 +157,41 @@ export default function TechnicalSupportPage() {
   const openIssues = issues.filter(issue => ['open', 'investigating'].includes(issue.status));
   const resolvedIssues = issues.filter(issue => ['resolved', 'closed'].includes(issue.status));
 
+  const adminRoles = ['admin', 'superAdmin', 'schoolAdmin', 'director'];
+
+  if (authLoading) {
+    return (
+      <ParentAppShell>
+        <div className="flex justify-center items-center min-h-[50vh]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      </ParentAppShell>
+    );
+  }
+
+  if (!isAuthenticated) {
+    setLocation('/login');
+    return null;
+  }
+
+  if (!adminRoles.includes(activeRole || '')) {
+    return (
+      <ParentAppShell>
+        <div className="container mx-auto py-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+            <p>Only administrators can access the support issues dashboard.</p>
+          </div>
+        </div>
+      </ParentAppShell>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <ParentAppShell>
+      <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Support Issues Dashboard</h1>
+        <h1 className="text-3xl font-bold" data-testid="text-support-issues-title">Support Issues Dashboard</h1>
         <p className="text-gray-600">Review user-submitted questions and technical issues</p>
       </div>
 
@@ -397,7 +435,8 @@ export default function TechnicalSupportPage() {
           </Card>
         </div>
       )}
-    </div>
+      </div>
+    </ParentAppShell>
   );
 }
 

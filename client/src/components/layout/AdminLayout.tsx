@@ -16,7 +16,8 @@ import {
   FileText,
   BookOpenCheck,
   Shield,
-  Upload
+  Upload,
+  LifeBuoy,
 } from 'lucide-react';
 import { useAuth } from "@/hooks/useAuth0";
 import { cn } from '@/lib/utils';
@@ -49,6 +50,7 @@ const navItems = [
   { name: 'Reports', href: '/admin/reports', icon: <PieChart className="h-5 w-5" /> },
   { name: 'AI Tools', href: '/admin/ai-tools', icon: <BookOpenCheck className="h-5 w-5" /> },
   { name: 'Platform Overview', href: '/admin/features', icon: <FileText className="h-5 w-5" /> },
+  { name: 'Support Issues', href: '/admin/technical-support', icon: <LifeBuoy className="h-5 w-5" /> },
   { name: 'Roles & Permissions', href: '/admin/roles', icon: <Shield className="h-5 w-5" /> },
   { name: 'Role Management', href: '/admin/role-management', icon: <Users className="h-5 w-5" /> },
   { name: 'Settings', href: '/admin/settings', icon: <Settings className="h-5 w-5" /> },

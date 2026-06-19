@@ -7,7 +7,7 @@
 - **API:** `POST /api/technical-support/report` requires auth; always notifies recipients; AI tips still returned after submit.
 - **Routing:** Platform issues → platform admins (`admin`/`superAdmin`); school policy → school admins for parent’s `schoolId` (in-app + email via `server/lib/support-issue-notifications.ts`).
 - **Persistence:** Postgres table `technical_support_issues` — migration `server/migrations/250-technical-support-issues.sql` (run on prod before deploy).
-- **Admin:** `/admin` Technical Support dashboard shows category + signed screenshot URL; school admins see only their school’s policy tickets.
+- **Admin:** `/admin/technical-support` — Support Issues dashboard (sidebar: Admin portal + school admin **Communication**); category + signed screenshot URL; school admins see only their school’s policy tickets.
 - **E2E:** `e2e/help-issue-submission.spec.ts` — `npm run test:e2e -- e2e/help-issue-submission.spec.ts`
 
 ## 2026-06-19 (Membership ledger foundation — reconcile + status job fix)
