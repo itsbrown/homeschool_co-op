@@ -272,7 +272,7 @@ export default function ParentDashboard() {
   } = useUnpaidEnrollments();
   const payOutstanding = usePayOutstanding();
 
-  const { data: upcomingPaymentsData, isLoading: upcomingPaymentsLoading } = useQuery<{
+  const { data: upcomingPaymentsData, isLoading: upcomingPaymentsLoading, isFetched: upcomingPaymentsFetched } = useQuery<{
     success?: boolean;
     payments?: Array<{
       id: number;
@@ -293,7 +293,7 @@ export default function ParentDashboard() {
 
   const nextScheduledPayment = upcomingPaymentsData?.payments?.[0] ?? null;
 
-  const { data: billingSummary, isLoading: billingSummaryLoading } = useQuery<{
+  const { data: billingSummary, isLoading: billingSummaryLoading, isFetched: billingSummaryFetched } = useQuery<{
     totalBalance?: number;
     enrollmentBalance?: number;
     enrollmentDetails?: Array<{ balance?: number }>;
@@ -324,6 +324,14 @@ export default function ParentDashboard() {
   /** Plan balance with no cart/upcoming row — e.g. cancelled stuck installments. */
   const hasBillingBalanceOnly =
     billingOutstandingCents > 0 && !hasCartCheckoutDue && !nextScheduledPayment;
+
+  /** Avoid flashing billing total before cart/upcoming sources finish loading. */
+  const paymentsCardLoading =
+    isLoadingUnpaid ||
+    billingSummaryLoading ||
+    upcomingPaymentsLoading ||
+    !billingSummaryFetched ||
+    !upcomingPaymentsFetched;
 
   const buildUnpaidEnrollmentForPay = useCallback(
     (enrollment: any): UnpaidEnrollment | null => {
@@ -922,7 +930,12 @@ export default function ParentDashboard() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {hasCartCheckoutDue ? (
+                {paymentsCardLoading ? (
+                  <>
+                    <div className="text-2xl font-bold text-muted-foreground">…</div>
+                    <p className="text-xs text-muted-foreground mt-1">Loading balance…</p>
+                  </>
+                ) : hasCartCheckoutDue ? (
                   <>
                     <div
                       className="text-2xl font-bold text-orange-600"
@@ -1067,9 +1080,7 @@ export default function ParentDashboard() {
                 ) : (
                   <>
                     <div className="text-2xl font-bold">
-                      {isLoadingUnpaid || upcomingPaymentsLoading || billingSummaryLoading
-                        ? "…"
-                        : formatCurrency(0)}
+                      {formatCurrency(0)}
                     </div>
                     <p className="text-xs text-muted-foreground">No payments due right now</p>
                   </>
