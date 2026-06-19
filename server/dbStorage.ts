@@ -72,6 +72,9 @@ import {
   type CreditHoldStatus,
   type StripePaymentHistory,
   type InsertStripePaymentHistory,
+  technicalSupportIssues,
+  type TechnicalSupportIssue,
+  type InsertTechnicalSupportIssue,
 } from '../shared/schema';
 import { sqlStripeHistoryUserAtSchool } from './lib/admin-school-context';
 
@@ -4434,4 +4437,115 @@ export class DatabaseStorage implements IStorage {
   saveQuarterlyProgressSnapshot = apDb.saveQuarterlyProgressSnapshot;
   getQuarterlyProgressSnapshots = apDb.getQuarterlyProgressSnapshots;
   getQuarterlyProgressSnapshotById = apDb.getQuarterlyProgressSnapshotById;
+
+  private mapTechnicalSupportIssueRow(row: TechnicalSupportIssue) {
+    return {
+      id: row.id,
+      userId: row.userId ?? undefined,
+      userEmail: row.userEmail,
+      userRole: row.userRole,
+      schoolId: row.schoolId ?? undefined,
+      issueCategory: row.issueCategory,
+      issueType: row.issueType,
+      severity: row.severity,
+      title: row.title,
+      description: row.description,
+      userAgent: row.userAgent ?? '',
+      url: row.url ?? '',
+      browserInfo: (row.browserInfo as Record<string, string>) ?? {},
+      reproductionSteps: (row.reproductionSteps as string[]) ?? [],
+      recommendedActions: (row.recommendedActions as string[]) ?? [],
+      aiDiagnosis: row.aiDiagnosis ?? undefined,
+      aiUserResponse: row.aiUserResponse ?? undefined,
+      screenshotObjectPath: row.screenshotObjectPath ?? undefined,
+      status: row.status,
+      assignedTo: row.assignedTo ?? undefined,
+      resolution: row.resolution ?? undefined,
+      timestamp: row.createdAt,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  async createTechnicalIssue(issue: InsertTechnicalSupportIssue & { id: string }): Promise<any> {
+    const db = await getDb();
+    const [row] = await db
+      .insert(technicalSupportIssues)
+      .values({
+        id: issue.id,
+        userId: issue.userId ?? null,
+        userEmail: issue.userEmail,
+        userRole: issue.userRole ?? 'parent',
+        schoolId: issue.schoolId ?? null,
+        issueCategory: issue.issueCategory ?? 'platform',
+        issueType: issue.issueType ?? 'other',
+        severity: issue.severity ?? 'medium',
+        title: issue.title,
+        description: issue.description,
+        userAgent: issue.userAgent ?? null,
+        url: issue.url ?? null,
+        browserInfo: issue.browserInfo ?? {},
+        reproductionSteps: issue.reproductionSteps ?? [],
+        recommendedActions: issue.recommendedActions ?? [],
+        aiDiagnosis: issue.aiDiagnosis ?? null,
+        aiUserResponse: issue.aiUserResponse ?? null,
+        screenshotObjectPath: issue.screenshotObjectPath ?? null,
+        status: issue.status ?? 'open',
+        assignedTo: issue.assignedTo ?? null,
+        resolution: issue.resolution ?? null,
+      })
+      .returning();
+    return this.mapTechnicalSupportIssueRow(row);
+  }
+
+  async getTechnicalIssue(id: string): Promise<any> {
+    const db = await getDb();
+    const [row] = await db
+      .select()
+      .from(technicalSupportIssues)
+      .where(eq(technicalSupportIssues.id, id))
+      .limit(1);
+    return row ? this.mapTechnicalSupportIssueRow(row) : undefined;
+  }
+
+  async getAllTechnicalIssues(): Promise<any[]> {
+    const db = await getDb();
+    const rows = await db
+      .select()
+      .from(technicalSupportIssues)
+      .orderBy(desc(technicalSupportIssues.createdAt));
+    return rows.map((row) => this.mapTechnicalSupportIssueRow(row));
+  }
+
+  async getTechnicalIssuesBySchoolId(schoolId: number): Promise<any[]> {
+    const db = await getDb();
+    const rows = await db
+      .select()
+      .from(technicalSupportIssues)
+      .where(
+        and(
+          eq(technicalSupportIssues.schoolId, schoolId),
+          eq(technicalSupportIssues.issueCategory, 'school_policy'),
+        ),
+      )
+      .orderBy(desc(technicalSupportIssues.createdAt));
+    return rows.map((row) => this.mapTechnicalSupportIssueRow(row));
+  }
+
+  async updateTechnicalIssue(id: string, updates: Partial<{
+    status: string;
+    resolution: string;
+    assignedTo: string;
+  }>): Promise<any> {
+    const db = await getDb();
+    const [row] = await db
+      .update(technicalSupportIssues)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(technicalSupportIssues.id, id))
+      .returning();
+    return row ? this.mapTechnicalSupportIssueRow(row) : null;
+  }
 }

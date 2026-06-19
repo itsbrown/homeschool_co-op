@@ -21,6 +21,18 @@ export async function dismissStaffGuideIfVisible(page: Page) {
   }
 }
 
+/** Skip the first-run parent dashboard onboarding tour if it appears. */
+export async function dismissParentOnboardingTourIfVisible(page: Page) {
+  const skip = page.getByTestId("tour-skip");
+  try {
+    await skip.waitFor({ state: "visible", timeout: 5000 });
+    await skip.click();
+    await expect(skip).toBeHidden({ timeout: 5000 });
+  } catch {
+    // Tour not shown.
+  }
+}
+
 export async function loginParent(page: Page, email: string, password: string) {
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   await page.getByLabel("Email").fill(email);

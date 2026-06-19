@@ -80,6 +80,13 @@ export const uploadCategories: Record<string, UploadCategoryConfig> = {
     public: false,
     description: "User profile photos",
   },
+  supportScreenshots: {
+    maxSizeBytes: 5 * 1024 * 1024,
+    allowedTypes: ["image/png", "image/jpeg", "image/webp"],
+    folder: "support-screenshots",
+    public: false,
+    description: "Optional screenshots attached to support issue reports",
+  },
   formAttachments: {
     maxSizeBytes: 10 * 1024 * 1024,
     allowedTypes: [
@@ -233,6 +240,27 @@ class FileUploadService {
     } catch (error) {
       console.error("Failed to delete object:", error);
       return false;
+    }
+  }
+
+  /** Time-limited signed GET URL for private objects (e.g. support screenshots). */
+  async getSignedDownloadUrl(objectPath: string, ttlSec = 900): Promise<string | null> {
+    try {
+      const normalized = objectPath.startsWith("/objects/")
+        ? objectPath
+        : objectPath.startsWith("/public/")
+          ? objectPath
+          : `/objects/${objectPath.replace(/^\//, "")}`;
+      const { bucketName, objectName } = this.parseObjectPath(normalized);
+      return await this.signObjectURL({
+        bucketName,
+        objectName,
+        method: "GET",
+        ttlSec,
+      });
+    } catch (error) {
+      console.error("Failed to sign download URL:", error);
+      return null;
     }
   }
 

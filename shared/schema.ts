@@ -1112,6 +1112,40 @@ export const insertErrorLogSchema = createInsertSchema(errorLogs).omit({
 export type InsertErrorLog = z.infer<typeof insertErrorLogSchema>;
 export type ErrorLog = typeof errorLogs.$inferSelect;
 
+/** User-submitted support tickets (`technical_support_issues` — migration 250). */
+export const technicalSupportIssues = pgTable("technical_support_issues", {
+  id: text("id").primaryKey(),
+  userId: integer("user_id"),
+  userEmail: text("user_email").notNull(),
+  userRole: text("user_role").notNull().default("parent"),
+  schoolId: integer("school_id"),
+  issueCategory: text("issue_category").notNull().default("platform"),
+  issueType: text("issue_type").notNull().default("other"),
+  severity: text("severity").notNull().default("medium"),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  userAgent: text("user_agent"),
+  url: text("url"),
+  browserInfo: jsonb("browser_info").default({}).notNull(),
+  reproductionSteps: jsonb("reproduction_steps").default([]).notNull(),
+  recommendedActions: jsonb("recommended_actions").default([]).notNull(),
+  aiDiagnosis: text("ai_diagnosis"),
+  aiUserResponse: text("ai_user_response"),
+  screenshotObjectPath: text("screenshot_object_path"),
+  status: text("status").notNull().default("open"),
+  assignedTo: text("assigned_to"),
+  resolution: text("resolution"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertTechnicalSupportIssueSchema = createInsertSchema(technicalSupportIssues).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertTechnicalSupportIssue = z.infer<typeof insertTechnicalSupportIssueSchema>;
+export type TechnicalSupportIssue = typeof technicalSupportIssues.$inferSelect;
+
 /** Phase A post-payment verification audit trail (read-only checks; no auto-fix). */
 export const paymentVerificationLogs = pgTable("payment_verification_logs", {
   id: serial("id").primaryKey(),

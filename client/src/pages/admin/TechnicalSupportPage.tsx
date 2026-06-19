@@ -28,6 +28,7 @@ interface TechnicalIssue {
   id: string;
   userEmail: string;
   userRole: string;
+  issueCategory?: 'platform' | 'school_policy';
   issueType: 'navigation' | 'payment' | 'ui' | 'performance' | 'authentication' | 'other';
   severity: 'low' | 'medium' | 'high' | 'critical';
   title: string;
@@ -38,6 +39,8 @@ interface TechnicalIssue {
   assignedTo?: string;
   reproductionSteps: string[];
   recommendedActions: string[];
+  screenshotUrl?: string | null;
+  screenshotObjectPath?: string;
 }
 
 export default function TechnicalSupportPage() {
@@ -150,8 +153,8 @@ export default function TechnicalSupportPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Technical Support Dashboard</h1>
-        <p className="text-gray-600">Monitor and manage technical issues reported by users</p>
+        <h1 className="text-3xl font-bold">Support Issues Dashboard</h1>
+        <p className="text-gray-600">Review user-submitted questions and technical issues</p>
       </div>
 
       {/* System Health Status */}
@@ -292,7 +295,25 @@ export default function TechnicalSupportPage() {
                   <User className="h-3 w-3 mr-1" />
                   {selectedIssue.userRole}
                 </Badge>
+                {selectedIssue.issueCategory && (
+                  <Badge variant="outline">
+                    {selectedIssue.issueCategory === 'school_policy' ? 'School' : 'Platform'}
+                  </Badge>
+                )}
               </div>
+
+              {selectedIssue.screenshotUrl && (
+                <div>
+                  <h4 className="font-medium mb-2">Screenshot</h4>
+                  <a href={selectedIssue.screenshotUrl} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={selectedIssue.screenshotUrl}
+                      alt="Issue screenshot"
+                      className="max-h-64 rounded border object-contain bg-muted"
+                    />
+                  </a>
+                </div>
+              )}
 
               <div>
                 <h4 className="font-medium mb-2">User Information</h4>
@@ -419,6 +440,14 @@ function IssuesList({
                   <p className="text-sm text-gray-600 truncate max-w-md">{issue.description}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs text-gray-500">{issue.userEmail}</span>
+                    {issue.issueCategory && (
+                      <>
+                        <span className="text-xs text-gray-500">•</span>
+                        <span className="text-xs text-gray-500">
+                          {issue.issueCategory === 'school_policy' ? 'School' : 'Platform'}
+                        </span>
+                      </>
+                    )}
                     <span className="text-xs text-gray-500">•</span>
                     <span className="text-xs text-gray-500">
                       {formatDistanceToNow(new Date(issue.timestamp))} ago

@@ -1,198 +1,228 @@
 import type { Express } from "express";
 import { AITechnicalSupportService } from "../lib/ai-technical-support";
+import { notifySupportIssueRecipients, type SupportIssueCategory } from "../lib/support-issue-notifications";
 import { storage } from "../storage";
 import { supabaseAuth } from "../middleware/supabase-auth";
-
-interface TechnicalIssue {
-  id: string;
-  userEmail: string;
-  userRole: string;
-  issueType: 'navigation' | 'payment' | 'ui' | 'performance' | 'authentication' | 'other';
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  title: string;
-  description: string;
-  userAgent: string;
-  url: string;
-  browserInfo: {
-    browser: string;
-    version: string;
-    platform: string;
-  };
-  reproductionSteps: string[];
-  recommendedActions: string[];
-  timestamp: Date;
-  status: 'open' | 'investigating' | 'resolved' | 'closed';
-  assignedTo?: string;
-  resolution?: string;
-}
+import { fileUploadService } from "../services/fileUploadService";
 
 const aiSupport = new AITechnicalSupportService();
 
+const PLATFORM_ROLES = new Set(['admin', 'superAdmin']);
+
+async function resolveAdminContext(email: string) {
+  const user = await storage.getUserByEmail(email);
+  if (!user) return null;
+
+  const userRoles = await storage.getUserRolesByUserId(user.id);
+  const isPlatformAdmin =
+    PLATFORM_ROLES.has(user.role) ||
+    userRoles.some((r) => PLATFORM_ROLES.has(r.role));
+
+  const schoolAdminRole = userRoles.find((r) => r.role === 'schoolAdmin' || r.role === 'director');
+  const schoolId = schoolAdminRole?.schoolId ?? user.schoolId ?? null;
+
+  const isSchoolAdmin =
+    !isPlatformAdmin &&
+    (user.role === 'schoolAdmin' ||
+      userRoles.some((r) => r.role === 'schoolAdmin' || r.role === 'director'));
+
+  return { user, userRoles, isPlatformAdmin, isSchoolAdmin, schoolId };
+}
+
+async function listIssuesForAdmin(email: string) {
+  const ctx = await resolveAdminContext(email);
+  if (!ctx) return { issues: [], ctx: null };
+
+  const { isPlatformAdmin, isSchoolAdmin, schoolId } = ctx;
+  if (!isPlatformAdmin && !isSchoolAdmin) {
+    return { issues: [], ctx };
+  }
+
+  let issues;
+  if (isPlatformAdmin) {
+    issues = await storage.getAllTechnicalIssues();
+  } else if (isSchoolAdmin && schoolId) {
+    issues = await storage.getTechnicalIssuesBySchoolId(schoolId);
+  } else {
+    issues = [];
+  }
+
+  return {
+    ctx,
+    issues: issues.sort(
+      (a, b) => new Date(b.timestamp ?? b.createdAt).getTime() - new Date(a.timestamp ?? a.createdAt).getTime(),
+    ),
+  };
+}
+
 export function registerTechnicalSupportRoutes(app: Express) {
-  // Report a technical issue with AI analysis
-  app.post('/api/technical-support/report', async (req, res) => {
+  app.post('/api/technical-support/report', supabaseAuth, async (req: any, res) => {
     try {
       const {
         description,
-        userEmail,
-        userRole,
+        userRole: bodyRole,
         currentUrl,
         userAgent,
         browserInfo,
-        attemptedActions
+        attemptedActions,
+        issueCategory: rawCategory,
+        screenshotObjectPath,
       } = req.body;
 
-      if (!description || !userEmail) {
+      const authEmail = req.user?.email;
+      if (!authEmail) {
+        return res.status(401).json({ success: false, error: 'Authentication required' });
+      }
+
+      if (!description?.trim()) {
+        return res.status(400).json({ success: false, error: 'Description is required' });
+      }
+
+      const user = await storage.getUserByEmail(authEmail);
+      const userEmail = authEmail;
+      const userRole = bodyRole || user?.role || 'parent';
+      const schoolId = user?.schoolId ?? null;
+
+      const issueCategory: SupportIssueCategory =
+        rawCategory === 'school_policy' ? 'school_policy' : 'platform';
+
+      if (issueCategory === 'school_policy' && !schoolId) {
         return res.status(400).json({
           success: false,
-          error: 'Description and user email are required'
+          error: 'Your account is not linked to a school. Use platform support for technical issues.',
         });
       }
 
-      // AI analysis of the issue
-      const analysis = await aiSupport.analyzeUserIssue({
-        description,
-        userEmail,
-        userRole: userRole || 'parent',
-        currentUrl: currentUrl || '',
-        userAgent: userAgent || '',
-        browserInfo: browserInfo || {},
-        attemptedActions: attemptedActions || []
-      });
+      const useFastAnalysis =
+        process.env.NODE_ENV === 'test' || process.env.TESTING_FAST_SUPPORT === 'true';
 
-      // Create issue record
-      const issue: TechnicalIssue = {
-        id: aiSupport.generateIssueId(),
+      const analysis = useFastAnalysis
+        ? {
+            diagnosis: 'Automated test analysis stub.',
+            issueType: 'other' as const,
+            severity: 'medium' as const,
+            recommendedActions: [
+              'Try refreshing the page',
+              'Clear your browser cache',
+              'Contact support if the issue persists',
+            ],
+            reproductionSteps: ['Reproduce in test environment'],
+            requiresAdminNotification: true,
+          }
+        : await aiSupport.analyzeUserIssue({
+            description: description.trim(),
+            userEmail,
+            userRole,
+            currentUrl: currentUrl || '',
+            userAgent: userAgent || '',
+            browserInfo: browserInfo || {},
+            attemptedActions: attemptedActions || [],
+          });
+
+      const issueId = aiSupport.generateIssueId();
+      const userFirstName = userEmail.split('@')[0];
+      const userResponse = useFastAnalysis
+        ? `Hi ${userFirstName}, we've received your report and our team is reviewing it. Try refreshing the page while you wait.`
+        : await aiSupport.generateUserResponse({
+            diagnosis: analysis.diagnosis,
+            recommendedActions: analysis.recommendedActions,
+            userFirstName,
+          });
+
+      const issueRecord = {
+        id: issueId,
+        userId: user?.id ?? null,
         userEmail,
-        userRole: userRole || 'parent',
+        userRole,
+        schoolId: issueCategory === 'school_policy' ? schoolId : schoolId,
+        issueCategory,
         issueType: analysis.issueType,
         severity: analysis.severity,
         title: `${analysis.issueType} issue: ${description.substring(0, 50)}...`,
-        description,
+        description: description.trim(),
         userAgent: userAgent || '',
         url: currentUrl || '',
         browserInfo: browserInfo || {},
         reproductionSteps: analysis.reproductionSteps,
         recommendedActions: analysis.recommendedActions,
-        timestamp: new Date(),
-        status: 'open'
+        aiDiagnosis: analysis.diagnosis,
+        aiUserResponse: userResponse,
+        screenshotObjectPath: screenshotObjectPath || null,
+        status: 'open' as const,
       };
 
-      // Store issue
-      await storage.createTechnicalIssue(issue);
+      await storage.createTechnicalIssue(issueRecord);
 
-      // Generate user-friendly response
-      const userFirstName = userEmail.split('@')[0];
-      const userResponse = await aiSupport.generateUserResponse({
-        diagnosis: analysis.diagnosis,
-        recommendedActions: analysis.recommendedActions,
-        userFirstName
-      });
+      try {
+        await notifySupportIssueRecipients({
+          issue: {
+            ...issueRecord,
+            timestamp: new Date(),
+            reproductionSteps: analysis.reproductionSteps,
+            recommendedActions: analysis.recommendedActions,
+          },
+          issueCategory,
+          schoolId,
+        });
+      } catch (notifError) {
+        console.error('Failed to notify support recipients:', notifError);
+      }
 
-      // Create admin notification if needed
-      if (analysis.requiresAdminNotification) {
-        try {
-          // Find admin users from both users.role AND userRoles table for comprehensive detection
-          const allUsers = await storage.getAllUsers();
-          
-          // Build set of admin user IDs - check primary role first
-          const adminUserIds = new Set<number>();
-          for (const user of allUsers) {
-            // Check primary role
-            if (user.role === 'admin' || user.role === 'schoolAdmin' || user.role === 'superAdmin') {
-              adminUserIds.add(user.id);
-              continue;
-            }
-            // Check secondary roles in userRoles table
-            const userRoles = await storage.getUserRolesByUserId(user.id);
-            if (userRoles.some(ur => ur.role === 'admin' || ur.role === 'schoolAdmin' || ur.role === 'superAdmin')) {
-              adminUserIds.add(user.id);
-            }
-          }
-          
-          const adminUsers = allUsers.filter(u => adminUserIds.has(u.id));
-          const senderId = adminUsers[0]?.id || 1;
-          
-          if (adminUsers.length === 0) {
-            console.warn('⚠️ No admin users found to notify about technical issue');
-          }
-          
-          // Create notification for admins
-          const notification = await storage.createNotification({
-            senderId,
-            type: 'in_app',
-            priority: analysis.severity === 'critical' ? 'high' : 'normal',
-            subject: `Technical Issue: ${analysis.issueType}`,
-            content: `User ${userEmail} reported: ${description.substring(0, 200)}${description.length > 200 ? '...' : ''}`,
-            targetType: 'role',
-            targetData: { role: 'schoolAdmin', issueId: issue.id },
-            scheduledFor: null,
-            expiresAt: null
-          });
-          
-          // Create notification recipients for all admin users
-          for (const admin of adminUsers) {
-            try {
-              await storage.createNotificationRecipient({
-                notificationId: notification.id,
-                recipientId: admin.id,
-                deliveryType: 'in_app',
-                status: 'pending'
-              });
-            } catch (recipientError) {
-              console.error(`Failed to create recipient for admin ${admin.id}:`, recipientError);
-            }
-          }
-          console.log(`📬 Created ${adminUsers.length} notification recipients for technical issue`);
-          
-          // Also log to error monitoring for tracking
-          await storage.createErrorLog({
-            errorType: 'frontend',
-            severity: analysis.severity === 'critical' ? 'high' : 'medium',
-            route: currentUrl || '/technical-support',
-            method: 'POST',
-            message: `Technical Issue: ${analysis.issueType} - ${issue.title}`,
-            stackTrace: aiSupport.formatIssueForAdmin(issue),
-            userEmail: userEmail,
-            metadata: { issueId: issue.id, notificationId: notification.id }
-          });
-          
-          console.log(`📢 Created admin notification ${notification.id} for technical issue ${issue.id}`);
-        } catch (notifError) {
-          console.error('Failed to create admin notification:', notifError);
-        }
+      try {
+        await storage.createErrorLog({
+          errorType: 'frontend',
+          severity: analysis.severity === 'critical' ? 'high' : 'medium',
+          route: currentUrl || '/technical-support',
+          method: 'POST',
+          message: `Support Issue (${issueCategory}): ${analysis.issueType} - ${issueRecord.title}`,
+          stackTrace: aiSupport.formatIssueForAdmin({
+            ...issueRecord,
+            timestamp: new Date(),
+            reproductionSteps: analysis.reproductionSteps,
+            recommendedActions: analysis.recommendedActions,
+          }),
+          userEmail,
+          schoolId: schoolId ?? undefined,
+          metadata: { issueId, issueCategory, screenshotObjectPath: screenshotObjectPath ?? null },
+        });
+      } catch (logError) {
+        console.error('Failed to log support issue to error monitoring:', logError);
       }
 
       res.json({
         success: true,
-        issueId: issue.id,
+        issueId,
+        issueCategory,
         diagnosis: analysis.diagnosis,
         userResponse,
         recommendedActions: analysis.recommendedActions,
         severity: analysis.severity,
-        trackingEnabled: true
+        trackingEnabled: true,
       });
-
     } catch (error) {
       console.error('Technical support error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to process technical support request'
+        error: 'Failed to process technical support request',
       });
     }
   });
 
-  // Get issue status for user tracking
-  app.get('/api/technical-support/issue/:issueId', async (req, res) => {
+  app.get('/api/technical-support/issue/:issueId', supabaseAuth, async (req: any, res) => {
     try {
       const { issueId } = req.params;
       const issue = await storage.getTechnicalIssue(issueId);
 
       if (!issue) {
-        return res.status(404).json({
-          success: false,
-          error: 'Issue not found'
-        });
+        return res.status(404).json({ success: false, error: 'Issue not found' });
+      }
+
+      const authEmail = req.user?.email;
+      if (issue.userEmail !== authEmail) {
+        const ctx = authEmail ? await resolveAdminContext(authEmail) : null;
+        if (!ctx?.isPlatformAdmin && !ctx?.isSchoolAdmin) {
+          return res.status(403).json({ success: false, error: 'Forbidden' });
+        }
       }
 
       res.json({
@@ -202,139 +232,104 @@ export function registerTechnicalSupportRoutes(app: Express) {
           status: issue.status,
           title: issue.title,
           description: issue.description,
-          timestamp: issue.timestamp,
+          timestamp: issue.timestamp ?? issue.createdAt,
           resolution: issue.resolution,
-          recommendedActions: issue.recommendedActions
-        }
+          recommendedActions: issue.recommendedActions,
+          issueCategory: issue.issueCategory,
+        },
       });
-
     } catch (error) {
       console.error('Issue lookup error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to retrieve issue status'
-      });
+      res.status(500).json({ success: false, error: 'Failed to retrieve issue status' });
     }
   });
 
-  // System health check for proactive monitoring
-  app.get('/api/technical-support/system-health', async (req, res) => {
+  app.get('/api/technical-support/system-health', async (_req, res) => {
     try {
       const healthCheck = await aiSupport.checkSystemHealth();
-      
-      res.json({
-        success: true,
-        ...healthCheck
-      });
-
+      res.json({ success: true, ...healthCheck });
     } catch (error) {
       console.error('System health check error:', error);
       res.status(500).json({
         success: false,
         overallHealth: 'critical',
-        error: 'Health check failed'
+        error: 'Health check failed',
       });
     }
   });
 
-  // Admin: Get all technical issues (requires admin role)
   app.get('/api/admin/technical-issues', supabaseAuth, async (req: any, res) => {
     try {
-      // Verify admin role (check both users.role AND userRoles table)
       const userEmail = req.user?.email;
       if (!userEmail) {
         return res.status(401).json({ success: false, error: 'Unauthorized' });
       }
-      
-      const user = await storage.getUserByEmail(userEmail);
-      if (!user) {
-        return res.status(401).json({ success: false, error: 'User not found' });
-      }
-      
-      // Check if user has admin role in either users.role or userRoles table
-      const userRolesForUser = await storage.getUserRolesByUserId(user.id);
-      const hasAdminRole = 
-        user.role === 'admin' || user.role === 'schoolAdmin' || user.role === 'superAdmin' ||
-        userRolesForUser.some(ur => ur.role === 'admin' || ur.role === 'schoolAdmin' || ur.role === 'superAdmin');
-      
-      if (!hasAdminRole) {
+
+      const { issues, ctx } = await listIssuesForAdmin(userEmail);
+      if (!ctx || (!ctx.isPlatformAdmin && !ctx.isSchoolAdmin)) {
         return res.status(403).json({ success: false, error: 'Admin access required' });
       }
-      
-      const issues = await storage.getAllTechnicalIssues();
 
-      res.json({
-        success: true,
-        issues: issues.sort((a, b) => 
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        )
-      });
+      const issuesWithScreenshots = await Promise.all(
+        issues.map(async (issue) => {
+          let screenshotUrl: string | null = null;
+          if (issue.screenshotObjectPath) {
+            screenshotUrl = await fileUploadService.getSignedDownloadUrl(issue.screenshotObjectPath);
+          }
+          return { ...issue, screenshotUrl };
+        }),
+      );
 
+      res.json({ success: true, issues: issuesWithScreenshots });
     } catch (error) {
       console.error('Admin issues lookup error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to retrieve technical issues'
-      });
+      res.status(500).json({ success: false, error: 'Failed to retrieve technical issues' });
     }
   });
 
-  // Admin: Update issue status (requires admin role)
   app.patch('/api/admin/technical-issues/:issueId', supabaseAuth, async (req: any, res) => {
     try {
-      // Verify admin role (check both users.role AND userRoles table)
       const userEmail = req.user?.email;
       if (!userEmail) {
         return res.status(401).json({ success: false, error: 'Unauthorized' });
       }
-      
-      const user = await storage.getUserByEmail(userEmail);
-      if (!user) {
-        return res.status(401).json({ success: false, error: 'User not found' });
-      }
-      
-      // Check if user has admin role in either users.role or userRoles table
-      const userRolesForUser = await storage.getUserRolesByUserId(user.id);
-      const hasAdminRole = 
-        user.role === 'admin' || user.role === 'schoolAdmin' || user.role === 'superAdmin' ||
-        userRolesForUser.some(ur => ur.role === 'admin' || ur.role === 'schoolAdmin' || ur.role === 'superAdmin');
-      
-      if (!hasAdminRole) {
+
+      const ctx = await resolveAdminContext(userEmail);
+      if (!ctx || (!ctx.isPlatformAdmin && !ctx.isSchoolAdmin)) {
         return res.status(403).json({ success: false, error: 'Admin access required' });
       }
 
       const { issueId } = req.params;
-      const { status, resolution, assignedTo } = req.body;
+      const existing = await storage.getTechnicalIssue(issueId);
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Issue not found' });
+      }
 
+      if (ctx.isSchoolAdmin && !ctx.isPlatformAdmin) {
+        if (existing.issueCategory !== 'school_policy' || existing.schoolId !== ctx.schoolId) {
+          return res.status(403).json({ success: false, error: 'Forbidden' });
+        }
+      }
+
+      const { status, resolution, assignedTo } = req.body;
       const updatedIssue = await storage.updateTechnicalIssue(issueId, {
         status,
         resolution,
-        assignedTo
+        assignedTo,
       });
 
       if (!updatedIssue) {
-        return res.status(404).json({
-          success: false,
-          error: 'Issue not found'
-        });
+        return res.status(404).json({ success: false, error: 'Issue not found' });
       }
 
-      // Log resolution to error monitoring for tracking
       if (status === 'resolved' && resolution) {
-        console.log(`✅ Technical issue ${updatedIssue.id} resolved for ${updatedIssue.userEmail}: ${resolution}`);
+        console.log(`✅ Support issue ${updatedIssue.id} resolved for ${updatedIssue.userEmail}: ${resolution}`);
       }
 
-      res.json({
-        success: true,
-        issue: updatedIssue
-      });
-
+      res.json({ success: true, issue: updatedIssue });
     } catch (error) {
       console.error('Issue update error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to update issue'
-      });
+      res.status(500).json({ success: false, error: 'Failed to update issue' });
     }
   });
 }

@@ -157,12 +157,12 @@ const tutorials: Tutorial[] = [
       },
       {
         title: 'AI Technical Support',
-        content: 'If you\'re experiencing technical issues with the platform (errors, pages not loading, etc.), choose "AI Technical Support" to report the problem. Our system will analyze the issue and provide immediate guidance.',
+        content: 'If you\'re experiencing technical issues with the platform (errors, pages not loading, etc.), choose "Report an Issue" to send a description and optional screenshot to our team. AI tips appear right after you submit.',
         tip: 'Include as many details as possible about what you were trying to do when the problem occurred.'
       },
       {
         title: 'Contact Your School',
-        content: 'For questions about classes, schedules, payments, or school policies, choose "Contact My School". This sends a message directly to your school administrator.',
+        content: 'For questions about classes, schedules, payments, or school policies, choose "Report an Issue" and select **School question / policy**, or use "Contact My School" for phone and email.',
         tip: 'School admins typically respond within 1-2 business days.'
       },
       {

@@ -117,6 +117,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/quarterly-progress-report-wizard.spec.ts`](../e2e/quarterly-progress-report-wizard.spec.ts) | `npm run test:e2e -- e2e/quarterly-progress-report-wizard.spec.ts` | Educator NY \| Progress report wizard (save rubric, finalize) + parent PDF download | `setup-progress-scenario` |
 | [`e2e/credit-management-parent-lookup.spec.ts`](../e2e/credit-management-parent-lookup.spec.ts) | `npm run test:e2e -- e2e/credit-management-parent-lookup.spec.ts` | School-admin parent search / manual credit | `setup-credit-lookup-scenario` |
 | [`e2e/parent-profile-credits-tab.spec.ts`](../e2e/parent-profile-credits-tab.spec.ts) | `npm run test:e2e -- e2e/parent-profile-credits-tab.spec.ts` | Admin parent profile Credits tab | `setup-cart-scenario` (`linkSupabaseAuthAdmin`) |
+| [`e2e/help-issue-submission.spec.ts`](../e2e/help-issue-submission.spec.ts) | `npm run test:e2e -- e2e/help-issue-submission.spec.ts` | Need Help → Report an Issue (platform + school policy, screenshot upload, payment help link, school admin list) | `ensure-technical-support-schema` + `setup-cart-scenario` (`linkSupabaseAuth`, `linkSupabaseAuthAdmin`) |
 
 **Supabase:** Real project required (`isRealSupabaseConfigured()` or `supabaseLinked === true`).
 
@@ -155,7 +156,9 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `POST /api/test/setup-public-form-scenario` | `public-custom-forms.spec.ts` |
 | `POST /api/test/setup-registration-scenario` | `school-code-registration`, `parent-full-journey` |
 | `POST /api/test/setup-session-enrollment-scenario` | `session-enrollment-flow` |
-| `POST /api/test/setup-cart-scenario` | Payment, credits, membership, profile credits |
+| `POST /api/test/setup-cart-scenario` | Payment, credits, membership, profile credits, help issue submission |
+| `POST /api/test/ensure-technical-support-schema` | `help-issue-submission.spec.ts` |
+| `GET /api/test/technical-support-issue/:id` | `help-issue-submission.spec.ts` (persistence verify) |
 | `POST /api/test/setup-credit-lookup-scenario` | `credit-management-parent-lookup` |
 | `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard` |
 | `POST /api/test/seed-upcoming-scheduled-payment` | `parent-payment-flow` (installment test) |

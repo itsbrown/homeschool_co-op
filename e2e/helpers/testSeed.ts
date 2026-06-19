@@ -61,6 +61,40 @@ export async function postSetupCartScenario(
   return { response, json };
 }
 
+export async function postEnsureTechnicalSupportSchema(
+  request: APIRequestContext,
+): Promise<{ response: APIResponse; json: { success?: boolean; error?: string } | null }> {
+  const response = await request.post("/api/test/ensure-technical-support-schema", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+  });
+  let json: { success?: boolean; error?: string } | null = null;
+  try {
+    json = (await response.json()) as { success?: boolean; error?: string };
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
+export async function getTechnicalSupportIssue(
+  request: APIRequestContext,
+  issueId: string,
+): Promise<{ response: APIResponse; json: { success?: boolean; issue?: Record<string, unknown> } | null }> {
+  const response = await request.get(`/api/test/technical-support-issue/${issueId}`, {
+    headers: { "X-Test-Token": testApiToken() },
+  });
+  let json: { success?: boolean; issue?: Record<string, unknown> } | null = null;
+  try {
+    json = (await response.json()) as { success?: boolean; issue?: Record<string, unknown> };
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export type SetupSessionEnrollmentScenarioResponse = {
   success: boolean;
   data?: {

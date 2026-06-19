@@ -1266,6 +1266,58 @@ router.get('/manual-payment-enrollment-visibility/:id', async (req: Request, res
   }
 });
 
+/** POST /api/test/ensure-technical-support-schema — applies migration 250 if missing (E2E). */
+router.post('/ensure-technical-support-schema', async (_req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS technical_support_issues (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        user_email TEXT NOT NULL,
+        user_role TEXT NOT NULL DEFAULT 'parent',
+        school_id INTEGER REFERENCES schools(id) ON DELETE SET NULL,
+        issue_category TEXT NOT NULL DEFAULT 'platform',
+        issue_type TEXT NOT NULL DEFAULT 'other',
+        severity TEXT NOT NULL DEFAULT 'medium',
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        user_agent TEXT,
+        url TEXT,
+        browser_info JSONB NOT NULL DEFAULT '{}',
+        reproduction_steps JSONB NOT NULL DEFAULT '[]',
+        recommended_actions JSONB NOT NULL DEFAULT '[]',
+        ai_diagnosis TEXT,
+        ai_user_response TEXT,
+        screenshot_object_path TEXT,
+        status TEXT NOT NULL DEFAULT 'open',
+        assigned_to TEXT,
+        resolution TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('[Test] ensure-technical-support-schema error:', error);
+    return res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+/** GET /api/test/technical-support-issue/:id — read persisted issue (E2E verification). */
+router.get('/technical-support-issue/:id', async (req: Request, res: Response) => {
+  try {
+    const issue = await storage.getTechnicalIssue(req.params.id);
+    if (!issue) {
+      return res.status(404).json({ success: false, error: 'Issue not found' });
+    }
+    return res.json({ success: true, issue });
+  } catch (error) {
+    console.error('[Test] technical-support-issue lookup error:', error);
+    return res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
 /** GET /api/test/program-enrollment/:id — returns the row or null. */
 router.get('/program-enrollment/:id', async (req: Request, res: Response) => {
   try {
