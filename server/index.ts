@@ -36,6 +36,8 @@ import cartRouter from "./api/cart";
 import progressRouter from "./api/progress";
 import progressInsightsRouter from "./api/progress-insights";
 import locationEnrollmentsRouter from "./api/location-enrollments";
+import publicStoreRouter from './api/public-store';
+import storeAdminRouter from './api/store-admin';
 import { getDb } from "./db";
 import { getNormalizedDatabaseUrl } from "./lib/database-url";
 
@@ -204,6 +206,8 @@ app.use("/api/cart", cartRouter);
 app.use("/api/progress", progressRouter);
 app.use("/api/progress/insights", progressInsightsRouter);
 app.use("/api/location-enrollments", locationEnrollmentsRouter);
+app.use("/api/public/store", publicStoreRouter);
+app.use("/api/school-admin/public-store", storeAdminRouter);
 
 // Test endpoints for development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {

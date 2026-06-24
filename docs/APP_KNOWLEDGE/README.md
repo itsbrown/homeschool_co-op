@@ -32,6 +32,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 | [domains/custom-forms-public-access.md](./domains/custom-forms-public-access.md) | Public Form Builder, mentor app, resume upload, E2E |
 | [../E2E_COMMANDS.md](../E2E_COMMANDS.md) | Playwright: npm scripts, per-spec commands, seeds (**update catalog when adding `e2e/*.spec.ts`**) |
 | [domains/student-progress-assessments.md](./domains/student-progress-assessments.md) | F-14 assessments, Lexile, progress tracking audit |
+| [domains/public-store.md](./domains/public-store.md) | Public storefront `/store/:slug`, store lane checkout, admin |
 | [runbooks/merge-replit-prod.md](./runbooks/merge-replit-prod.md) | Merge → Replit → prod SQL |
 | [runbooks/public-mentor-application-form.md](./runbooks/public-mentor-application-form.md) | Mentor form: seed, clone/provision, public URL |
 | [CHANGELOG.md](./CHANGELOG.md) | Knowledge updates by date |
