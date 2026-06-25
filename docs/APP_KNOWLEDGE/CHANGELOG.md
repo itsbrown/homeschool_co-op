@@ -6,6 +6,7 @@
 - **API:** `server/api/public-store.ts`, `server/api/store-admin.ts`; webhook early `store_checkout` branch.
 - **UI:** `/store/:schoolSlug`, checkout wizard, success page; `/school-admin/public-store`; publish-from-save on Sessions (+ class API hooks).
 - **Docs:** [domains/public-store.md](./domains/public-store.md); E2E catalog `e2e/public-store-guest-checkout.spec.ts` (skipped until seed).
+- **Nav/UX:** Finance sidebar link (gated by `enabled_features.publicStore` or activation); `SchoolAdminLayout` shell; store-admin 503 when migration 251 missing.
 
 ## 2026-06-19 (Help — issue submission with optional screenshot)
 

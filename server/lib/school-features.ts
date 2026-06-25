@@ -23,3 +23,11 @@ export function isSchoolFeatureEnabled(features: Record<string, boolean>, featur
   }
   return DEFAULT_SCHOOL_FEATURES[featureName] === true;
 }
+
+/** Nav + admin access: paid feature flag or school already activated the store. */
+export function showPublicStoreInNav(
+  features: Record<string, boolean>,
+  publicStoreEnabled: boolean,
+): boolean {
+  return isSchoolFeatureEnabled(features, 'publicStore') || publicStoreEnabled === true;
+}

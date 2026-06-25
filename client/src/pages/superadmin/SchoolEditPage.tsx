@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
-import { Loader2, ArrowLeft, Sparkles, Shield } from "lucide-react";
+import { Loader2, ArrowLeft, Sparkles, Shield, Store } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -425,6 +425,25 @@ export default function SchoolEditPage() {
                     </div>
                   ) : (
                     <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-purple-100 rounded-lg">
+                            <Store className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">Public Store</p>
+                            <p className="text-sm text-muted-foreground">
+                              Guest-facing storefront at /store/:slug — unlocks admin nav and checkout lane
+                            </p>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={localFeatures.publicStore || false}
+                          onCheckedChange={(checked) => handleFeatureToggle('publicStore', checked)}
+                          disabled={updateFeaturesMutation.isPending}
+                        />
+                      </div>
+
                       <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-purple-100 rounded-lg">
