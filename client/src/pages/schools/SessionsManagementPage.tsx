@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
+import { StorePublishSection } from "@/components/store/StorePublishSection";
+import { PurchaseConfirmationDocumentsSection } from "@/components/store/PurchaseConfirmationDocumentsSection";
 import { formatFetchErrorMessage } from "@/lib/formatFetchError";
 import { safeJsonParse } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -131,6 +133,22 @@ export default function SessionsManagementPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<SessionFormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [storePublish, setStorePublish] = useState(false);
+  const [storeMembersOnly, setStoreMembersOnly] = useState(false);
+  const [deliveryDocumentIds, setDeliveryDocumentIds] = useState<number[]>([]);
+
+  const { data: storeSettings } = useQuery({
+    queryKey: ["/api/school-admin/public-store/settings"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/school-admin/public-store/settings");
+      if (!res.ok) return { publicStoreEnabled: false };
+      return res.json();
+    },
+  });
+
+  const { data: schoolDocuments = [] } = useQuery<{ id: number; title: string }[]>({
+    queryKey: ["/api/school-admin/documents"],
+  });
 
   const { data: sessionsList = [], isLoading } = useQuery<Session[]>({
     queryKey: ["/api/admin/sessions"],
@@ -203,12 +221,38 @@ export default function SessionsManagementPage() {
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setStorePublish(false);
+    setStoreMembersOnly(false);
+    setDeliveryDocumentIds([]);
     setDialogOpen(true);
   };
 
-  const openEdit = (s: Session) => {
+  const openEdit = async (s: Session) => {
     setEditingId(s.id);
     setForm(sessionToForm(s));
+    setStorePublish(false);
+    setStoreMembersOnly(false);
+    setDeliveryDocumentIds([]);
+    try {
+      const res = await apiRequest("GET", `/api/admin/sessions/${s.id}`);
+      if (res.ok) {
+        const detail = await res.json();
+        if (detail.storeListing) {
+          setStorePublish(!!detail.storeListing.isPublished);
+          setStoreMembersOnly(!!detail.storeListing.membersOnly);
+        }
+      }
+      const docRes = await apiRequest(
+        "GET",
+        `/api/school-admin/public-store/delivery-documents/session/${s.id}`,
+      );
+      if (docRes.ok) {
+        const docData = await docRes.json();
+        setDeliveryDocumentIds(docData.documentIds ?? []);
+      }
+    } catch {
+      /* optional */
+    }
     setDialogOpen(true);
   };
 
@@ -217,7 +261,11 @@ export default function SessionsManagementPage() {
       toast({ title: "Please fill in all required fields", variant: "destructive" });
       return;
     }
-    const payload = formToPayload(form);
+    const payload = {
+      ...formToPayload(form),
+      storeListing: { publish: storePublish, membersOnly: storeMembersOnly },
+      deliveryDocumentIds,
+    };
     if (editingId) {
       updateMutation.mutate({ id: editingId, data: payload });
     } else {
@@ -498,6 +546,22 @@ export default function SessionsManagementPage() {
                 <Input type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} />
               </div>
             </div>
+
+            <StorePublishSection
+              listingType="session"
+              storeEnabled={!!storeSettings?.publicStoreEnabled}
+              publish={storePublish}
+              membersOnly={storeMembersOnly}
+              onPublishChange={setStorePublish}
+              onMembersOnlyChange={setStoreMembersOnly}
+              defaultMembersOnly={false}
+            />
+
+            <PurchaseConfirmationDocumentsSection
+              documents={schoolDocuments}
+              selectedIds={deliveryDocumentIds}
+              onChange={setDeliveryDocumentIds}
+            />
           </div>
 
           <DialogFooter>

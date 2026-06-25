@@ -1993,3 +1993,60 @@ ${schoolName} Team
     return false;
   }
 }
+
+export async function sendStorePurchaseConfirmationEmail(data: {
+  to: string;
+  parentName: string;
+  schoolId: number;
+  storeOrderId: number;
+  accessToken: string;
+  paidLines: Array<{ line: { title: string; lineTotalCents: number }; enrollmentId: number }>;
+  waitlistLines: Array<{ line: { title: string }; waitlistPosition?: number | null }>;
+  merchLines: Array<{ title: string; quantity?: number; lineTotalCents: number }>;
+  documents: Array<{ id: number; title: string; fileName: string }>;
+}): Promise<boolean> {
+  const { storage } = await import('../storage');
+  const school = await storage.getSchool(data.schoolId);
+  const schoolName = school?.name ?? 'School';
+  const subject = `Your registration confirmation — ${schoolName}`;
+
+  const programRows = [
+    ...data.paidLines.map(
+      (p) =>
+        `<li><strong>${p.line.title}</strong> — $${(p.line.lineTotalCents / 100).toFixed(2)} paid</li>`,
+    ),
+    ...data.waitlistLines.map(
+      (w) =>
+        `<li><strong>${w.line.title}</strong> — Waitlist${w.waitlistPosition ? ` #${w.waitlistPosition}` : ''} (no payment collected)</li>`,
+    ),
+    ...data.merchLines.map(
+      (m) =>
+        `<li>${m.title}${m.quantity && m.quantity > 1 ? ` × ${m.quantity}` : ''} — $${(m.lineTotalCents / 100).toFixed(2)}</li>`,
+    ),
+  ].join('');
+
+  const docLinks =
+    data.documents.length > 0
+      ? `<p><strong>Documents:</strong></p><ul>${data.documents
+          .map((d) => `<li>${d.title}</li>`)
+          .join('')}</ul><p>Download from your order confirmation page using your receipt link.</p>`
+      : '';
+
+  const html = `
+    <p>Hi ${data.parentName},</p>
+    <p>Thank you for your purchase with ${schoolName}.</p>
+    <p><strong>Order #${data.storeOrderId}</strong></p>
+    <ul>${programRows}</ul>
+    ${docLinks}
+    <p>Keep this email for your records.</p>
+  `;
+
+  return sendEmail(
+    data.to,
+    data.parentName,
+    subject,
+    html,
+    undefined,
+    'store_purchase_confirmation',
+  );
+}

@@ -1085,6 +1085,21 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
       }
     }
 
+    if (req.body.storeListing) {
+      const { syncStoreListingFromProgram } = await import('../lib/store-listing-sync');
+      await syncStoreListingFromProgram({
+        schoolId,
+        listingType: 'class',
+        sourceId: classId,
+        publish: !!req.body.storeListing.publish,
+        membersOnly: req.body.storeListing.membersOnly ?? true,
+      });
+    }
+    if (Array.isArray(req.body.deliveryDocumentIds)) {
+      const { setProgramDeliveryDocuments } = await import('../lib/store-storage');
+      await setProgramDeliveryDocuments(schoolId, 'class', classId, req.body.deliveryDocumentIds);
+    }
+
     console.log('✅ [PATCH] Class updated successfully:', updatedClass.title);
     res.json(updatedClass);
   } catch (error) {
@@ -2626,6 +2641,26 @@ router.post("/classes", supabaseAuth, requireSchoolContext, async (req: any, res
     // Create class in database
     const newClass = await storage.createClass(newClassData);
     console.log('✅ Class created successfully in database');
+
+    if (req.body.storeListing) {
+      const { syncStoreListingFromProgram } = await import('../lib/store-listing-sync');
+      await syncStoreListingFromProgram({
+        schoolId: Number(schoolId),
+        listingType: 'class',
+        sourceId: newClass.id,
+        publish: !!req.body.storeListing.publish,
+        membersOnly: req.body.storeListing.membersOnly ?? true,
+      });
+    }
+    if (Array.isArray(req.body.deliveryDocumentIds)) {
+      const { setProgramDeliveryDocuments } = await import('../lib/store-storage');
+      await setProgramDeliveryDocuments(
+        Number(schoolId),
+        'class',
+        newClass.id,
+        req.body.deliveryDocumentIds,
+      );
+    }
 
     console.log('✅ Class created successfully:', newClass.title);
     return res.status(201).json({

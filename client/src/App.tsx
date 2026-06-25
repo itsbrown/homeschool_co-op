@@ -84,6 +84,10 @@ const FinancialReportsPage = lazy(() => import("./pages/schooladmin/FinancialRep
 const RetentionReportPage = lazy(() => import("./pages/schooladmin/RetentionReportPage"));
 const FundraiserStorePage = lazy(() => import("./pages/FundraiserStorePage"));
 const FundraiserSuccessPage = lazy(() => import("./pages/FundraiserSuccessPage"));
+const PublicStorePage = lazy(() => import("./pages/public-store/PublicStorePage"));
+const PublicStoreCheckoutPage = lazy(() => import("./pages/public-store/PublicStoreCheckoutPage"));
+const PublicStoreSuccessPage = lazy(() => import("./pages/public-store/PublicStoreSuccessPage"));
+const PublicStoreManagerPage = lazy(() => import("./pages/schooladmin/PublicStoreManagerPage"));
 const DynamicFormPage = lazy(() => import("./pages/DynamicFormPage"));
 const ProductOrderFormPage = lazy(() => import("./pages/ProductOrderFormPage"));
 const ProductOrderPaymentPage = lazy(() => import("./pages/ProductOrderPaymentPage"));
@@ -411,7 +415,7 @@ function Router() {
   // Handle redirects in useEffect to avoid state updates during render
   useEffect(() => {
     // Redirect to login if not authenticated (except for public routes)
-    if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/') && !location.startsWith('/forms/') && !location.startsWith('/qr/')) {
+    if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/') && !location.startsWith('/forms/') && !location.startsWith('/qr/') && !location.startsWith('/store/') && !location.startsWith('/fundraiser/')) {
       console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
       setLocation('/login?returnTo=' + encodeURIComponent(location));
     }
@@ -742,6 +746,7 @@ function Router() {
       <Route path="/school-admin/attendance" component={() => <SchoolAdminShellWrapper><AttendanceManagementPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/credits" component={() => <SchoolAdminShellWrapper><CreditManagementPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/fundraisers" component={() => <SchoolAdminShellWrapper><FundraiserManagementPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/public-store" component={() => <SchoolAdminShellWrapper><PublicStoreManagerPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/staff-permissions" component={() => <SchoolAdminShellWrapper><StaffPermissionsPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/location-enrollments" component={() => <SchoolAdminShellWrapper><LocationEnrollmentsPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/refunds" component={() => <SchoolAdminShellWrapper><RefundHistoryPage /></SchoolAdminShellWrapper>} />
@@ -751,6 +756,9 @@ function Router() {
         {(params) => <FundraiserStorePage campaignId={params?.campaignId || ''} familySlug={params?.familySlug || ''} />}
       </Route>
       <Route path="/fundraiser/success" component={FundraiserSuccessPage} />
+      <Route path="/store/:schoolSlug/checkout" component={PublicStoreCheckoutPage} />
+      <Route path="/store/:schoolSlug/success" component={PublicStoreSuccessPage} />
+      <Route path="/store/:schoolSlug" component={PublicStorePage} />
       <Route path="/forms/:slug" component={DynamicFormPage} />
       <Route path="/product-order/:slug" component={ProductOrderFormPage} />
       <Route path="/payment/:submissionId" component={ProductOrderPaymentPage} />

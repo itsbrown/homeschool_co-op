@@ -13,6 +13,11 @@ import {
 } from "../lib/parent-auth-scope";
 import { getLocationCore } from "../lib/location-db";
 import { isLocationCollectingWishlist } from "@shared/location-activation";
+import {
+  syncStoreListingFromProgram,
+  getStoreListingState,
+} from "../lib/store-listing-sync";
+import { setProgramDeliveryDocuments } from "../lib/store-storage";
 
 const router = Router();
 
@@ -128,7 +133,8 @@ router.get("/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext, a
       return res.status(404).json({ message: "Session not found" });
     }
 
-    res.json(result[0]);
+    const storeListing = await getStoreListingState(schoolId, "session", id);
+    res.json({ ...result[0], storeListing });
   } catch (error) {
     console.error("Error fetching session:", error);
     res.status(500).json({ message: "Failed to fetch session" });
@@ -150,6 +156,25 @@ router.post("/", supabaseAuth, requireAdminOrDirector, requireSchoolContext, asy
     }
 
     const [created] = await db.insert(sessions).values(parsed.data).returning();
+
+    if (req.body.storeListing) {
+      await syncStoreListingFromProgram({
+        schoolId,
+        listingType: "session",
+        sourceId: created.id,
+        publish: !!req.body.storeListing.publish,
+        membersOnly: req.body.storeListing.membersOnly ?? false,
+      });
+    }
+    if (Array.isArray(req.body.deliveryDocumentIds)) {
+      await setProgramDeliveryDocuments(
+        schoolId,
+        "session",
+        created.id,
+        req.body.deliveryDocumentIds,
+      );
+    }
+
     res.status(201).json(created);
   } catch (error) {
     console.error("Error creating session:", error);
@@ -179,12 +204,27 @@ router.patch("/:id", supabaseAuth, requireAdminOrDirector, requireSchoolContext,
     delete updateData.id;
     delete updateData.schoolId;
     delete updateData.createdAt;
+    delete updateData.storeListing;
+    delete updateData.deliveryDocumentIds;
 
     const [updated] = await db
       .update(sessions)
       .set(updateData)
       .where(and(eq(sessions.id, id), eq(sessions.schoolId, schoolId)))
       .returning();
+
+    if (req.body.storeListing) {
+      await syncStoreListingFromProgram({
+        schoolId,
+        listingType: "session",
+        sourceId: id,
+        publish: !!req.body.storeListing.publish,
+        membersOnly: req.body.storeListing.membersOnly ?? false,
+      });
+    }
+    if (Array.isArray(req.body.deliveryDocumentIds)) {
+      await setProgramDeliveryDocuments(schoolId, "session", id, req.body.deliveryDocumentIds);
+    }
 
     res.json(updated);
   } catch (error) {

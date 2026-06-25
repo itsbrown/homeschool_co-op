@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-06-23 (Public storefront v1 — store lane)
+
+- **Schema:** `251-public-store.sql` — `store_slug`, `public_store_enabled`, `store_products`, `store_listings`, `store_orders`, `store_checkout_snapshots`, `program_delivery_documents`.
+- **API:** `server/api/public-store.ts`, `server/api/store-admin.ts`; webhook early `store_checkout` branch.
+- **UI:** `/store/:schoolSlug`, checkout wizard, success page; `/school-admin/public-store`; publish-from-save on Sessions (+ class API hooks).
+- **Docs:** [domains/public-store.md](./domains/public-store.md); E2E catalog `e2e/public-store-guest-checkout.spec.ts` (skipped until seed).
+
 ## 2026-06-19 (Help — issue submission with optional screenshot)
 
 - **UI:** “Need Help?” menu item renamed **Report an Issue** (`AISupportAssistant.tsx`); Payment Help adds “Still stuck?” link. Both floating buttons unchanged.

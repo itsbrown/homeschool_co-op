@@ -119,6 +119,11 @@ export const schools = pgTable("schools", {
 
   /** Premium feature flags (superadmin School Edit); see server/lib/school-features.ts */
   enabledFeatures: jsonb("enabled_features").default({}).notNull(),
+
+  /** Public storefront vanity slug (unique when set) */
+  storeSlug: text("store_slug").unique(),
+  publicStoreEnabled: boolean("public_store_enabled").default(false).notNull(),
+  publicStoreSettings: jsonb("public_store_settings").default({}).notNull(),
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -3255,4 +3260,104 @@ export const generateQuarterlyReportBodySchema = z.object({
   band: z.enum(['early', 'lower', 'mid', 'upper', 'secondary']).optional(),
   includeGuide: z.boolean().optional(),
   mentorName: z.string().max(120).optional().nullable(),
+});
+
+// --- Public storefront (v1) ---
+
+export const storeProducts = pgTable("store_products", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  priceCents: integer("price_cents").notNull(),
+  imageUrl: text("image_url"),
+  inventoryQty: integer("inventory_qty"),
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertStoreProductSchema = createInsertSchema(storeProducts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertStoreProduct = z.infer<typeof insertStoreProductSchema>;
+export type StoreProduct = typeof storeProducts.$inferSelect;
+
+export const storeListings = pgTable("store_listings", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  listingType: text("listing_type", { enum: ["product", "session", "class"] }).notNull(),
+  sourceId: integer("source_id").notNull(),
+  isPublished: boolean("is_published").default(false).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  membersOnly: boolean("members_only").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertStoreListingSchema = createInsertSchema(storeListings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertStoreListing = z.infer<typeof insertStoreListingSchema>;
+export type StoreListing = typeof storeListings.$inferSelect;
+
+export const storeOrders = pgTable("store_orders", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  parentId: integer("parent_id").references(() => users.id),
+  parentEmail: text("parent_email").notNull(),
+  parentName: text("parent_name"),
+  status: text("status", { enum: ["pending", "paid", "cancelled", "refunded"] }).default("pending").notNull(),
+  totalCents: integer("total_cents").default(0).notNull(),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id").unique(),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  accessToken: text("access_token").notNull(),
+  metadata: jsonb("metadata").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const storeOrderItems = pgTable("store_order_items", {
+  id: serial("id").primaryKey(),
+  storeOrderId: integer("store_order_id").notNull().references(() => storeOrders.id, { onDelete: "cascade" }),
+  listingId: integer("listing_id").references(() => storeListings.id),
+  productId: integer("product_id").references(() => storeProducts.id),
+  name: text("name").notNull(),
+  quantity: integer("quantity").default(1).notNull(),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+  lineTotalCents: integer("line_total_cents").notNull(),
+  metadata: jsonb("metadata").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const storeCheckoutSnapshots = pgTable("store_checkout_snapshots", {
+  id: text("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  storeSlug: text("store_slug").notNull(),
+  parentEmail: text("parent_email"),
+  parentName: text("parent_name"),
+  parentPhone: text("parent_phone"),
+  parentUserId: integer("parent_user_id").references(() => users.id),
+  payload: jsonb("payload").notNull(),
+  amountDueCents: integer("amount_due_cents").default(0).notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  fulfilledAt: timestamp("fulfilled_at"),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+  storeOrderId: integer("store_order_id").references(() => storeOrders.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const programDeliveryDocuments = pgTable("program_delivery_documents", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  sourceType: text("source_type", { enum: ["class", "session"] }).notNull(),
+  sourceId: integer("source_id").notNull(),
+  schoolDocumentId: integer("school_document_id").notNull().references(() => schoolDocuments.id, { onDelete: "cascade" }),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });

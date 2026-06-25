@@ -173,7 +173,9 @@ export async function handleExpiredSession(
       currentPath.startsWith('/register/') ||
       currentPath.startsWith('/school/') ||
       currentPath.startsWith('/forms/') ||
-      currentPath.startsWith('/qr/');
+      currentPath.startsWith('/qr/') ||
+      currentPath.startsWith('/store/') ||
+      currentPath.startsWith('/fundraiser/');
 
     console.log('🔒 Session expired — recovering');
 

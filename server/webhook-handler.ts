@@ -17,6 +17,7 @@ import { finalizeSucceededPaymentIntent } from './lib/finalize-succeeded-payment
 import { finalizeSucceededScheduledPaymentIntent } from './lib/finalize-succeeded-scheduled-payment-intent';
 import { schedulePostPaymentVerificationIfEnabled } from './services/post-payment-verification-schedule';
 import { reconcileMembershipAfterPaymentIntent } from './lib/reconcile-membership-ledger';
+import { fulfillStoreCheckoutFromWebhook } from './lib/store-fulfillment';
 
 // Stripe client will be lazily initialized within the webhook handler
 const RECENT_WEBHOOK_EVENTS_MAX = 1000;
@@ -252,6 +253,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
         const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent as string);
         console.log('💳 Retrieved payment intent from session:', paymentIntent.id);
 
+        const storeMeta =
+          session.metadata?.type === 'store_checkout' ||
+          paymentIntent.metadata?.type === 'store_checkout';
+        if (storeMeta) {
+          const handled = await fulfillStoreCheckoutFromWebhook({ session, paymentIntent });
+          if (handled) break;
+        }
+
         // Durable idempotency guard:
         // checkout.session.completed and payment_intent.succeeded can both arrive for the same PI.
         // Payment records persist to DB/file storage, so this protects against duplicate enrollment updates
@@ -339,6 +348,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // Check if this is a balance payment or new enrollment
         const paymentType = paymentIntent.metadata.paymentType || paymentIntent.metadata.type;
         console.log('🔍 Payment type:', paymentType);
+
+        if (paymentType === 'store_checkout') {
+          const { fulfillStoreCheckoutFromPaymentIntent } = await import('./lib/store-fulfillment');
+          const handled = await fulfillStoreCheckoutFromPaymentIntent(paymentIntent);
+          if (handled) break;
+        }
         
         // Check if this payment was already processed (to avoid double processing).
         // We intentionally do NOT skip when the existing row is still pending:
