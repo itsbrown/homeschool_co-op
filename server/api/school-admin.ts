@@ -8029,10 +8029,17 @@ router.get('/features', supabaseAuth, async (req: any, res) => {
     }
 
     const features = await storage.getSchoolFeatures(schoolId);
+    const school = await storage.getSchool(schoolId);
+    const { showPublicStoreInNav } = await import('../lib/school-features');
 
     res.json({
       features,
       schoolId,
+      publicStoreEnabled: school?.publicStoreEnabled ?? false,
+      showPublicStoreInNav: showPublicStoreInNav(
+        features,
+        school?.publicStoreEnabled ?? false,
+      ),
     });
   } catch (error) {
     console.error('[Features] Error fetching school features:', error);

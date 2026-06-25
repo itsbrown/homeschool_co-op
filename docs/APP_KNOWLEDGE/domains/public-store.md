@@ -12,7 +12,7 @@ Parallel **store lane** at `/store/:storeSlug` — isolated from member `/cart` 
 
 ## Admin
 
-- **Public Store** → `/school-admin/public-store` (settings, products, listings, orders)
+- **Public Store** → `/school-admin/public-store` (settings, products, listings, orders) — sidebar item under **Finance** when `enabled_features.publicStore` or the school has activated the store
 - **Sessions / Classes** → “List on public store” + purchase confirmation documents on save
 - Programs are **not** duplicated — `store_listings` points at existing session/class rows
 

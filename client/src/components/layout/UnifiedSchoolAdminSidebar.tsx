@@ -48,8 +48,10 @@ import {
   TrendingUp,
   BadgeCheck,
   LifeBuoy,
+  Store,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useSchoolFeatures } from '@/lib/useSchoolFeatures';
 
 interface SchoolData {
   id: number;
@@ -147,6 +149,31 @@ const adminNavGroups: NavGroup[] = [
   },
 ];
 
+const publicStoreNavItem: NavItem = {
+  title: 'Public Store',
+  href: '/school-admin/public-store',
+  icon: Store,
+};
+
+function buildAdminNavGroups(showPublicStore: boolean): NavGroup[] {
+  if (!showPublicStore) return adminNavGroups;
+  return adminNavGroups.map((group) => {
+    if (group.title !== 'Finance') return group;
+    const hasStore = group.items.some((item) => item.href === publicStoreNavItem.href);
+    if (hasStore) return group;
+    const fundraiserIndex = group.items.findIndex((item) => item.href === '/school-admin/fundraisers');
+    const items =
+      fundraiserIndex >= 0
+        ? [
+            ...group.items.slice(0, fundraiserIndex + 1),
+            publicStoreNavItem,
+            ...group.items.slice(fundraiserIndex + 1),
+          ]
+        : [...group.items, publicStoreNavItem];
+    return { ...group, items };
+  });
+}
+
 // Educator-specific nav items (no Dashboard/Settings duplication)
 const educatorOnlyNavItems: NavItem[] = [
   // Educators see their specific items only (Dashboard/Settings rendered separately)
@@ -220,7 +247,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   // Auto-expand group containing current route
   useEffect(() => {
     if (showAdminNavGroups) {
-      for (const group of adminNavGroups) {
+      for (const group of navGroups) {
         const hasActiveItem = group.items.some(item => 
           location === item.href || location.startsWith(`${item.href}/`)
         );
@@ -255,6 +282,8 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   };
   
   const hasSuperAdminRole = hasRole('superadmin');
+  const { showPublicStoreInNav } = useSchoolFeatures();
+  const navGroups = buildAdminNavGroups(showPublicStoreInNav || hasSuperAdminRole);
 
   // Fetch school data for logo and name (for any school-scoped role)
   const { data: schoolData } = useQuery<SchoolData>({
@@ -409,7 +438,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             </Link>
 
             {/* Grouped Navigation - for users with admin or director roles */}
-            {showAdminNavGroups && adminNavGroups.map((group) => {
+            {showAdminNavGroups && navGroups.map((group) => {
               const isGroupExpanded = expandedGroups.has(group.title);
               const hasActiveItem = group.items.some(item => 
                 location === item.href || location.startsWith(`${item.href}/`)
@@ -667,7 +696,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                   </Link>
 
                   {/* Grouped Navigation - for users with admin or director roles */}
-                  {showAdminNavGroups && adminNavGroups.map((group) => {
+                  {showAdminNavGroups && navGroups.map((group) => {
                     const isGroupExpanded = expandedGroups.has(group.title);
                     const hasActiveItem = group.items.some(item => 
                       location === item.href || location.startsWith(`${item.href}/`)
