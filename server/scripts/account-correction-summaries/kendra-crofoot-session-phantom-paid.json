@@ -1,0 +1,16 @@
+{
+  "parentEmail": "kcrofoot92@gmail.com",
+  "parentId": 21,
+  "correctedAt": "2026-06-25",
+  "script": "server/scripts/fix-kendra-crofoot-session-phantom-paid-production.ts",
+  "reason": "Phantom total_paid ($441/enrollment) with no succeeded Stripe PI or payments row",
+  "stalePaymentIntentId": "pi_3ThDZRGhVuNOnUs71KzilfhU",
+  "enrollmentsReset": [522, 523, 528, 529, 530, 531],
+  "changePerEnrollment": {
+    "totalPaidCents": { "before": 44100, "after": 0 },
+    "remainingBalanceCents": { "before": 60900, "after": 105000 },
+    "paymentStatus": { "before": "pending", "after": "pending" }
+  },
+  "notModified": [389, 390, 104, 105],
+  "systemFixPlan": "docs/plans/enrollment-ledger-stripe-parity.md"
+}

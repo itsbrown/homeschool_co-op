@@ -13,6 +13,7 @@ Parents pay via cart checkout (Stripe PaymentIntents). The server is authoritati
 - **Approved credits must be consumed** via `unified_credit_usage_logs` and `credits.used_amount_cents` when applied at checkout or in an admin correction. An approved credit with `used_amount_cents = 0` while enrollments still owe money is a ledger bug.
 - **Do not JOIN `payments` when summing enrollment balances** — inflates totals (one row per payment × each enrollment). Aggregate `program_enrollments` only, or use a subquery for payment counts.
 - **Scheduled payments are created post–first successful payment**, not at cart abandon — see `asa-payment-patterns` skill.
+- **`total_paid` without corroboration is invalid** — if `total_paid > 0`, `payment_status = pending`, and there is no succeeded Stripe PI / `payments` row for that checkout, treat as **phantom ledger** (admin display and cart must not treat as cash collected). See incident: Kendra Crofoot 2026-06-25; plan: [`enrollment-ledger-stripe-parity.md`](../../plans/enrollment-ledger-stripe-parity.md) (**Phase 5 test matrix** = ship gates before medium-risk phases).
 
 ## Balance fields (program enrollments)
 
@@ -288,3 +289,4 @@ Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current ba
 | Parent says paid; DB shows balance | Webhook miss; trust Stripe email search first | `inspect-parent-stripe-by-email.ts` → reconcile missed PI |
 | Parent says paid; no `stripe_customer_id` on user | Customer id may live in enrollment `metadata.stripeCustomerId` | Email search finds all Stripe customers; check PI metadata |
 | Membership `amount_paid` jumps by 2x on first checkout installment | Membership fulfillment called twice for same PI in webhook path (`webhook-handler` + `processBalancePayment`) | Ensure one fulfillment call per PI; audit `membership_enrollments` rows where checkout-note `updated_at > created_at` |
+| Admin shows $441 “paid” per session; Payments tab empty; PI `requires_payment_method` | Phantom `total_paid` — ledger updated without succeeded payment | Reset via `fix-kendra-crofoot-session-phantom-paid-production.ts` pattern; implement [ledger parity plan](../../plans/enrollment-ledger-stripe-parity.md) |

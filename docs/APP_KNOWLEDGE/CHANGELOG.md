@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-06-25 (Kendra Crofoot — phantom session ledger + parity plan)
+
+- **Prod fix:** Reset `total_paid` on session enrollments #522–531 (phantom $441 with no succeeded PI / no `payments` row). Script: `server/scripts/fix-kendra-crofoot-session-phantom-paid-production.ts`; summary: `server/scripts/account-correction-summaries/kendra-crofoot-session-phantom-paid.json`.
+- **Plan:** [enrollment-ledger-stripe-parity.md](../plans/enrollment-ledger-stripe-parity.md) — detect/prevent `total_paid` drift vs Stripe; **Phase 5 test matrix** (A–H) defines ship gates for medium-risk phases.
+- **Docs:** [payments-and-billing.md](./domains/payments-and-billing.md) — invalid `phantom_paid` state documented.
+
 ## 2026-06-23 (Public storefront v1 — store lane)
 
 - **Schema:** `251-public-store.sql` — `store_slug`, `public_store_enabled`, `store_products`, `store_listings`, `store_orders`, `store_checkout_snapshots`, `program_delivery_documents`.
