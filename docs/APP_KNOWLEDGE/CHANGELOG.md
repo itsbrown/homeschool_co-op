@@ -6,6 +6,12 @@
 - **Plan:** [enrollment-ledger-stripe-parity.md](../plans/enrollment-ledger-stripe-parity.md) — detect/prevent `total_paid` drift vs Stripe; **Phase 5 test matrix** (A–H) defines ship gates for medium-risk phases.
 - **Docs:** [payments-and-billing.md](./domains/payments-and-billing.md) — invalid `phantom_paid` state documented.
 
+## 2026-06-29 (Kendra Crofoot — Winter/Spring cart removal + parent email)
+
+- **Prod fix:** Cancelled Winter/Spring 2027 session enrollments #528–531; zeroed balance and 100% comp so cart shows Fall 2026 only. Script: `server/scripts/fix-kendra-crofoot-cancel-winter-spring-production.ts`.
+- **Cart:** `parentEnrollmentLineItems.ts` — cancelled/withdrawn/completed enrollments no longer hydrate checkout.
+- **Email:** `account-correction-summaries/kendra-crofoot-account-update.json` via `send-account-correction-email.ts`.
+
 ## 2026-06-23 (Public storefront v1 — store lane)
 
 - **Schema:** `251-public-store.sql` — `store_slug`, `public_store_enabled`, `store_products`, `store_listings`, `store_orders`, `store_checkout_snapshots`, `program_delivery_documents`.

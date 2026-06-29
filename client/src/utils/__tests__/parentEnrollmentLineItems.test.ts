@@ -162,6 +162,41 @@ describe('filterEnrollmentsToCartLineItems', () => {
     expect(out[0].id).toBe(30);
   });
 
+  it('omits cancelled enrollments even when remaining balance is positive', () => {
+    const enrollments = [
+      {
+        id: 528,
+        enrollmentVersion: 'v2',
+        sessionId: 300,
+        variantId: 'half_day',
+        childId: 5,
+        className: 'Winter 2027 - Half Day',
+        enrollmentDate: '2026-06-11',
+        status: 'cancelled',
+        totalCost: 105000,
+        totalPaid: 0,
+        effectiveBalance: 105000,
+        remainingBalance: 105000,
+      },
+      {
+        id: 522,
+        enrollmentVersion: 'v2',
+        sessionId: 298,
+        variantId: 'half_day',
+        childId: 5,
+        className: 'Fall 2026 - Half Day',
+        enrollmentDate: '2026-06-10',
+        status: 'pending_payment',
+        totalCost: 105000,
+        totalPaid: 0,
+        effectiveBalance: 105000,
+      },
+    ];
+    const out = filterEnrollmentsToCartLineItems(enrollments);
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe(522);
+  });
+
   it('does not collapse v2 sessions that share a legacy marketplaceClassId', () => {
     const enrollments = [
       {

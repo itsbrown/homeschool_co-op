@@ -8,6 +8,22 @@
 
 import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
 
+/** Enrollments in these statuses must never hydrate the parent cart. */
+const NON_CART_ENROLLMENT_STATUSES = new Set([
+  'cancelled',
+  'canceled',
+  'withdrawn',
+  'failed',
+  'completed',
+  'waitlist',
+  'location_wishlist',
+]);
+
+function enrollmentIsBillableStatus(e: any): boolean {
+  const status = String(e?.status ?? '').toLowerCase();
+  return status !== '' && !NON_CART_ENROLLMENT_STATUSES.has(status);
+}
+
 function enrollmentBalanceCents(e: any): number {
   const fromFormula = Math.max(
     0,
@@ -22,6 +38,7 @@ function enrollmentBalanceCents(e: any): number {
 }
 
 function enrollmentTuitionOwedCents(e: any): boolean {
+  if (!enrollmentIsBillableStatus(e)) return false;
   if (enrollmentBalanceCents(e) > 0) return true;
   return (
     e?.status === 'pending_payment' &&
@@ -112,11 +129,11 @@ export function filterEnrollmentsToCartLineItems(
       (latestEnrollment.paymentStatus === 'completed' &&
         getBalance(latestEnrollment) === 0);
 
-    const isWaitlisted = latestEnrollment.status === 'waitlist';
+    const isNonBillable = !enrollmentIsBillableStatus(latestEnrollment);
     // Do not hide a newer pending_payment row because an older enrolled row exists
     // in the same group (orphan pending after re-enroll / data drift).
     const shouldSkip =
-      isWaitlisted ||
+      isNonBillable ||
       latestIsPaid ||
       (hasFullyPaidEnrollment && latestEnrollment.status !== 'pending_payment');
 

@@ -1,0 +1,17 @@
+{
+  "parentEmail": "kcrofoot92@gmail.com",
+  "parentId": 21,
+  "correctedAt": "2026-06-29",
+  "script": "server/scripts/fix-kendra-crofoot-cancel-winter-spring-production.ts",
+  "reason": "Remove Winter/Spring 2027 from parent cart — Fall 2026 only",
+  "enrollmentsCancelled": [528, 529, 530, 531],
+  "changePerEnrollment": {
+    "status": "cancelled",
+    "remainingBalanceCents": 0,
+    "compPercentage": 100,
+    "compAmountCents": 105000,
+    "effectiveBalanceCents": 0
+  },
+  "unchanged": [522, 523],
+  "codeFix": "client/src/utils/parentEnrollmentLineItems.ts — exclude cancelled/withdrawn from cart hydration"
+}
