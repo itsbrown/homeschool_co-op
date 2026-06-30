@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
-import { StorePublishSection } from "@/components/store/StorePublishSection";
 import { PurchaseConfirmationDocumentsSection } from "@/components/store/PurchaseConfirmationDocumentsSection";
 import { formatFetchErrorMessage } from "@/lib/formatFetchError";
 import { safeJsonParse } from "@/lib/queryClient";
@@ -133,18 +132,7 @@ export default function SessionsManagementPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<SessionFormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [storePublish, setStorePublish] = useState(false);
-  const [storeMembersOnly, setStoreMembersOnly] = useState(false);
   const [deliveryDocumentIds, setDeliveryDocumentIds] = useState<number[]>([]);
-
-  const { data: storeSettings } = useQuery({
-    queryKey: ["/api/school-admin/public-store/settings"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/school-admin/public-store/settings");
-      if (!res.ok) return { publicStoreEnabled: false };
-      return res.json();
-    },
-  });
 
   const { data: schoolDocuments = [] } = useQuery<{ id: number; title: string }[]>({
     queryKey: ["/api/school-admin/documents"],
@@ -221,8 +209,6 @@ export default function SessionsManagementPage() {
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
-    setStorePublish(false);
-    setStoreMembersOnly(false);
     setDeliveryDocumentIds([]);
     setDialogOpen(true);
   };
@@ -230,18 +216,8 @@ export default function SessionsManagementPage() {
   const openEdit = async (s: Session) => {
     setEditingId(s.id);
     setForm(sessionToForm(s));
-    setStorePublish(false);
-    setStoreMembersOnly(false);
     setDeliveryDocumentIds([]);
     try {
-      const res = await apiRequest("GET", `/api/admin/sessions/${s.id}`);
-      if (res.ok) {
-        const detail = await res.json();
-        if (detail.storeListing) {
-          setStorePublish(!!detail.storeListing.isPublished);
-          setStoreMembersOnly(!!detail.storeListing.membersOnly);
-        }
-      }
       const docRes = await apiRequest(
         "GET",
         `/api/school-admin/public-store/delivery-documents/session/${s.id}`,
@@ -263,7 +239,6 @@ export default function SessionsManagementPage() {
     }
     const payload = {
       ...formToPayload(form),
-      storeListing: { publish: storePublish, membersOnly: storeMembersOnly },
       deliveryDocumentIds,
     };
     if (editingId) {
@@ -547,15 +522,13 @@ export default function SessionsManagementPage() {
               </div>
             </div>
 
-            <StorePublishSection
-              listingType="session"
-              storeEnabled={!!storeSettings?.publicStoreEnabled}
-              publish={storePublish}
-              membersOnly={storeMembersOnly}
-              onPublishChange={setStorePublish}
-              onMembersOnlyChange={setStoreMembersOnly}
-              defaultMembersOnly={false}
-            />
+            <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+              To show this session on your public store, use{" "}
+              <a href="/school-admin/public-store?tab=programs" className="text-blue-700 underline">
+                Public Store → Classes &amp; programs
+              </a>
+              .
+            </div>
 
             <PurchaseConfirmationDocumentsSection
               documents={schoolDocuments}

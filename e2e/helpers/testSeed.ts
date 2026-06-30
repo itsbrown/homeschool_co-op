@@ -307,6 +307,22 @@ export type SetupPublicStoreScenarioResponse = {
       imageUrl: string | null;
     };
     listing: { id: number; isPublished: boolean };
+    class?: {
+      id: number;
+      title: string;
+      priceCents: number;
+      coverImage: string | null;
+      listingId: number | null;
+      listingPublished: boolean;
+    };
+    session?: {
+      id: number;
+      name: string;
+      fullDayPrice: number | null;
+      coverImage: string | null;
+      listingId: number | null;
+      listingPublished: boolean;
+    };
   };
   error?: string;
   details?: string;

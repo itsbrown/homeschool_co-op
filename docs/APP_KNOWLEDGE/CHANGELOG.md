@@ -1,5 +1,15 @@
 # App knowledge changelog
 
+## 2026-06-01 (Public store — Classes & programs tab + catalog images)
+
+- **Admin:** Public Store → **Classes & programs** tab replaces Listings — toggle store visibility, members-only, and upload hero images for sessions and classes.
+- **API:** `GET/PATCH /api/school-admin/public-store/programs/:listingType/:sourceId`; `POST …/upload/program-image`.
+- **Schema:** `sessions.cover_image` (migration `252-session-cover-image.sql`); classes use existing `cover_image`.
+- **Catalog:** `GET /api/public/store/:slug/catalog` returns `imageUrl` for session/class listings; guest cards show square crop via `StoreProductCardImage`.
+- **Sessions admin:** store publish controls removed; link to Public Store programs tab.
+- **E2E:** Extended `setup-public-store-scenario` (class/session fixtures); `fulfill-store-checkout` test API; `e2e/public-store.spec.ts` programs tab, catalog images, guest class payment flow.
+- **Fix:** `storage.createUserRole` implemented (guest store checkout was calling a missing method).
+
 ## 2026-06-23 (Public store — merch upload auth + E2E)
 
 - **Fix:** `ImageUpload` uses `apiRequest` so Supabase `Authorization` header is sent (fixes `Missing or invalid authorization header` on store merch upload).

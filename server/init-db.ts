@@ -2491,6 +2491,10 @@ async function runMigrations() {
       ALTER TABLE sessions
       ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES locations(id);
     `);
+    await db.execute(sql`
+      ALTER TABLE sessions
+      ADD COLUMN IF NOT EXISTS cover_image TEXT;
+    `);
     console.log('✅ Migration completed: sessions table created');
 
     // Add session_id column to classes table

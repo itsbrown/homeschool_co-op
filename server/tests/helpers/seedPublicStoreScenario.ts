@@ -1,4 +1,6 @@
 import { nanoid } from 'nanoid';
+import { getDb } from '../../db';
+import { sessions } from '@shared/schema';
 import { TestDatabase } from './testDatabase';
 import { storage } from '../../storage';
 import { ensurePublicStoreSchema } from '../../lib/ensure-public-store-schema';
@@ -19,6 +21,22 @@ export type PublicStoreSeedResult = {
     imageUrl: string | null;
   };
   listing: { id: number; isPublished: boolean };
+  class?: {
+    id: number;
+    title: string;
+    priceCents: number;
+    coverImage: string | null;
+    listingId: number | null;
+    listingPublished: boolean;
+  };
+  session?: {
+    id: number;
+    name: string;
+    fullDayPrice: number | null;
+    coverImage: string | null;
+    listingId: number | null;
+    listingPublished: boolean;
+  };
 };
 
 export async function seedPublicStoreScenario(
@@ -27,6 +45,18 @@ export async function seedPublicStoreScenario(
     adminPassword?: string;
     productImageUrl?: string | null;
     withPublishedProduct?: boolean;
+    /** Create a published marketplace class for store program tests. */
+    withClass?: boolean;
+    classTitle?: string;
+    classPriceCents?: number;
+    classCoverImage?: string | null;
+    withPublishedClassListing?: boolean;
+    /** Create an enrollment-open session with full-day pricing. */
+    withSession?: boolean;
+    sessionName?: string;
+    sessionFullDayPriceCents?: number;
+    sessionCoverImage?: string | null;
+    withPublishedSessionListing?: boolean;
   } = {},
 ): Promise<PublicStoreSeedResult> {
   await ensurePublicStoreSchema();
@@ -49,6 +79,8 @@ export async function seedPublicStoreScenario(
   const school = await testDb.createTestSchool(admin.id, {
     name: `E2E Public Store ${uniqueId}`,
     registrationCode: `STORE${uniqueId.toUpperCase()}`,
+    membershipRequired: false,
+    membershipFeeAmount: 0,
   });
   await storage.updateUser(admin.id, { schoolId: school.id });
 
@@ -70,7 +102,7 @@ export async function seedPublicStoreScenario(
     sortOrder: 0,
   });
 
-  let listing = await upsertStoreListing({
+  const listing = await upsertStoreListing({
     schoolId: school.id,
     listingType: 'product',
     sourceId: product.id,
@@ -79,7 +111,7 @@ export async function seedPublicStoreScenario(
     sortOrder: 0,
   });
 
-  return {
+  const result: PublicStoreSeedResult = {
     admin: { id: admin.id, email: admin.email!, password: adminPassword },
     school: { id: school.id, name: school.name, storeSlug },
     storeSlug,
@@ -91,4 +123,89 @@ export async function seedPublicStoreScenario(
     },
     listing: { id: listing.id, isPublished: listing.isPublished },
   };
+
+  if (options.withClass) {
+    const classPriceCents = options.classPriceCents ?? 7500;
+    const classItem = await testDb.createTestClass(school.id, {
+      title: options.classTitle ?? `E2E Summer Camp ${uniqueId}`,
+      description: 'Playwright seeded store class',
+      category: 'summer-camp',
+      price: classPriceCents,
+      isPublished: true,
+      enrollmentOpen: true,
+      coverImage: options.classCoverImage ?? null,
+      type: 'school_admin',
+    });
+
+    let classListingId: number | null = null;
+    let classListingPublished = false;
+    if (options.withPublishedClassListing) {
+      const classListing = await upsertStoreListing({
+        schoolId: school.id,
+        listingType: 'class',
+        sourceId: classItem.id,
+        isPublished: true,
+        membersOnly: false,
+        sortOrder: 1,
+      });
+      classListingId = classListing.id;
+      classListingPublished = classListing.isPublished;
+    }
+
+    result.class = {
+      id: classItem.id,
+      title: classItem.title,
+      priceCents: classItem.price,
+      coverImage: classItem.coverImage ?? null,
+      listingId: classListingId,
+      listingPublished: classListingPublished,
+    };
+  }
+
+  if (options.withSession) {
+    const db = await getDb();
+    const fullDay = options.sessionFullDayPriceCents ?? 37500;
+    const [sessionRow] = await db
+      .insert(sessions)
+      .values({
+        schoolId: school.id,
+        name: options.sessionName ?? `E2E Session ${uniqueId}`,
+        description: 'Playwright seeded enrollment session',
+        startDate: '2026-06-01',
+        endDate: '2026-08-31',
+        status: 'upcoming',
+        enrollmentOpen: true,
+        fullDayPrice: fullDay,
+        halfDayPrice: Math.round(fullDay / 2),
+        sortOrder: 0,
+        coverImage: options.sessionCoverImage ?? null,
+      })
+      .returning();
+
+    let sessionListingId: number | null = null;
+    let sessionListingPublished = false;
+    if (options.withPublishedSessionListing) {
+      const sessionListing = await upsertStoreListing({
+        schoolId: school.id,
+        listingType: 'session',
+        sourceId: sessionRow.id,
+        isPublished: true,
+        membersOnly: false,
+        sortOrder: 2,
+      });
+      sessionListingId = sessionListing.id;
+      sessionListingPublished = sessionListing.isPublished;
+    }
+
+    result.session = {
+      id: sessionRow.id,
+      name: sessionRow.name,
+      fullDayPrice: sessionRow.fullDayPrice,
+      coverImage: sessionRow.coverImage ?? null,
+      listingId: sessionListingId,
+      listingPublished: sessionListingPublished,
+    };
+  }
+
+  return result;
 }

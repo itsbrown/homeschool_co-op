@@ -181,7 +181,7 @@ export default function PublicStoreCheckoutPage() {
                   </span>
                 </div>
               ))}
-              <Button className="mt-4 w-full" onClick={() => setStep(2)}>
+              <Button className="mt-4 w-full" onClick={() => setStep(2)} data-testid="store-checkout-step1-continue">
                 Continue
               </Button>
             </CardContent>
@@ -200,6 +200,7 @@ export default function PublicStoreCheckoutPage() {
                   <Input
                     value={parent.firstName}
                     onChange={(e) => setParent({ ...parent, firstName: e.target.value })}
+                    data-testid="store-checkout-parent-first-name"
                   />
                 </div>
                 <div>
@@ -207,6 +208,7 @@ export default function PublicStoreCheckoutPage() {
                   <Input
                     value={parent.lastName}
                     onChange={(e) => setParent({ ...parent, lastName: e.target.value })}
+                    data-testid="store-checkout-parent-last-name"
                   />
                 </div>
               </div>
@@ -216,6 +218,7 @@ export default function PublicStoreCheckoutPage() {
                   type="email"
                   value={parent.email}
                   onChange={(e) => setParent({ ...parent, email: e.target.value })}
+                  data-testid="store-checkout-parent-email"
                 />
               </div>
               <div>
@@ -223,9 +226,10 @@ export default function PublicStoreCheckoutPage() {
                 <Input
                   value={parent.phone}
                   onChange={(e) => setParent({ ...parent, phone: e.target.value })}
+                  data-testid="store-checkout-parent-phone"
                 />
               </div>
-              <Button className="w-full" onClick={() => setStep(hasPrograms ? 3 : maxStep)}>
+              <Button className="w-full" onClick={() => setStep(hasPrograms ? 3 : maxStep)} data-testid="store-checkout-step2-continue">
                 Continue
               </Button>
             </CardContent>
@@ -276,6 +280,7 @@ export default function PublicStoreCheckoutPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <Input
                         placeholder="First name"
+                        data-testid="store-checkout-child-first-name"
                         onChange={(e) =>
                           setChildAssignments((prev) => ({
                             ...prev,
@@ -296,6 +301,7 @@ export default function PublicStoreCheckoutPage() {
                       />
                       <Input
                         placeholder="Last name"
+                        data-testid="store-checkout-child-last-name"
                         onChange={(e) =>
                           setChildAssignments((prev) => ({
                             ...prev,
@@ -317,6 +323,7 @@ export default function PublicStoreCheckoutPage() {
                       <Input
                         type="date"
                         placeholder="Birthdate"
+                        data-testid="store-checkout-child-birthdate"
                         onChange={(e) =>
                           setChildAssignments((prev) => ({
                             ...prev,
@@ -337,6 +344,7 @@ export default function PublicStoreCheckoutPage() {
                       />
                       <Input
                         placeholder="Grade"
+                        data-testid="store-checkout-child-grade"
                         onChange={(e) =>
                           setChildAssignments((prev) => ({
                             ...prev,
@@ -359,7 +367,7 @@ export default function PublicStoreCheckoutPage() {
                   )}
                 </div>
               ))}
-              <Button className="w-full" onClick={() => setStep(4)}>
+              <Button className="w-full" onClick={() => setStep(4)} data-testid="store-checkout-step3-continue">
                 Continue to payment
               </Button>
             </CardContent>
@@ -393,7 +401,7 @@ export default function PublicStoreCheckoutPage() {
                 <span>Total due today</span>
                 <span>${((snapshot?.amountDueCents ?? 0) / 100).toFixed(2)}</span>
               </div>
-              <Button className="w-full" onClick={submitCheckout}>
+              <Button className="w-full" onClick={submitCheckout} data-testid="store-checkout-submit">
                 {snapshot?.amountDueCents > 0 ? "Pay with Stripe" : "Complete registration"}
               </Button>
             </CardContent>
