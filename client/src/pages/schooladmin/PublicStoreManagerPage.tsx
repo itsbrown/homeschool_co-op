@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
@@ -10,6 +10,58 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { ExternalLink } from "lucide-react";
+import { ImageUpload } from "@/components/ImageUpload";
+import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
+
+type StoreProduct = {
+  id: number;
+  name: string;
+  priceCents: number;
+  description?: string | null;
+  imageUrl?: string | null;
+};
+
+type ProductFormState = {
+  name: string;
+  priceCents: number;
+  description: string;
+  imageUrl: string;
+};
+
+const STORE_TAB_KEY = "public-store-manager-tab";
+const PRODUCT_DRAFT_KEY = "public-store-manager-product-draft";
+const STORE_TABS = new Set(["settings", "products", "listings", "orders"]);
+
+const emptyProductForm = (): ProductFormState => ({
+  name: "",
+  priceCents: 0,
+  description: "",
+  imageUrl: "",
+});
+
+function readInitialTab(): string {
+  const fromUrl = new URLSearchParams(window.location.search).get("tab");
+  if (fromUrl && STORE_TABS.has(fromUrl)) return fromUrl;
+  const stored = sessionStorage.getItem(STORE_TAB_KEY);
+  if (stored && STORE_TABS.has(stored)) return stored;
+  return "settings";
+}
+
+function readProductDraft(): ProductFormState {
+  try {
+    const raw = sessionStorage.getItem(PRODUCT_DRAFT_KEY);
+    if (!raw) return emptyProductForm();
+    const parsed = JSON.parse(raw) as Partial<ProductFormState>;
+    return {
+      name: parsed.name ?? "",
+      priceCents: typeof parsed.priceCents === "number" ? parsed.priceCents : 0,
+      description: parsed.description ?? "",
+      imageUrl: parsed.imageUrl ?? "",
+    };
+  } catch {
+    return emptyProductForm();
+  }
+}
 
 export default function PublicStoreManagerPage() {
   const { toast } = useToast();
@@ -25,13 +77,23 @@ export default function PublicStoreManagerPage() {
 
   const [slug, setSlug] = useState("");
   const [enabled, setEnabled] = useState(false);
+  const [activeTab, setActiveTab] = useState(readInitialTab);
+  const settingsHydrated = useRef(false);
 
   useEffect(() => {
-    if (settings) {
+    if (settings && !settingsHydrated.current) {
       setSlug(settings.storeSlug ?? "");
       setEnabled(settings.publicStoreEnabled ?? false);
+      settingsHydrated.current = true;
     }
   }, [settings]);
+
+  useEffect(() => {
+    sessionStorage.setItem(STORE_TAB_KEY, activeTab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", activeTab);
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  }, [activeTab]);
 
   const saveSettings = useMutation({
     mutationFn: async () => {
@@ -45,15 +107,18 @@ export default function PublicStoreManagerPage() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast({ title: "Store settings saved" });
+      setSlug(updated.storeSlug ?? slug);
+      setEnabled(updated.publicStoreEnabled ?? enabled);
+      settingsHydrated.current = true;
       queryClient.invalidateQueries({ queryKey: settingsKey });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/features"] });
     },
     onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
   });
 
-  const { data: products = [] } = useQuery({
+  const { data: products = [] } = useQuery<StoreProduct[]>({
     queryKey: ["/api/school-admin/public-store/products"],
   });
 
@@ -65,11 +130,15 @@ export default function PublicStoreManagerPage() {
     queryKey: ["/api/school-admin/public-store/orders"],
   });
 
-  const [productForm, setProductForm] = useState({
-    name: "",
-    priceCents: 0,
-    description: "",
-  });
+  const [productForm, setProductForm] = useState<ProductFormState>(readProductDraft);
+
+  useEffect(() => {
+    sessionStorage.setItem(PRODUCT_DRAFT_KEY, JSON.stringify(productForm));
+  }, [productForm]);
+
+  const updateProductForm = (patch: Partial<ProductFormState>) => {
+    setProductForm((prev) => ({ ...prev, ...patch }));
+  };
 
   const createProduct = useMutation({
     mutationFn: async () => {
@@ -77,14 +146,28 @@ export default function PublicStoreManagerPage() {
         name: productForm.name,
         description: productForm.description || null,
         priceCents: Math.round(productForm.priceCents * 100),
+        imageUrl: productForm.imageUrl || null,
       });
       if (!res.ok) throw new Error("Failed to create product");
-      return res.json();
+      const product = (await res.json()) as StoreProduct;
+
+      const listingRes = await apiRequest("POST", "/api/school-admin/public-store/listings", {
+        listingType: "product",
+        sourceId: product.id,
+        isPublished: true,
+        membersOnly: false,
+      });
+      if (!listingRes.ok) throw new Error("Product created but failed to publish listing");
+
+      return product;
     },
     onSuccess: () => {
-      toast({ title: "Product created" });
-      setProductForm({ name: "", priceCents: 0, description: "" });
+      toast({ title: "Product created and listed on store" });
+      const cleared = emptyProductForm();
+      setProductForm(cleared);
+      sessionStorage.removeItem(PRODUCT_DRAFT_KEY);
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/listings"] });
     },
   });
 
@@ -93,12 +176,12 @@ export default function PublicStoreManagerPage() {
   return (
     <SchoolAdminLayout pageTitle="Public Store">
       <div className="max-w-4xl mx-auto space-y-6">
-        <Tabs defaultValue="settings">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="products">Products</TabsTrigger>
-            <TabsTrigger value="listings">Listings</TabsTrigger>
-            <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="settings" data-testid="store-tab-settings">Settings</TabsTrigger>
+            <TabsTrigger value="products" data-testid="store-tab-products">Products</TabsTrigger>
+            <TabsTrigger value="listings" data-testid="store-tab-listings">Listings</TabsTrigger>
+            <TabsTrigger value="orders" data-testid="store-tab-orders">Orders</TabsTrigger>
           </TabsList>
 
           <TabsContent value="settings" className="mt-4">
@@ -152,26 +235,54 @@ export default function PublicStoreManagerPage() {
                 <Input
                   placeholder="Name"
                   value={productForm.name}
-                  onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                  onChange={(e) => updateProductForm({ name: e.target.value })}
                 />
                 <Input
                   type="number"
                   placeholder="Price (USD)"
                   value={productForm.priceCents || ""}
                   onChange={(e) =>
-                    setProductForm({ ...productForm, priceCents: parseFloat(e.target.value) || 0 })
+                    updateProductForm({ priceCents: parseFloat(e.target.value) || 0 })
                   }
                 />
                 <Input
                   placeholder="Description"
                   value={productForm.description}
-                  onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                  onChange={(e) => updateProductForm({ description: e.target.value })}
                 />
-                <Button onClick={() => createProduct.mutate()}>Create product</Button>
-                <ul className="text-sm space-y-1 pt-4">
-                  {products.map((p: { id: number; name: string; priceCents: number }) => (
-                    <li key={p.id}>
-                      {p.name} — ${(p.priceCents / 100).toFixed(2)}
+                <div>
+                  <Label className="mb-2 block">Product photo</Label>
+                  <ImageUpload
+                    value={productForm.imageUrl}
+                    onChange={(url) => updateProductForm({ imageUrl: url })}
+                    uploadEndpoint="/api/school-admin/public-store/upload/product-image"
+                    previewAspectClass="aspect-square"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Shown as a square crop on the public store. JPEG, PNG, GIF, or WebP — max 5MB.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => createProduct.mutate()}
+                  disabled={!productForm.name.trim()}
+                  data-testid="button-create-store-product"
+                >
+                  Create product
+                </Button>
+                <ul className="grid gap-3 pt-4 sm:grid-cols-2">
+                  {products.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex gap-3 rounded-lg border p-2 text-sm items-center"
+                    >
+                      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md">
+                        <StoreProductCardImage src={p.imageUrl} alt={p.name} className="rounded-md h-full" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{p.name}</p>
+                        <p className="text-muted-foreground">${(p.priceCents / 100).toFixed(2)}</p>
+                      </div>
                     </li>
                   ))}
                 </ul>

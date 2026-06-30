@@ -3,6 +3,7 @@ import { z } from "zod";
 import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { errorNotificationService } from '../services/error-notification';
+import { captureServerException } from '../lib/sentry';
 
 const router = express.Router();
 
@@ -90,6 +91,14 @@ router.post("/frontend", async (req, res) => {
       });
     }
 
+    if (effectiveSeverity === 'medium' || effectiveSeverity === 'high' || effectiveSeverity === 'critical') {
+      captureServerException(new Error(message), {
+        route: route ?? url,
+        schoolId,
+        tags: { errorType: 'frontend', correlationId: metadata?.correlationId },
+      });
+    }
+
     res.json({ success: true, errorId: errorLog.id });
   } catch (error: any) {
     console.error('[ErrorTelemetry] Error logging frontend error:', error);
@@ -135,6 +144,14 @@ router.post("/backend", async (req, res) => {
     if (severity === 'critical' || severity === 'high') {
       errorNotificationService.sendImmediateNotification(errorLog).catch(e => {
         console.error('[ErrorTelemetry] Failed to send immediate notification:', e);
+      });
+    }
+
+    if (severity === 'medium' || severity === 'high' || severity === 'critical') {
+      captureServerException(new Error(message), {
+        route: route ?? undefined,
+        schoolId,
+        tags: { errorType: errorType ?? 'backend' },
       });
     }
 

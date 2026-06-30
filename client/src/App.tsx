@@ -261,6 +261,14 @@ function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function PublicStoreManagerRoute() {
+  return (
+    <SchoolAdminShellWrapper>
+      <PublicStoreManagerPage />
+    </SchoolAdminShellWrapper>
+  );
+}
+
 
 function DashboardRouter() {
   const { user } = useAuth();
@@ -746,7 +754,7 @@ function Router() {
       <Route path="/school-admin/attendance" component={() => <SchoolAdminShellWrapper><AttendanceManagementPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/credits" component={() => <SchoolAdminShellWrapper><CreditManagementPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/fundraisers" component={() => <SchoolAdminShellWrapper><FundraiserManagementPage /></SchoolAdminShellWrapper>} />
-      <Route path="/school-admin/public-store" component={() => <SchoolAdminShellWrapper><PublicStoreManagerPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/public-store" component={PublicStoreManagerRoute} />
       <Route path="/school-admin/staff-permissions" component={() => <SchoolAdminShellWrapper><StaffPermissionsPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/location-enrollments" component={() => <SchoolAdminShellWrapper><LocationEnrollmentsPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/refunds" component={() => <SchoolAdminShellWrapper><RefundHistoryPage /></SchoolAdminShellWrapper>} />

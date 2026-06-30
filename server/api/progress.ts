@@ -13,6 +13,8 @@ import {
 } from '../../shared/schema';
 import { generateProgressReportPdf } from '../services/progressReportPdf';
 import { sendProgressReportEmail } from '../lib/email-service';
+import { logProgressReportEvent } from '../lib/progress-report-audit';
+import { startProgressReportSpan } from '../lib/sentry';
 import type { StudentProgressReportDto } from '../lib/build-student-progress-report';
 import type { ProgressReportBand } from '../lib/resolve-progress-report-band';
 
@@ -209,6 +211,27 @@ router.get('/tracks/catalog', supabaseAuth, requireSchoolContext, staffOnly, asy
   }
 });
 
+router.get('/report/school-snapshots', supabaseAuth, requireSchoolContext, staffOnly, async (req: Request, res: Response) => {
+  try {
+    const schoolId = (req.user as any).schoolId;
+    const snapshots = await storage.getQuarterlyProgressSnapshotsForSchool(schoolId, 50);
+    res.json(
+      snapshots.map((s) => ({
+        id: s.id,
+        childId: s.childId,
+        schoolYear: s.schoolYear,
+        quarter: s.quarter,
+        band: s.band,
+        templateVersion: s.templateVersion,
+        generatedAt: s.generatedAt,
+      })),
+    );
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: 'Failed to list school report snapshots' });
+  }
+});
+
 router.get('/report/:childId/snapshots', supabaseAuth, requireSchoolContext, async (req: Request, res: Response) => {
   try {
     const schoolId = (req.user as any).schoolId;
@@ -329,11 +352,21 @@ router.get('/report/:childId', supabaseAuth, requireSchoolContext, reportRateLim
     if (!report) return res.status(404).json({ message: 'Could not build report' });
 
     if (format === 'pdf') {
-      const pdf = await generateProgressReportPdf(report, { includeGuide });
+      const pdf = await startProgressReportSpan('progress.report.pdf.download', () =>
+        generateProgressReportPdf(report, { includeGuide }),
+      );
       const safeName = report.header.studentName.replace(/[^a-zA-Z0-9-_]/g, '_');
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="NY-Progress-Report-${safeName}-${report.quarter}-${report.schoolYear}.pdf"`);
       res.setHeader('Cache-Control', 'private, no-store');
+      await logProgressReportEvent(req, 'progress_report_downloaded', {
+        childId,
+        schoolId,
+        schoolYear: report.schoolYear,
+        quarter: report.quarter,
+        snapshotId,
+        templateVersion: report.templateVersion,
+      });
       return res.send(pdf);
     }
 
@@ -379,7 +412,9 @@ router.post('/report/:childId/generate', supabaseAuth, requireSchoolContext, sta
       });
     }
 
-    const pdf = await generateProgressReportPdf(report, { includeGuide: body.includeGuide });
+    const pdf = await startProgressReportSpan('progress.report.pdf.generate', () =>
+      generateProgressReportPdf(report, { includeGuide: body.includeGuide }),
+    );
     const pdfSha256 = createHash('sha256').update(pdf).digest('hex');
 
     const snapshot = await storage.saveQuarterlyProgressSnapshot(
@@ -393,6 +428,16 @@ router.post('/report/:childId/generate', supabaseAuth, requireSchoolContext, sta
       userId,
       pdfSha256,
     );
+
+    await logProgressReportEvent(req, 'progress_report_generated', {
+      childId,
+      schoolId,
+      schoolYear: body.schoolYear,
+      quarter: body.quarter,
+      snapshotId: snapshot.id,
+      templateVersion: report.templateVersion,
+      actorId: userId,
+    });
 
     res.status(201).json({
       snapshotId: snapshot.id,
@@ -431,7 +476,9 @@ router.post('/report/:childId/email', supabaseAuth, requireSchoolContext, staffO
     }
 
     const report = snap.payloadJson as StudentProgressReportDto;
-    const pdf = await generateProgressReportPdf(report, { includeGuide: false });
+    const pdf = await startProgressReportSpan('progress.report.pdf.email', () =>
+      generateProgressReportPdf(report, { includeGuide: false }),
+    );
     const parentName = `${parent.firstName || ''} ${parent.lastName || ''}`.trim() || 'Parent';
     const childName = `${child.firstName} ${child.lastName}`;
 
@@ -447,6 +494,15 @@ router.post('/report/:childId/email', supabaseAuth, requireSchoolContext, staffO
     if (!sent) {
       return res.status(503).json({ message: 'Email could not be sent. Check SendGrid configuration.' });
     }
+
+    await logProgressReportEvent(req, 'progress_report_emailed', {
+      childId,
+      schoolId,
+      schoolYear: snap.schoolYear,
+      quarter: snap.quarter,
+      snapshotId: snap.id,
+      templateVersion: snap.templateVersion,
+    });
 
     res.json({ success: true, sentTo: parent.email });
   } catch (e) {

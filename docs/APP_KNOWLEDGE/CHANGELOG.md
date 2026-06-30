@@ -1,5 +1,28 @@
 # App knowledge changelog
 
+## 2026-06-23 (Public store — merch upload auth + E2E)
+
+- **Fix:** `ImageUpload` uses `apiRequest` so Supabase `Authorization` header is sent (fixes `Missing or invalid authorization header` on store merch upload).
+- **E2E:** `e2e/public-store.spec.ts` — catalog imageUrl, guest card display, admin upload + create product, cart; seeds `ensure-public-store-schema` + `setup-public-store-scenario`.
+- **Playwright:** `PUBLIC_STORE_ENABLED=true` in `webServer` env.
+
+## 2026-06-23 (Public store — merch product photos)
+
+- **UI:** `StoreProductCardImage` — square cropped image on public store product cards; placeholder when no photo.
+- **Admin:** Public Store → Products — `ImageUpload` + auto-publish listing on create; `POST …/upload/product-image`.
+
+## 2026-06-25 (Kendra Crofoot — phantom session ledger + parity plan)
+
+- **Prod fix:** Reset `total_paid` on session enrollments #522–531 (phantom $441 with no succeeded PI / no `payments` row). Script: `server/scripts/fix-kendra-crofoot-session-phantom-paid-production.ts`; summary: `server/scripts/account-correction-summaries/kendra-crofoot-session-phantom-paid.json`.
+- **Plan:** [enrollment-ledger-stripe-parity.md](../plans/enrollment-ledger-stripe-parity.md) — detect/prevent `total_paid` drift vs Stripe; **Phase 5 test matrix** (A–H) defines ship gates for medium-risk phases.
+- **Docs:** [payments-and-billing.md](./domains/payments-and-billing.md) — invalid `phantom_paid` state documented.
+
+## 2026-06-29 (Kendra Crofoot — Winter/Spring cart removal + parent email)
+
+- **Prod fix:** Cancelled Winter/Spring 2027 session enrollments #528–531; zeroed balance and 100% comp so cart shows Fall 2026 only. Script: `server/scripts/fix-kendra-crofoot-cancel-winter-spring-production.ts`.
+- **Cart:** `parentEnrollmentLineItems.ts` — cancelled/withdrawn/completed enrollments no longer hydrate checkout.
+- **Email:** `account-correction-summaries/kendra-crofoot-account-update.json` via `send-account-correction-email.ts`.
+
 ## 2026-06-23 (Public storefront v1 — store lane)
 
 - **Schema:** `251-public-store.sql` — `store_slug`, `public_store_enabled`, `store_products`, `store_listings`, `store_orders`, `store_checkout_snapshots`, `program_delivery_documents`.
@@ -7,6 +30,16 @@
 - **UI:** `/store/:schoolSlug`, checkout wizard, success page; `/school-admin/public-store`; publish-from-save on Sessions (+ class API hooks).
 - **Docs:** [domains/public-store.md](./domains/public-store.md); E2E catalog `e2e/public-store-guest-checkout.spec.ts` (skipped until seed).
 - **Nav/UX:** Finance sidebar link (gated by `enabled_features.publicStore` or activation); `SchoolAdminLayout` shell; store-admin 503 when migration 251 missing.
+
+## 2026-06-01 (F-14 observability finish — Sentry, Claude bundle, audit)
+
+- **`progress-context-bundle.ts`:** Single query bundle for progress-insights, Lexile AI (student route), and parent concierge cached summary append.
+- **Staff insights:** `GET /api/progress/insights/staff/summary/:childId` shares 24h cache with parent route.
+- **Sentry:** `@sentry/node` + `@sentry/react`; dual-write from error-telemetry (≥ medium) and errorTracker (non-throttled); PII scrub in `shared/sentry-scrub.ts`; PDF spans on report generate/download/email.
+- **Report audit:** `progress_report_generated|downloaded|emailed` → `audit_logs`; admin **Sessions & reports** tab lists snapshots via `GET /api/progress/report/school-snapshots`.
+- **SendGrid webhook stub:** `POST /api/webhooks/sendgrid/events` updates `email_log` on bounce/deliver.
+- **Tests:** `progress-insights-rate-limit.test.ts`; optional `@axe-core/playwright` on parent progress hub in quarterly E2E spec.
+- **Docs:** [domains/observability.md](./domains/observability.md).
 
 ## 2026-06-19 (Help — issue submission with optional screenshot)
 

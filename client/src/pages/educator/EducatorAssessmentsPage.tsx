@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/components/SupabaseProvider';
@@ -88,6 +88,25 @@ export default function EducatorAssessmentsPage() {
   const queryClient = useQueryClient();
   
   const [activeTab, setActiveTab] = useState('record');
+  const [progressChildId, setProgressChildId] = useState<number | undefined>();
+  const [progressChildName, setProgressChildName] = useState<string | undefined>();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const allowed = new Set(['record', 'recent', 'bulk', 'lexile', 'progress']);
+    if (tab && allowed.has(tab)) {
+      setActiveTab(tab);
+    }
+    const childIdParam = params.get('childId');
+    if (childIdParam && /^\d+$/.test(childIdParam)) {
+      setProgressChildId(parseInt(childIdParam, 10));
+    }
+    const childNameParam = params.get('childName');
+    if (childNameParam) {
+      setProgressChildName(childNameParam);
+    }
+  }, []);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -422,8 +441,8 @@ export default function EducatorAssessmentsPage() {
             <LexileTab />
           </TabsContent>
 
-          <TabsContent value="progress" className="mt-4">
-            <ProgressLogTab />
+          <TabsContent value="progress" className="mt-4" data-testid="assessments-tabpanel-progress">
+            <ProgressLogTab fixedChildId={progressChildId} fixedChildName={progressChildName} />
           </TabsContent>
         </Tabs>
 

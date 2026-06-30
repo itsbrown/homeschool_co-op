@@ -1,6 +1,6 @@
 # Student progress & assessments
 
-**Last updated:** 2026-06-07
+**Last updated:** 2026-06-01
 
 ## Two lanes
 
@@ -19,7 +19,7 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 | Parent | `/parent/assessments` | Reading charts + Lexile history |
 | Educator | `/educator/assessments` | Tabs: record assessment, **Progress** (log form), Lexile |
 | Educator | Student detail | Quick **Log progress** dialog |
-| School admin | `/school-admin/assessments` | Types/books + **Progress catalog** tab |
+| School admin | `/school-admin/assessments` | Types/books + **Progress catalog** + **Sessions & reports** tabs |
 
 ## Key behaviors
 
@@ -28,8 +28,8 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 - **Carry-forward:** `student_progress_current` upserted on each log; unique `(child_id, progress_track_id)`.
 - **Reading bridge:** Creating a `student_assessment` with a `curriculum_book` linked to `progress_track_id` updates current + optional log when session resolvable.
 - **Default subjects:** `ensureProgressSubjectsForSchool` seeds math, science, reading, etc. on first catalog read.
-- **AI:** `GET /api/progress/insights/summary/:childId` caches in `child_progress_insights`; invalidated on progress writes. Parent concierge tool `get_child_progress`.
-- **Reports:** NY IHIP quarterly template (`template=ny-ihip-quarterly`): preview JSON, draft PDF, `POST .../generate` → immutable `quarterly_progress_reports` snapshot; parents download via `snapshotId` only.
+- **AI:** `GET /api/progress/insights/summary/:childId` (parent) and `GET /api/progress/insights/staff/summary/:childId` (staff) share `child_progress_insights` cache via `server/lib/progress-context-bundle.ts`. Parent concierge appends cached summary when fresh (&lt;24h).
+- **Reports:** NY IHIP quarterly template (`template=ny-ihip-quarterly`): preview JSON, draft PDF, `POST .../generate` → immutable `quarterly_progress_reports` snapshot; audit events in `audit_logs`; parents download via `snapshotId` only.
 
 ## Tests
 
@@ -39,6 +39,7 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 | `server/tests/ny-ihip-template.test.ts` | Verbatim ASA PDF strings |
 | `server/tests/progress-report-pdf.test.ts` | PDF generation smoke |
 | `server/tests/email-service-sendgrid.test.ts` | SendGrid routing + attachment |
+| `server/tests/progress-insights-rate-limit.test.ts` | AI insights 429 at rate limit |
 | `server/tests/integration/f14-quarterly-report.integration.test.ts` | Full quarter workflow (`TEST_DATABASE_URL`) |
 | `server/tests/integration/progress-api.test.ts` | DB smoke (`TEST_DATABASE_URL`) |
 
@@ -72,15 +73,17 @@ RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your
 - Template data: `server/data/ny-ihip-progress-report-template.ts` (verbatim ASA PDF; version `2026-05-asa-v1`).
 - Band resolver: `server/lib/resolve-progress-report-band.ts` from `children.gradeLevel`.
 - Rubric tables: `quarterly_progress_meta`, `quarterly_skill_checks`, snapshots in `quarterly_progress_reports`.
-- Educator UI: `QuarterlyReportWizard` on progress log form; admin book → `progressTrackId` on `/school-admin/assessments`.
-- Reference PDF: `docs/templates/` (copy ASA source PDF when committed).
+- Educator UI: `QuarterlyReportWizard` on progress log form; admin book → `progressTrackId` on `/school-admin/assessments`; `AssessmentSessionsTab` for session + report audit view.
+- Observability: see [observability.md](./observability.md) (Sentry dual-write, SendGrid webhook, report audit).
 
 ## Key files
 
 - `shared/schema.ts` — enums + progress/assessment + quarterly tables
 - `server/lib/assessment-progress-db.ts` — CRUD + bridge + insights + quarterly
 - `server/lib/build-student-progress-report.ts`, `server/services/progressReportPdf.ts`
+- `server/lib/progress-context-bundle.ts` — shared Claude context for insights, Lexile AI, concierge
 - `server/api/progress.ts`, `progress-insights.ts`, `assessments.ts`, `lexile.ts`
 - `client/src/components/educator/ProgressLogForm.tsx`, `ProgressLogTab.tsx`, `ProgressQuickLogDialog.tsx`
 - `client/src/pages/parent/ParentProgressPage.tsx`
-- `client/src/components/admin/ProgressCatalogTab.tsx`
+- `client/src/components/admin/ProgressCatalogTab.tsx`, `AssessmentSessionsTab.tsx`
+- Reference PDF: `docs/templates/` (copy ASA source PDF when committed)

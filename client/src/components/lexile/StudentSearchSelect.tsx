@@ -101,6 +101,7 @@ export default function StudentSearchSelect({ value, onSelect, placeholder = 'Se
                   value={`${student.firstName} ${student.lastName} ${student.gradeLevel}`}
                   onSelect={() => handleSelect(student)}
                   className="flex items-center gap-2"
+                  data-testid={`progress-student-option-${student.id}`}
                 >
                   <Check className={cn('h-4 w-4 shrink-0', value === student.id.toString() ? 'opacity-100' : 'opacity-0')} />
                   <span className="flex-1 min-w-0">

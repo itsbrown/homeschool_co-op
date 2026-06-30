@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
 
 interface ImageUploadProps {
@@ -11,6 +12,8 @@ interface ImageUploadProps {
   uploadEndpoint?: string;
   className?: string;
   disabled?: boolean;
+  /** Tailwind aspect class for preview crop (default square for merch). */
+  previewAspectClass?: string;
 }
 
 export function ImageUpload({
@@ -19,6 +22,7 @@ export function ImageUpload({
   uploadEndpoint = '/api/fundraisers/upload/product-image',
   className,
   disabled = false,
+  previewAspectClass = 'aspect-video',
 }: ImageUploadProps) {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
@@ -42,16 +46,15 @@ export function ImageUpload({
     try {
       const formData = new FormData();
       formData.append('image', file);
-      
-      const response = await fetch(uploadEndpoint, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
-      
+
+      const response = await apiRequest('POST', uploadEndpoint, formData);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Upload failed');
+        const error = (await response.json().catch(() => ({}))) as {
+          message?: string;
+          error?: string;
+        };
+        throw new Error(error.message || error.error || 'Upload failed');
       }
       
       const data = await response.json();
@@ -130,7 +133,7 @@ export function ImageUpload({
             ? 'border-primary bg-primary/5 scale-[1.02]'
             : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50',
           disabled && 'opacity-50 cursor-not-allowed',
-          displayUrl ? 'aspect-video' : 'p-6'
+          displayUrl ? previewAspectClass : 'p-6'
         )}
         data-testid="image-upload-dropzone"
       >

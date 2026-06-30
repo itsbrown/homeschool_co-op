@@ -15,6 +15,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import { captureClientException, shouldForwardToSentry } from './sentry';
 
 // Types
 interface ErrorContext {
@@ -755,6 +756,14 @@ class ErrorTracker {
       }
 
       this.totalErrorsThisMinute++;
+
+      if (shouldForwardToSentry(sanitizedContext.severity, sanitizedContext.message)) {
+        captureClientException(new Error(sanitizedContext.message), {
+          severity: sanitizedContext.severity,
+          correlationId: this.correlationId,
+          component: sanitizedContext.component,
+        });
+      }
 
       // Add to batch for sending
       const queuedError: QueuedError = {

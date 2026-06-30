@@ -1,7 +1,10 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { initSentryClient } from "./lib/sentry";
 import "./index.css";
+
+initSentryClient();
 
 // Global error handler to capture "Script error" events with more details
 // This helps debug cross-origin and mobile Safari issues

@@ -30,6 +30,8 @@ Parallel **store lane** at `/store/:storeSlug` — isolated from member `/cart` 
 - Durable cart: `store_checkout_snapshots` (Stripe metadata holds `snapshotId` only)
 - Waitlist at capacity: no charge; enrollment `status=waitlist`
 - Pay in full only on store lane (no biweekly/credits/promos)
+- **Merch photos:** `store_products.image_url`; admin upload at `POST /api/school-admin/public-store/upload/product-image` (requires Supabase bearer via `apiRequest` / `ImageUpload`); public cards use square `object-cover` crop via `StoreProductCardImage`
+- **E2E:** `e2e/public-store.spec.ts` — schema ensure, catalog `imageUrl`, admin upload UI, guest display + cart
 
 ## Key files
 

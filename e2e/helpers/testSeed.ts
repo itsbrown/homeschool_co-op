@@ -292,3 +292,57 @@ export async function postSeedUpcomingScheduledPayment(
   const text = await response.text();
   return { ok: response.ok(), status: response.status(), text };
 }
+
+export type SetupPublicStoreScenarioResponse = {
+  success: boolean;
+  data?: {
+    adminSupabaseLinked?: boolean;
+    admin: { id: number; email: string; password: string };
+    school: { id: number; name: string; storeSlug: string };
+    storeSlug: string;
+    product: {
+      id: number;
+      name: string;
+      priceCents: number;
+      imageUrl: string | null;
+    };
+    listing: { id: number; isPublished: boolean };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postEnsurePublicStoreSchema(
+  request: APIRequestContext,
+): Promise<{ response: APIResponse; json: { success?: boolean; error?: string } | null }> {
+  const response = await request.post("/api/test/ensure-public-store-schema", {
+    headers: { "X-Test-Token": testApiToken() },
+  });
+  let json: { success?: boolean; error?: string } | null = null;
+  try {
+    json = (await response.json()) as { success?: boolean; error?: string };
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
+export async function postSetupPublicStoreScenario(
+  request: APIRequestContext,
+  body: Record<string, unknown> = {},
+): Promise<{ response: APIResponse; json: SetupPublicStoreScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-public-store-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupPublicStoreScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupPublicStoreScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}

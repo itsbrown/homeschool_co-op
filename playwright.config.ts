@@ -62,6 +62,8 @@ const webServerEnv = {
   DISABLE_LISTEN_REUSE_PORT: envOr("DISABLE_LISTEN_REUSE_PORT", "true"),
   /** Skip interval jobs when the dev server is started by Playwright's webServer. */
   PLAYWRIGHT_WEB_SERVER: envOr("PLAYWRIGHT_WEB_SERVER", "true"),
+  PUBLIC_STORE_ENABLED: envOr("PUBLIC_STORE_ENABLED", "true"),
+  PUBLIC_STORE_CHECKOUT_ENABLED: envOr("PUBLIC_STORE_CHECKOUT_ENABLED", "true"),
   /** Expose `window.__E2E_CART__.refreshDiscounts` for Playwright membership regression tests. */
   VITE_E2E_EXPOSE_CART: envOr("VITE_E2E_EXPOSE_CART", "true"),
   /** Align biweekly installment math with integration golden fixture (session dates in E2E seed). */
