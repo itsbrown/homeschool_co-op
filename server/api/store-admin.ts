@@ -1,7 +1,5 @@
 import { Router, type Response } from 'express';
 import { z } from 'zod';
-import path from 'path';
-import fs from 'fs';
 import type { UploadedFile } from 'express-fileupload';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
@@ -21,6 +19,8 @@ import {
   getProgramDeliveryDocumentIds,
   setProgramDeliveryDocuments,
 } from '../lib/store-storage';
+import { getStoreProgramsForSchool, patchStoreProgram } from '../lib/store-programs';
+import { persistStoreImageFile } from '../lib/store-image-upload';
 import { storage } from '../storage';
 
 const router = Router();
@@ -104,37 +104,81 @@ router.post('/upload/product-image', async (req: any, res) => {
     if (!req.files?.image) {
       return res.status(400).json({ success: false, message: 'No image file uploaded' });
     }
-
-    const imageFile = req.files.image as UploadedFile;
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedMimeTypes.includes(imageFile.mimetype)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Only image files are allowed (JPEG, PNG, GIF, WebP)',
-      });
-    }
-
-    const maxSize = 5 * 1024 * 1024;
-    if (imageFile.size > maxSize) {
-      return res.status(400).json({ success: false, message: 'File too large. Maximum size is 5MB.' });
-    }
-
-    const uploadDir = path.join(process.cwd(), 'uploads', 'store-products');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    const timestamp = Date.now();
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const ext = path.extname(imageFile.name).toLowerCase();
-    const filename = `product-${timestamp}-${randomSuffix}${ext}`;
-    const filepath = path.join(uploadDir, filename);
-    await imageFile.mv(filepath);
-
-    const imageUrl = `/uploads/store-products/${filename}`;
-    res.json({ success: true, imageUrl, filename, size: imageFile.size, mimetype: imageFile.mimetype });
+    const saved = await persistStoreImageFile(
+      req.files.image as UploadedFile,
+      'store-products',
+      'product',
+    );
+    res.json({ success: true, ...saved });
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to upload image';
+    if (message.includes('allowed') || message.includes('large')) {
+      return res.status(400).json({ success: false, message });
+    }
     handleStoreRouteError(res, err, 'Failed to upload product image');
+  }
+});
+
+router.post('/upload/program-image', async (req: any, res) => {
+  try {
+    if (!req.files?.image) {
+      return res.status(400).json({ success: false, message: 'No image file uploaded' });
+    }
+    const saved = await persistStoreImageFile(
+      req.files.image as UploadedFile,
+      'store-programs',
+      'program',
+    );
+    res.json({ success: true, imageUrl: saved.imageUrl, ...saved });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to upload image';
+    if (message.includes('allowed') || message.includes('large')) {
+      return res.status(400).json({ success: false, message });
+    }
+    handleStoreRouteError(res, err, 'Failed to upload program image');
+  }
+});
+
+router.get('/programs', async (req: any, res) => {
+  try {
+    const schoolId = parseInt(req.schoolId, 10);
+    res.json({ programs: await getStoreProgramsForSchool(schoolId) });
+  } catch (err) {
+    handleStoreRouteError(res, err, 'Failed to load store programs');
+  }
+});
+
+const patchProgramSchema = z.object({
+  isPublished: z.boolean().optional(),
+  membersOnly: z.boolean().optional(),
+  coverImage: z.string().nullable().optional(),
+});
+
+router.patch('/programs/:listingType/:sourceId', async (req: any, res) => {
+  try {
+    const schoolId = parseInt(req.schoolId, 10);
+    const listingType = req.params.listingType;
+    if (listingType !== 'session' && listingType !== 'class') {
+      return res.status(400).json({ message: 'listingType must be session or class' });
+    }
+    const sourceId = parseInt(req.params.sourceId, 10);
+    if (Number.isNaN(sourceId)) {
+      return res.status(400).json({ message: 'Invalid source ID' });
+    }
+    const body = patchProgramSchema.parse(req.body);
+    const updated = await patchStoreProgram({
+      schoolId,
+      listingType,
+      sourceId,
+      ...body,
+    });
+    res.json(updated);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to update program';
+    if (message.includes('not found')) {
+      return res.status(404).json({ message });
+    }
+    handleStoreRouteError(res, err, 'Failed to update store program');
   }
 });
 

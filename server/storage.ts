@@ -135,6 +135,7 @@ export interface IStorage {
 
   // User Role methods
   getUserRolesByUserId(userId: number): Promise<UserRole[]>;
+  createUserRole(role: { userId: number; role: string; schoolId?: number | null; isPrimary?: boolean }): Promise<UserRole>;
   deleteUserRolesByUserId(userId: number): Promise<void>;
 
   // Location methods
@@ -1174,6 +1175,22 @@ export class MemStorage implements IStorage {
 
   async getUserRolesByUserId(userId: number): Promise<UserRole[]> {
     return [];
+  }
+
+  async createUserRole(role: {
+    userId: number;
+    role: string;
+    schoolId?: number | null;
+    isPrimary?: boolean;
+  }): Promise<UserRole> {
+    return {
+      id: 0,
+      userId: role.userId,
+      role: role.role,
+      schoolId: role.schoolId ?? null,
+      isPrimary: role.isPrimary ?? false,
+      createdAt: new Date(),
+    };
   }
 
   async deleteUserRolesByUserId(userId: number): Promise<void> {
@@ -5490,6 +5507,19 @@ export class MemStorage implements IStorage {
         return await this.dbStorage.getUserRolesByUserId(userId);
       } catch (error) {
         return this.memStorage.getUserRolesByUserId(userId);
+      }
+    }
+
+    async createUserRole(role: {
+      userId: number;
+      role: string;
+      schoolId?: number | null;
+      isPrimary?: boolean;
+    }): Promise<UserRole> {
+      try {
+        return await this.dbStorage.createUserRole(role);
+      } catch (error) {
+        return this.memStorage.createUserRole(role);
       }
     }
 

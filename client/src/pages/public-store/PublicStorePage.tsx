@@ -170,13 +170,15 @@ export default function PublicStorePage() {
             className="overflow-hidden"
             data-testid={`store-catalog-item-${item.listingType}-${item.listingId}`}
           >
-            {item.listingType === "product" && (
-              <StoreProductCardImage
-                src={item.imageUrl}
-                alt={item.title}
-                data-testid="store-product-image"
-              />
-            )}
+            <StoreProductCardImage
+              src={item.imageUrl}
+              alt={item.title}
+              data-testid={
+                item.listingType === "product"
+                  ? "store-product-image"
+                  : `store-${item.listingType}-image`
+              }
+            />
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <CardTitle className="text-lg">{item.title}</CardTitle>

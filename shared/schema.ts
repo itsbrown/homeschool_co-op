@@ -472,6 +472,8 @@ export const sessions = pgTable("sessions", {
   sortOrder: integer("sort_order").notNull().default(0),
   /** NULL = legacy school-wide session; set for campus-specific enrollment periods */
   locationId: integer("location_id").references(() => locations.id),
+  /** Optional hero image on the public store catalog */
+  coverImage: text("cover_image"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

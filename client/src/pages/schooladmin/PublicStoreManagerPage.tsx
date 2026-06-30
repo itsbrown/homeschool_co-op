@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ExternalLink } from "lucide-react";
 import { ImageUpload } from "@/components/ImageUpload";
 import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
+import { StoreProgramsTab } from "@/components/store/StoreProgramsTab";
 
 type StoreProduct = {
   id: number;
@@ -30,7 +31,7 @@ type ProductFormState = {
 
 const STORE_TAB_KEY = "public-store-manager-tab";
 const PRODUCT_DRAFT_KEY = "public-store-manager-product-draft";
-const STORE_TABS = new Set(["settings", "products", "listings", "orders"]);
+const STORE_TABS = new Set(["settings", "programs", "products", "orders"]);
 
 const emptyProductForm = (): ProductFormState => ({
   name: "",
@@ -41,8 +42,10 @@ const emptyProductForm = (): ProductFormState => ({
 
 function readInitialTab(): string {
   const fromUrl = new URLSearchParams(window.location.search).get("tab");
+  if (fromUrl === "listings") return "programs";
   if (fromUrl && STORE_TABS.has(fromUrl)) return fromUrl;
   const stored = sessionStorage.getItem(STORE_TAB_KEY);
+  if (stored === "listings") return "programs";
   if (stored && STORE_TABS.has(stored)) return stored;
   return "settings";
 }
@@ -122,10 +125,6 @@ export default function PublicStoreManagerPage() {
     queryKey: ["/api/school-admin/public-store/products"],
   });
 
-  const { data: listings = [] } = useQuery({
-    queryKey: ["/api/school-admin/public-store/listings"],
-  });
-
   const { data: orders = [] } = useQuery({
     queryKey: ["/api/school-admin/public-store/orders"],
   });
@@ -167,7 +166,7 @@ export default function PublicStoreManagerPage() {
       setProductForm(cleared);
       sessionStorage.removeItem(PRODUCT_DRAFT_KEY);
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/products"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/listings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/programs"] });
     },
   });
 
@@ -179,8 +178,8 @@ export default function PublicStoreManagerPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="settings" data-testid="store-tab-settings">Settings</TabsTrigger>
+            <TabsTrigger value="programs" data-testid="store-tab-programs">Classes &amp; programs</TabsTrigger>
             <TabsTrigger value="products" data-testid="store-tab-products">Products</TabsTrigger>
-            <TabsTrigger value="listings" data-testid="store-tab-listings">Listings</TabsTrigger>
             <TabsTrigger value="orders" data-testid="store-tab-orders">Orders</TabsTrigger>
           </TabsList>
 
@@ -223,6 +222,10 @@ export default function PublicStoreManagerPage() {
                 </Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="programs" className="mt-4">
+            <StoreProgramsTab storeEnabled={enabled} />
           </TabsContent>
 
           <TabsContent value="products" className="mt-4">
@@ -286,39 +289,6 @@ export default function PublicStoreManagerPage() {
                     </li>
                   ))}
                 </ul>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="listings" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Published listings</CardTitle>
-                <CardDescription>
-                  Programs and products currently visible on your public store.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {listings.filter((l: { isPublished: boolean }) => l.isPublished).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No published listings yet. Open{" "}
-                    <a href="/schools/sessions" className="text-blue-700 underline">
-                      Sessions
-                    </a>{" "}
-                    or Classes, check <strong>List on public store</strong>, and save.
-                  </p>
-                ) : (
-                  <ul className="text-sm space-y-2">
-                    {listings
-                      .filter((l: { isPublished: boolean }) => l.isPublished)
-                      .map((l: { id: number; listingType: string; sourceId: number; membersOnly?: boolean }) => (
-                        <li key={l.id}>
-                          {l.listingType} #{l.sourceId}
-                          {l.membersOnly ? " (members only)" : " (open)"}
-                        </li>
-                      ))}
-                  </ul>
-                )}
               </CardContent>
             </Card>
           </TabsContent>

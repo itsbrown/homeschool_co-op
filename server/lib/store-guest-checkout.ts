@@ -90,7 +90,7 @@ export async function resolveStoreParent(params: {
     isActive: true,
   } as any);
 
-  await (storage as any).createUserRole({
+  await storage.createUserRole({
     userId: parentUser.id,
     role: 'parent',
     schoolId: params.schoolId,

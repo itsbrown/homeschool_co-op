@@ -30,7 +30,7 @@ export default function PublicStoreSuccessPage() {
           {isLoading && <p>Loading your confirmation…</p>}
           {!isLoading && data && (
             <>
-              <p>Your order #{data.order.id} has been received.</p>
+              <p data-testid="store-success-order">Your order #{data.order.id} has been received.</p>
               {data.order.status === "paid" && (
                 <p className="text-sm text-muted-foreground">
                   A confirmation email has been sent to {data.order.parentEmail}.

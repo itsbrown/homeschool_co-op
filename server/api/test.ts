@@ -3518,6 +3518,22 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
       productImageUrl:
         typeof req.body?.productImageUrl === 'string' ? req.body.productImageUrl : null,
       withPublishedProduct: req.body?.withPublishedProduct !== false,
+      withClass: req.body?.withClass === true,
+      classTitle: typeof req.body?.classTitle === 'string' ? req.body.classTitle : undefined,
+      classPriceCents:
+        typeof req.body?.classPriceCents === 'number' ? req.body.classPriceCents : undefined,
+      classCoverImage:
+        typeof req.body?.classCoverImage === 'string' ? req.body.classCoverImage : null,
+      withPublishedClassListing: req.body?.withPublishedClassListing === true,
+      withSession: req.body?.withSession === true,
+      sessionName: typeof req.body?.sessionName === 'string' ? req.body.sessionName : undefined,
+      sessionFullDayPriceCents:
+        typeof req.body?.sessionFullDayPriceCents === 'number'
+          ? req.body.sessionFullDayPriceCents
+          : undefined,
+      sessionCoverImage:
+        typeof req.body?.sessionCoverImage === 'string' ? req.body.sessionCoverImage : null,
+      withPublishedSessionListing: req.body?.withPublishedSessionListing === true,
     });
 
     let adminSupabaseLinked = false;
@@ -3555,6 +3571,99 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
     console.error('❌ setup-public-store-scenario:', error);
     res.status(500).json({
       error: 'Failed to setup public store scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/fulfill-store-checkout
+ * Simulates Stripe webhook fulfillment for a pending public-store checkout (E2E only).
+ */
+router.post('/fulfill-store-checkout', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+    }
+
+    const snapshotId =
+      typeof req.body?.snapshotId === 'string' ? req.body.snapshotId : undefined;
+    const accessToken =
+      typeof req.body?.accessToken === 'string' ? req.body.accessToken : undefined;
+
+    if (!snapshotId && !accessToken) {
+      return res.status(400).json({ error: 'snapshotId or accessToken required' });
+    }
+
+    const {
+      getStoreCheckoutSnapshot,
+      getStoreOrderByAccessToken,
+    } = await import('../lib/store-storage');
+    const { fulfillStoreCheckoutFromWebhook } = await import('../lib/store-fulfillment');
+
+    let snapshot = snapshotId ? await getStoreCheckoutSnapshot(snapshotId) : null;
+    let order =
+      accessToken != null ? await getStoreOrderByAccessToken(accessToken) : null;
+
+    if (!snapshot && order?.metadata && typeof order.metadata === 'object') {
+      const metaSnapshotId = (order.metadata as { snapshotId?: string }).snapshotId;
+      if (metaSnapshotId) {
+        snapshot = await getStoreCheckoutSnapshot(metaSnapshotId);
+      }
+    }
+
+    if (!order && snapshot?.storeOrderId) {
+      const { getStoreOrderById } = await import('../lib/store-storage');
+      order = await getStoreOrderById(snapshot.storeOrderId);
+    }
+
+    if (!snapshot) {
+      return res.status(404).json({ error: 'Store checkout snapshot not found' });
+    }
+    if (!order) {
+      return res.status(404).json({ error: 'Store order not found' });
+    }
+
+    const resolvedSnapshotId = snapshot.id;
+    const amount = snapshot.amountDueCents ?? order.totalCents ?? 0;
+    const unique = nanoid(10);
+    const paymentIntentId = `pi_test_store_${unique}`;
+    const checkoutSessionId = order.stripeCheckoutSessionId ?? `cs_test_store_${unique}`;
+
+    await fulfillStoreCheckoutFromWebhook({
+      session: {
+        id: checkoutSessionId,
+        metadata: {
+          type: 'store_checkout',
+          snapshotId: resolvedSnapshotId,
+          storeOrderId: String(order.id),
+        },
+      } as any,
+      paymentIntent: {
+        id: paymentIntentId,
+        amount,
+        currency: 'usd',
+        metadata: {
+          type: 'store_checkout',
+          snapshotId: resolvedSnapshotId,
+          storeOrderId: String(order.id),
+          parentEmail: order.parentEmail,
+        },
+      } as any,
+    });
+
+    res.json({
+      success: true,
+      orderId: order.id,
+      accessToken: order.accessToken,
+      snapshotId: resolvedSnapshotId,
+      paymentIntentId,
+    });
+  } catch (error) {
+    console.error('❌ fulfill-store-checkout:', error);
+    res.status(500).json({
+      error: 'Failed to fulfill store checkout',
       details: error instanceof Error ? error.message : String(error),
     });
   }

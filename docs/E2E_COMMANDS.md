@@ -115,7 +115,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/school-code-registration.spec.ts`](../e2e/school-code-registration.spec.ts) | `npm run test:e2e -- e2e/school-code-registration.spec.ts` | `/register/:code` UI + live signup | `POST /api/test/setup-registration-scenario` |
 | [`e2e/session-enrollment-flow.spec.ts`](../e2e/session-enrollment-flow.spec.ts) | `npm run test:e2e -- e2e/session-enrollment-flow.spec.ts` | Parent session wizard + `POST /api/session-enrollments` | `setup-session-enrollment-scenario` |
 | [`e2e/quarterly-progress-report-wizard.spec.ts`](../e2e/quarterly-progress-report-wizard.spec.ts) | `npm run test:e2e -- e2e/quarterly-progress-report-wizard.spec.ts` | Educator NY \| Progress report wizard (save rubric, finalize) + parent PDF download + optional axe on parent hub | `setup-progress-scenario`, Supabase auth linked |
-| [`e2e/public-store.spec.ts`](../e2e/public-store.spec.ts) | `npm run test:e2e -- e2e/public-store.spec.ts` | Public store catalog, merch image upload/display, admin product create, guest cart | `ensure-public-store-schema` + `setup-public-store-scenario`; `PUBLIC_STORE_ENABLED=true` (set in Playwright webServer); Supabase for admin upload UI test |
+| [`e2e/public-store.spec.ts`](../e2e/public-store.spec.ts) | `npm run test:e2e -- e2e/public-store.spec.ts` | Public store merch + **Classes & programs** (catalog image, admin listing toggle, program image, guest class checkout via test fulfill) | `ensure-public-store-schema` + `setup-public-store-scenario` (+ optional `fulfill-store-checkout`); `PUBLIC_STORE_ENABLED=true`; Supabase for admin tests |
 | [`e2e/credit-management-parent-lookup.spec.ts`](../e2e/credit-management-parent-lookup.spec.ts) | `npm run test:e2e -- e2e/credit-management-parent-lookup.spec.ts` | School-admin parent search / manual credit | `setup-credit-lookup-scenario` |
 | [`e2e/parent-profile-credits-tab.spec.ts`](../e2e/parent-profile-credits-tab.spec.ts) | `npm run test:e2e -- e2e/parent-profile-credits-tab.spec.ts` | Admin parent profile Credits tab | `setup-cart-scenario` (`linkSupabaseAuthAdmin`) |
 | [`e2e/help-issue-submission.spec.ts`](../e2e/help-issue-submission.spec.ts) | `npm run test:e2e -- e2e/help-issue-submission.spec.ts` | Need Help → Report an Issue (platform + school policy, screenshot upload, payment help link, school admin list) | `ensure-technical-support-schema` + `setup-cart-scenario` (`linkSupabaseAuth`, `linkSupabaseAuthAdmin`) |
@@ -164,6 +164,7 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard` |
 | `POST /api/test/ensure-public-store-schema` | `public-store.spec.ts` |
 | `POST /api/test/setup-public-store-scenario` | `public-store.spec.ts` |
+| `POST /api/test/fulfill-store-checkout` | `public-store.spec.ts` (simulates Stripe webhook after guest checkout) |
 | `POST /api/test/seed-upcoming-scheduled-payment` | `parent-payment-flow` (installment test) |
 
 Implementation: [`server/api/test.ts`](../server/api/test.ts). Helpers: [`server/tests/helpers/`](../server/tests/helpers/).
