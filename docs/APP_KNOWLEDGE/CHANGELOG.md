@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-06-01 (Public store — class store-ready uses enrollmentOpen)
+
+- **Fix:** Public Store **Classes & programs** treats **Open for Enrollment** (`enrollmentOpen`) + price as store-ready for classes, matching the parent catalog — not legacy `isPublished`.
+
 ## 2026-06-01 (Public store — Classes & programs tab + catalog images)
 
 - **Admin:** Public Store → **Classes & programs** tab replaces Listings — toggle store visibility, members-only, and upload hero images for sessions and classes.

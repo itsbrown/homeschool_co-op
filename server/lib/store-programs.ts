@@ -54,8 +54,8 @@ function sessionReady(row: typeof sessions.$inferSelect): { ready: boolean; hint
 }
 
 function classReady(row: typeof classes.$inferSelect): { ready: boolean; hint: string | null } {
-  if (!row.isPublished) {
-    return { ready: false, hint: 'Publish the class in Classes admin' };
+  if (!row.enrollmentOpen) {
+    return { ready: false, hint: 'Turn on Open for Enrollment in Classes' };
   }
   if (!row.price || row.price <= 0) {
     return { ready: false, hint: 'Set a price on the class' };

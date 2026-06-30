@@ -16,6 +16,7 @@ Parallel **store lane** at `/store/:storeSlug` — isolated from member `/cart` 
 - **Sessions / Classes** → edit program content only; storefront visibility is managed under **Public Store → Classes & programs**
 - Programs are **not** duplicated — `store_listings` points at existing session/class rows
 - **Program images:** `sessions.cover_image` (migration 252) and `classes.cover_image`; upload at `POST …/upload/program-image`; catalog exposes `imageUrl`
+- **Store-ready classes:** `enrollmentOpen` + price (same gate as parent catalog); not legacy `isPublished`
 
 ## API
 
