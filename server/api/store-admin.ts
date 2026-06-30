@@ -1,5 +1,8 @@
 import { Router, type Response } from 'express';
 import { z } from 'zod';
+import path from 'path';
+import fs from 'fs';
+import type { UploadedFile } from 'express-fileupload';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import {
@@ -93,6 +96,45 @@ router.get('/products', async (req: any, res) => {
     res.json(await getStoreProductsBySchoolId(schoolId));
   } catch (err) {
     handleStoreRouteError(res, err, 'Failed to load store products');
+  }
+});
+
+router.post('/upload/product-image', async (req: any, res) => {
+  try {
+    if (!req.files?.image) {
+      return res.status(400).json({ success: false, message: 'No image file uploaded' });
+    }
+
+    const imageFile = req.files.image as UploadedFile;
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedMimeTypes.includes(imageFile.mimetype)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only image files are allowed (JPEG, PNG, GIF, WebP)',
+      });
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (imageFile.size > maxSize) {
+      return res.status(400).json({ success: false, message: 'File too large. Maximum size is 5MB.' });
+    }
+
+    const uploadDir = path.join(process.cwd(), 'uploads', 'store-products');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const ext = path.extname(imageFile.name).toLowerCase();
+    const filename = `product-${timestamp}-${randomSuffix}${ext}`;
+    const filepath = path.join(uploadDir, filename);
+    await imageFile.mv(filepath);
+
+    const imageUrl = `/uploads/store-products/${filename}`;
+    res.json({ success: true, imageUrl, filename, size: imageFile.size, mimetype: imageFile.mimetype });
+  } catch (err) {
+    handleStoreRouteError(res, err, 'Failed to upload product image');
   }
 });
 

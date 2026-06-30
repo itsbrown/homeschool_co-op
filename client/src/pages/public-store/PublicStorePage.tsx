@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/components/SupabaseProvider";
 import { fetchParentMemberId, PARENT_MEMBER_ID_QUERY_KEY } from "@/lib/parent-member-id";
 import { loadStoreCart, saveStoreCart, newLineId } from "@/lib/store-cart";
+import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 
 type CatalogItem = {
   listingId: number;
@@ -25,6 +26,7 @@ type CatalogItem = {
   priceCents?: number;
   halfDayPrice?: number;
   fullDayPrice?: number;
+  imageUrl?: string | null;
   membersOnly: boolean;
   inStock?: boolean;
 };
@@ -163,7 +165,10 @@ export default function PublicStorePage() {
 
       <main className="mx-auto max-w-5xl px-4 py-8 grid gap-4 md:grid-cols-2">
         {items.map((item) => (
-          <Card key={`${item.listingType}-${item.listingId}`}>
+          <Card key={`${item.listingType}-${item.listingId}`} className="overflow-hidden">
+            {item.listingType === "product" && (
+              <StoreProductCardImage src={item.imageUrl} alt={item.title} />
+            )}
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <CardTitle className="text-lg">{item.title}</CardTitle>

@@ -11,6 +11,8 @@ interface ImageUploadProps {
   uploadEndpoint?: string;
   className?: string;
   disabled?: boolean;
+  /** Tailwind aspect class for preview crop (default square for merch). */
+  previewAspectClass?: string;
 }
 
 export function ImageUpload({
@@ -19,6 +21,7 @@ export function ImageUpload({
   uploadEndpoint = '/api/fundraisers/upload/product-image',
   className,
   disabled = false,
+  previewAspectClass = 'aspect-video',
 }: ImageUploadProps) {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
@@ -130,7 +133,7 @@ export function ImageUpload({
             ? 'border-primary bg-primary/5 scale-[1.02]'
             : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50',
           disabled && 'opacity-50 cursor-not-allowed',
-          displayUrl ? 'aspect-video' : 'p-6'
+          displayUrl ? previewAspectClass : 'p-6'
         )}
         data-testid="image-upload-dropzone"
       >

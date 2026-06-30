@@ -10,6 +10,16 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { ExternalLink } from "lucide-react";
+import { ImageUpload } from "@/components/ImageUpload";
+import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
+
+type StoreProduct = {
+  id: number;
+  name: string;
+  priceCents: number;
+  description?: string | null;
+  imageUrl?: string | null;
+};
 
 export default function PublicStoreManagerPage() {
   const { toast } = useToast();
@@ -53,7 +63,7 @@ export default function PublicStoreManagerPage() {
     onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
   });
 
-  const { data: products = [] } = useQuery({
+  const { data: products = [] } = useQuery<StoreProduct[]>({
     queryKey: ["/api/school-admin/public-store/products"],
   });
 
@@ -69,6 +79,7 @@ export default function PublicStoreManagerPage() {
     name: "",
     priceCents: 0,
     description: "",
+    imageUrl: "",
   });
 
   const createProduct = useMutation({
@@ -77,14 +88,26 @@ export default function PublicStoreManagerPage() {
         name: productForm.name,
         description: productForm.description || null,
         priceCents: Math.round(productForm.priceCents * 100),
+        imageUrl: productForm.imageUrl || null,
       });
       if (!res.ok) throw new Error("Failed to create product");
-      return res.json();
+      const product = (await res.json()) as StoreProduct;
+
+      const listingRes = await apiRequest("POST", "/api/school-admin/public-store/listings", {
+        listingType: "product",
+        sourceId: product.id,
+        isPublished: true,
+        membersOnly: false,
+      });
+      if (!listingRes.ok) throw new Error("Product created but failed to publish listing");
+
+      return product;
     },
     onSuccess: () => {
-      toast({ title: "Product created" });
-      setProductForm({ name: "", priceCents: 0, description: "" });
+      toast({ title: "Product created and listed on store" });
+      setProductForm({ name: "", priceCents: 0, description: "", imageUrl: "" });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/listings"] });
     },
   });
 
@@ -167,11 +190,34 @@ export default function PublicStoreManagerPage() {
                   value={productForm.description}
                   onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
                 />
-                <Button onClick={() => createProduct.mutate()}>Create product</Button>
-                <ul className="text-sm space-y-1 pt-4">
-                  {products.map((p: { id: number; name: string; priceCents: number }) => (
-                    <li key={p.id}>
-                      {p.name} — ${(p.priceCents / 100).toFixed(2)}
+                <div>
+                  <Label className="mb-2 block">Product photo</Label>
+                  <ImageUpload
+                    value={productForm.imageUrl}
+                    onChange={(url) => setProductForm({ ...productForm, imageUrl: url })}
+                    uploadEndpoint="/api/school-admin/public-store/upload/product-image"
+                    previewAspectClass="aspect-square"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Shown as a square crop on the public store. JPEG, PNG, GIF, or WebP — max 5MB.
+                  </p>
+                </div>
+                <Button onClick={() => createProduct.mutate()} disabled={!productForm.name.trim()}>
+                  Create product
+                </Button>
+                <ul className="grid gap-3 pt-4 sm:grid-cols-2">
+                  {products.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex gap-3 rounded-lg border p-2 text-sm items-center"
+                    >
+                      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md">
+                        <StoreProductCardImage src={p.imageUrl} alt={p.name} className="rounded-md h-full" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{p.name}</p>
+                        <p className="text-muted-foreground">${(p.priceCents / 100).toFixed(2)}</p>
+                      </div>
                     </li>
                   ))}
                 </ul>

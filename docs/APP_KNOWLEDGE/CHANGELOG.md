@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-06-23 (Public store — merch product photos)
+
+- **UI:** `StoreProductCardImage` — square cropped image on public store product cards; placeholder when no photo.
+- **Admin:** Public Store → Products — `ImageUpload` + auto-publish listing on create; `POST …/upload/product-image`.
+
 ## 2026-06-25 (Kendra Crofoot — phantom session ledger + parity plan)
 
 - **Prod fix:** Reset `total_paid` on session enrollments #522–531 (phantom $441 with no succeeded PI / no `payments` row). Script: `server/scripts/fix-kendra-crofoot-session-phantom-paid-production.ts`; summary: `server/scripts/account-correction-summaries/kendra-crofoot-session-phantom-paid.json`.
