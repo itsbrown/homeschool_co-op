@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
@@ -21,6 +21,48 @@ type StoreProduct = {
   imageUrl?: string | null;
 };
 
+type ProductFormState = {
+  name: string;
+  priceCents: number;
+  description: string;
+  imageUrl: string;
+};
+
+const STORE_TAB_KEY = "public-store-manager-tab";
+const PRODUCT_DRAFT_KEY = "public-store-manager-product-draft";
+const STORE_TABS = new Set(["settings", "products", "listings", "orders"]);
+
+const emptyProductForm = (): ProductFormState => ({
+  name: "",
+  priceCents: 0,
+  description: "",
+  imageUrl: "",
+});
+
+function readInitialTab(): string {
+  const fromUrl = new URLSearchParams(window.location.search).get("tab");
+  if (fromUrl && STORE_TABS.has(fromUrl)) return fromUrl;
+  const stored = sessionStorage.getItem(STORE_TAB_KEY);
+  if (stored && STORE_TABS.has(stored)) return stored;
+  return "settings";
+}
+
+function readProductDraft(): ProductFormState {
+  try {
+    const raw = sessionStorage.getItem(PRODUCT_DRAFT_KEY);
+    if (!raw) return emptyProductForm();
+    const parsed = JSON.parse(raw) as Partial<ProductFormState>;
+    return {
+      name: parsed.name ?? "",
+      priceCents: typeof parsed.priceCents === "number" ? parsed.priceCents : 0,
+      description: parsed.description ?? "",
+      imageUrl: parsed.imageUrl ?? "",
+    };
+  } catch {
+    return emptyProductForm();
+  }
+}
+
 export default function PublicStoreManagerPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -35,13 +77,23 @@ export default function PublicStoreManagerPage() {
 
   const [slug, setSlug] = useState("");
   const [enabled, setEnabled] = useState(false);
+  const [activeTab, setActiveTab] = useState(readInitialTab);
+  const settingsHydrated = useRef(false);
 
   useEffect(() => {
-    if (settings) {
+    if (settings && !settingsHydrated.current) {
       setSlug(settings.storeSlug ?? "");
       setEnabled(settings.publicStoreEnabled ?? false);
+      settingsHydrated.current = true;
     }
   }, [settings]);
+
+  useEffect(() => {
+    sessionStorage.setItem(STORE_TAB_KEY, activeTab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", activeTab);
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  }, [activeTab]);
 
   const saveSettings = useMutation({
     mutationFn: async () => {
@@ -55,8 +107,11 @@ export default function PublicStoreManagerPage() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast({ title: "Store settings saved" });
+      setSlug(updated.storeSlug ?? slug);
+      setEnabled(updated.publicStoreEnabled ?? enabled);
+      settingsHydrated.current = true;
       queryClient.invalidateQueries({ queryKey: settingsKey });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/features"] });
     },
@@ -75,12 +130,15 @@ export default function PublicStoreManagerPage() {
     queryKey: ["/api/school-admin/public-store/orders"],
   });
 
-  const [productForm, setProductForm] = useState({
-    name: "",
-    priceCents: 0,
-    description: "",
-    imageUrl: "",
-  });
+  const [productForm, setProductForm] = useState<ProductFormState>(readProductDraft);
+
+  useEffect(() => {
+    sessionStorage.setItem(PRODUCT_DRAFT_KEY, JSON.stringify(productForm));
+  }, [productForm]);
+
+  const updateProductForm = (patch: Partial<ProductFormState>) => {
+    setProductForm((prev) => ({ ...prev, ...patch }));
+  };
 
   const createProduct = useMutation({
     mutationFn: async () => {
@@ -105,7 +163,9 @@ export default function PublicStoreManagerPage() {
     },
     onSuccess: () => {
       toast({ title: "Product created and listed on store" });
-      setProductForm({ name: "", priceCents: 0, description: "", imageUrl: "" });
+      const cleared = emptyProductForm();
+      setProductForm(cleared);
+      sessionStorage.removeItem(PRODUCT_DRAFT_KEY);
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/listings"] });
     },
@@ -116,7 +176,7 @@ export default function PublicStoreManagerPage() {
   return (
     <SchoolAdminLayout pageTitle="Public Store">
       <div className="max-w-4xl mx-auto space-y-6">
-        <Tabs defaultValue="settings">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="settings" data-testid="store-tab-settings">Settings</TabsTrigger>
             <TabsTrigger value="products" data-testid="store-tab-products">Products</TabsTrigger>
@@ -175,26 +235,26 @@ export default function PublicStoreManagerPage() {
                 <Input
                   placeholder="Name"
                   value={productForm.name}
-                  onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                  onChange={(e) => updateProductForm({ name: e.target.value })}
                 />
                 <Input
                   type="number"
                   placeholder="Price (USD)"
                   value={productForm.priceCents || ""}
                   onChange={(e) =>
-                    setProductForm({ ...productForm, priceCents: parseFloat(e.target.value) || 0 })
+                    updateProductForm({ priceCents: parseFloat(e.target.value) || 0 })
                   }
                 />
                 <Input
                   placeholder="Description"
                   value={productForm.description}
-                  onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                  onChange={(e) => updateProductForm({ description: e.target.value })}
                 />
                 <div>
                   <Label className="mb-2 block">Product photo</Label>
                   <ImageUpload
                     value={productForm.imageUrl}
-                    onChange={(url) => setProductForm({ ...productForm, imageUrl: url })}
+                    onChange={(url) => updateProductForm({ imageUrl: url })}
                     uploadEndpoint="/api/school-admin/public-store/upload/product-image"
                     previewAspectClass="aspect-square"
                   />
@@ -203,6 +263,7 @@ export default function PublicStoreManagerPage() {
                   </p>
                 </div>
                 <Button
+                  type="button"
                   onClick={() => createProduct.mutate()}
                   disabled={!productForm.name.trim()}
                   data-testid="button-create-store-product"
