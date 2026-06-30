@@ -5,7 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import ProgressLogForm from './ProgressLogForm';
 
-export default function ProgressLogTab() {
+type Props = {
+  fixedChildId?: number;
+  fixedChildName?: string;
+};
+
+export default function ProgressLogTab({ fixedChildId, fixedChildName }: Props) {
   const { data: recent = [], isLoading } = useQuery({
     queryKey: ['/api/progress/log/recent'],
     queryFn: async () => {
@@ -22,7 +27,7 @@ export default function ProgressLogTab() {
         <TabsTrigger value="recent" data-testid="progress-subtab-recent">Recent</TabsTrigger>
       </TabsList>
       <TabsContent value="log" className="mt-4">
-        <ProgressLogForm />
+        <ProgressLogForm fixedChildId={fixedChildId} fixedChildName={fixedChildName} />
       </TabsContent>
       <TabsContent value="recent" className="mt-4">
         <Card>

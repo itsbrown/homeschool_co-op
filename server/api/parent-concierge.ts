@@ -659,6 +659,7 @@ You can now enroll ${firstName} in classes. Would you like me to show you availa
         if (!sid) return `${child.firstName} is not linked to a school yet.`;
         const current = await storage.getStudentProgressCurrent(child.id, sid);
         const logs = await storage.getStudentProgressLog(child.id, sid);
+        const cachedInsight = await storage.getProgressInsightCache(child.id, sid);
         const subjectFilter = toolInput.subject?.toLowerCase();
         const filterSubject = (label: string, key: string) =>
           !subjectFilter || label.toLowerCase().includes(subjectFilter) || key.toLowerCase().includes(subjectFilter);
@@ -687,6 +688,16 @@ You can now enroll ${firstName} in classes. Would you like me to show you availa
         }
         if (child.currentLexileRange || child.currentReadingGradeLevel) {
           out += `\n**Reading snapshot:** Lexile ${child.currentLexileRange || 'n/a'}, grade level ${child.currentReadingGradeLevel || 'n/a'}.`;
+        }
+        if (
+          cachedInsight?.summary &&
+          cachedInsight.generatedAt &&
+          Date.now() - cachedInsight.generatedAt.getTime() < 24 * 60 * 60 * 1000
+        ) {
+          out += `\n\n**AI summary (cached):** ${cachedInsight.summary}`;
+          if (cachedInsight.nextSteps?.length) {
+            out += `\n**Suggested next steps:** ${cachedInsight.nextSteps.slice(0, 3).join('; ')}.`;
+          }
         }
         return out;
       }

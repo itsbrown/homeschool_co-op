@@ -8086,6 +8086,9 @@ export class MemStorage implements IStorage {
       getQuarterlyProgressSnapshots(childId: number, schoolId: number) {
         return this.requireApDb().getQuarterlyProgressSnapshots(childId, schoolId);
       }
+      getQuarterlyProgressSnapshotsForSchool(schoolId: number, limit?: number) {
+        return this.requireApDb().getQuarterlyProgressSnapshotsForSchool(schoolId, limit);
+      }
       getQuarterlyProgressSnapshotById(id: number, schoolId: number) {
         return this.requireApDb().getQuarterlyProgressSnapshotById(id, schoolId);
       }

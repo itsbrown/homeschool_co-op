@@ -3574,6 +3574,22 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
     });
     await storage.updateUser(parent.id, { password: await bcrypt.hash(password, 10) });
 
+    const db = await getDb();
+    await db.insert(userRoles).values([
+      {
+        userId: educator.id,
+        role: 'educator',
+        schoolId: school.id,
+        isPrimary: true,
+      },
+      {
+        userId: parent.id,
+        role: 'parent',
+        schoolId: school.id,
+        isPrimary: true,
+      },
+    ]);
+
     const child = await storage.createChild({
       parentId: parent.id,
       parentEmail,

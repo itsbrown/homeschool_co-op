@@ -4436,6 +4436,7 @@ export class DatabaseStorage implements IStorage {
   buildStudentProgressReport = apDb.buildStudentProgressReport;
   saveQuarterlyProgressSnapshot = apDb.saveQuarterlyProgressSnapshot;
   getQuarterlyProgressSnapshots = apDb.getQuarterlyProgressSnapshots;
+  getQuarterlyProgressSnapshotsForSchool = apDb.getQuarterlyProgressSnapshotsForSchool;
   getQuarterlyProgressSnapshotById = apDb.getQuarterlyProgressSnapshotById;
 
   private mapTechnicalSupportIssueRow(row: TechnicalSupportIssue) {

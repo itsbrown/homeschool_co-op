@@ -20,6 +20,16 @@
 - **Docs:** [domains/public-store.md](./domains/public-store.md); E2E catalog `e2e/public-store-guest-checkout.spec.ts` (skipped until seed).
 - **Nav/UX:** Finance sidebar link (gated by `enabled_features.publicStore` or activation); `SchoolAdminLayout` shell; store-admin 503 when migration 251 missing.
 
+## 2026-06-01 (F-14 observability finish — Sentry, Claude bundle, audit)
+
+- **`progress-context-bundle.ts`:** Single query bundle for progress-insights, Lexile AI (student route), and parent concierge cached summary append.
+- **Staff insights:** `GET /api/progress/insights/staff/summary/:childId` shares 24h cache with parent route.
+- **Sentry:** `@sentry/node` + `@sentry/react`; dual-write from error-telemetry (≥ medium) and errorTracker (non-throttled); PII scrub in `shared/sentry-scrub.ts`; PDF spans on report generate/download/email.
+- **Report audit:** `progress_report_generated|downloaded|emailed` → `audit_logs`; admin **Sessions & reports** tab lists snapshots via `GET /api/progress/report/school-snapshots`.
+- **SendGrid webhook stub:** `POST /api/webhooks/sendgrid/events` updates `email_log` on bounce/deliver.
+- **Tests:** `progress-insights-rate-limit.test.ts`; optional `@axe-core/playwright` on parent progress hub in quarterly E2E spec.
+- **Docs:** [domains/observability.md](./domains/observability.md).
+
 ## 2026-06-19 (Help — issue submission with optional screenshot)
 
 - **UI:** “Need Help?” menu item renamed **Report an Issue** (`AISupportAssistant.tsx`); Payment Help adds “Still stuck?” link. Both floating buttons unchanged.

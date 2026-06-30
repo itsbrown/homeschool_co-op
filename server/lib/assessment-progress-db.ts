@@ -1086,6 +1086,19 @@ export async function saveQuarterlyProgressSnapshot(
   return row;
 }
 
+export async function getQuarterlyProgressSnapshotsForSchool(
+  schoolId: number,
+  limit = 50,
+): Promise<(typeof quarterlyProgressReports.$inferSelect)[]> {
+  const db = await getDb();
+  return db
+    .select()
+    .from(quarterlyProgressReports)
+    .where(eq(quarterlyProgressReports.schoolId, schoolId))
+    .orderBy(desc(quarterlyProgressReports.generatedAt))
+    .limit(limit);
+}
+
 export async function getQuarterlyProgressSnapshots(
   childId: number,
   schoolId: number,

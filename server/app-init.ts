@@ -1,6 +1,8 @@
 import { type Request, Response, NextFunction } from "express";
 import express, { type Express } from "express";
 import type { Server } from 'http';
+import { initSentryServer } from './lib/sentry';
+initSentryServer();
 import { registerRoutes } from "./routes";
 import { setupVite, log } from "./vite";
 import fileUpload from "express-fileupload";
@@ -30,6 +32,7 @@ import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
 import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import errorTelemetryRouter from "./api/error-telemetry";
+import sendgridWebhookRouter from "./api/sendgrid-webhook";
 import { errorNotificationService } from "./services/error-notification";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import unifiedUploadsRouter from "./api/unified-uploads";
@@ -220,6 +223,7 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/user", autoPayRouter);
   app.use("/api/admin/users", adminPaymentMethodsRouter);
   app.use("/api/telemetry/errors", errorTelemetryRouter);
+  app.use("/api/webhooks/sendgrid", sendgridWebhookRouter);
   app.use("/api/unified-uploads", unifiedUploadsRouter);
   app.use("/api/schedule-builder", scheduleBuilderRouter);
   app.use("/api/schedule-ai", scheduleAiRouter);

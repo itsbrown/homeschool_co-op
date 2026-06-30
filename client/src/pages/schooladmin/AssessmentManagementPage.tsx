@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import LexileTab from '@/components/lexile/LexileTab';
 import ProgressCatalogTab from '@/components/admin/ProgressCatalogTab';
+import AssessmentSessionsTab from '@/components/admin/AssessmentSessionsTab';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import AppShell from '@/components/layout/AppShell';
@@ -465,6 +466,10 @@ export default function AssessmentManagementPage() {
               <TrendingUp className="h-4 w-4" />
               Progress catalog
             </TabsTrigger>
+            <TabsTrigger value="sessions" className="flex items-center gap-2" data-testid="tab-assessment-sessions">
+              <Calendar className="h-4 w-4" />
+              Sessions & reports
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="types">
@@ -725,6 +730,10 @@ export default function AssessmentManagementPage() {
 
           <TabsContent value="progress-catalog">
             <ProgressCatalogTab />
+          </TabsContent>
+
+          <TabsContent value="sessions">
+            <AssessmentSessionsTab />
           </TabsContent>
         </Tabs>
 

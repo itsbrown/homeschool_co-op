@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { storage } from '../storage';
 import { anthropicService } from '../services/anthropic';
 import { supabaseAuth, requireSchoolContext } from '../middleware/supabase-auth';
+import { buildProgressContextBundle, formatBundleForPrompt } from '../lib/progress-context-bundle';
 
 const router = Router();
 
@@ -48,29 +49,27 @@ router.get('/student/:childId', supabaseAuth, requireSchoolContext, requireLexil
       return res.status(404).json({ message: 'Student not found in your school' });
     }
 
-    const history = await storage.getLexileHistoryForChildBySchool(childId, schoolId);
+    const bundle = await buildProgressContextBundle({ childId, schoolId });
+    if (!bundle) {
+      return res.status(404).json({ message: 'Student not found in your school' });
+    }
 
-    if (history.length === 0 && !child.currentLexileRange && !child.currentReadingGradeLevel) {
+    const { lexileHistory } = bundle;
+
+    if (lexileHistory.length === 0 && !child.currentLexileRange && !child.currentReadingGradeLevel) {
       return res.json({ noData: true, message: 'No lexile data recorded yet' });
     }
 
     const prompt = `You are an expert reading specialist helping educators understand student reading data.
 
-Student Profile:
-- Name: ${child.firstName} ${child.lastName}
-- Grade Level: ${child.gradeLevel}
-- Current Lexile Range: ${child.currentLexileRange || 'Not recorded'}
-- Current Reading Grade Level: ${child.currentReadingGradeLevel || 'Not recorded'}
-- Current Book List: ${child.currentBookList || 'Not recorded'}
-
-Reading History (most recent first):
-${history.slice(0, 10).map((h, i) => `${i + 1}. Date: ${new Date(h.assessmentDate).toLocaleDateString()} | Score: ${h.score} | Notes: ${h.notes || 'None'}`).join('\n') || 'No history available'}
+${formatBundleForPrompt(bundle)}
 
 Behavioral constraints:
 - Be specific and actionable
 - Use plain language suitable for educators (not highly technical)
 - Base recommendations on the actual data provided
 - If data is limited, acknowledge it and provide general guidance
+- Do not invent scores or assessment results
 
 Return a JSON object with exactly these fields:
 {

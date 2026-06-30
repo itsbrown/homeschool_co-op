@@ -257,18 +257,33 @@ HUGGINGFACE_API_KEY=hf_...
 #### Email Services
 
 ```bash
-# Brevo (Primary)
+# SendGrid (primary when SENDGRID_API_KEY is set; set EMAIL_PROVIDER=brevo to rollback)
+SENDGRID_API_KEY=SG....
+SENDGRID_FROM_EMAIL=noreply@yourschool.com
+EMAIL_PROVIDER=sendgrid
+
+# Brevo (fallback / legacy)
 BREVO_API_KEY=xkeysib-...
 BREVO_SENDER_EMAIL=noreply@yourschool.com
 BREVO_SENDER_NAME=ASA Platform
-
-# SendGrid (Backup)
-SENDGRID_API_KEY=SG....
 ```
 
 **How to get:**
+- **SendGrid:** https://app.sendgrid.com → Settings → API Keys; configure Event Webhook → `POST /api/webhooks/sendgrid/events`
 - **Brevo:** https://app.brevo.com → Settings → API Keys
-- **SendGrid:** https://app.sendgrid.com → Settings → API Keys
+
+#### Error monitoring (Sentry, optional)
+
+```bash
+SENTRY_DSN=https://...@sentry.io/...
+SENTRY_ENVIRONMENT=production
+SENTRY_RELEASE=<git-sha>
+VITE_SENTRY_DSN=https://...@sentry.io/...
+VITE_SENTRY_ENVIRONMENT=production
+VITE_SENTRY_RELEASE=<git-sha>
+```
+
+See [docs/APP_KNOWLEDGE/domains/observability.md](./APP_KNOWLEDGE/domains/observability.md). DB `error_logs` remains the admin alert source of truth.
 
 ---
 

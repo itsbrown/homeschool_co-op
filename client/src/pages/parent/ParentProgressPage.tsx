@@ -15,10 +15,6 @@ import { Link } from 'wouter';
 function ProgressSummaryCard({ childId }: { childId: number }) {
   const { data, isLoading } = useQuery({
     queryKey: ['/api/progress/insights/summary', childId],
-    queryFn: async () => {
-      const res = await fetch(`/api/progress/insights/summary/${childId}`, { credentials: 'include' });
-      return res.json();
-    },
     enabled: !!childId,
   });
 
@@ -46,11 +42,6 @@ function FinalizedReportsCard({ childId }: { childId: number }) {
     { id: number; schoolYear: string; quarter: string; generatedAt: string }[]
   >({
     queryKey: ['/api/progress/report', childId, 'snapshots'],
-    queryFn: async () => {
-      const res = await fetch(`/api/progress/report/${childId}/snapshots`, { credentials: 'include' });
-      if (!res.ok) return [];
-      return res.json();
-    },
     enabled: !!childId,
   });
 
