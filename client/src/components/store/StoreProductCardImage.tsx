@@ -5,10 +5,16 @@ type StoreProductCardImageProps = {
   src?: string | null;
   alt: string;
   className?: string;
+  "data-testid"?: string;
 };
 
 /** Square cropped merch image for public store product cards. */
-export function StoreProductCardImage({ src, alt, className }: StoreProductCardImageProps) {
+export function StoreProductCardImage({
+  src,
+  alt,
+  className,
+  "data-testid": dataTestId,
+}: StoreProductCardImageProps) {
   if (!src) {
     return (
       <div
@@ -25,7 +31,13 @@ export function StoreProductCardImage({ src, alt, className }: StoreProductCardI
 
   return (
     <div className={cn("aspect-square overflow-hidden rounded-t-lg bg-muted", className)}>
-      <img src={src} alt={alt} className="h-full w-full object-cover" loading="lazy" />
+      <img
+        src={src}
+        alt={alt}
+        className="h-full w-full object-cover"
+        loading="lazy"
+        data-testid={dataTestId}
+      />
     </div>
   );
 }

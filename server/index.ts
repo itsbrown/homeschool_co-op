@@ -149,6 +149,14 @@ app.use('/api/custom-forms/forms/:formId/upload-attachment', fileUpload({
   createParentPath: true,
 }));
 
+// Public store merch product images
+app.use('/api/school-admin/public-store/upload', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  abortOnLimit: true,
+  createParentPath: true,
+}));
+
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 

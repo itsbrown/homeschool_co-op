@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
 
 interface ImageUploadProps {
@@ -45,16 +46,15 @@ export function ImageUpload({
     try {
       const formData = new FormData();
       formData.append('image', file);
-      
-      const response = await fetch(uploadEndpoint, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
-      
+
+      const response = await apiRequest('POST', uploadEndpoint, formData);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Upload failed');
+        const error = (await response.json().catch(() => ({}))) as {
+          message?: string;
+          error?: string;
+        };
+        throw new Error(error.message || error.error || 'Upload failed');
       }
       
       const data = await response.json();

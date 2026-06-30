@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-06-23 (Public store — merch upload auth + E2E)
+
+- **Fix:** `ImageUpload` uses `apiRequest` so Supabase `Authorization` header is sent (fixes `Missing or invalid authorization header` on store merch upload).
+- **E2E:** `e2e/public-store.spec.ts` — catalog imageUrl, guest card display, admin upload + create product, cart; seeds `ensure-public-store-schema` + `setup-public-store-scenario`.
+- **Playwright:** `PUBLIC_STORE_ENABLED=true` in `webServer` env.
+
 ## 2026-06-23 (Public store — merch product photos)
 
 - **UI:** `StoreProductCardImage` — square cropped image on public store product cards; placeholder when no photo.

@@ -3489,6 +3489,78 @@ router.post('/setup-reallocation-pair', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/test/ensure-public-store-schema — applies migration 251 if missing (E2E).
+ */
+router.post('/ensure-public-store-schema', async (_req: Request, res: Response) => {
+  try {
+    const { ensurePublicStoreSchema } = await import('../lib/ensure-public-store-schema');
+    await ensurePublicStoreSchema();
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('[Test] ensure-public-store-schema error:', error);
+    return res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+/**
+ * POST /api/test/setup-public-store-scenario
+ * Seeds school admin + enabled public store + published merch product.
+ */
+router.post('/setup-public-store-scenario', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+    }
+
+    const { seedPublicStoreScenario } = await import('../tests/helpers/seedPublicStoreScenario');
+    const seed = await seedPublicStoreScenario(new TestDatabase(), {
+      productImageUrl:
+        typeof req.body?.productImageUrl === 'string' ? req.body.productImageUrl : null,
+      withPublishedProduct: req.body?.withPublishedProduct !== false,
+    });
+
+    let adminSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthAdmin === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuthAdmin requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      try {
+        adminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.admin.id,
+          email: seed.admin.email,
+          password: seed.admin.password,
+          role: 'schoolAdmin',
+          schoolId: seed.school.id,
+          displayName: 'Store E2E Admin',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthAdmin failed:', e);
+        adminSupabaseLinked = false;
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...seed,
+        adminSupabaseLinked,
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-public-store-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup public store scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
  * POST /api/test/setup-public-form-scenario
  * Seeds public + members-only custom forms for Playwright public-access tests.
  */

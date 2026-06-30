@@ -165,9 +165,17 @@ export default function PublicStorePage() {
 
       <main className="mx-auto max-w-5xl px-4 py-8 grid gap-4 md:grid-cols-2">
         {items.map((item) => (
-          <Card key={`${item.listingType}-${item.listingId}`} className="overflow-hidden">
+          <Card
+            key={`${item.listingType}-${item.listingId}`}
+            className="overflow-hidden"
+            data-testid={`store-catalog-item-${item.listingType}-${item.listingId}`}
+          >
             {item.listingType === "product" && (
-              <StoreProductCardImage src={item.imageUrl} alt={item.title} />
+              <StoreProductCardImage
+                src={item.imageUrl}
+                alt={item.title}
+                data-testid="store-product-image"
+              />
             )}
             <CardHeader>
               <div className="flex items-start justify-between gap-2">

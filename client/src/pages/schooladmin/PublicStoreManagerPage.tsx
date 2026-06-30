@@ -118,10 +118,10 @@ export default function PublicStoreManagerPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         <Tabs defaultValue="settings">
           <TabsList>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="products">Products</TabsTrigger>
-            <TabsTrigger value="listings">Listings</TabsTrigger>
-            <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="settings" data-testid="store-tab-settings">Settings</TabsTrigger>
+            <TabsTrigger value="products" data-testid="store-tab-products">Products</TabsTrigger>
+            <TabsTrigger value="listings" data-testid="store-tab-listings">Listings</TabsTrigger>
+            <TabsTrigger value="orders" data-testid="store-tab-orders">Orders</TabsTrigger>
           </TabsList>
 
           <TabsContent value="settings" className="mt-4">
@@ -202,7 +202,11 @@ export default function PublicStoreManagerPage() {
                     Shown as a square crop on the public store. JPEG, PNG, GIF, or WebP — max 5MB.
                   </p>
                 </div>
-                <Button onClick={() => createProduct.mutate()} disabled={!productForm.name.trim()}>
+                <Button
+                  onClick={() => createProduct.mutate()}
+                  disabled={!productForm.name.trim()}
+                  data-testid="button-create-store-product"
+                >
                   Create product
                 </Button>
                 <ul className="grid gap-3 pt-4 sm:grid-cols-2">
