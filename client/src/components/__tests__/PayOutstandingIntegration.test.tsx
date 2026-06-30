@@ -127,6 +127,11 @@ function seedParentQueries(qc: QueryClient) {
   qc.setQueryData(['/api/parent/fundraiser-links'], []);
   qc.setQueryData(['/api/parent/fundraiser-orders'], []);
   qc.setQueryData(['/api/parent/auto-pay'], { enabled: false });
+  qc.setQueryData(['billing-summary'], {
+    totalBalance: 50_000,
+    enrollmentBalance: 50_000,
+    enrollmentDetails: [{ balance: 50_000 }],
+  });
   qc.setQueryData(['parent-credits'], {
     user: { id: 1, name: '', email: 'p@example.com' },
     schoolId: null,
@@ -146,6 +151,23 @@ describe('Task 182: Pay Outstanding CTAs (integration)', () => {
 
     global.fetch = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : String(input);
+      if (url.includes('/api/billing/summary')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              totalBalance: 50_000,
+              enrollmentBalance: 50_000,
+              enrollmentDetails: [{ balance: 50_000 }],
+            }),
+        }) as Promise<Response>;
+      }
+      if (url.includes('/api/scheduled-payments/upcoming')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ payments: [] }),
+        }) as Promise<Response>;
+      }
       if (url.includes('/api/cart/calculate')) {
         try {
           const body = init?.body ? JSON.parse(String(init.body)) : { items: [] as unknown[] };
@@ -190,7 +212,7 @@ describe('Task 182: Pay Outstanding CTAs (integration)', () => {
 
     render(<ParentDashboard />, { wrapper });
 
-    const btn = screen.getByTestId('button-pay-outstanding-dashboard');
+    const btn = await screen.findByTestId('button-pay-outstanding-dashboard');
     await waitFor(() => expect(btn).not.toBeDisabled());
     expect(btn).toHaveTextContent('Pay $500.00');
 
