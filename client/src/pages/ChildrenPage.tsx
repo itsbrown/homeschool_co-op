@@ -141,6 +141,7 @@ interface Child {
   learningStyle?: string;
   interests?: string[];
   age?: number;
+  locationName?: string | null;
 }
 
 export default function ChildrenPage() {
@@ -209,6 +210,7 @@ export default function ChildrenPage() {
                       <CardTitle>{child.firstName} {child.lastName}</CardTitle>
                       <CardDescription>
                         Age: {child.age} • Grade: {child.gradeLevel}
+                        {child.locationName ? ` • Location: ${child.locationName}` : ""}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>

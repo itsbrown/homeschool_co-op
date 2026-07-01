@@ -84,6 +84,7 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
         parentEmail: studentData.parentEmail,
         parentPhone: studentData.parentPhone,
         emergencyContact: studentData.emergencyContact,
+        locationName: studentData.locationName ?? null,
         enrollmentDate: studentData.enrollmentDate || studentData.createdAt,
         status: studentData.status || "Active"
       };
@@ -271,6 +272,15 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
                     <label className="text-sm font-medium text-muted-foreground">Grade Level</label>
                     <p className="font-medium">Grade {child.gradeLevel}</p>
                   </div>
+                  {child.locationName ? (
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Registered Location</label>
+                      <p className="font-medium flex items-center gap-1.5">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        {child.locationName}
+                      </p>
+                    </div>
+                  ) : null}
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Enrollment Date</label>
                     <p className="font-medium">{child.enrollmentDate}</p>
@@ -424,6 +434,12 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
                         <div className="flex items-center justify-between mb-2">
                           <div>
                             <h3 className="font-semibold">{enrollment.className}</h3>
+                            {(enrollment.registeredLocationName || enrollment.locationName || child.locationName) ? (
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <MapPin className="h-3.5 w-3.5" />
+                                {enrollment.registeredLocationName || enrollment.locationName || child.locationName}
+                              </p>
+                            ) : null}
                             <p className="text-sm text-muted-foreground">
                               Enrolled on {new Date(enrollment.enrollmentDate).toLocaleDateString()}
                             </p>

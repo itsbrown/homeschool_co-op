@@ -13,6 +13,7 @@ import {
 } from '../utils/cart-pricing';
 import { enrollmentMatchesParent, emailsMatch } from '@shared/parent-identity';
 import { runMembershipReconcileForParentUser } from '../lib/reconcile-membership-ledger';
+import { resolveChildRegisteredLocation, resolveRegisteredLocation } from '../lib/parent-registered-location';
 
 const router = Router();
 
@@ -62,28 +63,44 @@ router.get('/children', jwtCheck, async (req: any, res) => {
       return res.status(200).json([]);
     }
 
+    const dbUser = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: req.auth?.supabaseId,
+    });
+
     // Transform children data to ensure consistent format
-    const transformedChildren = children.map(child => ({
-      id: child.id,
-      firstName: child.firstName,
-      lastName: child.lastName,
-      birthdate: child.birthdate,
-      gradeLevel: child.gradeLevel,
-      gender: child.gender,
-      parentId: child.parentId,
-      specialNeeds: child.specialNeeds,
-      interests: child.interests,
-      school: child.school,
-      learningStyle: child.learningStyle,
-      allergies: child.allergies,
-      medicalInfo: child.medicalInfo,
-      profileImage: child.profileImage,
-      emergencyContact: child.emergencyContact,
-      additionalLanguages: child.additionalLanguages,
-      notes: child.notes,
-      createdAt: child.createdAt,
-      updatedAt: child.updatedAt
-    }));
+    const transformedChildren = await Promise.all(
+      children.map(async (child) => {
+        const { locationId, locationName } = await resolveChildRegisteredLocation(
+          storage,
+          dbUser,
+          child,
+        );
+        return {
+          id: child.id,
+          firstName: child.firstName,
+          lastName: child.lastName,
+          birthdate: child.birthdate,
+          gradeLevel: child.gradeLevel,
+          gender: child.gender,
+          parentId: child.parentId,
+          specialNeeds: child.specialNeeds,
+          interests: child.interests,
+          school: child.school,
+          learningStyle: child.learningStyle,
+          allergies: child.allergies,
+          medicalInfo: child.medicalInfo,
+          profileImage: child.profileImage,
+          emergencyContact: child.emergencyContact,
+          additionalLanguages: child.additionalLanguages,
+          notes: child.notes,
+          locationId,
+          locationName,
+          createdAt: child.createdAt,
+          updatedAt: child.updatedAt,
+        };
+      }),
+    );
 
     return res.status(200).json(transformedChildren);
   } catch (error) {
@@ -138,8 +155,18 @@ router.get('/children/:id', jwtCheck, async (req: any, res) => {
         error: 'NOT_YOUR_CHILD'
       });
     }
-    
-    return res.status(200).json(child);
+
+    const { locationId, locationName } = await resolveChildRegisteredLocation(
+      storage,
+      dbUser,
+      child,
+    );
+
+    return res.status(200).json({
+      ...child,
+      locationId,
+      locationName,
+    });
   } catch (error) {
     console.error('❌ Error fetching child:', error);
     return res.status(500).json({ 
@@ -287,6 +314,11 @@ router.get('/enrollments', jwtCheck, async (req: any, res) => {
       userEmail,
     );
 
+    const { locationId: registeredLocationId, locationName: registeredLocationName } =
+      dbUser != null
+        ? await resolveRegisteredLocation(storage, dbUser.locationId)
+        : { locationId: null, locationName: null };
+
     const enriched = parentEnrollments.map((enrollment: any) => {
       const checkoutExcluded = enrollmentShouldExcludeFromCart(
         enrollment,
@@ -296,6 +328,9 @@ router.get('/enrollments', jwtCheck, async (req: any, res) => {
         ...enrollment,
         managedByPaymentPlan: checkoutExcluded,
         checkoutExcluded,
+        registeredLocationId,
+        registeredLocationName,
+        locationName: registeredLocationName,
       };
     });
 

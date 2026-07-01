@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2, Megaphone } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2, Megaphone, MapPin } from "lucide-react";
 import type { EnrollmentSession } from "@shared/schema";
 import {
   formatSessionSignupCta,
@@ -1532,7 +1532,18 @@ export default function ParentDashboard() {
                             </div>
                             <div>
                               <p className="font-medium">{fullName}</p>
-                              <p className="text-sm text-muted-foreground">Age: {age} • Grade: {child.gradeLevel || 'Not specified'}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Age: {age} • Grade: {child.gradeLevel || 'Not specified'}
+                                {child.locationName ? (
+                                  <>
+                                    {" • "}
+                                    <span className="inline-flex items-center gap-1">
+                                      <MapPin className="h-3 w-3" />
+                                      {child.locationName}
+                                    </span>
+                                  </>
+                                ) : null}
+                              </p>
                             </div>
                           </div>
                           <Button size="sm" variant="outline" asChild>
@@ -1547,9 +1558,17 @@ export default function ParentDashboard() {
                             <div className="space-y-2">
                               {childEnrollments.map((enrollment: any) => (
                                 <div key={enrollment.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                  <div className="flex items-center gap-2">
-                                    <BookOpen className="h-4 w-4 text-blue-600" />
-                                    <span className="text-sm">{enrollment.className}</span>
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <BookOpen className="h-4 w-4 text-blue-600 shrink-0" />
+                                    <div className="min-w-0">
+                                      <span className="text-sm">{enrollment.className}</span>
+                                      {enrollment.registeredLocationName || enrollment.locationName ? (
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                          <MapPin className="h-3 w-3 shrink-0" />
+                                          {enrollment.registeredLocationName || enrollment.locationName}
+                                        </p>
+                                      ) : null}
+                                    </div>
                                   </div>
                                   <Badge 
                                     variant={enrollment.status === 'enrolled' ? 'default' : 'secondary'}
@@ -1601,6 +1620,7 @@ export default function ParentDashboard() {
                         <TableRow>
                           <TableHead>Child</TableHead>
                           <TableHead>Class</TableHead>
+                          <TableHead>Location</TableHead>
                           <TableHead>Enrolled</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Total</TableHead>
@@ -1620,6 +1640,8 @@ export default function ParentDashboard() {
                               : "—");
                           const title =
                             enrollment.className || enrollment.program?.title || "Program";
+                          const registeredLocation =
+                            enrollment.registeredLocationName || enrollment.locationName || null;
                           return (
                             <TableRow
                               key={enrollment.id || `enrollment-${index}`}
@@ -1633,6 +1655,16 @@ export default function ParentDashboard() {
                                     {enrollment.program.description}
                                   </p>
                                 ) : null}
+                              </TableCell>
+                              <TableCell>
+                                {registeredLocation ? (
+                                  <span className="inline-flex items-center gap-1 text-sm">
+                                    <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    {registeredLocation}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
                               </TableCell>
                               <TableCell>
                                 {enrollment.enrollmentDate

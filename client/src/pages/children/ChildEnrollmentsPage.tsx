@@ -62,6 +62,7 @@ interface Child {
   lastName: string;
   birthdate: string;
   gradeLevel: string;
+  locationName?: string | null;
 }
 
 export default function ChildEnrollmentsPage() {
@@ -75,10 +76,11 @@ export default function ChildEnrollmentsPage() {
   const [rosterClassName, setRosterClassName] = useState<string>('');
 
   // Fetch child data
-  const { data: child, isLoading: childLoading } = useQuery<Child>({
+  const { data: childResponse, isLoading: childLoading } = useQuery<{ child: Child }>({
     queryKey: [`/api/children/${childId}`],
     enabled: !!childId,
   });
+  const child = childResponse?.child;
 
   const childEnrollmentsQuery = useQuery<Enrollment[]>({
     queryKey: [`/api/children/${childId}/enrollments`],
@@ -173,6 +175,8 @@ export default function ChildEnrollmentsPage() {
 
   // Memoized helper to get class details for enrollments
   const enrichedEnrollments = useMemo(() => {
+    const registeredLocation =
+      child?.locationName ?? null;
     return enrollments.map((enrollment) => {
       const enrollmentAny = enrollment as any;
       const isSchoolClass = enrollmentAny.classType === 'school_class';
@@ -212,19 +216,20 @@ export default function ChildEnrollmentsPage() {
         }
       }
       
-      // Get location from multiple possible sources
-      let location = 'Location TBD';
-      if (classData?.location) {
-        // Direct location field
-        location = typeof classData.location === 'string' 
-          ? classData.location
-          : classData.location?.name || 'Location TBD';
-      } else if (enrollmentAny.locationName) {
-        // Location from enrollment
-        location = enrollmentAny.locationName;
-      } else if (classData?.campus) {
-        // Location from campus field (some class structures)
-        location = classData.campus;
+      // Registered campus from parent profile; class location is a fallback only.
+      let location = registeredLocation || 'Location TBD';
+      if (!registeredLocation) {
+        if (classData?.location) {
+          location = typeof classData.location === 'string'
+            ? classData.location
+            : classData.location?.name || 'Location TBD';
+        } else if (enrollmentAny.locationName) {
+          location = enrollmentAny.locationName;
+        } else if (enrollmentAny.registeredLocationName) {
+          location = enrollmentAny.registeredLocationName;
+        } else if (classData?.campus) {
+          location = classData.campus;
+        }
       }
       
       return {
@@ -239,7 +244,7 @@ export default function ChildEnrollmentsPage() {
         }
       };
     });
-  }, [enrollments, marketplaceClasses, schoolClasses]);
+  }, [enrollments, marketplaceClasses, schoolClasses, child?.locationName]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -316,6 +321,12 @@ export default function ChildEnrollmentsPage() {
                   <p className="text-xs sm:text-sm text-muted-foreground">Grade Level</p>
                   <p className="font-medium text-sm sm:text-base">{child.gradeLevel}</p>
                 </div>
+                {child.locationName ? (
+                  <div className="col-span-2">
+                    <p className="text-xs sm:text-sm text-muted-foreground">Registered Location</p>
+                    <p className="font-medium text-sm sm:text-base">{child.locationName}</p>
+                  </div>
+                ) : null}
               </div>
             </CardContent>
           </Card>

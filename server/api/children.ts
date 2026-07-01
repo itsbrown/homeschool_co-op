@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import { jwtCheck } from "../middleware/auth0-auth";
 import { syncChildLocationToParent } from "../services/locationSyncService";
+import { resolveChildRegisteredLocation } from "../lib/parent-registered-location";
 
 const router = Router();
 
@@ -89,7 +90,18 @@ router.get("/:id", jwtCheck, isParent, async (req: any, res: Response) => {
     }
     
     console.log(`✅ Found child: ${child.firstName} ${child.lastName}`);
-    res.json({ child });
+    const { locationId, locationName } = await resolveChildRegisteredLocation(
+      storage,
+      parent,
+      child,
+    );
+    res.json({
+      child: {
+        ...child,
+        locationId,
+        locationName,
+      },
+    });
   } catch (error) {
     console.error("Error fetching child:", error);
     res.status(500).json({ message: "Error fetching child" });
