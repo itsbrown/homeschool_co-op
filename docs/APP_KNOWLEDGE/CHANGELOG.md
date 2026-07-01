@@ -24,6 +24,14 @@
 - **Success page:** Branded confirmation with order summary, formatted order ID, cart cleared from session storage.
 - **E2E:** `publicStoreCheckout.ts` fills emergency contact + grade select; success assertions on order number and child name.
 
+## 2026-07-01 (Public store — single-click add to cart)
+
+- **Fix:** Program add-to-cart required two clicks — `confirmAddProgram` read stale `pendingProgram` state after `setPendingProgram`, and guests had to confirm a sign-in modal. Programs now add on first click; sign-in remains optional at checkout.
+
+## 2026-07-01 (Public store — member banner Enroll link)
+
+- **UI:** Member banner hides **Enroll** when the store catalog has no session listings (classes/products only); copy switches to “manage programs” instead of “enroll via the member portal”.
+
 ## 2026-07-01 (Public store — item detail crash & card actions)
 
 - **Fix:** Item detail page crashed when listing had dates — `safeFormatDate` was called without a format string in `PublicStoreItemPage`.

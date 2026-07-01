@@ -22,13 +22,12 @@ export type StoreGuestChildDraft = {
   gradeLevel: string;
 };
 
-/** Add a session/class line as an unauthenticated visitor (guest modal). */
+/** Add a session/class line as an unauthenticated visitor. */
 export async function addStoreProgramToCartAsGuest(
   page: Page,
   addButtonLabel: string | RegExp,
 ): Promise<void> {
   await page.getByRole("button", { name: addButtonLabel }).click();
-  await page.getByRole("button", { name: "Continue as guest" }).click();
   await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
 }
 

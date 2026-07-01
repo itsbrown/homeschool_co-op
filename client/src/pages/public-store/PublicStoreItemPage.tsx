@@ -3,20 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useAuth } from "@/components/SupabaseProvider";
 import { fetchParentMemberId, PARENT_MEMBER_ID_QUERY_KEY } from "@/lib/parent-member-id";
 import { usePublicStoreCart } from "@/hooks/usePublicStoreCart";
 import type { StoreCatalogItem } from "@/lib/store-catalog";
 import { PublicStoreHeader } from "@/components/store/PublicStoreHeader";
 import { StoreCatalogItemActions } from "@/components/store/StoreCatalogItemActions";
+import { PublicStoreMemberBanner } from "@/components/store/PublicStoreMemberBanner";
 import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 import { formatStoreCartMoney } from "@/lib/store-cart";
 import { ShoppingCart } from "lucide-react";
@@ -40,12 +33,8 @@ export default function PublicStoreItemPage() {
     cartCount,
     cartTotal,
     cartPulse,
-    signInModalOpen,
-    setSignInModalOpen,
-    pendingProgram,
     addProduct,
     onAddProgram,
-    confirmAddProgram,
     goToCheckout,
   } = usePublicStoreCart(schoolSlug);
 
@@ -66,6 +55,16 @@ export default function PublicStoreItemPage() {
     enabled: !!schoolSlug,
   });
 
+  const { data: catalogData } = useQuery({
+    queryKey: ["/api/public/store", schoolSlug, "catalog"],
+    queryFn: async () => {
+      const res = await fetch(`/api/public/store/${schoolSlug}/catalog`);
+      if (!res.ok) throw new Error("Catalog unavailable");
+      return res.json() as Promise<{ items: StoreCatalogItem[] }>;
+    },
+    enabled: !!schoolSlug && !!store,
+  });
+
   const { data, isLoading, isError } = useQuery<{ item: StoreCatalogItem }>({
     queryKey: ["/api/public/store", schoolSlug, "catalog", listingId],
     queryFn: async () => {
@@ -77,6 +76,7 @@ export default function PublicStoreItemPage() {
   });
 
   const item = data?.item;
+  const catalogItems = catalogData?.items ?? [];
   const dateRange = item ? formatDateRange(item.startDate, item.endDate) : null;
   const isMemberOfStore =
     isAuthenticated && memberData?.schoolId != null && memberData.schoolId === (store as { schoolId?: number })?.schoolId;
@@ -129,17 +129,7 @@ export default function PublicStoreItemPage() {
       />
 
       {isMemberOfStore && (
-        <div className="bg-blue-50 border-b border-blue-100">
-          <div className="mx-auto max-w-3xl px-4 py-3 text-sm flex flex-wrap gap-3 items-center">
-            <span>You&apos;re a member — you can also enroll via the member portal:</span>
-            <Link href="/parent/programs" className="text-blue-700 underline">
-              My Programs
-            </Link>
-            <Link href="/enroll" className="text-blue-700 underline">
-              Enroll
-            </Link>
-          </div>
-        </div>
+        <PublicStoreMemberBanner items={catalogItems} containerClassName="max-w-3xl" />
       )}
 
       <main className="mx-auto max-w-3xl px-4 py-6 space-y-6" data-testid="store-item-detail">
@@ -196,9 +186,7 @@ export default function PublicStoreItemPage() {
                 item={item}
                 layout="detail"
                 onAddProduct={addProduct}
-                onAddProgram={(programItem, variant) =>
-                  onAddProgram(programItem, variant, isAuthenticated)
-                }
+                onAddProgram={onAddProgram}
               />
             </div>
           </div>
@@ -218,28 +206,6 @@ export default function PublicStoreItemPage() {
         </div>
       )}
 
-      <Dialog open={signInModalOpen} onOpenChange={setSignInModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sign in or continue as guest</DialogTitle>
-            <DialogDescription>
-              Signing in lets you pick saved children at checkout. You can also continue as a guest.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" asChild>
-              <Link href={`/login?returnTo=${encodeURIComponent(window.location.pathname)}`}>
-                Sign in (recommended)
-              </Link>
-            </Button>
-            <Button
-              onClick={() => pendingProgram && confirmAddProgram(pendingProgram.variant)}
-            >
-              Continue as guest
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -19,11 +19,6 @@ export function usePublicStoreCart(schoolSlug: string) {
   const { toast } = useToast();
   const [cart, setCart] = useState<StoreCartState>(() => loadStoreCart(schoolSlug));
   const [cartPulse, setCartPulse] = useState(false);
-  const [pendingProgram, setPendingProgram] = useState<{
-    item: StoreCatalogItem;
-    variant: "half_day" | "full_day";
-  } | null>(null);
-  const [signInModalOpen, setSignInModalOpen] = useState(false);
 
   useEffect(() => {
     saveStoreCart(cart);
@@ -58,9 +53,7 @@ export function usePublicStoreCart(schoolSlug: string) {
     notifyAdded(item.title, next);
   };
 
-  const confirmAddProgram = (variant: "half_day" | "full_day") => {
-    if (!pendingProgram) return;
-    const { item } = pendingProgram;
+  const addProgram = (item: StoreCatalogItem, variant: "half_day" | "full_day") => {
     const price =
       variant === "half_day" ? item.halfDayPrice ?? 0 : item.fullDayPrice ?? item.priceCents ?? 0;
     const displayTitle = `${item.title}${
@@ -80,18 +73,10 @@ export function usePublicStoreCart(schoolSlug: string) {
     });
     setCart(next);
     notifyAdded(displayTitle, next);
-    setPendingProgram(null);
-    setSignInModalOpen(false);
   };
 
-  const onAddProgram = (
-    item: StoreCatalogItem,
-    variant: "half_day" | "full_day",
-    isAuthenticated: boolean,
-  ) => {
-    setPendingProgram({ item, variant });
-    if (!isAuthenticated) setSignInModalOpen(true);
-    else confirmAddProgram(variant);
+  const onAddProgram = (item: StoreCatalogItem, variant: "half_day" | "full_day") => {
+    addProgram(item, variant);
   };
 
   return {
@@ -99,12 +84,8 @@ export function usePublicStoreCart(schoolSlug: string) {
     cartCount,
     cartTotal,
     cartPulse,
-    pendingProgram,
-    signInModalOpen,
-    setSignInModalOpen,
     addProduct,
     onAddProgram,
-    confirmAddProgram,
     goToCheckout: () => setLocation(`/store/${schoolSlug}/checkout`),
   };
 }

@@ -1,17 +1,9 @@
-import { Link, useParams, useLocation } from "wouter";
+import { Link, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useAuth } from "@/components/SupabaseProvider";
 import { fetchParentMemberId, PARENT_MEMBER_ID_QUERY_KEY } from "@/lib/parent-member-id";
 import { usePublicStoreCart } from "@/hooks/usePublicStoreCart";
@@ -20,6 +12,7 @@ import { formatStoreCartMoney } from "@/lib/store-cart";
 import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 import { PublicStoreHeader } from "@/components/store/PublicStoreHeader";
 import { StoreCatalogItemActions } from "@/components/store/StoreCatalogItemActions";
+import { PublicStoreMemberBanner } from "@/components/store/PublicStoreMemberBanner";
 
 export default function PublicStorePage() {
   const { schoolSlug = "" } = useParams<{ schoolSlug: string }>();
@@ -28,12 +21,8 @@ export default function PublicStorePage() {
     cartCount,
     cartTotal,
     cartPulse,
-    signInModalOpen,
-    setSignInModalOpen,
-    pendingProgram,
     addProduct,
     onAddProgram,
-    confirmAddProgram,
     goToCheckout,
   } = usePublicStoreCart(schoolSlug);
 
@@ -79,19 +68,7 @@ export default function PublicStorePage() {
         onCheckout={goToCheckout}
       />
 
-      {isMemberOfStore && (
-        <div className="bg-blue-50 border-b border-blue-100">
-          <div className="mx-auto max-w-5xl px-4 py-3 text-sm flex flex-wrap gap-3 items-center">
-            <span>You&apos;re a member — you can also enroll via the member portal:</span>
-            <Link href="/parent/programs" className="text-blue-700 underline">
-              My Programs
-            </Link>
-            <Link href="/enroll" className="text-blue-700 underline">
-              Enroll
-            </Link>
-          </div>
-        </div>
-      )}
+      {isMemberOfStore && <PublicStoreMemberBanner items={items} />}
 
       <main className="mx-auto max-w-5xl px-4 py-8">
         {catalogData && items.length === 0 ? (
@@ -144,9 +121,7 @@ export default function PublicStorePage() {
                 <StoreCatalogItemActions
                   item={item}
                   onAddProduct={addProduct}
-                  onAddProgram={(programItem, variant) =>
-                    onAddProgram(programItem, variant, isAuthenticated)
-                  }
+                  onAddProgram={onAddProgram}
                 />
                 <Button
                   variant="outline"
@@ -177,28 +152,6 @@ export default function PublicStorePage() {
         </div>
       )}
 
-      <Dialog open={signInModalOpen} onOpenChange={setSignInModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sign in or continue as guest</DialogTitle>
-            <DialogDescription>
-              Signing in lets you pick saved children at checkout. You can also continue as a guest.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" asChild>
-              <Link href={`/login?returnTo=${encodeURIComponent(`/store/${schoolSlug}`)}`}>
-                Sign in (recommended)
-              </Link>
-            </Button>
-            <Button
-              onClick={() => pendingProgram && confirmAddProgram(pendingProgram.variant)}
-            >
-              Continue as guest
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

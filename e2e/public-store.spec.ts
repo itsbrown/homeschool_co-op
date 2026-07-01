@@ -136,7 +136,6 @@ test.describe("public store", () => {
     await expect(page.getByTestId("store-item-description")).not.toHaveClass(/line-clamp/);
 
     await page.getByTestId(`store-add-class-${listingId}`).click();
-    await page.getByRole("button", { name: "Continue as guest" }).click();
     await expect(page.getByText("Added to cart")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
   });
