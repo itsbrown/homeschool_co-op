@@ -755,6 +755,7 @@ export default function FundraiserManagementPage() {
               <ImageUpload
                 value={productForm.imageUrl}
                 onChange={(url) => setProductForm({ ...productForm, imageUrl: url })}
+                uploadCategory="fundraiserProducts"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -835,6 +836,7 @@ export default function FundraiserManagementPage() {
               <ImageUpload
                 value={productForm.imageUrl}
                 onChange={(url) => setProductForm({ ...productForm, imageUrl: url })}
+                uploadCategory="fundraiserProducts"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">

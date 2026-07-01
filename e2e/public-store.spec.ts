@@ -10,6 +10,7 @@ import {
   postEnsurePublicStoreSchema,
   postSetupPublicStoreScenario,
 } from "./helpers/testSeed";
+import { runPresignedUpload } from "./helpers/presignedUploadFlow";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const merchFixturePath = path.join(__dirname, "fixtures", "merch-sample.png");
@@ -27,18 +28,15 @@ test.describe("public store", () => {
     );
   });
 
-  test("POST /api/school-admin/public-store/upload/product-image requires auth", async ({
+  test("POST /api/unified-uploads/request-url for storeProducts requires auth", async ({
     request,
   }) => {
-    const res = await request.post("/api/school-admin/public-store/upload/product-image", {
-      multipart: {
-        image: {
-          name: "merch-sample.png",
-          mimeType: "image/png",
-          buffer: await import("node:fs").then((fs) =>
-            fs.promises.readFile(merchFixturePath),
-          ),
-        },
+    const res = await request.post("/api/unified-uploads/request-url", {
+      data: {
+        name: "merch-sample.png",
+        size: 1024,
+        contentType: "image/png",
+        category: "storeProducts",
       },
     });
     expect(res.status()).toBe(401);
@@ -46,18 +44,15 @@ test.describe("public store", () => {
     expect(body.error).toMatch(/authorization/i);
   });
 
-  test("POST /api/school-admin/public-store/upload/program-image requires auth", async ({
+  test("POST /api/unified-uploads/request-url for storePrograms requires auth", async ({
     request,
   }) => {
-    const res = await request.post("/api/school-admin/public-store/upload/program-image", {
-      multipart: {
-        image: {
-          name: "merch-sample.png",
-          mimeType: "image/png",
-          buffer: await import("node:fs").then((fs) =>
-            fs.promises.readFile(merchFixturePath),
-          ),
-        },
+    const res = await request.post("/api/unified-uploads/request-url", {
+      data: {
+        name: "merch-sample.png",
+        size: 1024,
+        contentType: "image/png",
+        category: "storePrograms",
       },
     });
     expect(res.status()).toBe(401);
@@ -120,7 +115,7 @@ test.describe("public store", () => {
       "seed or Supabase admin link unavailable",
     );
 
-    const { admin, storeSlug } = json!.data!;
+    const { admin, storeSlug, school } = json!.data!;
     const uniqueName = `E2E Upload Hoodie ${Date.now()}`;
 
     await loginSchoolAdmin(page, admin.email, admin.password);
@@ -131,24 +126,14 @@ test.describe("public store", () => {
       "X-Active-Role": "schoolAdmin",
     };
 
-    const uploadRes = await request.post(
-      "/api/school-admin/public-store/upload/product-image",
-      {
-        headers: authHeaders,
-        multipart: {
-          image: {
-            name: "merch-sample.png",
-            mimeType: "image/png",
-            buffer: await import("node:fs").then((fs) =>
-              fs.promises.readFile(merchFixturePath),
-            ),
-          },
-        },
-      },
+    const imageUrl = await runPresignedUpload(
+      request,
+      authHeaders,
+      "storeProducts",
+      merchFixturePath,
+      school.id,
     );
-    expect(uploadRes.ok(), `upload failed: ${uploadRes.status()}`).toBeTruthy();
-    const uploadJson = (await uploadRes.json()) as { success: boolean; imageUrl: string };
-    expect(uploadJson.imageUrl).toMatch(/^\/uploads\/store-products\//);
+    expect(imageUrl).toMatch(/^\/public\/store-products\//);
 
     const createRes = await request.post("/api/school-admin/public-store/products", {
       headers: { ...authHeaders, "Content-Type": "application/json" },
@@ -156,7 +141,7 @@ test.describe("public store", () => {
         name: uniqueName,
         description: "E2E merch with photo",
         priceCents: 2499,
-        imageUrl: uploadJson.imageUrl,
+        imageUrl,
       },
     });
     expect(createRes.ok(), `create product failed: ${createRes.status()}`).toBeTruthy();
@@ -177,7 +162,7 @@ test.describe("public store", () => {
     await expect(page.getByText(uniqueName)).toBeVisible({ timeout: 30_000 });
     const img = page.getByTestId("store-product-image").first();
     await expect(img).toBeVisible();
-    await expect(img).toHaveAttribute("src", uploadJson.imageUrl);
+    await expect(img).toHaveAttribute("src", imageUrl);
     await expect(img).toHaveClass(/object-cover/);
   });
 
@@ -199,7 +184,7 @@ test.describe("public store", () => {
     await expect(page.getByTestId("button-create-store-product")).toBeVisible();
   });
 
-  test("authenticated admin can upload via API with bearer token", async ({
+  test("authenticated admin can upload store product image via presigned flow", async ({
     page,
     request,
   }) => {
@@ -212,28 +197,18 @@ test.describe("public store", () => {
       "seed or Supabase admin link unavailable",
     );
 
-    const { admin } = json!.data!;
+    const { admin, school } = json!.data!;
     await loginSchoolAdmin(page, admin.email, admin.password);
     const token = await waitForSupabaseToken(page);
 
-    const uploadRes = await request.post(
-      "/api/school-admin/public-store/upload/product-image",
-      {
-        headers: bearerAuthHeaders(token),
-        multipart: {
-          image: {
-            name: "merch-sample.png",
-            mimeType: "image/png",
-            buffer: await import("node:fs").then((fs) =>
-              fs.promises.readFile(merchFixturePath),
-            ),
-          },
-        },
-      },
+    const imageUrl = await runPresignedUpload(
+      request,
+      bearerAuthHeaders(token),
+      "storeProducts",
+      merchFixturePath,
+      school.id,
     );
-    expect(uploadRes.ok(), `upload failed: ${uploadRes.status()}`).toBeTruthy();
-    const body = (await uploadRes.json()) as { success: boolean; imageUrl: string };
-    expect(body.imageUrl).toMatch(/^\/uploads\/store-products\//);
+    expect(imageUrl).toMatch(/^\/public\/store-products\//);
   });
 
   test("guest adds merch to cart from public store", async ({ page, request }) => {
@@ -426,7 +401,7 @@ test.describe("public store programs", () => {
       "seed or Supabase admin link unavailable",
     );
 
-    const { admin, storeSlug, class: seededClass } = json!.data!;
+    const { admin, storeSlug, class: seededClass, school } = json!.data!;
     await loginSchoolAdmin(page, admin.email, admin.password);
     await page.evaluate(() => localStorage.setItem("activeRole", "schoolAdmin"));
     const token = await waitForSupabaseToken(page);
@@ -435,30 +410,20 @@ test.describe("public store programs", () => {
       "X-Active-Role": "schoolAdmin",
     };
 
-    const uploadRes = await request.post(
-      "/api/school-admin/public-store/upload/program-image",
-      {
-        headers: authHeaders,
-        multipart: {
-          image: {
-            name: "merch-sample.png",
-            mimeType: "image/png",
-            buffer: await import("node:fs").then((fs) =>
-              fs.promises.readFile(merchFixturePath),
-            ),
-          },
-        },
-      },
+    const imageUrl = await runPresignedUpload(
+      request,
+      authHeaders,
+      "storePrograms",
+      merchFixturePath,
+      school.id,
     );
-    expect(uploadRes.ok(), `program upload failed: ${uploadRes.status()}`).toBeTruthy();
-    const uploadJson = (await uploadRes.json()) as { imageUrl: string };
-    expect(uploadJson.imageUrl).toMatch(/^\/uploads\/store-programs\//);
+    expect(imageUrl).toMatch(/^\/public\/store-programs\//);
 
     const patchRes = await request.patch(
       `/api/school-admin/public-store/programs/class/${seededClass!.id}`,
       {
         headers: { ...authHeaders, "Content-Type": "application/json" },
-        data: { coverImage: uploadJson.imageUrl },
+        data: { coverImage: imageUrl },
       },
     );
     expect(patchRes.ok()).toBeTruthy();
@@ -470,12 +435,12 @@ test.describe("public store programs", () => {
     const row = catalog.items.find(
       (i) => i.listingType === "class" && i.sourceId === seededClass!.id,
     );
-    expect(row?.imageUrl).toBe(uploadJson.imageUrl);
+    expect(row?.imageUrl).toBe(imageUrl);
 
     await page.goto(`/store/${storeSlug}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("store-class-image").first()).toHaveAttribute(
       "src",
-      uploadJson.imageUrl,
+      imageUrl,
     );
   });
 

@@ -74,6 +74,19 @@ export class ObjectStorageService {
     return dir;
   }
 
+  /** Resolve a stored `/public/...` path to a GCS file (for ACL, download, delete). */
+  async getPublicObjectFile(publicObjectPath: string): Promise<File> {
+    if (!publicObjectPath.startsWith("/public/")) {
+      throw new ObjectNotFoundError();
+    }
+    const filePath = publicObjectPath.slice("/public/".length);
+    const file = await this.searchPublicObject(filePath);
+    if (!file) {
+      throw new ObjectNotFoundError();
+    }
+    return file;
+  }
+
   // Search for a public object from the search paths.
   async searchPublicObject(filePath: string): Promise<File | null> {
     for (const searchPath of this.getPublicObjectSearchPaths()) {

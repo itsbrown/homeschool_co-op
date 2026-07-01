@@ -1,12 +1,13 @@
 import { Router, Request, Response } from "express";
 import { fileUploadService, uploadCategories, UploadCategory } from "../services/fileUploadService";
 import { supabaseAuth } from "../middleware/supabase-auth";
+import { resolveRequestSchoolId } from "../lib/resolve-request-school-id";
 
 const router = Router();
 
 router.post("/request-url", supabaseAuth, async (req: Request, res: Response) => {
   try {
-    const { name, size, contentType, category, schoolId } = req.body;
+    const { name, size, contentType, category } = req.body;
 
     if (!name || !size || !contentType || !category) {
       return res.status(400).json({
@@ -20,13 +21,19 @@ router.post("/request-url", supabaseAuth, async (req: Request, res: Response) =>
       });
     }
 
+    const schoolId = await resolveRequestSchoolId(
+      req,
+      category as UploadCategory,
+      req.body.schoolId,
+    );
+
     const result = await fileUploadService.getUploadUrl({
       category: category as UploadCategory,
       filename: name,
       contentType,
       sizeBytes: size,
       userId: req.user?.id,
-      schoolId: schoolId ? parseInt(schoolId) : undefined,
+      schoolId,
     });
 
     if (!result.validation.valid) {

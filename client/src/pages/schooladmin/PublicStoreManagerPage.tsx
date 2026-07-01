@@ -258,7 +258,7 @@ export default function PublicStoreManagerPage() {
                   <ImageUpload
                     value={productForm.imageUrl}
                     onChange={(url) => updateProductForm({ imageUrl: url })}
-                    uploadEndpoint="/api/school-admin/public-store/upload/product-image"
+                    uploadCategory="storeProducts"
                     previewAspectClass="aspect-square"
                   />
                   <p className="text-xs text-muted-foreground mt-2">

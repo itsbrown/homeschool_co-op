@@ -133,35 +133,7 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
     createParentPath: true,
   }));
 
-  app.use('/api/schools/upload-logo', fileUpload({
-    useTempFiles: false,
-    limits: { fileSize: 5 * 1024 * 1024 },
-    abortOnLimit: true,
-    createParentPath: true,
-  }));
-
-  app.use('/api/schools/documents/upload', fileUpload({
-    useTempFiles: false,
-    limits: { fileSize: 25 * 1024 * 1024 },
-    abortOnLimit: true,
-    createParentPath: true,
-  }));
-
-  app.use('/api/custom-forms/forms/:formId/upload-attachment', fileUpload({
-    useTempFiles: false,
-    limits: { fileSize: 10 * 1024 * 1024 },
-    abortOnLimit: true,
-    createParentPath: true,
-  }));
-
-  app.use('/api/school-admin/public-store/upload', fileUpload({
-    useTempFiles: false,
-    limits: { fileSize: 5 * 1024 * 1024 },
-    abortOnLimit: true,
-    createParentPath: true,
-  }));
-
-  // Serve static files from uploads directory
+  // Serve static files from uploads directory (legacy paths + E2E stub objects)
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   // Request logging middleware
@@ -207,14 +179,6 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
     createParentPath: true,
   }));
 
-  app.use('/api/file-upload', fileUpload({
-    useTempFiles: false,
-    limits: { fileSize: 50 * 1024 * 1024 },
-    abortOnLimit: true,
-    createParentPath: true,
-  }));
-
-  // Register routers
   app.use('/api/file-upload', fileUploadRouter);
   app.use('/api/school-admin/marketing-links', marketingLinksRouter);
   app.use('/api/school-parents', schoolParentsRouter);

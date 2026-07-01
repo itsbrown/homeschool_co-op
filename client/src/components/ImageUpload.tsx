@@ -4,22 +4,28 @@ import { Upload, X, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { uploadFile, type UploadCategory } from '@/lib/uploadClient';
 import { cn } from '@/lib/utils';
 
 interface ImageUploadProps {
   value: string;
   onChange: (url: string) => void;
+  /** @deprecated Use uploadCategory with presigned object storage instead. */
   uploadEndpoint?: string;
+  /** Presigned object storage category (preferred). */
+  uploadCategory?: UploadCategory;
+  schoolId?: number;
   className?: string;
   disabled?: boolean;
-  /** Tailwind aspect class for preview crop (default square for merch). */
   previewAspectClass?: string;
 }
 
 export function ImageUpload({
   value,
   onChange,
-  uploadEndpoint = '/api/fundraisers/upload/product-image',
+  uploadEndpoint,
+  uploadCategory,
+  schoolId,
   className,
   disabled = false,
   previewAspectClass = 'aspect-video',
@@ -28,47 +34,50 @@ export function ImageUpload({
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(value || null);
 
-  // Sync preview with value prop changes (e.g., when editing existing products)
   useEffect(() => {
     setPreviewUrl(value || null);
   }, [value]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
-    
+
     const file = acceptedFiles[0];
-    
-    // Create local preview immediately
     const localPreview = URL.createObjectURL(file);
     setPreviewUrl(localPreview);
     setIsUploading(true);
-    
+
     try {
-      const formData = new FormData();
-      formData.append('image', file);
+      let imageUrl: string;
 
-      const response = await apiRequest('POST', uploadEndpoint, formData);
-
-      if (!response.ok) {
-        const error = (await response.json().catch(() => ({}))) as {
-          message?: string;
-          error?: string;
-        };
-        throw new Error(error.message || error.error || 'Upload failed');
-      }
-      
-      const data = await response.json();
-      
-      if (data.success && data.imageUrl) {
-        onChange(data.imageUrl);
-        setPreviewUrl(data.imageUrl);
-        toast({
-          title: 'Image uploaded',
-          description: 'Your image has been uploaded successfully.',
-        });
+      if (uploadCategory) {
+        const result = await uploadFile(file, { category: uploadCategory, schoolId });
+        imageUrl = result.url;
+      } else if (uploadEndpoint) {
+        const formData = new FormData();
+        formData.append('image', file);
+        const response = await apiRequest('POST', uploadEndpoint, formData);
+        if (!response.ok) {
+          const error = (await response.json().catch(() => ({}))) as {
+            message?: string;
+            error?: string;
+          };
+          throw new Error(error.message || error.error || 'Upload failed');
+        }
+        const data = (await response.json()) as { success?: boolean; imageUrl?: string };
+        if (!data.imageUrl) {
+          throw new Error('Upload failed');
+        }
+        imageUrl = data.imageUrl;
       } else {
-        throw new Error('Upload failed');
+        throw new Error('ImageUpload requires uploadCategory or uploadEndpoint');
       }
+
+      onChange(imageUrl);
+      setPreviewUrl(imageUrl);
+      toast({
+        title: 'Image uploaded',
+        description: 'Your image has been uploaded successfully.',
+      });
     } catch (error) {
       console.error('Upload error:', error);
       setPreviewUrl(value || null);
@@ -79,12 +88,9 @@ export function ImageUpload({
       });
     } finally {
       setIsUploading(false);
-      // Revoke local preview if different from final URL
-      if (localPreview !== previewUrl) {
-        URL.revokeObjectURL(localPreview);
-      }
+      URL.revokeObjectURL(localPreview);
     }
-  }, [uploadEndpoint, onChange, value, toast, previewUrl]);
+  }, [uploadCategory, uploadEndpoint, onChange, value, toast, schoolId]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -95,7 +101,7 @@ export function ImageUpload({
       'image/webp': ['.webp'],
     },
     maxFiles: 1,
-    maxSize: 5 * 1024 * 1024, // 5MB
+    maxSize: 5 * 1024 * 1024,
     disabled: disabled || isUploading,
     onDropRejected: (rejections) => {
       const rejection = rejections[0];
@@ -138,7 +144,7 @@ export function ImageUpload({
         data-testid="image-upload-dropzone"
       >
         <input {...getInputProps()} data-testid="image-upload-input" />
-        
+
         {isUploading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { Control } from 'react-hook-form';
+import { uploadPublicFormAttachment } from '@/lib/publicFormUpload';
 
 type FormFileAttachment = {
   fileName: string;
@@ -47,16 +48,7 @@ function FileUploadField({
                     if (!file) return;
                     setUploading(true);
                     try {
-                      const body = new FormData();
-                      body.append('file', file);
-                      const response = await fetch(
-                        `/api/custom-forms/forms/${formId}/upload-attachment`,
-                        { method: 'POST', body }
-                      );
-                      const data = await response.json();
-                      if (!response.ok) {
-                        throw new Error(data.message || 'Upload failed');
-                      }
+                      const data = await uploadPublicFormAttachment(formId, file);
                       formField.onChange({
                         fileName: data.fileName,
                         objectPath: data.objectPath,

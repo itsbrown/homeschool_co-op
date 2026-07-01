@@ -2,8 +2,8 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { randomBytes } from 'crypto';
+import { z } from 'zod';
 import { storage } from '../../storage';
-import { UploadedFile } from 'express-fileupload';
 import { supabaseAuth } from '../../middleware/supabase-auth';
 import { fileUploadService, DOCUMENT_ALLOWED_MIME_TYPES } from '../../services/fileUploadService';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
@@ -297,113 +297,105 @@ async function sendDocumentNotification(
   }
 }
 
-// Upload a new document
+const registerDocumentSchema = z.object({
+  objectPath: z.string().min(1),
+  fileName: z.string().min(1),
+  mimeType: z.string().min(1),
+  sizeBytes: z.coerce.number().int().positive(),
+  title: z.string().min(1),
+  description: z.string().optional().nullable(),
+  category: z.string().optional(),
+  isPublished: z.union([z.boolean(), z.string()]).optional(),
+  visibleToAll: z.union([z.boolean(), z.string()]).optional(),
+  notificationTargeting: z.unknown().optional(),
+  expiresAt: z.string().optional().nullable(),
+});
+
+// Register a document after client presigned upload (category `documents`).
 router.post('/upload', supabaseAuth, async (req: any, res) => {
   try {
-    const { title, description, category, isPublished, visibleToAll, notificationTargeting, expiresAt } = req.body;
+    const parsedBody = registerDocumentSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsedBody.error.errors[0]?.message || 'Invalid request',
+      });
+    }
+
+    const {
+      objectPath,
+      fileName,
+      mimeType,
+      sizeBytes,
+      title,
+      description,
+      category,
+      isPublished,
+      visibleToAll,
+      notificationTargeting,
+      expiresAt,
+    } = parsedBody.data;
+
     const uploadedBy = req.user?.id;
-
-    if (!title) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Document title is required' 
-      });
-    }
-
     if (!uploadedBy) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'User not authenticated' 
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated',
       });
     }
 
-    // SECURITY: Derive schoolId from authenticated user - do not accept from client
     const schoolId = req.user?.schoolId;
     if (!schoolId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User is not associated with a school.' 
+      return res.status(400).json({
+        success: false,
+        message: 'User is not associated with a school.',
       });
     }
 
-    // Check for uploaded file
-    if (!req.files || !req.files.document) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'No file uploaded' 
+    if (!objectPath.startsWith('/objects/documents/')) {
+      return res.status(400).json({
+        success: false,
+        message: 'objectPath must be a private document storage path (/objects/documents/...)',
       });
     }
 
-    const documentFile = req.files.document as UploadedFile;
+    if (!DOCUMENT_ALLOWED_MIME_TYPES.includes(mimeType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid file type. Allowed types: PDF, Word documents, and images.',
+      });
+    }
 
-    // Check for duplicate filename in this school
+    if (sizeBytes > 25 * 1024 * 1024) {
+      return res.status(400).json({
+        success: false,
+        message: 'File too large. Maximum size is 25MB.',
+      });
+    }
+
+    const sanitizedFileName = sanitizeFilename(fileName);
+
     let existingDocWithName;
     try {
-      existingDocWithName = await storage.getSchoolDocumentByFileName(schoolId, documentFile.name);
+      existingDocWithName = await storage.getSchoolDocumentByFileName(schoolId, sanitizedFileName);
     } catch (dbCheckError: any) {
       console.error('❌ DB error during duplicate filename check:', dbCheckError.message, dbCheckError.stack);
       return res.status(503).json({
         success: false,
-        message: 'Service temporarily unavailable.'
+        message: 'Service temporarily unavailable.',
       });
     }
     if (existingDocWithName) {
       return res.status(409).json({
         success: false,
-        message: `A document named "${documentFile.name}" already exists for this school. Please rename the file before uploading.`
+        message: `A document named "${sanitizedFileName}" already exists for this school. Please rename the file before uploading.`,
       });
     }
 
-    // Validate file type using shared constant
-    if (!DOCUMENT_ALLOWED_MIME_TYPES.includes(documentFile.mimetype)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid file type. Allowed types: PDF, Word documents, and images.'
-      });
-    }
-
-    // Validate file size (25MB limit)
-    if (documentFile.size > 25 * 1024 * 1024) {
-      return res.status(400).json({
-        success: false,
-        message: 'File too large. Maximum size is 25MB.'
-      });
-    }
-
-    // Sanitize filename before storage
-    const sanitizedFileName = sanitizeFilename(documentFile.name);
-
-    // Upload file to object storage using fileUploadService
-    let uploadResult;
-    try {
-      uploadResult = await fileUploadService.uploadBuffer(documentFile.data, {
-        category: 'documents',
-        originalFilename: sanitizedFileName,
-        mimeType: documentFile.mimetype,
-        userId: uploadedBy,
-        schoolId: schoolId,
-        metadata: {
-          title: title,
-          category: category || 'other',
-        },
-      });
-      console.log('📤 Document uploaded to object storage:', uploadResult.objectPath);
-    } catch (uploadError: any) {
-      console.error('❌ Failed to upload document to object storage:', uploadError);
-      return res.status(500).json({
-        success: false,
-        message: uploadError.message || 'Failed to upload document to storage'
-      });
-    }
-
-    // Use the object storage path as the file URL
-    const fileUrl = uploadResult.objectPath;
-
-    // Parse booleans explicitly — missing/empty values default to false (draft)
+    const fileUrl = objectPath;
     const parsedIsPublished = isPublished === 'true' || isPublished === true;
     const parsedVisibleToAll = visibleToAll === 'true' || visibleToAll === true;
 
-    // Create document record in database; clean up orphaned file on failure
     let document;
     try {
       document = await storage.createSchoolDocument({
@@ -414,34 +406,28 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
         category: category || 'other',
         fileName: sanitizedFileName,
         filePath: fileUrl,
-        fileSize: documentFile.size,
-        mimeType: documentFile.mimetype,
+        fileSize: sizeBytes,
+        mimeType,
         isPublished: parsedIsPublished,
         visibleToAll: parsedVisibleToAll,
-        ...(expiresAt ? { expiresAt: new Date(expiresAt) } : {})
+        ...(expiresAt ? { expiresAt: new Date(expiresAt) } : {}),
       });
     } catch (dbError: any) {
-      console.error('❌ DB insert failed after file upload — cleaning up orphaned file:', fileUrl, dbError);
-      const cleaned = await fileUploadService.deleteObject(fileUrl);
-      if (cleaned) {
-        console.log('🗑️ Orphaned file cleaned up successfully:', fileUrl);
-      } else {
-        console.error('⚠️ Orphaned file cleanup FAILED — manual removal may be required:', fileUrl);
-      }
+      console.error('❌ DB insert failed after presigned upload — cleaning up orphaned file:', fileUrl, dbError);
+      await fileUploadService.deleteObject(fileUrl);
       return res.status(500).json({
         success: false,
-        message: 'Failed to save document record'
+        message: 'Failed to save document record',
       });
     }
 
-    // Send notification if document is published and targeting is provided
     let notificationSent = false;
     if (parsedIsPublished && notificationTargeting) {
       try {
-        const targeting = typeof notificationTargeting === 'string' 
-          ? JSON.parse(notificationTargeting) 
+        const targeting = typeof notificationTargeting === 'string'
+          ? JSON.parse(notificationTargeting)
           : notificationTargeting;
-        
+
         const notification = await sendDocumentNotification(document, targeting, uploadedBy, schoolId);
         notificationSent = !!notification;
       } catch (parseError) {
@@ -449,19 +435,19 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
       }
     }
 
-    res.json({ 
-      success: true, 
-      message: notificationSent 
-        ? 'Document uploaded and notification sent successfully' 
-        : 'Document uploaded successfully',
+    res.json({
+      success: true,
+      message: notificationSent
+        ? 'Document uploaded and notification sent successfully'
+        : 'Document registered successfully',
       document,
-      notificationSent
+      notificationSent,
     });
   } catch (error: any) {
-    console.error('Error uploading document:', error.message, error.stack);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to upload document' 
+    console.error('Error registering document:', error.message, error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to register document',
     });
   }
 });

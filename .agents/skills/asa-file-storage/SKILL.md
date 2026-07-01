@@ -53,16 +53,20 @@ Each category defines validation rules and storage path:
 | `documents` | 25 MB | PDF, DOC, DOCX, PNG, JPEG, GIF | No | `documents/` |
 | `knowledgeBase` | 50 MB | PDF, DOC, DOCX, TXT, PNG, JPEG | No | `knowledge-base/` |
 | `fundraiserProducts` | 5 MB | PNG, JPEG, WebP | Yes | `fundraiser-products/` |
+| `storePrograms` | 5 MB | PNG, JPEG, GIF, WebP | Yes | `store-programs/` |
+| `storeProducts` | 5 MB | PNG, JPEG, GIF, WebP | Yes | `store-products/` |
 | `assessments` | 10 MB | PDF, PNG, JPEG | No | `assessments/` |
-| `profilePhotos` | 5 MB | PNG, JPEG, WebP | No | `profile-photos/` |
+| `formAttachments` | 10 MB | PDF, DOC, DOCX | No | `form-attachments/` |
+| `scheduleResources` | 25 MB | PDF, DOC, DOCX, CSV, images | No | `schedule-resources/` |
+| `productOrderImages` | 5 MB | JPEG, PNG, WebP | No | `product-order-images/` |
 
 ## Upload Flow (Presigned URL Pattern)
 
 ### Step 1: Request Upload URL
 ```
-POST /api/unified-uploads/presigned-url
-Body: { category, filename, contentType, sizeBytes }
-Response: { uploadURL, objectPath, validation }
+POST /api/unified-uploads/request-url
+Body: { name, size, contentType, category, schoolId? }
+Response: { uploadURL, objectPath }
 ```
 - Server validates category, size, and content type
 - Generates UUID-based storage path to prevent collisions
@@ -88,9 +92,9 @@ Body: { objectPath, category, metadata }
 ## Download & Access
 
 ### Public Files
-- Served directly via public object search paths
-- URL pattern: `/objects/public/<folder>/<file>`
-- No authentication required
+- Served via `GET /public/:path` (app proxies object storage)
+- URL stored in DB: `/public/<folder>/school-{id}/YYYY-MM-DD/uuid.ext`
+- No authentication required for public categories after ACL confirm
 
 ### Private Files
 - Require presigned download URL
@@ -234,11 +238,12 @@ Note: this endpoint streams from object storage rather than returning a presigne
 - Always set ACL policy after upload confirmation (public for logos/products, private for documents)
 - Always use `randomUUID()` in storage paths to prevent filename collisions
 - Always handle both legacy and new upload path formats when reading stored paths
-- Always use `apiRequest` with `FormData` for frontend uploads — it handles auth headers and content type automatically
+- Use `client/src/lib/uploadClient.ts` (`uploadFile`) for authenticated presigned uploads; `publicFormUpload.ts` for anonymous form attachments
 
 ### Don't
 - Don't store files on the local filesystem — they'll be lost on restart
 - Don't proxy large file uploads through the Express backend — use presigned URLs for direct-to-storage uploads
+- Don't use multipart `FormData` for asset uploads (logos, documents, KB files, store images) — register JSON endpoints after presigned PUT
 - Don't expose private file paths directly — always generate presigned download URLs
 - Don't skip category validation — it enforces size limits and allowed types
 - Don't hardcode storage paths — use `FileUploadService.buildStoragePath()` for consistent path generation
@@ -250,7 +255,28 @@ Note: this endpoint streams from object storage rather than returning a presigne
 - `server/replit_integrations/object_storage/objectAcl.ts` — ACL policy management
 - `server/replit_integrations/object_storage/routes.ts` — object storage HTTP routes
 - `server/api/unified-uploads.ts` — unified upload API endpoints
-- `server/api/file-upload.ts` — legacy file upload endpoints
-- `server/api/knowledge-base-upload.ts` — knowledge base file upload
-- `server/api/schools/documents.ts` — school document management
-- `server/api/schools/upload-logo.ts` — school logo upload
+- `server/api/file-upload.ts` — deprecated multipart routes (410); use unified-uploads
+- `server/api/knowledge-base-upload.ts` — KB AI processing from presigned `objectPath` JSON
+- `server/api/custom-forms.ts` — public form `request-upload-url` / `confirm-upload`
+- `client/src/lib/uploadClient.ts` — browser presigned upload helper
+- `client/src/lib/publicFormUpload.ts` — anonymous form attachment presigned flow
+- `server/tests/unified-upload-categories.test.ts` — category stub + readObjectBuffer
+- `server/tests/integration/presigned-upload-migrations.test.ts` — register endpoint integration
+- `e2e/helpers/presignedUploadFlow.ts` — Playwright presigned helper (store, logos, etc.)
+- `e2e/helpers/publicFormPresignedUpload.ts` — Playwright public form presigned helper
+
+## Migrated upload surfaces (2026-06)
+
+| Feature | Category | Register / confirm |
+|---------|----------|-------------------|
+| School logo | `logos` | `POST /api/schools/upload-logo` JSON |
+| School documents | `documents` | `POST /api/schools/documents/upload` JSON |
+| Knowledge base files | `knowledgeBase` | metadata on KB + `POST /api/knowledge-bases/:id/upload` JSON for AI |
+| Fundraiser images | `fundraiserProducts` | saved on product record via `ImageUpload` |
+| Store program/merch | `storePrograms` / `storeProducts` | saved on store admin UI |
+| Custom form attachments | `formAttachments` | `custom-forms` presigned routes (no auth) |
+| Waiver signatures | `signatures` | educator API `signatureObjectPath` |
+| Product order photos | `productOrderImages` | order form field value |
+| Support screenshots | `supportScreenshots` | technical support report API |
+
+**Intentionally not migrated:** CSV imports (assessments, lexile, contacts), OCR temp uploads — in-memory/ephemeral only.

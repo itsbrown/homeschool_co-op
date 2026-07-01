@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { uploadKnowledgeBaseFiles } from "@/lib/knowledgeBaseUpload";
 import {
   Dialog,
   DialogContent,
@@ -136,35 +137,24 @@ export function FileUploadModal({
         )
       );
 
-      const formData = new FormData();
-      formData.append('files', item.file);
-
-      const token = localStorage.getItem('supabase_token');
-      const response = await fetch('/api/file-upload/knowledge-base', {
-        method: 'POST',
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` })
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        setUploadItems(prev => 
-          prev.map(prevItem => 
-            prevItem.id === item.id 
-              ? { ...prevItem, status: 'success', progress: 100 }
+      const uploaded = await uploadKnowledgeBaseFiles([item.file], (p) => {
+        setUploadItems(prev =>
+          prev.map(prevItem =>
+            prevItem.id === item.id
+              ? { ...prevItem, progress: p }
               : prevItem
           )
         );
-      } else {
-        throw new Error(result.message || 'Upload failed');
-      }
+      });
+
+      setUploadItems(prev =>
+        prev.map(prevItem =>
+          prevItem.id === item.id
+            ? { ...prevItem, status: 'success', progress: 100 }
+            : prevItem
+        )
+      );
+      return uploaded;
     } catch (error) {
       setUploadItems(prev => 
         prev.map(prevItem => 

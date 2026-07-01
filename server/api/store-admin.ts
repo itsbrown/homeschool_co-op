@@ -1,6 +1,5 @@
 import { Router, type Response } from 'express';
 import { z } from 'zod';
-import type { UploadedFile } from 'express-fileupload';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import {
@@ -20,7 +19,6 @@ import {
   setProgramDeliveryDocuments,
 } from '../lib/store-storage';
 import { getStoreProgramsForSchool, patchStoreProgram } from '../lib/store-programs';
-import { persistStoreImageFile } from '../lib/store-image-upload';
 import { storage } from '../storage';
 
 const router = Router();
@@ -96,46 +94,6 @@ router.get('/products', async (req: any, res) => {
     res.json(await getStoreProductsBySchoolId(schoolId));
   } catch (err) {
     handleStoreRouteError(res, err, 'Failed to load store products');
-  }
-});
-
-router.post('/upload/product-image', async (req: any, res) => {
-  try {
-    if (!req.files?.image) {
-      return res.status(400).json({ success: false, message: 'No image file uploaded' });
-    }
-    const saved = await persistStoreImageFile(
-      req.files.image as UploadedFile,
-      'store-products',
-      'product',
-    );
-    res.json({ success: true, ...saved });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to upload image';
-    if (message.includes('allowed') || message.includes('large')) {
-      return res.status(400).json({ success: false, message });
-    }
-    handleStoreRouteError(res, err, 'Failed to upload product image');
-  }
-});
-
-router.post('/upload/program-image', async (req: any, res) => {
-  try {
-    if (!req.files?.image) {
-      return res.status(400).json({ success: false, message: 'No image file uploaded' });
-    }
-    const saved = await persistStoreImageFile(
-      req.files.image as UploadedFile,
-      'store-programs',
-      'program',
-    );
-    res.json({ success: true, imageUrl: saved.imageUrl, ...saved });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to upload image';
-    if (message.includes('allowed') || message.includes('large')) {
-      return res.status(400).json({ success: false, message });
-    }
-    handleStoreRouteError(res, err, 'Failed to upload program image');
   }
 });
 

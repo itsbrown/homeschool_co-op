@@ -1,5 +1,18 @@
 # App knowledge changelog
 
+## 2026-06-01 (Platform — presigned uploads for all asset surfaces)
+
+- **Architecture:** Logos, documents, knowledge base files, fundraiser images, custom form attachments, product order photos, and store images use `POST /api/unified-uploads/request-url` → direct PUT → confirm. Register endpoints save object paths (`/public/…` or `/objects/…`).
+- **Removed:** Multipart upload routes for school logo, school documents, custom form attachments, fundraiser product images, store program/merch images.
+- **Fixed:** Fundraisers API mounted at `/api/fundraisers`; public/private E2E object stub supports `/objects/*`.
+- **Tests:** `server/tests/unified-upload-categories.test.ts`, `server/tests/upload-migration-registry.test.ts`; E2E helper `e2e/helpers/presignedUploadFlow.ts`.
+
+## 2026-06-01 (Public store — presigned object storage for images)
+
+- **Architecture:** Store program and merch images use the unified presigned upload flow (`POST /api/unified-uploads/request-url` → direct PUT → confirm) with categories `storePrograms` / `storeProducts`. DB stores `/public/store-programs/…` or `/public/store-products/…`. Removed multipart `POST …/public-store/upload/*` endpoints.
+- **Serving:** `GET /public/*` in `registerObjectStorageRoutes` (wired in `server/index.ts`); E2E stub for Playwright.
+- **Fix:** `setObjectAcl` and `getPublicObjectFile` for public object paths; schoolId auto-resolved on unified upload for store categories.
+
 ## 2026-06-01 (Public store — cart UX)
 
 - **UX:** Add-to-cart toast + cart badge subtotal; mobile sticky cart bar; checkout cart review with quantity controls (products), remove lines, live subtotal updates.

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/components/SupabaseProvider';
+import { uploadFile } from '@/lib/uploadClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,7 +35,7 @@ interface SchoolData {
 }
 
 export default function SchoolSettings() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -89,42 +90,33 @@ export default function SchoolSettings() {
   // Logo upload mutation  
   const logoUploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      console.log('🔍 Full school data object:', schoolData);
-      console.log('🔍 School ID type:', typeof schoolData?.id);
-      console.log('🔍 School ID value:', schoolData?.id);
-      console.log('🔍 All school data keys:', schoolData ? Object.keys(schoolData) : 'no data');
-      
       if (!schoolData?.id) {
-        console.error('❌ No school ID found in data:', schoolData);
         throw new Error('No school ID available - please refresh the page');
       }
-      
-      const schoolId = schoolData.id.toString();
-      console.log('📤 Uploading for school ID (string):', schoolId);
-      
-      const formData = new FormData();
-      formData.append('logo', file);
-      formData.append('schoolId', schoolId);
-      
-      // Log FormData contents
-      console.log('📋 FormData contents:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`  ${key}:`, value);
-        if (key === 'schoolId') {
-          console.log(`  schoolId type: ${typeof value}, length: ${value.toString().length}`);
-        }
+
+      const schoolId = schoolData.id;
+      const token = session?.access_token;
+      if (!token) {
+        throw new Error('Not authenticated');
       }
-      
-      // Verify FormData was built correctly
-      console.log('📋 FormData verification:');
-      console.log('  - Has logo file:', formData.has('logo'));
-      console.log('  - Has schoolId:', formData.has('schoolId'));
-      console.log('  - SchoolId value:', formData.get('schoolId'));
-      
-      console.log('🚀 Sending upload request with FormData...');
-      const response = await apiRequest('POST', '/api/schools/upload-logo', formData);
-      console.log('📡 Response status:', response.status);
-      console.log('📡 Response ok:', response.ok);
+
+      const uploadResult = await uploadFile(file, {
+        category: 'logos',
+        schoolId,
+      });
+
+      const response = await fetch('/api/schools/upload-logo', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          schoolId,
+          logoUrl: uploadResult.objectPath,
+        }),
+      });
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to upload logo');
