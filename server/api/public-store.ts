@@ -28,6 +28,7 @@ import {
 } from '../lib/store-guest-checkout';
 import { fulfillStoreCheckoutWithoutPayment } from '../lib/store-fulfillment';
 import { resolveStoreDeliveryDocuments } from '../lib/store-documents';
+import { isClassEligibleForPublicStore } from '../lib/store-programs';
 import { storage } from '../storage';
 
 const router = Router();
@@ -156,7 +157,7 @@ router.get('/:storeSlug/catalog', async (req, res) => {
       }
       if (listing.listingType === 'class') {
         const cls = await getClassById(listing.sourceId);
-        if (!cls?.isPublished) continue;
+        if (!cls || !isClassEligibleForPublicStore(cls)) continue;
         catalog.push({
           listingId: listing.id,
           listingType: 'class',

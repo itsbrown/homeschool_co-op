@@ -12,6 +12,7 @@ import {
   getClassById,
   getStoreProductById,
 } from './store-storage';
+import { isClassEligibleForPublicStore } from './store-programs';
 import {
   getLocationCore,
 } from '../lib/location-db';
@@ -156,7 +157,7 @@ async function resolveClassLine(
   listing: { id: number; sourceId: number; membersOnly: boolean },
 ): Promise<{ title: string; description: string | null; unitPriceCents: number; fulfillment: 'paid' | 'waitlist'; waitlistPosition?: number } | null> {
   const cls = await getClassById(listing.sourceId);
-  if (!cls || !cls.isPublished) {
+  if (!cls || !isClassEligibleForPublicStore(cls)) {
     return null;
   }
   const price = cls.price ?? 0;

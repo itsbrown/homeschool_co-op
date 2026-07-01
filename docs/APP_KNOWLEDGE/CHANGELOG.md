@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-06-01 (Public store — catalog uses enrollmentOpen for classes)
+
+- **Fix:** Public store catalog and checkout pricing use `enrollmentOpen` (not legacy `isPublished`) so listed classes appear on `/store/:slug` when admin marks them on store.
+
 ## 2026-06-01 (Public store — class store-ready uses enrollmentOpen)
 
 - **Fix:** Public Store **Classes & programs** treats **Open for Enrollment** (`enrollmentOpen`) + price as store-ready for classes, matching the parent catalog — not legacy `isPublished`.

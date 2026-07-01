@@ -53,6 +53,19 @@ function sessionReady(row: typeof sessions.$inferSelect): { ready: boolean; hint
   return { ready: true, hint: null };
 }
 
+/** Same visibility rules as parent catalog + store admin readiness. */
+export function isClassEligibleForPublicStore(cls: {
+  enrollmentOpen?: boolean | null;
+  isAdminOnly?: boolean | null;
+  price?: number | null;
+  endDate?: string | Date | null;
+}): boolean {
+  if (!cls.enrollmentOpen || cls.isAdminOnly) return false;
+  if (!cls.price || cls.price <= 0) return false;
+  if (cls.endDate && new Date(cls.endDate) < new Date()) return false;
+  return true;
+}
+
 function classReady(row: typeof classes.$inferSelect): { ready: boolean; hint: string | null } {
   if (!row.enrollmentOpen) {
     return { ready: false, hint: 'Turn on Open for Enrollment in Classes' };
