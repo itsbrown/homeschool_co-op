@@ -6,9 +6,14 @@ export type UploadCategory =
   | "documents"
   | "knowledgeBase"
   | "fundraiserProducts"
+  | "storePrograms"
+  | "storeProducts"
   | "assessments"
   | "profilePhotos"
-  | "supportScreenshots";
+  | "supportScreenshots"
+  | "formAttachments"
+  | "scheduleResources"
+  | "productOrderImages";
 
 export interface UploadResult {
   objectPath: string;

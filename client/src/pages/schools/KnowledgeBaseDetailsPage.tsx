@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { uploadKnowledgeBaseFiles } from "@/lib/knowledgeBaseUpload";
 import { useParams, Link } from "wouter";
 import {
   Loader2,
@@ -217,34 +218,17 @@ export default function KnowledgeBaseDetailsPage() {
     setUploadProgress(0);
     
     try {
-      // Upload files to server
-      const formData = new FormData();
-      uploadingFiles.forEach(file => {
-        formData.append('files', file);
-      });
-
+      // Upload files to object storage
       setUploadProgress(30);
 
-      const uploadResponse = await fetch('/api/file-upload/knowledge-base', {
-        method: 'POST',
-        body: formData,
+      const uploadedFiles = await uploadKnowledgeBaseFiles(uploadingFiles, (_i, p) => {
+        setUploadProgress(30 + Math.round(p * 0.4));
       });
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-      }
-
-      const uploadResult = await uploadResponse.json();
-      
-      if (!uploadResult.success) {
-        throw new Error(uploadResult.message || 'Upload failed');
-      }
 
       setUploadProgress(70);
 
-      // Update the knowledge base record with new files
       const currentFiles = knowledgeBase?.files || [];
-      const updatedFiles = [...currentFiles, ...uploadResult.files];
+      const updatedFiles = [...currentFiles, ...uploadedFiles];
 
       const updateResponse = await fetch(`/api/knowledge-bases/${id}`, {
         method: 'PATCH',

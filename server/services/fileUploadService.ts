@@ -1,6 +1,11 @@
+import fs from "fs";
 import { ObjectStorageService, objectStorageClient } from "../replit_integrations/object_storage";
 import { setObjectAclPolicy } from "../replit_integrations/object_storage/objectAcl";
 import { randomUUID } from "crypto";
+import {
+  e2eObjectLocalPath,
+  isE2eObjectStorageStubEnabled,
+} from "../lib/e2e-public-object-storage";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
@@ -66,6 +71,20 @@ export const uploadCategories: Record<string, UploadCategoryConfig> = {
     public: true,
     description: "Fundraiser product images",
   },
+  storePrograms: {
+    maxSizeBytes: 5 * 1024 * 1024,
+    allowedTypes: ["image/png", "image/jpeg", "image/gif", "image/webp"],
+    folder: "store-programs",
+    public: true,
+    description: "Public store program and class hero images",
+  },
+  storeProducts: {
+    maxSizeBytes: 5 * 1024 * 1024,
+    allowedTypes: ["image/png", "image/jpeg", "image/gif", "image/webp"],
+    folder: "store-products",
+    public: true,
+    description: "Public store merch product images",
+  },
   assessments: {
     maxSizeBytes: 10 * 1024 * 1024,
     allowedTypes: ["application/pdf", "image/png", "image/jpeg"],
@@ -112,6 +131,13 @@ export const uploadCategories: Record<string, UploadCategoryConfig> = {
     folder: "schedule-resources",
     public: false,
     description: "Schedule builder lesson resources and attachments",
+  },
+  productOrderImages: {
+    maxSizeBytes: 5 * 1024 * 1024,
+    allowedTypes: ["image/jpeg", "image/png", "image/webp"],
+    folder: "product-order-images",
+    public: false,
+    description: "Parent product order form photo attachments",
   },
 };
 
@@ -199,6 +225,15 @@ class FileUploadService {
     const ext = this.getExtension(options.filename);
     const storagePath = this.buildStoragePath(options, objectId, ext);
 
+    const objectPath = categoryConfig.public
+      ? `/public/${storagePath}`
+      : `/objects/${storagePath}`;
+
+    if (shouldStubFormUploadForE2e()) {
+      const uploadURL = `/api/test/e2e-object-upload?objectPath=${encodeURIComponent(objectPath)}&contentType=${encodeURIComponent(options.contentType)}`;
+      return { uploadURL, objectPath, validation };
+    }
+
     const privateObjectDir = this.objectStorageService.getPrivateObjectDir();
     const fullPath = categoryConfig.public
       ? `${this.getPublicBasePath()}/${storagePath}`
@@ -213,16 +248,17 @@ class FileUploadService {
       ttlSec: 900,
     });
 
-    const objectPath = categoryConfig.public
-      ? `/public/${storagePath}`
-      : `/objects/${storagePath}`;
-
     return { uploadURL, objectPath, validation };
   }
 
   async setObjectAcl(objectPath: string, ownerId: string, isPublic: boolean): Promise<void> {
+    if (shouldStubFormUploadForE2e()) {
+      return;
+    }
     try {
-      const objectFile = await this.objectStorageService.getObjectEntityFile(objectPath);
+      const objectFile = objectPath.startsWith("/public/")
+        ? await this.objectStorageService.getPublicObjectFile(objectPath)
+        : await this.objectStorageService.getObjectEntityFile(objectPath);
       await setObjectAclPolicy(objectFile, {
         owner: ownerId,
         visibility: isPublic ? "public" : "private",
@@ -241,6 +277,23 @@ class FileUploadService {
       console.error("Failed to delete object:", error);
       return false;
     }
+  }
+
+  /** Read object bytes from E2E stub disk or GCS (for server-side processing after presigned upload). */
+  async readObjectBuffer(objectPath: string): Promise<Buffer> {
+    if (isE2eObjectStorageStubEnabled() || shouldStubFormUploadForE2e()) {
+      const localPath = e2eObjectLocalPath(objectPath);
+      if (!localPath || !fs.existsSync(localPath)) {
+        throw new Error(`Object not found: ${objectPath}`);
+      }
+      return fs.readFileSync(localPath);
+    }
+
+    const objectFile = objectPath.startsWith("/public/")
+      ? await this.objectStorageService.getPublicObjectFile(objectPath)
+      : await this.objectStorageService.getObjectEntityFile(objectPath);
+    const [buffer] = await objectFile.download();
+    return buffer;
   }
 
   /** Time-limited signed GET URL for private objects (e.g. support screenshots). */
@@ -334,8 +387,14 @@ class FileUploadService {
       ? `/public/${storagePath}`
       : `/objects/${storagePath}`;
 
-    if (options.userId) {
-      await this.setObjectAcl(objectPath, options.userId.toString(), categoryConfig.public);
+    if (categoryConfig.public) {
+      await this.setObjectAcl(
+        objectPath,
+        options.userId?.toString() || "system",
+        true,
+      );
+    } else if (options.userId) {
+      await this.setObjectAcl(objectPath, options.userId.toString(), false);
     }
 
     return {

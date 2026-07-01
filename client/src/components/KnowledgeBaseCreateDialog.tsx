@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { uploadKnowledgeBaseFiles } from "@/lib/knowledgeBaseUpload";
 import { useAuth } from "@/hooks/useAuth0";
 
 const validationSchema = insertKnowledgeBaseSchema.extend({
@@ -90,24 +91,27 @@ export function KnowledgeBaseCreateDialog({
       
       // If files are uploaded, process them with AI
       if (selectedFiles.length > 0) {
-        const formData = new FormData();
-        selectedFiles.forEach(file => {
-          formData.append('files', file.file);
-        });
-        
-        // Upload files for AI processing
+        const uploaded = await uploadKnowledgeBaseFiles(selectedFiles.map((f) => f.file));
+
         const uploadResponse = await fetch(`/api/knowledge-bases/${(kb as any).id}/upload`, {
-          method: 'POST',
-          body: formData,
+          method: "POST",
           headers: {
-            'Authorization': `Bearer ${(user as any)?.token || ''}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${(user as any)?.token || localStorage.getItem("supabase_token") || ""}`,
           },
+          body: JSON.stringify({
+            files: uploaded.map((u, i) => ({
+              objectPath: u.url,
+              originalName: selectedFiles[i].file.name,
+              mimetype: selectedFiles[i].file.type || "application/octet-stream",
+            })),
+          }),
         });
-        
+
         if (!uploadResponse.ok) {
-          throw new Error('Failed to upload files for AI processing');
+          throw new Error("Failed to upload files for AI processing");
         }
-        
+
         const result = await uploadResponse.json();
         
         // Show processing status

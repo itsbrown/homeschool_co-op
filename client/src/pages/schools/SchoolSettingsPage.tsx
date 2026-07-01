@@ -35,6 +35,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { uploadFile } from "@/lib/uploadClient";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 
 interface UserProfile {
@@ -317,21 +318,26 @@ export default function SchoolSettingsPage() {
         throw new Error("School ID not found");
       }
 
-      const formData = new FormData();
-      formData.append('logo', file);
-      formData.append('schoolId', String(schoolId));
-
       const token = session?.access_token;
       if (!token) {
         throw new Error("Not authenticated");
       }
 
+      const uploadResult = await uploadFile(file, {
+        category: "logos",
+        schoolId,
+      });
+
       const response = await fetch('/api/schools/upload-logo', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-        body: formData
+        body: JSON.stringify({
+          schoolId,
+          logoUrl: uploadResult.objectPath,
+        }),
       });
 
       if (!response.ok) {

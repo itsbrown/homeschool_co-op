@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Upload, ArrowLeft, Plus, X, Info } from "lucide-react";
 import { saveKnowledgeBase } from "@/lib/storage";
 import { apiRequest } from "@/lib/queryClient";
+import { uploadKnowledgeBaseFiles } from "@/lib/knowledgeBaseUpload";
 
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -159,27 +160,7 @@ export default function KnowledgeBaseCreationPage() {
       let uploadedFileData = [];
       
       if (data.files.length > 0) {
-        const formData = new FormData();
-        data.files.forEach(file => {
-          formData.append('files', file);
-        });
-
-        const uploadResponse = await fetch('/api/file-upload/knowledge-base', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error(`File upload failed: ${uploadResponse.statusText}`);
-        }
-
-        const uploadResult = await uploadResponse.json();
-        
-        if (!uploadResult.success) {
-          throw new Error(uploadResult.message || 'File upload failed');
-        }
-        
-        uploadedFileData = uploadResult.files;
+        uploadedFileData = await uploadKnowledgeBaseFiles(data.files);
       }
       
       // Map frontend form data to backend schema with actual uploaded file URLs

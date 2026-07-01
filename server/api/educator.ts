@@ -2685,7 +2685,7 @@ router.post('/waivers/sign', async (req, res) => {
       return res.status(401).json({ error: 'User ID not found' });
     }
 
-    const { documentId, signatureData, signatoryName } = req.body;
+    const { documentId, signatureData, signatureObjectPath, signatoryName } = req.body;
 
     if (!documentId) {
       return res.status(400).json({ error: 'Missing required field: documentId' });
@@ -2733,7 +2733,14 @@ router.post('/waivers/sign', async (req, res) => {
     let signatureSizeBytes: number | null = null;
     let signatureUploadedAt: Date | null = null;
 
-    if (signatureData) {
+    if (signatureObjectPath) {
+      if (!signatureObjectPath.startsWith('/objects/signatures/')) {
+        return res.status(400).json({ error: 'Invalid signatureObjectPath' });
+      }
+      signatureUrl = signatureObjectPath;
+      signatureMimeType = 'image/png';
+      signatureUploadedAt = new Date();
+    } else if (signatureData) {
       try {
         // signatureData is expected to be a base64 data URL (e.g., "data:image/png;base64,...")
         const base64Match = signatureData.match(/^data:([^;]+);base64,(.+)$/);

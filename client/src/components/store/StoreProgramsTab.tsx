@@ -187,7 +187,7 @@ export function StoreProgramsTab({ storeEnabled }: StoreProgramsTabProps) {
                     <ImageUpload
                       value={program.coverImage ?? ""}
                       onChange={(url) => onImageChange(program, url)}
-                      uploadEndpoint="/api/school-admin/public-store/upload/program-image"
+                      uploadCategory="storePrograms"
                       previewAspectClass="aspect-square"
                       disabled={patchProgram.isPending}
                     />

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -8,7 +9,7 @@ type StoreProductCardImageProps = {
   "data-testid"?: string;
 };
 
-/** Square cropped merch image for public store product cards. */
+/** Square cropped image for public store product cards. */
 export function StoreProductCardImage({
   src,
   alt,

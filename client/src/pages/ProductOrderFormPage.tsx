@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { apiRequest } from '@/lib/queryClient';
+import { uploadFile } from '@/lib/uploadClient';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, X, ShoppingCart, CreditCard } from 'lucide-react';
 
@@ -205,27 +206,12 @@ export default function ProductOrderFormPage() {
   // Upload images mutation (with Supabase authentication)
   const uploadImagesMutation = useMutation({
     mutationFn: async (files: File[]) => {
-      const formData = new FormData();
-      files.forEach(file => {
-        formData.append('images', file);
-      });
-
-      // Get Supabase access token from localStorage
-      const token = localStorage.getItem('supabase_token');
-      
-      const response = await fetch('/api/upload/product-images', {
-        method: 'POST',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to upload images');
+      const images = [];
+      for (const file of files) {
+        const result = await uploadFile(file, { category: "productOrderImages" });
+        images.push({ url: result.objectPath });
       }
-
-      return response.json();
+      return { images };
     },
   });
 

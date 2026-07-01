@@ -65,14 +65,7 @@ export async function createTestApp(): Promise<Application> {
     createParentPath: true,
   }));
 
-  app.use('/api/schools/upload-logo', fileUpload({
-    useTempFiles: false,
-    limits: { fileSize: 5 * 1024 * 1024 },
-    abortOnLimit: true,
-    createParentPath: true,
-  }));
-
-  // Serve static files
+  // Serve static files (legacy paths + E2E stub objects)
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   // Register all API routes

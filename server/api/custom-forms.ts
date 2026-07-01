@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import type { UploadedFile } from 'express-fileupload';
 import { getDb } from '../db';
 import { customForms, customFormFields, customFormSubmissions, schools, insertCustomFormSchema, insertCustomFormFieldSchema, insertCustomFormSubmissionSchema } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
@@ -9,6 +8,94 @@ import { fileUploadService } from '../services/fileUploadService';
 import { ObjectStorageService } from '../replit_integrations/object_storage';
 
 const router = Router();
+
+async function getActivePublicForm(formId: number) {
+  const db = await getDb();
+  const [form] = await db
+    .select()
+    .from(customForms)
+    .where(and(
+      eq(customForms.id, formId),
+      eq(customForms.isActive, true),
+      eq(customForms.accessLevel, 'public'),
+    ));
+  return form ?? null;
+}
+
+// Presigned upload for public form attachments (no auth — form must be public).
+router.post('/forms/:formId/request-upload-url', async (req, res) => {
+  try {
+    const formId = parseInt(req.params.formId, 10);
+    if (!Number.isFinite(formId)) {
+      return res.status(400).json({ message: 'Invalid form ID' });
+    }
+
+    const form = await getActivePublicForm(formId);
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found or not public' });
+    }
+
+    const { name, size, contentType } = req.body ?? {};
+    if (!name || !size || !contentType) {
+      return res.status(400).json({ message: 'Missing required fields: name, size, contentType' });
+    }
+
+    const result = await fileUploadService.getUploadUrl({
+      category: 'formAttachments',
+      filename: name,
+      contentType,
+      sizeBytes: size,
+      schoolId: form.schoolId,
+      metadata: { formId: String(formId), purpose: 'custom_form_attachment' },
+    });
+
+    if (!result.validation.valid) {
+      return res.status(400).json({ message: result.validation.error });
+    }
+
+    res.json({
+      uploadURL: result.uploadURL,
+      objectPath: result.objectPath,
+    });
+  } catch (error: any) {
+    console.error('Error generating form upload URL:', error);
+    res.status(500).json({ message: error?.message || 'Failed to generate upload URL' });
+  }
+});
+
+router.post('/forms/:formId/confirm-upload', async (req, res) => {
+  try {
+    const formId = parseInt(req.params.formId, 10);
+    if (!Number.isFinite(formId)) {
+      return res.status(400).json({ message: 'Invalid form ID' });
+    }
+
+    const form = await getActivePublicForm(formId);
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found or not public' });
+    }
+
+    const { objectPath, fileName } = req.body ?? {};
+    if (!objectPath || !fileName) {
+      return res.status(400).json({ message: 'Missing objectPath or fileName' });
+    }
+
+    if (!objectPath.startsWith('/objects/form-attachments/')) {
+      return res.status(400).json({ message: 'Invalid objectPath for form attachment' });
+    }
+
+    await fileUploadService.setObjectAcl(objectPath, 'anonymous', false);
+
+    res.json({
+      success: true,
+      fileName,
+      objectPath,
+    });
+  } catch (error: any) {
+    console.error('Error confirming form upload:', error);
+    res.status(500).json({ message: error?.message || 'Failed to confirm upload' });
+  }
+});
 
 // PUBLIC ROUTES (before jwtCheck) - for public form access and submissions
 // Get form by slug (for public access)
@@ -97,56 +184,6 @@ router.get('/forms/by-slug-auth/:slug', jwtCheck, async (req: any, res) => {
   } catch (error) {
     console.error('Error fetching form by slug:', error);
     res.status(500).json({ message: 'Error fetching form' });
-  }
-});
-
-// Upload a file attachment for a public form field (e.g. resume) — no auth required.
-router.post('/forms/:formId/upload-attachment', async (req, res) => {
-  try {
-    const formId = parseInt(req.params.formId);
-    if (!Number.isFinite(formId)) {
-      return res.status(400).json({ message: 'Invalid form ID' });
-    }
-
-    const db = await getDb();
-    const [form] = await db
-      .select()
-      .from(customForms)
-      .where(and(
-        eq(customForms.id, formId),
-        eq(customForms.isActive, true),
-        eq(customForms.accessLevel, 'public'),
-      ));
-
-    if (!form) {
-      return res.status(404).json({ message: 'Form not found or not public' });
-    }
-
-    if (!req.files || !req.files.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
-    }
-
-    const file = req.files.file as UploadedFile;
-    const uploadResult = await fileUploadService.uploadBuffer(file.data, {
-      category: 'formAttachments',
-      originalFilename: file.name,
-      mimeType: file.mimetype,
-      schoolId: form.schoolId,
-      metadata: { formId: String(formId), purpose: 'custom_form_attachment' },
-    });
-
-    res.json({
-      success: true,
-      fileName: file.name,
-      objectPath: uploadResult.objectPath,
-      mimeType: file.mimetype,
-      sizeBytes: file.size,
-    });
-  } catch (error: any) {
-    console.error('Error uploading form attachment:', error);
-    res.status(500).json({
-      message: error?.message || 'Failed to upload file',
-    });
   }
 });
 

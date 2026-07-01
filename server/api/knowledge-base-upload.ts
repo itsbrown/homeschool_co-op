@@ -1,33 +1,40 @@
 import { Request, Response } from "express";
-import fileUpload from 'express-fileupload';
-import { knowledgeBaseProcessor } from '../services/knowledgeBaseProcessor';
+import { z } from "zod";
+import { knowledgeBaseProcessor } from "../services/knowledgeBaseProcessor";
+import { fileUploadService } from "../services/fileUploadService";
 import { storage } from "../storage";
 
-export interface UploadedFile {
-  name: string;
-  data: Buffer;
-  size: number;
-  encoding: string;
-  tempFilePath: string;
-  truncated: boolean;
-  mimetype: string;
-  md5: string;
-  mv: (path: string) => Promise<void>;
-}
+const registerKbFilesSchema = z.object({
+  files: z
+    .array(
+      z.object({
+        objectPath: z.string().min(1),
+        originalName: z.string().min(1),
+        mimetype: z.string().min(1),
+      }),
+    )
+    .min(1),
+});
 
 /**
- * Upload files to a knowledge base and start AI processing
+ * Start AI processing for knowledge-base files already uploaded via presigned flow.
  */
 export const uploadKnowledgeBaseFiles = async (req: Request, res: Response) => {
   try {
-    const knowledgeBaseId = parseInt(req.params.id);
+    const knowledgeBaseId = parseInt(req.params.id, 10);
     const authData = (req as any).auth;
 
     if (!authData?.dbUserId) {
       return res.status(401).json({ message: "Authentication required" });
     }
 
-    // Verify knowledge base exists and user has permission
+    const parsed = registerKbFilesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: parsed.error.errors[0]?.message || "Invalid request body",
+      });
+    }
+
     const knowledgeBase = await storage.getKnowledgeBase(knowledgeBaseId);
     if (!knowledgeBase) {
       return res.status(404).json({ message: "Knowledge base not found" });
@@ -37,73 +44,56 @@ export const uploadKnowledgeBaseFiles = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "Permission denied" });
     }
 
-    // Check if files were uploaded
-    if (!req.files || Object.keys(req.files).length === 0) {
-      return res.status(400).json({ message: "No files uploaded" });
-    }
+    const uploadedFiles: Array<{ buffer: Buffer; originalName: string; mimetype: string }> = [];
 
-    // Process uploaded files
-    const uploadedFiles = [];
-    const files = Array.isArray(req.files.files) ? req.files.files : [req.files.files];
-
-    for (const file of files) {
-      if (file && typeof file === 'object' && 'data' in file) {
-        const uploadedFile = file as UploadedFile;
-        
-        // Validate file type and size
-        if (uploadedFile.size > 50 * 1024 * 1024) { // 50MB limit
-          return res.status(400).json({ 
-            message: `File ${uploadedFile.name} is too large (max 50MB)` 
-          });
-        }
-
-        const allowedTypes = [
-          'application/pdf',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/msword',
-          'text/plain',
-          'text/html',
-          'text/markdown'
-        ];
-
-        if (!allowedTypes.includes(uploadedFile.mimetype)) {
-          return res.status(400).json({ 
-            message: `File type ${uploadedFile.mimetype} not supported for ${uploadedFile.name}` 
-          });
-        }
-
-        uploadedFiles.push({
-          buffer: uploadedFile.data,
-          originalName: uploadedFile.name,
-          mimetype: uploadedFile.mimetype
+    for (const file of parsed.data.files) {
+      if (!file.objectPath.startsWith("/objects/knowledge-base/")) {
+        return res.status(400).json({
+          message: `Invalid objectPath for ${file.originalName}: must start with /objects/knowledge-base/`,
         });
       }
+
+      const config = fileUploadService.getCategoryConfig("knowledgeBase");
+      if (config && !config.allowedTypes.includes(file.mimetype)) {
+        return res.status(400).json({
+          message: `File type ${file.mimetype} not supported for ${file.originalName}`,
+        });
+      }
+
+      const buffer = await fileUploadService.readObjectBuffer(file.objectPath);
+      if (buffer.length > (config?.maxSizeBytes ?? 50 * 1024 * 1024)) {
+        return res.status(400).json({
+          message: `File ${file.originalName} is too large (max ${config?.maxSizeBytes ?? 50 * 1024 * 1024} bytes)`,
+        });
+      }
+
+      uploadedFiles.push({
+        buffer,
+        originalName: file.originalName,
+        mimetype: file.mimetype,
+      });
     }
 
-    if (uploadedFiles.length === 0) {
-      return res.status(400).json({ message: "No valid files found" });
-    }
+    console.log(
+      `📤 Starting upload processing for ${uploadedFiles.length} presigned files in knowledge base ${knowledgeBaseId}`,
+    );
 
-    console.log(`📤 Starting upload processing for ${uploadedFiles.length} files in knowledge base ${knowledgeBaseId}`);
-
-    // Start AI processing
     const jobId = await knowledgeBaseProcessor.processKnowledgeBase(
       knowledgeBaseId,
-      uploadedFiles
+      uploadedFiles,
     );
 
     res.status(202).json({
       message: "Files uploaded successfully, AI processing started",
       jobId,
       filesCount: uploadedFiles.length,
-      status: "processing"
+      status: "processing",
     });
-
   } catch (error) {
     console.error("File upload error:", error);
-    res.status(500).json({ 
-      message: "Failed to upload files", 
-      error: error instanceof Error ? error.message : "Unknown error"
+    res.status(500).json({
+      message: "Failed to upload files",
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 };
@@ -125,7 +115,6 @@ export const getProcessingStatus = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Processing job not found" });
     }
 
-    // Verify user has permission to view this job
     const knowledgeBase = await storage.getKnowledgeBase(job.knowledgeBaseId);
     if (!knowledgeBase || knowledgeBase.authorId !== authData.dbUserId) {
       return res.status(403).json({ message: "Permission denied" });
@@ -139,26 +128,27 @@ export const getProcessingStatus = async (req: Request, res: Response) => {
       endTime: job.endTime,
       filesCount: job.files.length,
       error: job.error,
-      results: job.results ? {
-        totalWords: job.results.overallAnalysis.totalWords,
-        avgReadability: job.results.overallAnalysis.avgReadability,
-        suggestedGradeLevel: job.results.overallAnalysis.suggestedGradeLevel,
-        primarySubjects: job.results.overallAnalysis.primarySubjects,
-        combinedTopics: job.results.overallAnalysis.combinedTopics,
-        analyzedFiles: job.results.analyses.map(a => ({
-          fileName: a.fileName,
-          summary: a.summary,
-          keyTopics: a.keyTopics.slice(0, 5),
-          difficulty: a.difficulty
-        }))
-      } : undefined
+      results: job.results
+        ? {
+            totalWords: job.results.overallAnalysis.totalWords,
+            avgReadability: job.results.overallAnalysis.avgReadability,
+            suggestedGradeLevel: job.results.overallAnalysis.suggestedGradeLevel,
+            primarySubjects: job.results.overallAnalysis.primarySubjects,
+            combinedTopics: job.results.overallAnalysis.combinedTopics,
+            analyzedFiles: job.results.analyses.map((a) => ({
+              fileName: a.fileName,
+              summary: a.summary,
+              keyTopics: a.keyTopics.slice(0, 5),
+              difficulty: a.difficulty,
+            })),
+          }
+        : undefined,
     });
-
   } catch (error) {
     console.error("Processing status error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Failed to get processing status",
-      error: error instanceof Error ? error.message : "Unknown error"
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 };
@@ -178,14 +168,13 @@ export const getProcessingStats = async (req: Request, res: Response) => {
 
     res.json({
       processingStats: stats,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     console.error("Processing stats error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Failed to get processing stats",
-      error: error instanceof Error ? error.message : "Unknown error"
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 };

@@ -38,6 +38,12 @@ import progressInsightsRouter from "./api/progress-insights";
 import locationEnrollmentsRouter from "./api/location-enrollments";
 import publicStoreRouter from './api/public-store';
 import storeAdminRouter from './api/store-admin';
+import unifiedUploadsRouter from './api/unified-uploads';
+import { registerObjectStorageRoutes } from './replit_integrations/object_storage';
+import {
+  isE2eObjectStorageStubEnabled,
+  saveE2eObject,
+} from './lib/e2e-public-object-storage';
 import { getDb } from "./db";
 import { getNormalizedDatabaseUrl } from "./lib/database-url";
 
@@ -125,40 +131,35 @@ app.use('/api/school-admin/import-users', fileUpload({
   createParentPath: true,
 }));
 
-// Apply fileUpload middleware for school logo uploads
-app.use('/api/schools/upload-logo', fileUpload({
-  useTempFiles: false,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max file size for logos
-  abortOnLimit: true,
-  createParentPath: true,
-}));
-
-// Apply fileUpload middleware for school document uploads
-app.use('/api/schools/documents/upload', fileUpload({
-  useTempFiles: false,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max file size for documents
-  abortOnLimit: true,
-  createParentPath: true,
-}));
-
-// Custom form public attachments (e.g. resume on mentor application)
-app.use('/api/custom-forms/forms/:formId/upload-attachment', fileUpload({
-  useTempFiles: false,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  abortOnLimit: true,
-  createParentPath: true,
-}));
-
-// Public store merch product images
-app.use('/api/school-admin/public-store/upload', fileUpload({
-  useTempFiles: false,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  abortOnLimit: true,
-  createParentPath: true,
-}));
-
-// Serve static files from uploads directory
+// Serve static files from uploads directory (legacy local uploads only)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Object storage: /objects/* (private) and /public/* (public catalog assets)
+registerObjectStorageRoutes(app);
+
+// E2E presigned upload stub — accepts PUT from uploadClient during Playwright runs
+if (isE2eObjectStorageStubEnabled()) {
+  app.put(
+    '/api/test/e2e-object-upload',
+    express.raw({ type: '*/*', limit: '5mb' }),
+    (req, res) => {
+      try {
+        const objectPath = typeof req.query.objectPath === 'string' ? req.query.objectPath : '';
+        const contentType =
+          typeof req.query.contentType === 'string' ? req.query.contentType : undefined;
+        if (!objectPath.startsWith('/public/') && !objectPath.startsWith('/objects/')) {
+          return res.status(400).json({ error: 'Invalid objectPath' });
+        }
+        const body = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body ?? '');
+        saveE2eObject(objectPath, body, contentType);
+        return res.status(200).end();
+      } catch (error) {
+        console.error('E2E object upload stub failed:', error);
+        return res.status(500).json({ error: 'Failed to save stub object' });
+      }
+    },
+  );
+}
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -215,6 +216,7 @@ app.use("/api/progress", progressRouter);
 app.use("/api/progress/insights", progressInsightsRouter);
 app.use("/api/location-enrollments", locationEnrollmentsRouter);
 app.use("/api/public/store", publicStoreRouter);
+app.use("/api/unified-uploads", unifiedUploadsRouter);
 app.use("/api/school-admin/public-store", storeAdminRouter);
 
 // Test endpoints for development

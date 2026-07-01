@@ -3,6 +3,7 @@ import {
   postSetupPublicFormScenario,
   type SetupPublicFormScenarioResponse,
 } from "./helpers/testSeed";
+import { runPublicFormPresignedUpload } from "./helpers/publicFormPresignedUpload";
 
 /**
  * Public Form Builder forms: no login required via /forms/:slug and public API routes.
@@ -75,36 +76,26 @@ test.describe("public custom forms", () => {
     expect(body.formId).toBe(seed.publicForm.id);
   });
 
-  test("anonymous POST upload-attachment succeeds for public form", async ({ request }) => {
-    const res = await request.post(
-      `/api/custom-forms/forms/${seed.publicForm.id}/upload-attachment`,
-      {
-        multipart: {
-          file: {
-            name: "e2e-resume.pdf",
-            mimeType: "application/pdf",
-            buffer: Buffer.from("%PDF-1.4 e2e resume stub"),
-          },
-        },
-      },
+  test("anonymous presigned form attachment succeeds for public form", async ({ request }) => {
+    const body = await runPublicFormPresignedUpload(
+      request,
+      seed.publicForm.id,
+      Buffer.from("%PDF-1.4 e2e resume stub"),
+      "e2e-resume.pdf",
+      "application/pdf",
     );
-    expect(res.ok(), await res.text()).toBeTruthy();
-    const body = await res.json();
-    expect(body.success).toBe(true);
     expect(body.fileName).toBe("e2e-resume.pdf");
-    expect(body.objectPath).toMatch(/^\/objects\//);
+    expect(body.objectPath).toMatch(/^\/objects\/form-attachments\//);
   });
 
-  test("upload-attachment on members-only form returns 404", async ({ request }) => {
+  test("presigned upload on members-only form returns 404", async ({ request }) => {
     const res = await request.post(
-      `/api/custom-forms/forms/${seed.membersForm.id}/upload-attachment`,
+      `/api/custom-forms/forms/${seed.membersForm.id}/request-upload-url`,
       {
-        multipart: {
-          file: {
-            name: "blocked.pdf",
-            mimeType: "application/pdf",
-            buffer: Buffer.from("%PDF-1.4"),
-          },
+        data: {
+          name: "blocked.pdf",
+          size: 12,
+          contentType: "application/pdf",
         },
       },
     );
@@ -153,7 +144,7 @@ test.describe("public custom forms", () => {
     const uploadResponse = page.waitForResponse(
       (r) =>
         r.url().includes(
-          `/api/custom-forms/forms/${seed.publicForm.id}/upload-attachment`,
+          `/api/custom-forms/forms/${seed.publicForm.id}/confirm-upload`,
         ) && r.request().method() === "POST",
       { timeout: 30_000 },
     );

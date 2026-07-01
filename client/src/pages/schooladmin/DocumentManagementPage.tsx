@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { uploadFile } from '@/lib/uploadClient';
 import { useAuth } from '@/components/SupabaseProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -281,19 +282,20 @@ export default function DocumentManagementPage() {
         const baseName = file.name.replace(/\.[^/.]+$/, '');
         const title = single ? (uploadForm.title || baseName) : baseName;
 
-        const formData = new FormData();
-        formData.append('document', file);
-        formData.append('title', title);
-        formData.append('description', uploadForm.description);
-        formData.append('category', uploadForm.category);
-        formData.append('isPublished', uploadForm.isPublished.toString());
-        formData.append('visibleToAll', uploadForm.visibleToAll.toString());
-        if (uploadForm.expiresAt) {
-          formData.append('expiresAt', uploadForm.expiresAt);
-        }
-
         try {
-          const response = await apiRequest('POST', '/api/schools/documents/upload', formData);
+          const uploadResult = await uploadFile(file, { category: 'documents' });
+          const response = await apiRequest('POST', '/api/schools/documents/upload', {
+            objectPath: uploadResult.objectPath,
+            fileName: file.name,
+            mimeType: file.type || uploadResult.mimeType,
+            sizeBytes: file.size,
+            title,
+            description: uploadForm.description,
+            category: uploadForm.category,
+            isPublished: uploadForm.isPublished,
+            visibleToAll: uploadForm.visibleToAll,
+            ...(uploadForm.expiresAt ? { expiresAt: uploadForm.expiresAt } : {}),
+          });
           const data = await response.json();
           if (!response.ok) {
             errors.push(`${file.name}: ${data.message || 'upload failed'}`);

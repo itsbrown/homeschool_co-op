@@ -1,5 +1,12 @@
 import type { Express } from "express";
+import fs from "fs";
+import path from "path";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import {
+  e2eObjectLocalPath,
+  isE2eObjectStorageStubEnabled,
+  readE2eObjectMeta,
+} from "../../lib/e2e-public-object-storage";
 
 /**
  * Register object storage routes for file uploads.
@@ -72,6 +79,19 @@ export function registerObjectStorageRoutes(app: Express): void {
    */
   app.get("/objects/:objectPath(*)", async (req, res) => {
     try {
+      const objectPath = `/objects/${req.params.objectPath}`;
+
+      if (isE2eObjectStorageStubEnabled()) {
+        const localPath = e2eObjectLocalPath(objectPath);
+        if (localPath && fs.existsSync(localPath)) {
+          const meta = readE2eObjectMeta(localPath);
+          if (meta.contentType) {
+            res.setHeader("Content-Type", meta.contentType);
+          }
+          return res.sendFile(path.resolve(localPath));
+        }
+      }
+
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
       await objectStorageService.downloadObject(objectFile, res);
     } catch (error) {
@@ -79,6 +99,39 @@ export function registerObjectStorageRoutes(app: Express): void {
       if (error instanceof ObjectNotFoundError) {
         return res.status(404).json({ error: "Object not found" });
       }
+      return res.status(500).json({ error: "Failed to serve object" });
+    }
+  });
+
+  /**
+   * Serve public object storage assets (logos, store images, etc.).
+   *
+   * GET /public/:objectPath(*)
+   *
+   * URLs stored in the DB look like `/public/store-programs/school-1/2026-06-01/uuid.jpg`.
+   */
+  app.get("/public/:objectPath(*)", async (req, res) => {
+    try {
+      const objectPath = `/public/${req.params.objectPath}`;
+
+      if (isE2eObjectStorageStubEnabled()) {
+        const localPath = e2eObjectLocalPath(objectPath);
+        if (localPath && fs.existsSync(localPath)) {
+          const meta = readE2eObjectMeta(localPath);
+          if (meta.contentType) {
+            res.setHeader("Content-Type", meta.contentType);
+          }
+          return res.sendFile(path.resolve(localPath));
+        }
+      }
+
+      const objectFile = await objectStorageService.searchPublicObject(req.params.objectPath);
+      if (!objectFile) {
+        return res.status(404).json({ error: "Object not found" });
+      }
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error serving public object:", error);
       return res.status(500).json({ error: "Failed to serve object" });
     }
   });
