@@ -93,8 +93,18 @@ export default function PublicStorePage() {
         </div>
       )}
 
-      <main className="mx-auto max-w-5xl px-4 py-8 grid gap-4 md:grid-cols-2">
-        {items.map((item) => (
+      <main className="mx-auto max-w-5xl px-4 py-8">
+        {catalogData && items.length === 0 ? (
+          <div className="rounded-lg border border-dashed bg-white px-6 py-16 text-center">
+            <p className="text-lg font-medium text-slate-900">Nothing listed yet</p>
+            <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
+              This store is active, but no programs or products have been published. Check back
+              soon, or contact the school if you expected to see something here.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {items.map((item) => (
           <Card
             key={`${item.listingType}-${item.listingId}`}
             className="overflow-hidden flex flex-col"
@@ -130,7 +140,7 @@ export default function PublicStorePage() {
               {item.description && (
                 <p className="text-sm text-muted-foreground line-clamp-3 flex-1">{item.description}</p>
               )}
-              <div className="space-y-3 mt-auto">
+              <div className="flex flex-col gap-3 mt-auto w-full pt-1">
                 <StoreCatalogItemActions
                   item={item}
                   onAddProduct={addProduct}
@@ -138,13 +148,20 @@ export default function PublicStorePage() {
                     onAddProgram(programItem, variant, isAuthenticated)
                   }
                 />
-                <Button variant="link" className="h-auto p-0 text-sm" asChild>
+                <Button
+                  variant="outline"
+                  className="w-full min-h-11"
+                  asChild
+                  data-testid={`store-view-details-${item.listingId}`}
+                >
                   <Link href={storeItemDetailPath(schoolSlug, item.listingId)}>View details</Link>
                 </Button>
               </div>
             </CardContent>
           </Card>
-        ))}
+            ))}
+          </div>
+        )}
       </main>
 
       {cartCount > 0 && (

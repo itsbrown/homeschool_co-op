@@ -22,13 +22,15 @@ import { formatStoreCartMoney } from "@/lib/store-cart";
 import { ShoppingCart } from "lucide-react";
 import { safeFormatDate } from "@/utils/safeFormatDate";
 
+const STORE_DATE_FORMAT = "MMM d, yyyy";
+
 function formatDateRange(start?: string | null, end?: string | null): string | null {
   if (!start && !end) return null;
   if (start && end) {
-    return `${safeFormatDate(start)} – ${safeFormatDate(end)}`;
+    return `${safeFormatDate(start, STORE_DATE_FORMAT)} – ${safeFormatDate(end, STORE_DATE_FORMAT)}`;
   }
-  if (start) return `Starts ${safeFormatDate(start)}`;
-  return `Through ${safeFormatDate(end!)}`;
+  if (start) return `Starts ${safeFormatDate(start, STORE_DATE_FORMAT)}`;
+  return `Through ${safeFormatDate(end!, STORE_DATE_FORMAT)}`;
 }
 
 export default function PublicStoreItemPage() {
@@ -56,11 +58,21 @@ export default function PublicStoreItemPage() {
 
   const { data: store } = useQuery({
     queryKey: ["/api/public/store", schoolSlug],
+    queryFn: async () => {
+      const res = await fetch(`/api/public/store/${schoolSlug}`);
+      if (!res.ok) throw new Error("Store not found");
+      return res.json();
+    },
     enabled: !!schoolSlug,
   });
 
   const { data, isLoading, isError } = useQuery<{ item: StoreCatalogItem }>({
     queryKey: ["/api/public/store", schoolSlug, "catalog", listingId],
+    queryFn: async () => {
+      const res = await fetch(`/api/public/store/${schoolSlug}/catalog/${listingId}`);
+      if (!res.ok) throw new Error("Item not found");
+      return res.json();
+    },
     enabled: !!schoolSlug && !!listingId,
   });
 

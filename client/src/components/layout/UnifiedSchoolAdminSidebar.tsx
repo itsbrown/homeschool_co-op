@@ -281,9 +281,11 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     });
   };
   
-  const hasSuperAdminRole = hasRole('superadmin');
+  const hasSuperAdminRole =
+    availableRoles.some((r) => r.role.toLowerCase() === 'superadmin') || hasRole('superAdmin');
   const { showPublicStoreInNav } = useSchoolFeatures();
-  const navGroups = buildAdminNavGroups(showPublicStoreInNav || hasSuperAdminRole);
+  // School admins always need the config UI; public storefront is gated separately.
+  const navGroups = buildAdminNavGroups(showAdminNavGroups || showPublicStoreInNav || hasSuperAdminRole);
 
   // Fetch school data for logo and name (for any school-scoped role)
   const { data: schoolData } = useQuery<SchoolData>({

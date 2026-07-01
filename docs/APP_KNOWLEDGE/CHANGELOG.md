@@ -24,6 +24,11 @@
 - **Success page:** Branded confirmation with order summary, formatted order ID, cart cleared from session storage.
 - **E2E:** `publicStoreCheckout.ts` fills emergency contact + grade select; success assertions on order number and child name.
 
+## 2026-07-01 (Public store — item detail crash & card actions)
+
+- **Fix:** Item detail page crashed when listing had dates — `safeFormatDate` was called without a format string in `PublicStoreItemPage`.
+- **UI:** Catalog cards stack Add + View details vertically (full-width, 44px min touch targets); item detail queries use explicit `queryFn`.
+
 ## 2026-07-01 (Public store — item detail pages)
 
 - **UI:** `/store/:slug/item/:listingId` shows full description, hero image, dates, and add-to-cart; catalog cards link via title/image and “View details”.

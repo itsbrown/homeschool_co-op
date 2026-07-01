@@ -14,7 +14,13 @@ export function StoreCatalogItemActions({
   onAddProgram,
   layout = "card",
 }: StoreCatalogItemActionsProps) {
-  const buttonClass = layout === "detail" ? "min-w-[10rem]" : undefined;
+  const isCard = layout === "card";
+  const buttonClass = isCard
+    ? "w-full min-h-11"
+    : "w-full min-h-11 sm:w-auto sm:min-w-[10rem]";
+  const groupClass = isCard
+    ? "flex flex-col gap-2 w-full"
+    : "flex flex-col sm:flex-row flex-wrap gap-2 w-full";
 
   if (item.listingType === "product") {
     return (
@@ -31,7 +37,7 @@ export function StoreCatalogItemActions({
 
   if (item.listingType === "session") {
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className={groupClass}>
         {item.halfDayPrice != null && (
           <Button
             variant="outline"
