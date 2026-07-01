@@ -5,18 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useToast } from "@/hooks/use-toast";
 import { loadStoreCart, saveStoreCart, type StoreCartState } from "@/lib/store-cart";
 import { StoreCartReview } from "@/components/store/StoreCartReview";
+import { StoreCheckoutChildFields } from "@/components/store/StoreCheckoutChildFields";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
+import {
+  isChildDraftComplete,
+  isEmergencyContactComplete,
+  isParentContactComplete,
+  type StoreChildAssignment,
+  type StoreEmergencyContact,
+  type StoreParentContact,
+} from "@/lib/store-checkout";
 
 type SnapshotLine = {
   lineId: string;
@@ -26,6 +28,56 @@ type SnapshotLine = {
   waitlistPosition?: number | null;
   listingType: string;
 };
+
+type StoreInfo = {
+  name: string;
+  logo?: string | null;
+};
+
+const STEP_LABELS: Record<number, string> = {
+  1: "Cart",
+  2: "Contact",
+  3: "Children",
+  4: "Payment",
+};
+
+function CheckoutStepIndicator({ step, maxStep }: { step: number; maxStep: number }) {
+  const labels =
+    maxStep === 3
+      ? ["Cart", "Contact", "Payment"]
+      : ["Cart", "Contact", "Children", "Payment"];
+
+  return (
+    <ol className="flex items-center gap-2 text-xs sm:text-sm" aria-label="Checkout progress">
+      {labels.map((label, index) => {
+        const stepNum = index + 1;
+        const active = step === stepNum;
+        const done = step > stepNum;
+        return (
+          <li key={label} className="flex items-center gap-2 min-w-0">
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
+                done
+                  ? "bg-green-600 text-white"
+                  : active
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-200 text-slate-600"
+              }`}
+            >
+              {done ? "✓" : stepNum}
+            </span>
+            <span className={`truncate ${active ? "font-medium" : "text-muted-foreground"}`}>
+              {label}
+            </span>
+            {index < labels.length - 1 && (
+              <span className="hidden sm:inline text-muted-foreground">→</span>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
 export default function PublicStoreCheckoutPage() {
   const { schoolSlug = "" } = useParams<{ schoolSlug: string }>();
@@ -42,18 +94,32 @@ export default function PublicStoreCheckoutPage() {
   const [step, setStep] = useState(1);
   const maxStep = hasPrograms ? 4 : 3;
 
-  const [parent, setParent] = useState({
+  const [parent, setParent] = useState<StoreParentContact>({
     firstName: (user as any)?.firstName ?? "",
     lastName: (user as any)?.lastName ?? "",
     email: user?.email ?? "",
     phone: "",
   });
 
-  const [childAssignments, setChildAssignments] = useState<
-    Record<string, { childId?: number; draft?: { firstName: string; lastName: string; birthdate: string; gradeLevel: string } }>
-  >({});
+  const [emergencyContact, setEmergencyContact] = useState<StoreEmergencyContact>({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    relationship: "",
+  });
+
+  const [childAssignments, setChildAssignments] = useState<Record<string, StoreChildAssignment>>({});
 
   const programLines = cart.lines.filter((l) => l.listingType !== "product");
+
+  const { data: store } = useQuery<StoreInfo>({
+    queryKey: ["/api/public/store", schoolSlug],
+    queryFn: async () => {
+      const res = await fetch(`/api/public/store/${schoolSlug}`);
+      if (!res.ok) throw new Error("Store not found");
+      return res.json();
+    },
+  });
 
   const { data: children = [] } = useQuery({
     queryKey: ["/api/parent/children"],
@@ -104,6 +170,59 @@ export default function PublicStoreCheckoutPage() {
     if (step === maxStep) refetchSnapshot();
   }, [step, maxStep, refetchSnapshot]);
 
+  const setChildAssignment = (lineId: string, value: StoreChildAssignment) => {
+    setChildAssignments((prev) => ({ ...prev, [lineId]: value }));
+  };
+
+  const copyFirstChildToAll = () => {
+    const firstLineId = programLines[0]?.lineId;
+    if (!firstLineId) return;
+    const source = childAssignments[firstLineId];
+    if (!source) return;
+    const next: Record<string, StoreChildAssignment> = {};
+    for (const line of programLines) {
+      next[line.lineId] = { ...source };
+    }
+    setChildAssignments(next);
+    toast({ title: "Applied to all programs", description: "The same child is assigned to each program." });
+  };
+
+  const validateStep2 = (): boolean => {
+    if (!isParentContactComplete(parent)) {
+      toast({
+        title: "Contact information incomplete",
+        description: "Please fill in your name, email, and phone number.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    if (hasPrograms && !isEmergencyContactComplete(emergencyContact)) {
+      toast({
+        title: "Emergency contact required",
+        description: "Please provide an emergency contact for program enrollment.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const validateStep3 = (): boolean => {
+    for (const line of programLines) {
+      const assignment = childAssignments[line.lineId];
+      if (assignment?.childId) continue;
+      if (!isChildDraftComplete(assignment?.draft)) {
+        toast({
+          title: "Child information incomplete",
+          description: `Please complete child details for ${line.title}.`,
+          variant: "destructive",
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
   const submitCheckout = async () => {
     const token = localStorage.getItem("supabase_token");
     const assignments = programLines.map((line) => ({
@@ -121,6 +240,7 @@ export default function PublicStoreCheckoutPage() {
       body: JSON.stringify({
         cart: cartPayload,
         parent,
+        emergencyContact: hasPrograms ? emergencyContact : undefined,
         childAssignments: assignments,
       }),
     });
@@ -163,21 +283,37 @@ export default function PublicStoreCheckoutPage() {
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="mx-auto max-w-2xl px-4 space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Checkout</h1>
-          <Link href={`/store/${schoolSlug}`} className="text-sm text-blue-700 underline">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            {store?.logo && (
+              <img
+                src={store.logo}
+                alt=""
+                className="h-10 w-10 rounded-full object-cover shrink-0"
+              />
+            )}
+            <div className="min-w-0">
+              <h1 className="text-2xl font-semibold truncate">Checkout</h1>
+              {store?.name && (
+                <p className="text-sm text-muted-foreground truncate">{store.name}</p>
+              )}
+            </div>
+          </div>
+          <Link href={`/store/${schoolSlug}`} className="text-sm text-blue-700 underline shrink-0">
             Back to store
           </Link>
         </div>
 
+        <CheckoutStepIndicator step={step} maxStep={maxStep} />
         <p className="text-sm text-muted-foreground">
           Step {step} of {maxStep}
+          {STEP_LABELS[step] ? ` — ${STEP_LABELS[step]}` : ""}
         </p>
 
         {step === 1 && (
           <Card>
             <CardHeader>
-              <CardTitle>Cart review</CardTitle>
+              <CardTitle>Review your cart</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <StoreCartReview cart={cart} onCartChange={setCart} />
@@ -196,45 +332,126 @@ export default function PublicStoreCheckoutPage() {
         {step === 2 && (
           <Card>
             <CardHeader>
-              <CardTitle>Parent contact</CardTitle>
+              <CardTitle>Parent / guardian contact</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+            <CardContent className="space-y-6">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="store-checkout-parent-first-name">First name</Label>
+                    <Input
+                      id="store-checkout-parent-first-name"
+                      value={parent.firstName}
+                      onChange={(e) => setParent({ ...parent, firstName: e.target.value })}
+                      autoComplete="given-name"
+                      data-testid="store-checkout-parent-first-name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="store-checkout-parent-last-name">Last name</Label>
+                    <Input
+                      id="store-checkout-parent-last-name"
+                      value={parent.lastName}
+                      onChange={(e) => setParent({ ...parent, lastName: e.target.value })}
+                      autoComplete="family-name"
+                      data-testid="store-checkout-parent-last-name"
+                    />
+                  </div>
+                </div>
                 <div>
-                  <Label>First name</Label>
+                  <Label htmlFor="store-checkout-parent-email">Email</Label>
                   <Input
-                    value={parent.firstName}
-                    onChange={(e) => setParent({ ...parent, firstName: e.target.value })}
-                    data-testid="store-checkout-parent-first-name"
+                    id="store-checkout-parent-email"
+                    type="email"
+                    value={parent.email}
+                    onChange={(e) => setParent({ ...parent, email: e.target.value })}
+                    autoComplete="email"
+                    data-testid="store-checkout-parent-email"
                   />
                 </div>
                 <div>
-                  <Label>Last name</Label>
+                  <Label htmlFor="store-checkout-parent-phone">Phone</Label>
                   <Input
-                    value={parent.lastName}
-                    onChange={(e) => setParent({ ...parent, lastName: e.target.value })}
-                    data-testid="store-checkout-parent-last-name"
+                    id="store-checkout-parent-phone"
+                    type="tel"
+                    value={parent.phone}
+                    onChange={(e) => setParent({ ...parent, phone: e.target.value })}
+                    autoComplete="tel"
+                    data-testid="store-checkout-parent-phone"
                   />
                 </div>
               </div>
-              <div>
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={parent.email}
-                  onChange={(e) => setParent({ ...parent, email: e.target.value })}
-                  data-testid="store-checkout-parent-email"
-                />
-              </div>
-              <div>
-                <Label>Phone</Label>
-                <Input
-                  value={parent.phone}
-                  onChange={(e) => setParent({ ...parent, phone: e.target.value })}
-                  data-testid="store-checkout-parent-phone"
-                />
-              </div>
-              <Button className="w-full" onClick={() => setStep(hasPrograms ? 3 : maxStep)} data-testid="store-checkout-step2-continue">
+
+              {hasPrograms && (
+                <div className="space-y-3 pt-2 border-t">
+                  <div>
+                    <h3 className="font-medium">Emergency contact</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Required for program enrollment. This person can be reached if we cannot
+                      reach you during an activity.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="store-checkout-emergency-first-name">First name</Label>
+                      <Input
+                        id="store-checkout-emergency-first-name"
+                        value={emergencyContact.firstName}
+                        onChange={(e) =>
+                          setEmergencyContact({ ...emergencyContact, firstName: e.target.value })
+                        }
+                        data-testid="store-checkout-emergency-first-name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="store-checkout-emergency-last-name">Last name</Label>
+                      <Input
+                        id="store-checkout-emergency-last-name"
+                        value={emergencyContact.lastName}
+                        onChange={(e) =>
+                          setEmergencyContact({ ...emergencyContact, lastName: e.target.value })
+                        }
+                        data-testid="store-checkout-emergency-last-name"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="store-checkout-emergency-phone">Phone</Label>
+                      <Input
+                        id="store-checkout-emergency-phone"
+                        type="tel"
+                        value={emergencyContact.phone}
+                        onChange={(e) =>
+                          setEmergencyContact({ ...emergencyContact, phone: e.target.value })
+                        }
+                        data-testid="store-checkout-emergency-phone"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="store-checkout-emergency-relationship">Relationship</Label>
+                      <Input
+                        id="store-checkout-emergency-relationship"
+                        placeholder="e.g. Parent, Grandparent, Aunt"
+                        value={emergencyContact.relationship}
+                        onChange={(e) =>
+                          setEmergencyContact({ ...emergencyContact, relationship: e.target.value })
+                        }
+                        data-testid="store-checkout-emergency-relationship"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Button
+                className="w-full"
+                onClick={() => {
+                  if (!validateStep2()) return;
+                  setStep(hasPrograms ? 3 : maxStep);
+                }}
+                data-testid="store-checkout-step2-continue"
+              >
                 Continue
               </Button>
             </CardContent>
@@ -244,135 +461,46 @@ export default function PublicStoreCheckoutPage() {
         {step === 3 && hasPrograms && (
           <Card>
             <CardHeader>
-              <CardTitle>Children</CardTitle>
+              <CardTitle>Register children</CardTitle>
+              <p className="text-sm text-muted-foreground font-normal">
+                {programLines.length === 1
+                  ? "Tell us who will attend this program."
+                  : "Each program needs its own child assignment. You can register a different child for each program, or use the same child for all."}
+              </p>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4">
               {!isAuthenticated && (
-                <p className="text-sm">
+                <p className="text-sm rounded-md bg-blue-50 border border-blue-100 p-3">
                   <Link
                     href={`/login?returnTo=${encodeURIComponent(`/store/${schoolSlug}/checkout`)}`}
-                    className="text-blue-700 underline"
+                    className="text-blue-700 underline font-medium"
                   >
-                    Sign in to use saved children
-                  </Link>
+                    Sign in
+                  </Link>{" "}
+                  to use children you have already registered.
                 </p>
               )}
-              {programLines.map((line) => (
-                <div key={line.lineId} className="border rounded-lg p-4 space-y-3">
-                  <p className="font-medium text-sm">{line.title}</p>
-                  {isAuthenticated && children.length > 0 ? (
-                    <Select
-                      value={childAssignments[line.lineId]?.childId?.toString() ?? ""}
-                      onValueChange={(v) =>
-                        setChildAssignments((prev) => ({
-                          ...prev,
-                          [line.lineId]: { childId: parseInt(v, 10) },
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select child" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {children.map((c: any) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.firstName} {c.lastName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        placeholder="First name"
-                        data-testid="store-checkout-child-first-name"
-                        onChange={(e) =>
-                          setChildAssignments((prev) => ({
-                            ...prev,
-                            [line.lineId]: {
-                              ...prev[line.lineId],
-                              draft: {
-                                ...(prev[line.lineId]?.draft ?? {
-                                  firstName: "",
-                                  lastName: "",
-                                  birthdate: "",
-                                  gradeLevel: "",
-                                }),
-                                firstName: e.target.value,
-                              },
-                            },
-                          }))
-                        }
-                      />
-                      <Input
-                        placeholder="Last name"
-                        data-testid="store-checkout-child-last-name"
-                        onChange={(e) =>
-                          setChildAssignments((prev) => ({
-                            ...prev,
-                            [line.lineId]: {
-                              ...prev[line.lineId],
-                              draft: {
-                                ...(prev[line.lineId]?.draft ?? {
-                                  firstName: "",
-                                  lastName: "",
-                                  birthdate: "",
-                                  gradeLevel: "",
-                                }),
-                                lastName: e.target.value,
-                              },
-                            },
-                          }))
-                        }
-                      />
-                      <Input
-                        type="date"
-                        placeholder="Birthdate"
-                        data-testid="store-checkout-child-birthdate"
-                        onChange={(e) =>
-                          setChildAssignments((prev) => ({
-                            ...prev,
-                            [line.lineId]: {
-                              ...prev[line.lineId],
-                              draft: {
-                                ...(prev[line.lineId]?.draft ?? {
-                                  firstName: "",
-                                  lastName: "",
-                                  birthdate: "",
-                                  gradeLevel: "",
-                                }),
-                                birthdate: e.target.value,
-                              },
-                            },
-                          }))
-                        }
-                      />
-                      <Input
-                        placeholder="Grade"
-                        data-testid="store-checkout-child-grade"
-                        onChange={(e) =>
-                          setChildAssignments((prev) => ({
-                            ...prev,
-                            [line.lineId]: {
-                              ...prev[line.lineId],
-                              draft: {
-                                ...(prev[line.lineId]?.draft ?? {
-                                  firstName: "",
-                                  lastName: "",
-                                  birthdate: "",
-                                  gradeLevel: "",
-                                }),
-                                gradeLevel: e.target.value,
-                              },
-                            },
-                          }))
-                        }
-                      />
-                    </div>
-                  )}
-                </div>
+              {programLines.map((line, index) => (
+                <StoreCheckoutChildFields
+                  key={line.lineId}
+                  lineId={line.lineId}
+                  programTitle={line.title}
+                  isAuthenticated={isAuthenticated}
+                  children={children}
+                  assignment={childAssignments[line.lineId]}
+                  onChange={setChildAssignment}
+                  showCopyHint={programLines.length > 1 && index === 0}
+                  onCopyToAll={copyFirstChildToAll}
+                />
               ))}
-              <Button className="w-full" onClick={() => setStep(4)} data-testid="store-checkout-step3-continue">
+              <Button
+                className="w-full"
+                onClick={() => {
+                  if (!validateStep3()) return;
+                  setStep(4);
+                }}
+                data-testid="store-checkout-step3-continue"
+              >
                 Continue to payment
               </Button>
             </CardContent>
@@ -382,18 +510,18 @@ export default function PublicStoreCheckoutPage() {
         {step === maxStep && (
           <Card>
             <CardHeader>
-              <CardTitle>Pay in full</CardTitle>
+              <CardTitle>Payment summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {(snapshot?.lines as SnapshotLine[] | undefined)?.map((line) => (
-                <div key={line.lineId} className="flex justify-between text-sm">
+                <div key={line.lineId} className="flex justify-between text-sm gap-4">
                   <span>
                     {line.title}
                     {line.fulfillment === "waitlist" && (
                       <span className="text-amber-700 ml-1">(Waitlist — no charge)</span>
                     )}
                   </span>
-                  <span>${(line.lineTotalCents / 100).toFixed(2)}</span>
+                  <span className="shrink-0">${(line.lineTotalCents / 100).toFixed(2)}</span>
                 </div>
               ))}
               {snapshot?.membershipTotalCents > 0 && (

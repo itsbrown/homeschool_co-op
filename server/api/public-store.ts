@@ -12,9 +12,7 @@ import {
 import {
   getSchoolByStoreSlug,
   getPublishedStoreListings,
-  getStoreProductById,
-  getSessionById,
-  getClassById,
+  getPublishedStoreListingById,
   saveStoreCheckoutSnapshot,
   getStoreCheckoutSnapshot,
   createStoreOrder,
@@ -28,7 +26,12 @@ import {
 } from '../lib/store-guest-checkout';
 import { fulfillStoreCheckoutWithoutPayment } from '../lib/store-fulfillment';
 import { resolveStoreDeliveryDocuments } from '../lib/store-documents';
-import { isClassEligibleForPublicStore } from '../lib/store-programs';
+import { ensureDeliveryDocumentShareTokens } from '../lib/store-confirmation-email';
+import { buildStoreCatalogItem } from '../lib/store-catalog-items';
+import {
+  formatStoreOrderNumber,
+  persistStoreEmergencyContact,
+} from '../lib/store-checkout-contact';
 import { storage } from '../storage';
 
 const router = Router();
@@ -55,6 +58,13 @@ const snapshotBodySchema = z.object({
   cart: z.array(cartLineSchema).min(1),
 });
 
+const emergencyContactSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  phone: z.string().min(10),
+  relationship: z.string().min(1),
+});
+
 const checkoutBodySchema = snapshotBodySchema.extend({
   parent: z.object({
     firstName: z.string().min(1),
@@ -62,6 +72,7 @@ const checkoutBodySchema = snapshotBodySchema.extend({
     email: z.string().email(),
     phone: z.string().optional(),
   }),
+  emergencyContact: emergencyContactSchema.optional(),
   childAssignments: z.array(
     z.object({
       lineId: z.string().min(1),
@@ -119,65 +130,37 @@ router.get('/:storeSlug/catalog', async (req, res) => {
     const catalog = [];
 
     for (const listing of listings) {
-      if (listing.listingType === 'product') {
-        const product = await getStoreProductById(listing.sourceId);
-        if (!product?.isActive) continue;
-        catalog.push({
-          listingId: listing.id,
-          listingType: 'product',
-          sourceId: product.id,
-          title: product.name,
-          description: product.description,
-          priceCents: product.priceCents,
-          imageUrl: product.imageUrl,
-          membersOnly: listing.membersOnly,
-          sortOrder: listing.sortOrder,
-          inStock: product.inventoryQty == null || product.inventoryQty > 0,
-        });
-        continue;
-      }
-      if (listing.listingType === 'session') {
-        const session = await getSessionById(listing.sourceId);
-        if (!session || !session.enrollmentOpen) continue;
-        catalog.push({
-          listingId: listing.id,
-          listingType: 'session',
-          sourceId: session.id,
-          title: session.name,
-          description: session.description,
-          halfDayPrice: session.halfDayPrice,
-          fullDayPrice: session.fullDayPrice,
-          imageUrl: session.coverImage,
-          startDate: session.startDate,
-          endDate: session.endDate,
-          membersOnly: listing.membersOnly,
-          sortOrder: listing.sortOrder,
-        });
-        continue;
-      }
-      if (listing.listingType === 'class') {
-        const cls = await getClassById(listing.sourceId);
-        if (!cls || !isClassEligibleForPublicStore(cls)) continue;
-        catalog.push({
-          listingId: listing.id,
-          listingType: 'class',
-          sourceId: cls.id,
-          title: cls.title,
-          description: cls.description,
-          priceCents: cls.price,
-          imageUrl: cls.coverImage,
-          startDate: cls.startDate,
-          endDate: cls.endDate,
-          membersOnly: listing.membersOnly,
-          sortOrder: listing.sortOrder,
-        });
-      }
+      const item = await buildStoreCatalogItem(listing);
+      if (item) catalog.push(item);
     }
 
     res.json({ items: catalog.sort((a, b) => a.sortOrder - b.sortOrder) });
   } catch (err) {
     console.error('GET catalog:', err);
     res.status(500).json({ message: 'Failed to load catalog' });
+  }
+});
+
+router.get('/:storeSlug/catalog/:listingId', async (req, res) => {
+  try {
+    const school = await resolveStoreContext(req.params.storeSlug);
+    if (!school) return res.status(404).json({ message: 'Store not found' });
+
+    const listingId = parseInt(req.params.listingId, 10);
+    if (!Number.isFinite(listingId)) {
+      return res.status(400).json({ message: 'Invalid listing id' });
+    }
+
+    const listing = await getPublishedStoreListingById(school.id, listingId);
+    if (!listing) return res.status(404).json({ message: 'Item not found' });
+
+    const item = await buildStoreCatalogItem(listing);
+    if (!item) return res.status(404).json({ message: 'Item not found' });
+
+    res.json({ item });
+  } catch (err) {
+    console.error('GET catalog item:', err);
+    res.status(500).json({ message: 'Failed to load item' });
   }
 });
 
@@ -246,6 +229,16 @@ router.post('/:storeSlug/checkout', async (req, res) => {
       };
     });
 
+    const hasPrograms = parsed.data.cart.some((l) => l.listingType !== 'product');
+    if (hasPrograms) {
+      if (!parsed.data.parent.phone || parsed.data.parent.phone.trim().length < 10) {
+        return res.status(400).json({ message: 'Phone number is required for program enrollment' });
+      }
+      if (!parsed.data.emergencyContact) {
+        return res.status(400).json({ message: 'Emergency contact is required for program enrollment' });
+      }
+    }
+
     const snapshot = await calculateStoreSnapshot({
       schoolId: school.id,
       cartLines: cartWithChildren as StoreCartLineInput[],
@@ -288,6 +281,14 @@ router.post('/:storeSlug/checkout', async (req, res) => {
       });
     }
 
+    if (parsed.data.emergencyContact) {
+      await persistStoreEmergencyContact(
+        parentResult.parentId,
+        parsed.data.parent.email,
+        parsed.data.emergencyContact,
+      );
+    }
+
     const snapshotId = generateStoreSnapshotId();
     const accessToken = generateStoreAccessToken();
     const expiresAt = new Date(Date.now() + STORE_SNAPSHOT_TTL_MS);
@@ -316,6 +317,8 @@ router.post('/:storeSlug/checkout', async (req, res) => {
         parentId: parentResult.parentId,
         parentEmail: parsed.data.parent.email,
         parentName: `${parsed.data.parent.firstName} ${parsed.data.parent.lastName}`,
+        parentPhone: parsed.data.parent.phone ?? null,
+        emergencyContact: parsed.data.emergencyContact ?? null,
         childAssignments,
         pendingStoreOrderId: pendingOrder.id,
         accessToken,
@@ -415,11 +418,65 @@ router.get('/:storeSlug/order/:token', async (req, res) => {
       : null;
     const payload = snapshot?.payload as any;
     const paidLines = payload?.lines?.filter((l: any) => l.fulfillment === 'paid') ?? [];
-    const docs = await resolveStoreDeliveryDocuments(school.id, paidLines);
+    const programLinesForDocs =
+      payload?.lines?.filter((l: any) => l.listingType !== 'product') ?? [];
+    const rawDocs = await resolveStoreDeliveryDocuments(school.id, programLinesForDocs);
+    const shareTokens = await ensureDeliveryDocumentShareTokens(rawDocs);
+    const appBase = (process.env.APP_URL || 'https://accounts.americanseekersacademy.com').replace(
+      /\/$/,
+      '',
+    );
+    const docs = rawDocs.map((d: { id: number; title: string; fileName: string }) => {
+      const token = shareTokens.get(d.id);
+      return {
+        id: d.id,
+        title: d.title,
+        fileName: d.fileName,
+        downloadUrl: token
+          ? `${appBase}/api/schools/documents/public/${token}/download`
+          : undefined,
+      };
+    });
+
+    const childByLine = new Map(
+      (payload?.childAssignments ?? []).map((a: any) => [a.lineId, a]),
+    );
+    const lines = (payload?.lines ?? []).map((line: any) => {
+      const child = childByLine.get(line.lineId);
+      return {
+        lineId: line.lineId,
+        title: line.title,
+        listingType: line.listingType,
+        fulfillment: line.fulfillment,
+        quantity: line.quantity ?? 1,
+        lineTotalCents: line.lineTotalCents,
+        waitlistPosition: line.waitlistPosition ?? null,
+        child: child
+          ? { firstName: child.firstName, lastName: child.lastName }
+          : null,
+      };
+    });
 
     res.json({
-      order,
-      documents: docs.map((d: { id: number; title: string; fileName: string }) => ({ id: d.id, title: d.title, fileName: d.fileName })),
+      store: {
+        name: school.name,
+        logo: school.logo,
+        storeSlug: school.storeSlug,
+      },
+      order: {
+        id: order.id,
+        orderNumber: formatStoreOrderNumber(order.id, order.createdAt),
+        status: order.status,
+        parentEmail: order.parentEmail,
+        parentName: order.parentName,
+        totalCents: order.totalCents,
+        createdAt: order.createdAt,
+      },
+      parentPhone: payload?.parentPhone ?? snapshot?.parentPhone ?? null,
+      emergencyContact: payload?.emergencyContact ?? null,
+      lines,
+      membershipTotalCents: payload?.membershipTotalCents ?? 0,
+      documents: docs,
     });
   } catch (err) {
     console.error('GET order:', err);

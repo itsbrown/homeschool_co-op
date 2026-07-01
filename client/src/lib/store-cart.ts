@@ -32,6 +32,10 @@ export function saveStoreCart(cart: StoreCartState) {
   sessionStorage.setItem(STORE_CART_KEY, JSON.stringify(cart));
 }
 
+export function clearStoreCart() {
+  sessionStorage.removeItem(STORE_CART_KEY);
+}
+
 export function newLineId() {
   return `line_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }

@@ -1,5 +1,34 @@
 # App knowledge changelog
 
+## 2026-07-01 (Parent dashboard — registered campus on children & enrollments)
+
+- **API:** `GET /api/parent/children`, `/api/parent/children/:id`, and `/api/parent/enrollments` now include `locationName` (and `registeredLocationName` on enrollments) resolved from `users.location_id` with child `location_id` fallback via `server/lib/parent-registered-location.ts`.
+- **UI:** Parent Dashboard Children + Enrollments tabs, child profile, children list, and child enrollments page show the family’s registered campus.
+
+## 2026-07-01 (Public store — admin sign-ups export)
+
+- **Admin UI:** Public Store → **Sign-ups** tab with searchable table and CSV export (child, parent, emergency contact, order #, payment).
+- **API:** `GET /api/school-admin/public-store/signups` and `/signups/export`.
+
+## 2026-07-01 (Public store — confirmation email)
+
+- **Email:** Branded store purchase confirmation on fulfillment (paid Stripe + waitlist-only). Order number, child names, confirmation URL, program delivery document download links (auto share tokens).
+- **Idempotency:** `store_orders.metadata.confirmationEmailSentAt`
+- **Future attachments:** `STORE_CONFIRMATION_ATTACH_DOCUMENTS=true` + SendGrid (hook in `buildStoreDeliveryEmailAttachments`)
+- **Success page:** Document download links match email links
+
+## 2026-07-01 (Public store — checkout & confirmation UX)
+
+- **Checkout:** Labeled child fields (DOB, grade select), emergency contact on contact step for programs, one child per program line with “Use same child for all”, step progress indicator, school branding in header.
+- **API:** Checkout accepts `emergencyContact`; persisted via `server/lib/store-checkout-contact.ts`. Order token endpoint returns `orderNumber` (`YYYYMMDD-00001`), store branding, line items with child names.
+- **Success page:** Branded confirmation with order summary, formatted order ID, cart cleared from session storage.
+- **E2E:** `publicStoreCheckout.ts` fills emergency contact + grade select; success assertions on order number and child name.
+
+## 2026-07-01 (Public store — item detail pages)
+
+- **UI:** `/store/:slug/item/:listingId` shows full description, hero image, dates, and add-to-cart; catalog cards link via title/image and “View details”.
+- **API:** `GET /api/public/store/:storeSlug/catalog/:listingId`; shared `buildStoreCatalogItem` in `server/lib/store-catalog-items.ts`.
+
 ## 2026-07-01 (Upload client — Bearer auth for presigned uploads)
 
 - **Fix:** `uploadClient.ts` uses `apiRequest` for `/api/unified-uploads/*` so the Supabase JWT is sent (fixes `Missing or invalid authorization header` on store program/merch, logos, documents, KB, etc.).

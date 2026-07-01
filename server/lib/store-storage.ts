@@ -82,6 +82,25 @@ export async function getPublishedStoreListings(schoolId: number): Promise<Store
     .orderBy(asc(storeListings.sortOrder), asc(storeListings.id));
 }
 
+export async function getPublishedStoreListingById(
+  schoolId: number,
+  listingId: number,
+): Promise<StoreListing | null> {
+  const db = await getDb();
+  const [row] = await db
+    .select()
+    .from(storeListings)
+    .where(
+      and(
+        eq(storeListings.schoolId, schoolId),
+        eq(storeListings.id, listingId),
+        eq(storeListings.isPublished, true),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 export async function getStoreListingBySource(
   schoolId: number,
   listingType: 'product' | 'session' | 'class',

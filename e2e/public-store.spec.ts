@@ -102,6 +102,45 @@ test.describe("public store", () => {
     await expect(img).toHaveClass(/object-cover/);
   });
 
+  test("guest opens item detail page with full description and add to cart", async ({
+    page,
+    request,
+  }) => {
+    const { response, json } = await postSetupPublicStoreScenario(request, {
+      withPublishedProduct: false,
+      withClass: true,
+      withPublishedClassListing: true,
+      classPriceCents: 37500,
+    });
+    test.skip(!response.ok(), `seed failed (${response.status()})`);
+
+    const slug = json!.data!.storeSlug;
+    const classData = json!.data!.class!;
+    const listingId = classData.listingId!;
+    test.skip(!listingId, "class listing not seeded");
+
+    const itemRes = await request.get(`/api/public/store/${slug}/catalog/${listingId}`);
+    expect(itemRes.ok()).toBeTruthy();
+    const itemBody = (await itemRes.json()) as { item: { description: string; title: string } };
+    expect(itemBody.item.title).toBe(classData.title);
+    expect(itemBody.item.description).toContain("Playwright seeded store class");
+
+    await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId(`store-item-link-${listingId}`).click();
+    await expect(page).toHaveURL(new RegExp(`/store/${slug}/item/${listingId}`));
+    await expect(page.getByTestId("store-item-detail")).toBeVisible();
+    await expect(page.getByTestId("store-item-title")).toHaveText(classData.title);
+    await expect(page.getByTestId("store-item-description")).toContainText(
+      "Playwright seeded store class",
+    );
+    await expect(page.getByTestId("store-item-description")).not.toHaveClass(/line-clamp/);
+
+    await page.getByTestId(`store-add-class-${listingId}`).click();
+    await page.getByRole("button", { name: "Continue as guest" }).click();
+    await expect(page.getByText("Added to cart")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
+  });
+
   test("admin uploads image via API and product displays cropped photo on store", async ({
     page,
     request,
@@ -523,19 +562,25 @@ test.describe("public store programs", () => {
       firstName: "Camp",
       lastName: "Kid",
       birthdate: "2015-06-01",
-      gradeLevel: "4",
+      gradeLevel: "4th Grade",
     });
 
     await page.getByTestId("store-checkout-submit").click();
     await page.waitForURL(new RegExp(`/store/${slug}/success`), { timeout: 60_000 });
     await expect(page.getByTestId("store-success-order")).toBeVisible();
     await expect(page.getByText(guestEmail)).toBeVisible();
+    await expect(page.getByTestId("store-success-total")).toBeVisible();
 
     const orderRes = await request.get(
       `/api/public/store/${slug}/order/${new URL(page.url()).searchParams.get("token")}`,
     );
     expect(orderRes.ok()).toBeTruthy();
-    const orderJson = (await orderRes.json()) as { order: { status: string } };
+    const orderJson = (await orderRes.json()) as {
+      order: { status: string; orderNumber: string };
+      lines: { title: string; child?: { firstName: string } | null }[];
+    };
     expect(orderJson.order.status).toBe("paid");
+    expect(orderJson.order.orderNumber).toMatch(/^\d{8}-\d{5}$/);
+    expect(orderJson.lines.some((l) => l.child?.firstName === "Camp")).toBeTruthy();
   });
 });

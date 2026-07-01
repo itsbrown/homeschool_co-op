@@ -19,6 +19,7 @@ import {
   setProgramDeliveryDocuments,
 } from '../lib/store-storage';
 import { getStoreProgramsForSchool, patchStoreProgram } from '../lib/store-programs';
+import { getPublicStoreSignups, buildStoreSignupsCsv } from '../lib/store-signups';
 import { storage } from '../storage';
 
 const router = Router();
@@ -215,6 +216,29 @@ router.get('/orders', async (req: any, res) => {
     res.json(await getStoreOrdersBySchoolId(schoolId));
   } catch (err) {
     handleStoreRouteError(res, err, 'Failed to load store orders');
+  }
+});
+
+router.get('/signups', async (req: any, res) => {
+  try {
+    const schoolId = parseInt(req.schoolId, 10);
+    res.json(await getPublicStoreSignups(schoolId));
+  } catch (err) {
+    handleStoreRouteError(res, err, 'Failed to load store sign-ups');
+  }
+});
+
+router.get('/signups/export', async (req: any, res) => {
+  try {
+    const schoolId = parseInt(req.schoolId, 10);
+    const rows = await getPublicStoreSignups(schoolId);
+    const csv = buildStoreSignupsCsv(rows);
+    const date = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="store-signups-${date}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    handleStoreRouteError(res, err, 'Failed to export store sign-ups');
   }
 });
 

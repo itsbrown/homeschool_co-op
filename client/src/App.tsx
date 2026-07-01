@@ -85,6 +85,7 @@ const RetentionReportPage = lazy(() => import("./pages/schooladmin/RetentionRepo
 const FundraiserStorePage = lazy(() => import("./pages/FundraiserStorePage"));
 const FundraiserSuccessPage = lazy(() => import("./pages/FundraiserSuccessPage"));
 const PublicStorePage = lazy(() => import("./pages/public-store/PublicStorePage"));
+const PublicStoreItemPage = lazy(() => import("./pages/public-store/PublicStoreItemPage"));
 const PublicStoreCheckoutPage = lazy(() => import("./pages/public-store/PublicStoreCheckoutPage"));
 const PublicStoreSuccessPage = lazy(() => import("./pages/public-store/PublicStoreSuccessPage"));
 const PublicStoreManagerPage = lazy(() => import("./pages/schooladmin/PublicStoreManagerPage"));
@@ -766,6 +767,7 @@ function Router() {
       <Route path="/fundraiser/success" component={FundraiserSuccessPage} />
       <Route path="/store/:schoolSlug/checkout" component={PublicStoreCheckoutPage} />
       <Route path="/store/:schoolSlug/success" component={PublicStoreSuccessPage} />
+      <Route path="/store/:schoolSlug/item/:listingId" component={PublicStoreItemPage} />
       <Route path="/store/:schoolSlug" component={PublicStorePage} />
       <Route path="/forms/:slug" component={DynamicFormPage} />
       <Route path="/product-order/:slug" component={ProductOrderFormPage} />

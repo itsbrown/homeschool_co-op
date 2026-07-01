@@ -8,6 +8,13 @@ export type StoreGuestCheckoutContact = {
   phone?: string;
 };
 
+export type StoreGuestEmergencyContact = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  relationship: string;
+};
+
 export type StoreGuestChildDraft = {
   firstName: string;
   lastName: string;
@@ -34,20 +41,29 @@ export async function completeStoreGuestCheckout(
   page: Page,
   contact: StoreGuestCheckoutContact,
   child: StoreGuestChildDraft,
+  emergency: StoreGuestEmergencyContact = {
+    firstName: "Emergency",
+    lastName: "Contact",
+    phone: "5555550199",
+    relationship: "Aunt",
+  },
 ): Promise<void> {
   await page.getByTestId("store-checkout-step1-continue").click();
   await page.getByTestId("store-checkout-parent-first-name").fill(contact.firstName);
   await page.getByTestId("store-checkout-parent-last-name").fill(contact.lastName);
   await page.getByTestId("store-checkout-parent-email").fill(contact.email);
-  if (contact.phone) {
-    await page.getByTestId("store-checkout-parent-phone").fill(contact.phone);
-  }
+  await page.getByTestId("store-checkout-parent-phone").fill(contact.phone ?? "5555550100");
+  await page.getByTestId("store-checkout-emergency-first-name").fill(emergency.firstName);
+  await page.getByTestId("store-checkout-emergency-last-name").fill(emergency.lastName);
+  await page.getByTestId("store-checkout-emergency-phone").fill(emergency.phone);
+  await page.getByTestId("store-checkout-emergency-relationship").fill(emergency.relationship);
   await page.getByTestId("store-checkout-step2-continue").click();
 
   await page.getByTestId("store-checkout-child-first-name").first().fill(child.firstName);
   await page.getByTestId("store-checkout-child-last-name").first().fill(child.lastName);
   await page.getByTestId("store-checkout-child-birthdate").first().fill(child.birthdate);
-  await page.getByTestId("store-checkout-child-grade").first().fill(child.gradeLevel);
+  await page.getByTestId("store-checkout-child-grade").first().click();
+  await page.getByRole("option", { name: child.gradeLevel }).click();
   await page.getByTestId("store-checkout-step3-continue").click();
 }
 

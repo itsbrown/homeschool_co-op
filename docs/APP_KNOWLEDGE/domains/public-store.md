@@ -34,10 +34,13 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 
 - `GET /api/public/store/:storeSlug` — branding
 - `GET /api/public/store/:storeSlug/catalog` — published listings
+- `GET /api/public/store/:storeSlug/catalog/:listingId` — single item detail (full description)
 - `POST /api/public/store/:storeSlug/snapshot` — pricing (optional auth)
 - `POST /api/public/store/:storeSlug/checkout` — Stripe Checkout Session or waitlist-only fulfillment
-- `GET /api/public/store/:storeSlug/order/:token` — guest success page
+- `GET /api/public/store/:storeSlug/order/:token` — guest success page (branding, formatted order number, line items, child names)
 - `GET /api/school-admin/public-store/programs` — admin: sessions + classes with listing state
+- `GET /api/school-admin/public-store/signups` — program + product sign-ups with parent/child/emergency contact
+- `GET /api/school-admin/public-store/signups/export` — CSV download
 - `PATCH /api/school-admin/public-store/programs/:listingType/:sourceId` — publish, members-only, cover image
 - **Uploads:** `/api/unified-uploads/*` with categories `storePrograms`, `storeProducts` (not dedicated store multipart routes)
 
@@ -49,6 +52,21 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 - Pay in full only on store lane (no biweekly/credits/promos)
 - **E2E:** `e2e/public-store.spec.ts` — presigned upload helper `e2e/helpers/presignedUploadFlow.ts`; catalog `imageUrl`, admin UI, guest class checkout
 
+### Guest checkout (programs)
+
+- Steps: cart → parent contact + **emergency contact** → child per program line → payment
+- Each program line requires a child (saved profile or inline draft with labeled DOB + grade)
+- Multiple programs: different children allowed; “Use same child for all” copies first assignment
+- Success: `/store/:slug/success?token=…` — school logo/name, formatted order number, line summary, document download links
+- **Confirmation email:** sent on fulfillment (Stripe webhook or waitlist-only path) via `server/lib/store-confirmation-email.ts` — includes order summary, child names, confirmation link, and download links for **program delivery documents** (attached in Public Store → class/session edit). Idempotent via `store_orders.metadata.confirmationEmailSentAt`. Future: set `STORE_CONFIRMATION_ATTACH_DOCUMENTS=true` with SendGrid to attach files to the email.
+
+### Admin sign-ups
+
+- **Public Store → Sign-ups** tab: searchable table of public store registrations (class/session enrollments + merch line items)
+- Filters: program name, status (enrolled / waitlist / pending / products)
+- **Export CSV** includes child DOB & grade, parent contact, emergency contact, order number, payment totals
+- Source: `program_enrollments.metadata.enrollmentSource = 'public_store'` + `store_order_items`
+
 ## Key files
 
 - `server/lib/store-pricing.ts`
@@ -58,6 +76,11 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 - `server/lib/store-programs.ts`
 - `server/services/fileUploadService.ts` — `storePrograms`, `storeProducts` categories
 - `client/src/lib/uploadClient.ts` — presigned client
-- `client/src/components/ImageUpload.tsx` — `uploadCategory` prop
+- `client/src/lib/store-checkout.ts` — checkout helpers + order number format
+- `client/src/components/store/StoreCheckoutChildFields.tsx`
+- `client/src/pages/public-store/PublicStoreCheckoutPage.tsx`
+- `client/src/pages/public-store/PublicStoreSuccessPage.tsx`
+- `server/lib/store-signups.ts`
+- `client/src/components/store/StoreSignupsTab.tsx`
 - `server/migrations/251-public-store.sql`
 - `server/migrations/252-session-cover-image.sql`

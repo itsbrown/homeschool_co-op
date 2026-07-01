@@ -16,8 +16,7 @@ import {
   resolveStoreChild,
   type StoreChildRef,
 } from './store-guest-checkout';
-import { sendStorePurchaseConfirmationEmail } from './email-service';
-import { resolveStoreDeliveryDocuments } from './store-documents';
+import { sendStoreOrderConfirmationEmail } from './store-confirmation-email';
 
 export async function fulfillStoreCheckoutFromPaymentIntent(
   paymentIntent: Stripe.PaymentIntent,
@@ -200,17 +199,15 @@ export async function fulfillStoreCheckoutFromWebhook(params: {
   });
 
   try {
-    const docs = await resolveStoreDeliveryDocuments(snapshot.schoolId, paidProgramLines);
-    await sendStorePurchaseConfirmationEmail({
-      to: snapshot.parentEmail ?? payload.parentEmail,
-      parentName: snapshot.parentName ?? payload.parentName ?? 'Parent',
+    await sendStoreOrderConfirmationEmail({
       schoolId: snapshot.schoolId,
-      storeOrderId: storeOrder.id,
-      accessToken: storeOrder.accessToken,
-      paidLines: paidCreated,
-      waitlistLines: waitlistCreated,
-      merchLines: lines.filter((l: any) => l.listingType === 'product'),
-      documents: docs,
+      storeSlug: snapshot.storeSlug,
+      storeOrder,
+      snapshotPayload: payload,
+      parentEmail: snapshot.parentEmail ?? payload.parentEmail,
+      parentName: snapshot.parentName ?? payload.parentName ?? 'Parent',
+      paidEnrollments: paidCreated,
+      waitlistEnrollments: waitlistCreated,
     });
   } catch (emailErr) {
     console.error('Store confirmation email failed (non-fatal):', emailErr);
@@ -251,6 +248,27 @@ export async function fulfillStoreCheckoutWithoutPayment(snapshotId: string) {
   await markStoreSnapshotFulfilled(snapshotId, {
     storeOrderId: payload.pendingStoreOrderId,
   });
+
+  const storeOrder = payload.pendingStoreOrderId
+    ? await getStoreOrderById(payload.pendingStoreOrderId)
+    : null;
+
+  if (storeOrder) {
+    try {
+      await sendStoreOrderConfirmationEmail({
+        schoolId: snapshot.schoolId,
+        storeSlug: snapshot.storeSlug,
+        storeOrder,
+        snapshotPayload: payload,
+        parentEmail: snapshot.parentEmail ?? payload.parentEmail,
+        parentName: snapshot.parentName ?? payload.parentName ?? 'Parent',
+        paidEnrollments: [],
+        waitlistEnrollments: created,
+      });
+    } catch (emailErr) {
+      console.error('Store confirmation email failed (non-fatal):', emailErr);
+    }
+  }
 
   return { created, accessToken: payload.accessToken };
 }

@@ -1998,55 +1998,158 @@ export async function sendStorePurchaseConfirmationEmail(data: {
   to: string;
   parentName: string;
   schoolId: number;
-  storeOrderId: number;
-  accessToken: string;
-  paidLines: Array<{ line: { title: string; lineTotalCents: number }; enrollmentId: number }>;
-  waitlistLines: Array<{ line: { title: string }; waitlistPosition?: number | null }>;
+  storeSlug: string;
+  orderNumber: string;
+  orderTotalCents: number;
+  confirmationUrl: string;
+  paidLines: Array<{ title: string; childName?: string; lineTotalCents: number }>;
+  waitlistLines: Array<{ title: string; childName?: string; waitlistPosition?: number | null }>;
   merchLines: Array<{ title: string; quantity?: number; lineTotalCents: number }>;
-  documents: Array<{ id: number; title: string; fileName: string }>;
+  documents: Array<{ id: number; title: string; fileName: string; downloadUrl?: string }>;
+  attachments?: Array<{ filename: string; content: Buffer; type: string }>;
 }): Promise<boolean> {
   const { storage } = await import('../storage');
   const school = await storage.getSchool(data.schoolId);
   const schoolName = school?.name ?? 'School';
-  const subject = `Your registration confirmation — ${schoolName}`;
+  const subject = `Order confirmed — ${schoolName} (#${data.orderNumber})`;
+
+  const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  const lineRow = (
+    title: string,
+    detail: string,
+    amount?: string,
+  ) => `
+    <tr>
+      <td style="padding:12px 0;border-bottom:1px solid #E5E7EB;">
+        <strong>${title}</strong><br/>
+        <span style="color:#6B7280;font-size:13px;">${detail}</span>
+      </td>
+      <td style="padding:12px 0;border-bottom:1px solid #E5E7EB;text-align:right;white-space:nowrap;vertical-align:top;">
+        ${amount ?? ''}
+      </td>
+    </tr>`;
 
   const programRows = [
-    ...data.paidLines.map(
-      (p) =>
-        `<li><strong>${p.line.title}</strong> — $${(p.line.lineTotalCents / 100).toFixed(2)} paid</li>`,
+    ...data.paidLines.map((p) =>
+      lineRow(
+        p.title,
+        p.childName ? `Participant: ${p.childName}` : 'Program enrollment',
+        formatMoney(p.lineTotalCents),
+      ),
     ),
-    ...data.waitlistLines.map(
-      (w) =>
-        `<li><strong>${w.line.title}</strong> — Waitlist${w.waitlistPosition ? ` #${w.waitlistPosition}` : ''} (no payment collected)</li>`,
+    ...data.waitlistLines.map((w) =>
+      lineRow(
+        w.title,
+        [
+          w.childName ? `Participant: ${w.childName}` : 'Program enrollment',
+          `Waitlist${w.waitlistPosition ? ` #${w.waitlistPosition}` : ''} — no payment collected`,
+        ].join('<br/>'),
+        '$0.00',
+      ),
     ),
-    ...data.merchLines.map(
-      (m) =>
-        `<li>${m.title}${m.quantity && m.quantity > 1 ? ` × ${m.quantity}` : ''} — $${(m.lineTotalCents / 100).toFixed(2)}</li>`,
+    ...data.merchLines.map((m) =>
+      lineRow(
+        m.title,
+        m.quantity && m.quantity > 1 ? `Quantity: ${m.quantity}` : 'Merchandise',
+        formatMoney(m.lineTotalCents),
+      ),
     ),
   ].join('');
 
-  const docLinks =
+  const docSection =
     data.documents.length > 0
-      ? `<p><strong>Documents:</strong></p><ul>${data.documents
-          .map((d) => `<li>${d.title}</li>`)
-          .join('')}</ul><p>Download from your order confirmation page using your receipt link.</p>`
+      ? `
+    <div style="margin-top:24px;">
+      <h3 style="margin:0 0 12px 0;color:#1F2937;font-size:16px;">Program documents</h3>
+      <p style="margin:0 0 12px 0;color:#6B7280;font-size:14px;">
+        Download the materials linked to your program(s) below. These are the documents attached in class or session settings.
+      </p>
+      <ul style="margin:0;padding-left:20px;">
+        ${data.documents
+          .map(
+            (d) =>
+              `<li style="margin-bottom:8px;">${
+                d.downloadUrl
+                  ? `<a href="${d.downloadUrl}" style="color:#2563EB;">${d.title}</a>`
+                  : d.title
+              }</li>`,
+          )
+          .join('')}
+      </ul>
+    </div>`
       : '';
 
   const html = `
-    <p>Hi ${data.parentName},</p>
-    <p>Thank you for your purchase with ${schoolName}.</p>
-    <p><strong>Order #${data.storeOrderId}</strong></p>
-    <ul>${programRows}</ul>
-    ${docLinks}
-    <p>Keep this email for your records.</p>
-  `;
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#111827;">
+      <div style="background:#1D4ED8;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0;">
+        <h1 style="color:#fff;margin:0;font-size:22px;">Thank you for your order</h1>
+        <p style="color:#DBEAFE;margin:8px 0 0 0;">${schoolName}</p>
+      </div>
+      <div style="padding:24px;background:#fff;border:1px solid #E5E7EB;border-top:none;border-radius:0 0 8px 8px;">
+        <p style="margin-top:0;">Hi ${data.parentName},</p>
+        <p>Your registration with ${schoolName} is confirmed.</p>
+        <p style="margin:16px 0;"><strong>Order #${data.orderNumber}</strong></p>
+
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          ${programRows}
+          <tr>
+            <td style="padding:14px 0;font-weight:bold;">Total</td>
+            <td style="padding:14px 0;text-align:right;font-weight:bold;">${formatMoney(data.orderTotalCents)}</td>
+          </tr>
+        </table>
+
+        ${docSection}
+
+        <div style="text-align:center;margin:28px 0;">
+          <a href="${data.confirmationUrl}"
+             style="background:#1D4ED8;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:600;">
+            View order confirmation
+          </a>
+        </div>
+
+        <p style="font-size:13px;color:#6B7280;margin-bottom:0;">
+          Save this email for your records. If you have questions, reply to this message or contact ${schoolName}.
+        </p>
+      </div>
+    </div>`;
+
+  const textLines = [
+    `Hi ${data.parentName},`,
+    '',
+    `Your order with ${schoolName} is confirmed.`,
+    `Order #${data.orderNumber}`,
+    '',
+    ...data.paidLines.map(
+      (p) =>
+        `- ${p.title}${p.childName ? ` (${p.childName})` : ''}: ${formatMoney(p.lineTotalCents)}`,
+    ),
+    ...data.waitlistLines.map(
+      (w) =>
+        `- ${w.title}${w.childName ? ` (${w.childName})` : ''}: Waitlist${w.waitlistPosition ? ` #${w.waitlistPosition}` : ''}`,
+    ),
+    ...data.merchLines.map(
+      (m) => `- ${m.title}${m.quantity && m.quantity > 1 ? ` x${m.quantity}` : ''}: ${formatMoney(m.lineTotalCents)}`,
+    ),
+    '',
+    `Total: ${formatMoney(data.orderTotalCents)}`,
+    '',
+    `View confirmation: ${data.confirmationUrl}`,
+  ];
+  if (data.documents.length > 0) {
+    textLines.push('', 'Program documents:');
+    for (const d of data.documents) {
+      textLines.push(`- ${d.title}${d.downloadUrl ? `: ${d.downloadUrl}` : ''}`);
+    }
+  }
 
   return sendEmail(
     data.to,
     data.parentName,
     subject,
     html,
-    undefined,
+    textLines.join('\n'),
     'store_purchase_confirmation',
+    data.attachments,
   );
 }

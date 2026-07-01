@@ -13,6 +13,7 @@ import { ExternalLink } from "lucide-react";
 import { ImageUpload } from "@/components/ImageUpload";
 import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 import { StoreProgramsTab } from "@/components/store/StoreProgramsTab";
+import { StoreSignupsTab } from "@/components/store/StoreSignupsTab";
 
 type StoreProduct = {
   id: number;
@@ -31,7 +32,7 @@ type ProductFormState = {
 
 const STORE_TAB_KEY = "public-store-manager-tab";
 const PRODUCT_DRAFT_KEY = "public-store-manager-product-draft";
-const STORE_TABS = new Set(["settings", "programs", "products", "orders"]);
+const STORE_TABS = new Set(["settings", "programs", "signups", "products", "orders"]);
 
 const emptyProductForm = (): ProductFormState => ({
   name: "",
@@ -43,9 +44,11 @@ const emptyProductForm = (): ProductFormState => ({
 function readInitialTab(): string {
   const fromUrl = new URLSearchParams(window.location.search).get("tab");
   if (fromUrl === "listings") return "programs";
+  if (fromUrl === "orders") return "signups";
   if (fromUrl && STORE_TABS.has(fromUrl)) return fromUrl;
   const stored = sessionStorage.getItem(STORE_TAB_KEY);
   if (stored === "listings") return "programs";
+  if (stored === "orders") return "signups";
   if (stored && STORE_TABS.has(stored)) return stored;
   return "settings";
 }
@@ -125,10 +128,6 @@ export default function PublicStoreManagerPage() {
     queryKey: ["/api/school-admin/public-store/products"],
   });
 
-  const { data: orders = [] } = useQuery({
-    queryKey: ["/api/school-admin/public-store/orders"],
-  });
-
   const [productForm, setProductForm] = useState<ProductFormState>(readProductDraft);
 
   useEffect(() => {
@@ -179,8 +178,8 @@ export default function PublicStoreManagerPage() {
           <TabsList>
             <TabsTrigger value="settings" data-testid="store-tab-settings">Settings</TabsTrigger>
             <TabsTrigger value="programs" data-testid="store-tab-programs">Classes &amp; programs</TabsTrigger>
+            <TabsTrigger value="signups" data-testid="store-tab-signups">Sign-ups</TabsTrigger>
             <TabsTrigger value="products" data-testid="store-tab-products">Products</TabsTrigger>
-            <TabsTrigger value="orders" data-testid="store-tab-orders">Orders</TabsTrigger>
           </TabsList>
 
           <TabsContent value="settings" className="mt-4">
@@ -226,6 +225,10 @@ export default function PublicStoreManagerPage() {
 
           <TabsContent value="programs" className="mt-4">
             <StoreProgramsTab storeEnabled={enabled} />
+          </TabsContent>
+
+          <TabsContent value="signups" className="mt-4">
+            <StoreSignupsTab />
           </TabsContent>
 
           <TabsContent value="products" className="mt-4">
@@ -289,30 +292,6 @@ export default function PublicStoreManagerPage() {
                     </li>
                   ))}
                 </ul>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="orders" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Store orders</CardTitle>
-                <CardDescription>Guest and member purchases through the public store lane.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {orders.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No store orders yet.</p>
-                ) : (
-                  <ul className="text-sm space-y-2">
-                    {orders.map(
-                      (o: { id: number; parentEmail: string; status: string; totalCents: number }) => (
-                        <li key={o.id}>
-                          #{o.id} — {o.parentEmail} — {o.status} — ${(o.totalCents / 100).toFixed(2)}
-                        </li>
-                      ),
-                    )}
-                  </ul>
-                )}
               </CardContent>
             </Card>
           </TabsContent>
