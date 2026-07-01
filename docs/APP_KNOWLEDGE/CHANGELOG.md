@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-07-01 (Upload client — Bearer auth for presigned uploads)
+
+- **Fix:** `uploadClient.ts` uses `apiRequest` for `/api/unified-uploads/*` so the Supabase JWT is sent (fixes `Missing or invalid authorization header` on store program/merch, logos, documents, KB, etc.).
+- **E2E:** `public-store.spec.ts` — browser `ImageUpload` on programs tab (not only API-level presigned helper).
+
 ## 2026-06-01 (Platform — presigned uploads for all asset surfaces)
 
 - **Architecture:** Logos, documents, knowledge base files, fundraiser images, custom form attachments, product order photos, and store images use `POST /api/unified-uploads/request-url` → direct PUT → confirm. Register endpoints save object paths (`/public/…` or `/objects/…`).

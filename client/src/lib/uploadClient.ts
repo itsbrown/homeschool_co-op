@@ -1,4 +1,5 @@
 import type { UppyFile } from "@uppy/core";
+import { apiRequest } from "@/lib/queryClient";
 
 export type UploadCategory =
   | "signatures"
@@ -34,22 +35,20 @@ async function requestUploadUrl(
   category: UploadCategory,
   schoolId?: number
 ): Promise<{ uploadURL: string; objectPath: string }> {
-  const response = await fetch("/api/unified-uploads/request-url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({
-      name: file.name,
-      size: file.size,
-      contentType: file.type || "application/octet-stream",
-      category,
-      schoolId,
-    }),
+  const response = await apiRequest("POST", "/api/unified-uploads/request-url", {
+    name: file.name,
+    size: file.size,
+    contentType: file.type || "application/octet-stream",
+    category,
+    schoolId,
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Upload failed" }));
-    throw new Error(error.error || "Failed to get upload URL");
+    const error = (await response.json().catch(() => ({ error: "Upload failed" }))) as {
+      error?: string;
+      message?: string;
+    };
+    throw new Error(error.error || error.message || "Failed to get upload URL");
   }
 
   return response.json();
@@ -68,11 +67,9 @@ async function uploadToPresignedUrl(file: File, uploadURL: string): Promise<void
 }
 
 async function confirmUpload(objectPath: string, category: UploadCategory): Promise<void> {
-  const response = await fetch("/api/unified-uploads/confirm", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ objectPath, category }),
+  const response = await apiRequest("POST", "/api/unified-uploads/confirm", {
+    objectPath,
+    category,
   });
 
   if (!response.ok) {
@@ -123,17 +120,12 @@ export function getUploadParametersFactory(category: UploadCategory, schoolId?: 
   return async (
     file: UppyFile<Record<string, unknown>, Record<string, unknown>>
   ): Promise<{ method: "PUT"; url: string; headers?: Record<string, string> }> => {
-    const response = await fetch("/api/unified-uploads/request-url", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        name: file.name,
-        size: file.size,
-        contentType: file.type || "application/octet-stream",
-        category,
-        schoolId,
-      }),
+    const response = await apiRequest("POST", "/api/unified-uploads/request-url", {
+      name: file.name,
+      size: file.size,
+      contentType: file.type || "application/octet-stream",
+      category,
+      schoolId,
     });
 
     if (!response.ok) {
@@ -151,9 +143,6 @@ export function getUploadParametersFactory(category: UploadCategory, schoolId?: 
 
 export async function deleteFile(objectPath: string): Promise<boolean> {
   const path = objectPath.startsWith("/") ? objectPath.slice(1) : objectPath;
-  const response = await fetch(`/api/unified-uploads/${path}`, {
-    method: "DELETE",
-    credentials: "include",
-  });
+  const response = await apiRequest("DELETE", `/api/unified-uploads/${path}`);
   return response.ok;
 }

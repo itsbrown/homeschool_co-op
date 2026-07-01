@@ -184,6 +184,47 @@ test.describe("public store", () => {
     await expect(page.getByTestId("button-create-store-product")).toBeVisible();
   });
 
+  test("school admin programs tab uploads image through browser ImageUpload", async ({
+    page,
+    request,
+  }) => {
+    const { response, json } = await postSetupPublicStoreScenario(request, {
+      linkSupabaseAuthAdmin: true,
+      withPublishedProduct: false,
+      withClass: true,
+      withPublishedClassListing: true,
+    });
+    test.skip(
+      !response.ok() || json?.data?.adminSupabaseLinked !== true,
+      "seed or Supabase admin link unavailable",
+    );
+
+    const { admin } = json!.data!;
+    await loginSchoolAdmin(page, admin.email, admin.password);
+    await page.evaluate(() => localStorage.setItem("activeRole", "schoolAdmin"));
+    await page.goto("/school-admin/public-store?tab=programs", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.getByTestId("store-tab-programs").click();
+
+    const uploadResponse = page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/unified-uploads/request-url") &&
+        r.request().method() === "POST",
+      { timeout: 30_000 },
+    );
+    await page.getByTestId("image-upload-input").first().setInputFiles(merchFixturePath);
+    const uploadRes = await uploadResponse;
+    expect(uploadRes.ok(), `upload request-url failed: ${uploadRes.status()}`).toBeTruthy();
+
+    await expect(page.getByText("Image uploaded")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Store image saved")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("image-upload-preview").first()).toHaveAttribute(
+      "src",
+      /^\/public\/store-programs\//,
+    );
+  });
+
   test("authenticated admin can upload store product image via presigned flow", async ({
     page,
     request,
