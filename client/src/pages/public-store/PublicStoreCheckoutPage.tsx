@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useToast } from "@/hooks/use-toast";
-import { loadStoreCart } from "@/lib/store-cart";
+import { loadStoreCart, saveStoreCart, type StoreCartState } from "@/lib/store-cart";
+import { StoreCartReview } from "@/components/store/StoreCartReview";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 
 type SnapshotLine = {
@@ -31,7 +32,11 @@ export default function PublicStoreCheckoutPage() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
-  const cart = useMemo(() => loadStoreCart(schoolSlug), [schoolSlug]);
+  const [cart, setCart] = useState<StoreCartState>(() => loadStoreCart(schoolSlug));
+
+  useEffect(() => {
+    saveStoreCart(cart);
+  }, [cart]);
 
   const hasPrograms = cart.lines.some((l) => l.listingType !== "product");
   const [step, setStep] = useState(1);
@@ -64,14 +69,18 @@ export default function PublicStoreCheckoutPage() {
     enabled: isAuthenticated && hasPrograms,
   });
 
-  const cartPayload = cart.lines.map((l) => ({
-    lineId: l.lineId,
-    listingId: l.listingId,
-    listingType: l.listingType,
-    sourceId: l.sourceId,
-    quantity: l.quantity,
-    variant: l.variant,
-  }));
+  const cartPayload = useMemo(
+    () =>
+      cart.lines.map((l) => ({
+        lineId: l.lineId,
+        listingId: l.listingId,
+        listingType: l.listingType,
+        sourceId: l.sourceId,
+        quantity: l.quantity,
+        variant: l.variant,
+      })),
+    [cart.lines],
+  );
 
   const { data: snapshot, refetch: refetchSnapshot } = useQuery({
     queryKey: ["/api/public/store", schoolSlug, "snapshot", cartPayload],
@@ -170,18 +179,14 @@ export default function PublicStoreCheckoutPage() {
             <CardHeader>
               <CardTitle>Cart review</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {cart.lines.map((line) => (
-                <div key={line.lineId} className="flex justify-between text-sm">
-                  <span>{line.title} × {line.quantity}</span>
-                  <span>
-                    {line.unitPriceCents != null
-                      ? `$${((line.unitPriceCents * line.quantity) / 100).toFixed(2)}`
-                      : "—"}
-                  </span>
-                </div>
-              ))}
-              <Button className="mt-4 w-full" onClick={() => setStep(2)} data-testid="store-checkout-step1-continue">
+            <CardContent className="space-y-4">
+              <StoreCartReview cart={cart} onCartChange={setCart} />
+              <Button
+                className="w-full"
+                onClick={() => setStep(2)}
+                disabled={cart.lines.length === 0}
+                data-testid="store-checkout-step1-continue"
+              >
                 Continue
               </Button>
             </CardContent>

@@ -22,11 +22,11 @@ export async function addStoreProgramToCartAsGuest(
 ): Promise<void> {
   await page.getByRole("button", { name: addButtonLabel }).click();
   await page.getByRole("button", { name: "Continue as guest" }).click();
-  await expect(page.getByRole("button", { name: /Cart \(1\)/ })).toBeVisible();
+  await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
 }
 
 export async function openStoreCheckoutFromCart(page: Page): Promise<void> {
-  await page.getByRole("button", { name: /Cart \(\d+\)/ }).click();
+  await page.getByTestId("store-cart-button").click();
 }
 
 /** Walk guest checkout for a cart that includes at least one program line. */

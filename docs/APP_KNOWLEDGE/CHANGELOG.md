@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-06-01 (Public store — cart UX)
+
+- **UX:** Add-to-cart toast + cart badge subtotal; mobile sticky cart bar; checkout cart review with quantity controls (products), remove lines, live subtotal updates.
+- **Tests:** `client/src/lib/__tests__/store-cart.test.ts`; E2E cart feedback/qty/remove in `e2e/public-store.spec.ts`.
+
 ## 2026-06-01 (Public store — catalog uses enrollmentOpen for classes)
 
 - **Fix:** Public store catalog and checkout pricing use `enrollmentOpen` (not legacy `isPublished`) so listed classes appear on `/store/:slug` when admin marks them on store.

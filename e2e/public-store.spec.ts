@@ -245,9 +245,77 @@ test.describe("public store", () => {
     const slug = json!.data!.storeSlug;
     await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Add to cart" }).click();
-    await expect(page.getByRole("button", { name: /Cart \(1\)/ })).toBeVisible();
-    await page.getByRole("button", { name: /Cart \(1\)/ }).click();
+    await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
+    await page.getByTestId("store-cart-button").click();
     await expect(page).toHaveURL(new RegExp(`/store/${slug}/checkout`));
+  });
+
+  test("guest sees add-to-cart feedback and can edit merch quantity in checkout", async ({
+    page,
+    request,
+  }) => {
+    const { response, json } = await postSetupPublicStoreScenario(request, {
+      productImageUrl: "/uploads/store-products/e2e-cart-qty.png",
+    });
+    test.skip(!response.ok(), `seed failed (${response.status()})`);
+
+    const slug = json!.data!.storeSlug;
+    const priceCents = json!.data!.product.priceCents;
+
+    await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Add to cart" }).click();
+    await expect(page.getByText("Added to cart", { exact: true }).first()).toBeVisible();
+    await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
+    await expect(page.getByTestId("store-cart-button")).toContainText("$19.99");
+
+    await page.getByRole("button", { name: "Add to cart" }).click();
+    await expect(page.getByTestId("store-cart-button")).toContainText("Cart (2)");
+
+    await page.getByTestId("store-cart-button").click();
+    await expect(page.getByTestId("store-cart-review")).toBeVisible();
+
+    const line = page.locator('[data-testid^="store-cart-line-"]').first();
+    const lineTestId = await line.getAttribute("data-testid");
+    const lineId = lineTestId!.replace("store-cart-line-", "");
+
+    await page.getByTestId(`store-cart-qty-increase-${lineId}`).click();
+    await expect(page.getByTestId(`store-cart-qty-${lineId}`)).toHaveText("3");
+    await expect(page.getByTestId("store-cart-subtotal")).toHaveText(
+      `$${((priceCents * 3) / 100).toFixed(2)}`,
+    );
+
+    await page.getByTestId(`store-cart-qty-decrease-${lineId}`).click();
+    await page.getByTestId(`store-cart-qty-decrease-${lineId}`).click();
+    await page.getByTestId(`store-cart-qty-decrease-${lineId}`).click();
+    await expect(page.getByText("Your cart is empty.")).toBeVisible();
+  });
+
+  test("guest can remove a program line from checkout cart", async ({ page, request }) => {
+    const { addStoreProgramToCartAsGuest, openStoreCheckoutFromCart } = await import(
+      "./helpers/publicStoreCheckout"
+    );
+
+    const { response, json } = await postSetupPublicStoreScenario(request, {
+      withPublishedProduct: false,
+      withClass: true,
+      withPublishedClassListing: true,
+      classPriceCents: 5000,
+    });
+    test.skip(!response.ok(), `seed failed (${response.status()})`);
+
+    const slug = json!.data!.storeSlug;
+
+    await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
+    await addStoreProgramToCartAsGuest(page, /Add — \$50\.00/);
+    await openStoreCheckoutFromCart(page);
+    await expect(page.getByTestId("store-cart-review")).toBeVisible();
+
+    const line = page.locator('[data-testid^="store-cart-line-"]').first();
+    const lineTestId = await line.getAttribute("data-testid");
+    const lineId = lineTestId!.replace("store-cart-line-", "");
+
+    await page.getByTestId(`store-cart-remove-${lineId}`).click();
+    await expect(page.getByText("Your cart is empty.")).toBeVisible();
   });
 });
 
