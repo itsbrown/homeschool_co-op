@@ -32,6 +32,7 @@ import {
 import LexileTab from '@/components/lexile/LexileTab';
 import ProgressCatalogTab from '@/components/admin/ProgressCatalogTab';
 import AssessmentSessionsTab from '@/components/admin/AssessmentSessionsTab';
+import ProgressInsightsTab from '@/components/admin/ProgressInsightsTab';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import AppShell from '@/components/layout/AppShell';
@@ -470,6 +471,10 @@ export default function AssessmentManagementPage() {
               <Calendar className="h-4 w-4" />
               Sessions & reports
             </TabsTrigger>
+            <TabsTrigger value="progress-insights" className="flex items-center gap-2" data-testid="tab-progress-insights">
+              <TrendingUp className="h-4 w-4" />
+              Progress insights
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="types">
@@ -734,6 +739,10 @@ export default function AssessmentManagementPage() {
 
           <TabsContent value="sessions">
             <AssessmentSessionsTab />
+          </TabsContent>
+
+          <TabsContent value="progress-insights">
+            <ProgressInsightsTab />
           </TabsContent>
         </Tabs>
 

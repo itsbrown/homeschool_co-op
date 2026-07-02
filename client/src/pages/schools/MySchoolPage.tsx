@@ -984,6 +984,9 @@ export default function MySchoolPage() {
                 variant="outline" 
                 onClick={() => {
                   refetch();
+                  queryClient.invalidateQueries({ queryKey: ['/api/analytics/school/enrollment-breakdown'] });
+                  queryClient.invalidateQueries({ queryKey: ['/api/analytics/school/class-enrollments'] });
+                  queryClient.invalidateQueries({ queryKey: ['/api/analytics/school/location-stats'] });
                   toast({
                     title: "Refreshing data",
                     description: "The school information is being refreshed.",

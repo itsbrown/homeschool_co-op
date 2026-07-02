@@ -3354,6 +3354,69 @@ export const storeCheckoutSnapshots = pgTable("store_checkout_snapshots", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// School analytics — user activity events
+export const userActivityEventTypes = [
+  "login",
+  "page_view",
+  "session_start",
+  "session_end",
+  "heartbeat",
+] as const;
+
+export const userActivityEvents = pgTable("user_activity_events", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").references(() => schools.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  role: text("role"),
+  eventType: text("event_type").notNull(),
+  path: text("path"),
+  durationMs: integer("duration_ms"),
+  sessionId: text("session_id"),
+  metadata: jsonb("metadata").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertUserActivityEventSchema = createInsertSchema(userActivityEvents).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertUserActivityEvent = z.infer<typeof insertUserActivityEventSchema>;
+export type UserActivityEvent = typeof userActivityEvents.$inferSelect;
+
+export const checkoutFunnelLanes = ["member_cart", "public_store"] as const;
+export const checkoutFunnelSteps = [
+  "add_to_cart",
+  "view_cart",
+  "begin_checkout",
+  "add_payment_info",
+  "purchase",
+  "abandon",
+] as const;
+
+export const checkoutFunnelEvents = pgTable("checkout_funnel_events", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+  correlationId: text("correlation_id").notNull(),
+  parentId: integer("parent_id").references(() => users.id, { onDelete: "set null" }),
+  parentEmail: text("parent_email"),
+  lane: text("lane").notNull(),
+  step: text("step").notNull(),
+  enrollmentIds: jsonb("enrollment_ids").default([]).notNull(),
+  storeOrderId: integer("store_order_id").references(() => storeOrders.id, { onDelete: "set null" }),
+  classIds: jsonb("class_ids").default([]).notNull(),
+  childIds: jsonb("child_ids").default([]).notNull(),
+  cartValueCents: integer("cart_value_cents").default(0).notNull(),
+  metadata: jsonb("metadata").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCheckoutFunnelEventSchema = createInsertSchema(checkoutFunnelEvents).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertCheckoutFunnelEvent = z.infer<typeof insertCheckoutFunnelEventSchema>;
+export type CheckoutFunnelEvent = typeof checkoutFunnelEvents.$inferSelect;
+
 export const programDeliveryDocuments = pgTable("program_delivery_documents", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),

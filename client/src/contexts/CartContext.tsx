@@ -5,6 +5,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { trackAddToCart, trackRemoveFromCart, trackViewCart } from '@/lib/analytics';
+import { recordCheckoutFunnelStep } from '@/lib/telemetryClient';
 import { filterEnrollmentsToCartLineItems } from '@/utils/parentEnrollmentLineItems';
 import { isViteFlagTrue } from '@/lib/viteEnv';
 import {
@@ -1840,6 +1841,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       item_variant: item.childName,
     });
 
+    void recordCheckoutFunnelStep({
+      step: 'add_to_cart',
+      lane: 'member_cart',
+      classIds: [item.classId],
+      childIds: [item.childId],
+      cartValueCents: item.price,
+      metadata: { className: item.className, childName: item.childName },
+    });
+
     console.log('🛒 Cart will update via reducer and useEffect');
 
     // Only show toast if not skipping validation (to avoid duplicate toasts)
@@ -1999,6 +2009,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         })),
         state.cart.total
       );
+      void recordCheckoutFunnelStep({
+        step: 'view_cart',
+        lane: 'member_cart',
+        classIds: state.cart.items.map((i) => i.classId),
+        childIds: state.cart.items.map((i) => i.childId),
+        cartValueCents: state.cart.total,
+      });
     }
   };
   const closeCart = () => dispatch({ type: 'CLOSE_CART' });

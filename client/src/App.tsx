@@ -10,6 +10,7 @@ import { RoleProvider, useRole, AuthExpiredError, RegistrationRequiredError, Ser
 import { NotificationProvider } from "@/hooks/useNotifications";
 import { CartProvider } from "@/contexts/CartContext";
 import { FormTracker } from "@/components/FormTracker";
+import { ActivityTelemetry } from "@/components/ActivityTelemetry";
 import { InteractiveTutorialProvider } from "@/components/tutorials/InteractiveTutorial";
 import PaymentHelpAssistant from "@/components/payments/PaymentHelpAssistant";
 
@@ -83,6 +84,7 @@ const LocationEnrollmentsPage = lazy(() => import("./pages/schooladmin/LocationE
 const RefundHistoryPage = lazy(() => import("./pages/schooladmin/RefundHistoryPage"));
 const FinancialReportsPage = lazy(() => import("./pages/schooladmin/FinancialReportsPage"));
 const RetentionReportPage = lazy(() => import("./pages/schooladmin/RetentionReportPage"));
+const SchoolAnalyticsPage = lazy(() => import("./pages/schooladmin/SchoolAnalyticsPage"));
 const FundraiserStorePage = lazy(() => import("./pages/FundraiserStorePage"));
 const FundraiserSuccessPage = lazy(() => import("./pages/FundraiserSuccessPage"));
 const PublicStorePage = lazy(() => import("./pages/public-store/PublicStorePage"));
@@ -757,6 +759,7 @@ function Router() {
       <Route path="/school-admin/refunds" component={() => <SchoolAdminShellWrapper><RefundHistoryPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/financial-reports" component={() => <SchoolAdminShellWrapper><FinancialReportsPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/retention-report" component={() => <SchoolAdminShellWrapper><RetentionReportPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/analytics" component={() => <SchoolAdminShellWrapper><SchoolAnalyticsPage /></SchoolAdminShellWrapper>} />
       <Route path="/fundraiser/:campaignId/:familySlug">
         {(params) => <FundraiserStorePage campaignId={params?.campaignId || ''} familySlug={params?.familySlug || ''} />}
       </Route>
@@ -873,6 +876,7 @@ function App() {
                   <TooltipProvider>
                     <Toaster />
                     <FormTracker />
+                    <ActivityTelemetry />
                     <Router />
                     <SupportAssistantTrigger />
                     <PaymentHelpAssistant />

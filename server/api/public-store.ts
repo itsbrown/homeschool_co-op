@@ -9,6 +9,8 @@ import {
   isStoreCheckoutAllowed,
   STORE_SNAPSHOT_TTL_MS,
 } from '../lib/store-config';
+import { insertCheckoutFunnelEvent } from '../lib/school-analytics';
+import { randomUUID } from 'crypto';
 import {
   getSchoolByStoreSlug,
   saveStoreCheckoutSnapshot,
@@ -314,6 +316,23 @@ router.post('/:storeSlug/checkout', async (req, res) => {
       expiresAt,
       storeOrderId: pendingOrder.id,
     });
+
+    try {
+      await insertCheckoutFunnelEvent({
+        schoolId: school.id,
+        correlationId: randomUUID(),
+        parentId: parentResult.parentId,
+        parentEmail: parsed.data.parent.email,
+        lane: 'public_store',
+        step: 'begin_checkout',
+        storeOrderId: pendingOrder.id,
+        childIds: childAssignments.map((c) => c.childId),
+        cartValueCents: snapshot.amountDueCents,
+        metadata: { parentName: `${parsed.data.parent.firstName} ${parsed.data.parent.lastName}` },
+      });
+    } catch (funnelErr) {
+      console.warn('checkout funnel telemetry (public store):', funnelErr);
+    }
 
     if (snapshot.amountDueCents <= 0) {
       const result = await fulfillStoreCheckoutWithoutPayment(snapshotId);

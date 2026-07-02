@@ -120,6 +120,9 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/credit-management-parent-lookup.spec.ts`](../e2e/credit-management-parent-lookup.spec.ts) | `npm run test:e2e -- e2e/credit-management-parent-lookup.spec.ts` | School-admin parent search / manual credit | `setup-credit-lookup-scenario` |
 | [`e2e/parent-profile-credits-tab.spec.ts`](../e2e/parent-profile-credits-tab.spec.ts) | `npm run test:e2e -- e2e/parent-profile-credits-tab.spec.ts` | Admin parent profile Credits tab | `setup-cart-scenario` (`linkSupabaseAuthAdmin`) |
 | [`e2e/help-issue-submission.spec.ts`](../e2e/help-issue-submission.spec.ts) | `npm run test:e2e -- e2e/help-issue-submission.spec.ts` | Need Help → Report an Issue (platform + school policy, screenshot upload, payment help link, school admin list) | `ensure-technical-support-schema` + `setup-cart-scenario` (`linkSupabaseAuth`, `linkSupabaseAuthAdmin`) |
+| [`e2e/school-analytics-engagement.spec.ts`](../e2e/school-analytics-engagement.spec.ts) | `npm run test:e2e -- e2e/school-analytics-engagement.spec.ts` | School Analytics → Engagement tab + `/api/school-analytics/engagement` | `setup-cart-scenario` (`linkSupabaseAuthAdmin`) |
+| [`e2e/school-analytics-cart-abandonment.spec.ts`](../e2e/school-analytics-cart-abandonment.spec.ts) | `npm run test:e2e -- e2e/school-analytics-cart-abandonment.spec.ts` | School Analytics → Cart Abandonment tab + funnel API | `setup-cart-scenario` (`linkSupabaseAuthAdmin`) |
+| [`e2e/parent-progress-charts.spec.ts`](../e2e/parent-progress-charts.spec.ts) | `npm run test:e2e -- e2e/parent-progress-charts.spec.ts` | Parent `/parent/progress` Charts tab + child analytics API | `setup-progress-scenario` (`linkSupabaseAuth`) |
 
 **Supabase:** Real project required (`isRealSupabaseConfigured()` or `supabaseLinked === true`).
 

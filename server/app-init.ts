@@ -49,6 +49,10 @@ import lexileAiRouter from "./api/lexile-ai";
 import assessmentUploadRouter from "./api/assessment-upload";
 import progressRouter from "./api/progress";
 import progressInsightsRouter from "./api/progress-insights";
+import progressAnalyticsRouter from "./api/progress-analytics";
+import schoolAnalyticsRouter from "./api/school-analytics";
+import telemetryActivityRouter from "./api/telemetry-activity";
+import analyticsRouter from "./api/analytics";
 import locationEnrollmentsRouter from "./api/location-enrollments";
 
 async function ensureAdminRoles(): Promise<void> {
@@ -204,6 +208,10 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/assessment-upload", assessmentUploadRouter);
   app.use("/api/progress", progressRouter);
   app.use("/api/progress/insights", progressInsightsRouter);
+  app.use("/api/progress/analytics", progressAnalyticsRouter);
+  app.use("/api/school-analytics", schoolAnalyticsRouter);
+  app.use("/api/telemetry", telemetryActivityRouter);
+  app.use("/api/analytics", analyticsRouter);
   app.use("/api/location-enrollments", locationEnrollmentsRouter);
 
   // Register object storage routes for serving uploaded files

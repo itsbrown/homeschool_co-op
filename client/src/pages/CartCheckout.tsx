@@ -23,6 +23,7 @@ import { formatClassSchedule } from '@/lib/utils';
 import { stripePromise } from '@/config/stripe';
 import type { Stripe } from '@stripe/stripe-js';
 import { trackBeginCheckout, trackAddPaymentInfo } from '@/lib/analytics';
+import { recordCheckoutFunnelStep } from '@/lib/telemetryClient';
 import { isFreeEnrollmentApproved as gateIsFreeEnrollmentApproved, cartLooksFreeButUnverified as gateCartLooksFreeButUnverified } from '@/utils/freeEnrollmentGate';
 import { computeCartItemFingerprint } from '@shared/cartFingerprint';
 import { normalizeCheckoutPaymentPlanRequest } from '@shared/checkout-payment-plan';
@@ -134,6 +135,7 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
 
     // Track add_payment_info event for GA4
     trackAddPaymentInfo('card', selectedPlanAmount);
+    void recordCheckoutFunnelStep({ step: 'add_payment_info', lane: 'member_cart', cartValueCents: selectedPlanAmount });
     
     try {
       const result = await stripe.confirmPayment({
@@ -1286,6 +1288,14 @@ export default function CartCheckout() {
             })),
             cart.total
           );
+          void recordCheckoutFunnelStep({
+            step: 'begin_checkout',
+            lane: 'member_cart',
+            classIds: cart.items.map((i) => i.classId),
+            childIds: cart.items.map((i) => i.childId),
+            enrollmentIds: cart.items.map((i) => i.enrollmentId).filter((id): id is number => id != null),
+            cartValueCents: cart.total,
+          });
           setHasTrackedBeginCheckout(true);
         }
         

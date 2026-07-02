@@ -13,6 +13,7 @@ Parents pay via cart checkout (Stripe PaymentIntents). The server is authoritati
 - **Approved credits must be consumed** via `unified_credit_usage_logs` and `credits.used_amount_cents` when applied at checkout or in an admin correction. An approved credit with `used_amount_cents = 0` while enrollments still owe money is a ledger bug.
 - **Do not JOIN `payments` when summing enrollment balances** — inflates totals (one row per payment × each enrollment). Aggregate `program_enrollments` only, or use a subquery for payment counts.
 - **Scheduled payments are created post–first successful payment**, not at cart abandon — see `asa-payment-patterns` skill.
+- **Cart abandonment analytics** — funnel events in `checkout_funnel_events` (member cart + public store); admin UI at `/school-admin/analytics`. See [school-analytics.md](./school-analytics.md).
 - **`total_paid` without corroboration is invalid** — if `total_paid > 0`, `payment_status = pending`, and there is no succeeded Stripe PI / `payments` row for that checkout, treat as **phantom ledger** (admin display and cart must not treat as cash collected). See incident: Kendra Crofoot 2026-06-25; plan: [`enrollment-ledger-stripe-parity.md`](../../plans/enrollment-ledger-stripe-parity.md) (**Phase 5 test matrix** = ship gates before medium-risk phases).
 
 ## Balance fields (program enrollments)
