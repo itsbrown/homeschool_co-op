@@ -33,6 +33,7 @@ import {
   formatStoreOrderNumber,
   persistStoreEmergencyContact,
 } from '../lib/store-checkout-contact';
+import { storeProductDeliverySchema } from '../lib/store-product-fulfillment';
 import { storage } from '../storage';
 
 const router = Router();
@@ -81,6 +82,7 @@ const checkoutBodySchema = snapshotBodySchema.extend({
       childDraft: cartLineSchema.shape.childDraft,
     }),
   ),
+  productDelivery: storeProductDeliverySchema.optional(),
 });
 
 async function optionalUserId(req: any): Promise<number | null> {
@@ -216,6 +218,14 @@ router.post('/:storeSlug/checkout', async (req, res) => {
     });
 
     const hasPrograms = parsed.data.cart.some((l) => l.listingType !== 'product');
+    const hasProducts = parsed.data.cart.some((l) => l.listingType === 'product');
+
+    if (hasProducts) {
+      if (!parsed.data.productDelivery) {
+        return res.status(400).json({ message: 'Pickup or shipping is required for product orders' });
+      }
+    }
+
     if (hasPrograms) {
       if (!parsed.data.parent.phone || parsed.data.parent.phone.trim().length < 10) {
         return res.status(400).json({ message: 'Phone number is required for program enrollment' });
@@ -287,7 +297,10 @@ router.post('/:storeSlug/checkout', async (req, res) => {
       status: snapshot.amountDueCents > 0 ? 'pending' : 'paid',
       totalCents: snapshot.amountDueCents,
       accessToken,
-      metadata: { snapshotId },
+      metadata: {
+        snapshotId,
+        ...(parsed.data.productDelivery ? { productDelivery: parsed.data.productDelivery } : {}),
+      },
     });
 
     await saveStoreCheckoutSnapshot({
@@ -305,6 +318,7 @@ router.post('/:storeSlug/checkout', async (req, res) => {
         parentName: `${parsed.data.parent.firstName} ${parsed.data.parent.lastName}`,
         parentPhone: parsed.data.parent.phone ?? null,
         emergencyContact: parsed.data.emergencyContact ?? null,
+        productDelivery: parsed.data.productDelivery ?? null,
         childAssignments,
         pendingStoreOrderId: pendingOrder.id,
         accessToken,
@@ -460,6 +474,7 @@ router.get('/:storeSlug/order/:token', async (req, res) => {
       },
       parentPhone: payload?.parentPhone ?? snapshot?.parentPhone ?? null,
       emergencyContact: payload?.emergencyContact ?? null,
+      productDelivery: payload?.productDelivery ?? null,
       lines,
       membershipTotalCents: payload?.membershipTotalCents ?? 0,
       documents: docs,

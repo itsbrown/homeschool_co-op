@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-07-01 (Public store — product pickup vs shipping)
+
+- **Checkout:** Carts with products include a Delivery step — pick up at campus or ship (full address required).
+- **Persistence:** `productDelivery` on checkout snapshot + order metadata; shown on success page, confirmation email, admin sign-ups CSV.
+
 ## 2026-07-01 (Public store — header description)
 
 - **UI:** Removed clamped school description from sticky store header; full intro text shows once on the browse page body (`store-intro-description`).

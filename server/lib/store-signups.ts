@@ -8,6 +8,10 @@ import {
   users,
 } from '@shared/schema';
 import { formatStoreOrderNumber } from './store-checkout-contact';
+import {
+  formatStoreProductDeliveryLabel,
+  type StoreProductDelivery,
+} from './store-product-fulfillment';
 
 export type StoreSignupRow = {
   id: string;
@@ -33,6 +37,8 @@ export type StoreSignupRow = {
   totalCostCents: number;
   totalPaidCents: number;
   quantity: number | null;
+  productFulfillmentMethod: string | null;
+  shippingAddress: string | null;
 };
 
 function parentDisplayName(user: {
@@ -141,6 +147,8 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
       totalCostCents: e.totalCost ?? 0,
       totalPaidCents: e.totalPaid ?? 0,
       quantity: null,
+      productFulfillmentMethod: null,
+      shippingAddress: null,
     };
   });
 
@@ -162,6 +170,8 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
   const orderByIdAll = new Map(allOrders.map((o) => [o.id, o]));
   const productRows: StoreSignupRow[] = productItems.map((item) => {
     const order = orderByIdAll.get(item.storeOrderId);
+    const productDelivery = (order?.metadata as { productDelivery?: StoreProductDelivery } | null)
+      ?.productDelivery;
     return {
       id: `product-${item.id}`,
       kind: 'product',
@@ -186,6 +196,13 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
       totalCostCents: item.lineTotalCents,
       totalPaidCents: order?.status === 'paid' ? item.lineTotalCents : 0,
       quantity: item.quantity,
+      productFulfillmentMethod: productDelivery?.method ?? null,
+      shippingAddress:
+        productDelivery?.method === 'shipping' && productDelivery.shippingAddress
+          ? formatStoreProductDeliveryLabel(productDelivery)
+          : productDelivery?.method === 'pickup'
+            ? 'Pick up at campus'
+            : null,
     };
   });
 
@@ -222,6 +239,8 @@ export function buildStoreSignupsCsv(rows: StoreSignupRow[]): string {
     'Total (USD)',
     'Paid (USD)',
     'Quantity',
+    'Fulfillment',
+    'Shipping / pickup',
   ];
 
   const lines = rows.map((row) => {
@@ -252,6 +271,8 @@ export function buildStoreSignupsCsv(rows: StoreSignupRow[]): string {
       csvEscape((row.totalCostCents / 100).toFixed(2)),
       csvEscape((row.totalPaidCents / 100).toFixed(2)),
       csvEscape(row.quantity),
+      csvEscape(row.productFulfillmentMethod),
+      csvEscape(row.shippingAddress),
     ].join(',');
   });
 

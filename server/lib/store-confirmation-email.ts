@@ -6,6 +6,8 @@ import { updateStoreOrder } from './store-storage';
 import { sendStorePurchaseConfirmationEmail } from './email-service';
 import type { CreatedStoreEnrollment } from './store-guest-checkout';
 
+import type { StoreProductDelivery } from './store-product-fulfillment';
+
 type StoreSnapshotPayload = {
   lines?: Array<{
     lineId: string;
@@ -24,6 +26,7 @@ type StoreSnapshotPayload = {
   parentName?: string;
   parentEmail?: string;
   accessToken?: string;
+  productDelivery?: StoreProductDelivery | null;
 };
 
 type StoreOrderRow = {
@@ -146,6 +149,7 @@ export async function sendStoreOrderConfirmationEmail(params: {
       quantity: l.quantity,
       lineTotalCents: l.lineTotalCents ?? 0,
     })),
+    productDelivery: payload.productDelivery ?? null,
     documents,
     attachments,
   });

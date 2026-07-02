@@ -28,6 +28,8 @@ describe('buildStoreSignupsCsv', () => {
         totalCostCents: 5000,
         totalPaidCents: 5000,
         quantity: null,
+        productFulfillmentMethod: null,
+        shippingAddress: null,
       },
     ];
 

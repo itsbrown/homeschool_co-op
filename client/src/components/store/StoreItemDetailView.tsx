@@ -95,7 +95,7 @@ export function StoreItemDetailView({
               {isProduct ? (
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                   <Package className="h-4 w-4 shrink-0" aria-hidden />
-                  Ships with your order — pickup details in confirmation email.
+                  Choose pickup or shipping at checkout.
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5">

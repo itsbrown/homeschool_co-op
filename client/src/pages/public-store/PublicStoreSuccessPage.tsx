@@ -6,7 +6,7 @@ import { CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { clearStoreCart } from "@/lib/store-cart";
-import { formatStoreMoney } from "@/lib/store-checkout";
+import { formatStoreMoney, productDeliverySummary, type StoreProductDelivery } from "@/lib/store-checkout";
 
 type OrderLine = {
   lineId: string;
@@ -32,6 +32,7 @@ type OrderConfirmation = {
   };
   lines: OrderLine[];
   membershipTotalCents: number;
+  productDelivery?: StoreProductDelivery | null;
   documents: { id: number; title: string; fileName: string; downloadUrl?: string }[];
 };
 
@@ -156,6 +157,25 @@ export default function PublicStoreSuccessPage() {
                     <span data-testid="store-success-total">{formatStoreMoney(data.order.totalCents)}</span>
                   </div>
                 </div>
+
+                {data.productDelivery && data.lines.some((l) => l.listingType === "product") && (
+                  <div
+                    className="rounded-md border bg-slate-50 p-3 text-sm"
+                    data-testid="store-success-delivery"
+                  >
+                    <p className="font-medium mb-1">Product delivery</p>
+                    <p className="text-muted-foreground">{productDeliverySummary(data.productDelivery)}</p>
+                    {data.productDelivery.method === "shipping" && data.productDelivery.shippingAddress && (
+                      <p className="text-muted-foreground mt-2 whitespace-pre-line">
+                        {data.productDelivery.shippingAddress.line1}
+                        {data.productDelivery.shippingAddress.line2
+                          ? `\n${data.productDelivery.shippingAddress.line2}`
+                          : ""}
+                        {`\n${data.productDelivery.shippingAddress.city}, ${data.productDelivery.shippingAddress.state} ${data.productDelivery.shippingAddress.postalCode}`}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {data.documents.length > 0 && (
                   <div>

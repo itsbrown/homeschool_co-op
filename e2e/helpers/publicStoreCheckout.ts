@@ -58,6 +58,39 @@ export async function openStoreCheckoutFromCart(page: Page): Promise<void> {
   await page.getByTestId("store-cart-button").click();
 }
 
+/** Fill merch delivery step — defaults to shipping with a sample address. */
+export async function completeStoreMerchDeliveryStep(
+  page: Page,
+  options: { method?: "pickup" | "shipping" } = {},
+): Promise<void> {
+  const method = options.method ?? "shipping";
+  if (method === "pickup") {
+    await page.getByTestId("store-delivery-pickup").click();
+  } else {
+    await page.getByTestId("store-delivery-shipping").click();
+    await page.getByTestId("store-shipping-line1").fill("123 Main Street");
+    await page.getByTestId("store-shipping-city").fill("Albany");
+    await page.getByTestId("store-shipping-state").fill("NY");
+    await page.getByTestId("store-shipping-postal").fill("12203");
+  }
+  await page.getByTestId("store-checkout-delivery-continue").click();
+}
+
+/** Guest merch checkout through contact + delivery (no payment submit). */
+export async function completeStoreMerchGuestContactAndDelivery(
+  page: Page,
+  contact: StoreGuestCheckoutContact,
+  delivery: { method?: "pickup" | "shipping" } = {},
+): Promise<void> {
+  await page.getByTestId("store-checkout-step1-continue").click();
+  await page.getByTestId("store-checkout-parent-first-name").fill(contact.firstName);
+  await page.getByTestId("store-checkout-parent-last-name").fill(contact.lastName);
+  await page.getByTestId("store-checkout-parent-email").fill(contact.email);
+  await page.getByTestId("store-checkout-parent-phone").fill(contact.phone ?? "5555550100");
+  await page.getByTestId("store-checkout-step2-continue").click();
+  await completeStoreMerchDeliveryStep(page, delivery);
+}
+
 /** Walk guest checkout for a cart that includes at least one program line. */
 export async function completeStoreGuestCheckout(
   page: Page,
