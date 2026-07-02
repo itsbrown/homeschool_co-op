@@ -10,14 +10,21 @@ import { useToast } from "@/hooks/use-toast";
 import { loadStoreCart, saveStoreCart, type StoreCartState } from "@/lib/store-cart";
 import { StoreCartReview } from "@/components/store/StoreCartReview";
 import { StoreCheckoutChildFields } from "@/components/store/StoreCheckoutChildFields";
+import { StoreCheckoutDeliveryFields } from "@/components/store/StoreCheckoutDeliveryFields";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 import {
+  buildStoreCheckoutSteps,
+  emptyProductDelivery,
   isChildDraftComplete,
   isEmergencyContactComplete,
   isParentContactComplete,
+  isProductDeliveryComplete,
+  STORE_CHECKOUT_STEP_LABELS,
+  type StoreCheckoutStepKey,
   type StoreChildAssignment,
   type StoreEmergencyContact,
   type StoreParentContact,
+  type StoreProductDelivery,
 } from "@/lib/store-checkout";
 import { loginPathWithReturnTo } from "@/lib/auth-return-to";
 
@@ -35,27 +42,15 @@ type StoreInfo = {
   logo?: string | null;
 };
 
-const STEP_LABELS: Record<number, string> = {
-  1: "Cart",
-  2: "Contact",
-  3: "Children",
-  4: "Payment",
-};
-
-function CheckoutStepIndicator({ step, maxStep }: { step: number; maxStep: number }) {
-  const labels =
-    maxStep === 3
-      ? ["Cart", "Contact", "Payment"]
-      : ["Cart", "Contact", "Children", "Payment"];
-
+function CheckoutStepIndicator({ steps, stepIndex }: { steps: StoreCheckoutStepKey[]; stepIndex: number }) {
   return (
     <ol className="flex items-center gap-2 text-xs sm:text-sm" aria-label="Checkout progress">
-      {labels.map((label, index) => {
+      {steps.map((key, index) => {
         const stepNum = index + 1;
-        const active = step === stepNum;
-        const done = step > stepNum;
+        const active = stepIndex === stepNum;
+        const done = stepIndex > stepNum;
         return (
-          <li key={label} className="flex items-center gap-2 min-w-0">
+          <li key={key} className="flex items-center gap-2 min-w-0">
             <span
               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
                 done
@@ -68,9 +63,9 @@ function CheckoutStepIndicator({ step, maxStep }: { step: number; maxStep: numbe
               {done ? "✓" : stepNum}
             </span>
             <span className={`truncate ${active ? "font-medium" : "text-muted-foreground"}`}>
-              {label}
+              {STORE_CHECKOUT_STEP_LABELS[key]}
             </span>
-            {index < labels.length - 1 && (
+            {index < steps.length - 1 && (
               <span className="hidden sm:inline text-muted-foreground">→</span>
             )}
           </li>
@@ -91,9 +86,15 @@ export default function PublicStoreCheckoutPage() {
     saveStoreCart(cart);
   }, [cart]);
 
+  const hasProducts = cart.lines.some((l) => l.listingType === "product");
   const hasPrograms = cart.lines.some((l) => l.listingType !== "product");
+  const steps = useMemo(
+    () => buildStoreCheckoutSteps({ hasProducts, hasPrograms }),
+    [hasProducts, hasPrograms],
+  );
+  const maxStep = steps.length;
   const [step, setStep] = useState(1);
-  const maxStep = hasPrograms ? 4 : 3;
+  const currentStep = steps[step - 1];
 
   const [parent, setParent] = useState<StoreParentContact>({
     firstName: (user as any)?.firstName ?? "",
@@ -109,6 +110,7 @@ export default function PublicStoreCheckoutPage() {
     relationship: "",
   });
 
+  const [productDelivery, setProductDelivery] = useState<StoreProductDelivery>(emptyProductDelivery());
   const [childAssignments, setChildAssignments] = useState<Record<string, StoreChildAssignment>>({});
 
   const programLines = cart.lines.filter((l) => l.listingType !== "product");
@@ -168,8 +170,8 @@ export default function PublicStoreCheckoutPage() {
   });
 
   useEffect(() => {
-    if (step === maxStep) refetchSnapshot();
-  }, [step, maxStep, refetchSnapshot]);
+    if (currentStep === "payment") refetchSnapshot();
+  }, [currentStep, refetchSnapshot]);
 
   const setChildAssignment = (lineId: string, value: StoreChildAssignment) => {
     setChildAssignments((prev) => ({ ...prev, [lineId]: value }));
@@ -188,7 +190,7 @@ export default function PublicStoreCheckoutPage() {
     toast({ title: "Applied to all programs", description: "The same child is assigned to each program." });
   };
 
-  const validateStep2 = (): boolean => {
+  const validateContact = (): boolean => {
     if (!isParentContactComplete(parent)) {
       toast({
         title: "Contact information incomplete",
@@ -208,7 +210,22 @@ export default function PublicStoreCheckoutPage() {
     return true;
   };
 
-  const validateStep3 = (): boolean => {
+  const validateDelivery = (): boolean => {
+    if (!isProductDeliveryComplete(productDelivery)) {
+      toast({
+        title: "Delivery information incomplete",
+        description:
+          productDelivery.method === "shipping"
+            ? "Please enter a complete shipping address."
+            : "Please choose pickup or shipping.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const validateChildren = (): boolean => {
     for (const line of programLines) {
       const assignment = childAssignments[line.lineId];
       if (assignment?.childId) continue;
@@ -223,6 +240,8 @@ export default function PublicStoreCheckoutPage() {
     }
     return true;
   };
+
+  const goNext = () => setStep((s) => Math.min(s + 1, maxStep));
 
   const submitCheckout = async () => {
     const token = localStorage.getItem("supabase_token");
@@ -243,6 +262,7 @@ export default function PublicStoreCheckoutPage() {
         parent,
         emergencyContact: hasPrograms ? emergencyContact : undefined,
         childAssignments: assignments,
+        productDelivery: hasProducts ? productDelivery : undefined,
       }),
     });
 
@@ -305,13 +325,13 @@ export default function PublicStoreCheckoutPage() {
           </Link>
         </div>
 
-        <CheckoutStepIndicator step={step} maxStep={maxStep} />
+        <CheckoutStepIndicator steps={steps} stepIndex={step} />
         <p className="text-sm text-muted-foreground">
           Step {step} of {maxStep}
-          {STEP_LABELS[step] ? ` — ${STEP_LABELS[step]}` : ""}
+          {currentStep ? ` — ${STORE_CHECKOUT_STEP_LABELS[currentStep]}` : ""}
         </p>
 
-        {step === 1 && (
+        {currentStep === "cart" && (
           <Card>
             <CardHeader>
               <CardTitle>Review your cart</CardTitle>
@@ -320,7 +340,7 @@ export default function PublicStoreCheckoutPage() {
               <StoreCartReview cart={cart} onCartChange={setCart} />
               <Button
                 className="w-full"
-                onClick={() => setStep(2)}
+                onClick={goNext}
                 disabled={cart.lines.length === 0}
                 data-testid="store-checkout-step1-continue"
               >
@@ -330,7 +350,7 @@ export default function PublicStoreCheckoutPage() {
           </Card>
         )}
 
-        {step === 2 && (
+        {currentStep === "contact" && (
           <Card>
             <CardHeader>
               <CardTitle>Parent / guardian contact</CardTitle>
@@ -460,8 +480,8 @@ export default function PublicStoreCheckoutPage() {
               <Button
                 className="w-full"
                 onClick={() => {
-                  if (!validateStep2()) return;
-                  setStep(hasPrograms ? 3 : maxStep);
+                  if (!validateContact()) return;
+                  goNext();
                 }}
                 data-testid="store-checkout-step2-continue"
               >
@@ -471,7 +491,31 @@ export default function PublicStoreCheckoutPage() {
           </Card>
         )}
 
-        {step === 3 && hasPrograms && (
+        {currentStep === "delivery" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Delivery</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <StoreCheckoutDeliveryFields
+                delivery={productDelivery}
+                onChange={setProductDelivery}
+              />
+              <Button
+                className="w-full"
+                onClick={() => {
+                  if (!validateDelivery()) return;
+                  goNext();
+                }}
+                data-testid="store-checkout-delivery-continue"
+              >
+                Continue
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {currentStep === "children" && (
           <Card>
             <CardHeader>
               <CardTitle>Register children</CardTitle>
@@ -510,8 +554,8 @@ export default function PublicStoreCheckoutPage() {
               <Button
                 className="w-full"
                 onClick={() => {
-                  if (!validateStep3()) return;
-                  setStep(4);
+                  if (!validateChildren()) return;
+                  goNext();
                 }}
                 data-testid="store-checkout-step3-continue"
               >
@@ -521,7 +565,7 @@ export default function PublicStoreCheckoutPage() {
           </Card>
         )}
 
-        {step === maxStep && (
+        {currentStep === "payment" && (
           <Card>
             <CardHeader>
               <CardTitle>Payment summary</CardTitle>
@@ -543,6 +587,16 @@ export default function PublicStoreCheckoutPage() {
                   <span>Membership</span>
                   <span>${(snapshot.membershipTotalCents / 100).toFixed(2)}</span>
                 </div>
+              )}
+              {hasProducts && (
+                <p className="text-sm text-muted-foreground pt-1 border-t">
+                  Products:{" "}
+                  {productDelivery.method === "pickup"
+                    ? "Pick up at campus"
+                    : productDelivery.shippingAddress
+                      ? `Ship to ${productDelivery.shippingAddress.city}, ${productDelivery.shippingAddress.state}`
+                      : "Shipping"}
+                </p>
               )}
               <div className="flex justify-between font-semibold pt-2 border-t">
                 <span>Total due today</span>

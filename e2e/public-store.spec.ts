@@ -303,6 +303,40 @@ test.describe("public store", () => {
     await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
     await page.getByTestId("store-cart-button").click();
     await expect(page).toHaveURL(new RegExp(`/store/${slug}/checkout`));
+    await page.getByTestId("store-checkout-step1-continue").click();
+    await expect(page.getByTestId("store-checkout-delivery")).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("guest merch checkout collects shipping address", async ({ page, request }) => {
+    const { completeStoreMerchGuestContactAndDelivery } = await import(
+      "./helpers/publicStoreCheckout"
+    );
+
+    const { response, json } = await postSetupPublicStoreScenario(request, {
+      productImageUrl: "/uploads/store-products/e2e-ship.png",
+    });
+    test.skip(!response.ok(), `seed failed (${response.status()})`);
+
+    const slug = json!.data!.storeSlug;
+    const unique = Date.now();
+
+    await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Add to cart" }).click();
+    await page.getByTestId("store-cart-button").click();
+
+    await completeStoreMerchGuestContactAndDelivery(
+      page,
+      {
+        firstName: "Ship",
+        lastName: "Tester",
+        email: `store_ship_${unique}@test.com`,
+        phone: "5555550100",
+      },
+      { method: "shipping" },
+    );
+
+    await expect(page.getByText("Payment summary")).toBeVisible();
+    await expect(page.getByText(/Ship to Albany, NY/i)).toBeVisible();
   });
 
   test("guest sees add-to-cart feedback and can edit merch quantity in checkout", async ({

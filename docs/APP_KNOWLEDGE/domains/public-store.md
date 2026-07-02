@@ -60,7 +60,7 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 
 ### Guest checkout (programs)
 
-- Steps: cart → parent contact + **emergency contact** → child per program line → payment
+- Steps: cart → parent contact (+ emergency contact for programs) → **delivery** (pickup or shipping + address when cart has products) → child per program line → payment
 - Each program line requires a child (saved profile or inline draft with labeled DOB + grade)
 - Multiple programs: different children allowed; “Use same child for all” copies first assignment
 - Success: `/store/:slug/success?token=…` — school logo/name, formatted order number, line summary, document download links

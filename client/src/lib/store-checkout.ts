@@ -85,3 +85,77 @@ export function formatStoreOrderNumber(orderId: number, createdAt: string | Date
 export function formatStoreMoney(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
+
+export type StoreProductFulfillmentMethod = "pickup" | "shipping";
+
+export type StoreShippingAddress = {
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+};
+
+export type StoreProductDelivery = {
+  method: StoreProductFulfillmentMethod;
+  shippingAddress?: StoreShippingAddress;
+};
+
+export function emptyShippingAddress(): StoreShippingAddress {
+  return { line1: "", line2: "", city: "", state: "", postalCode: "" };
+}
+
+export function emptyProductDelivery(): StoreProductDelivery {
+  return { method: "pickup" };
+}
+
+export function isShippingAddressComplete(address: StoreShippingAddress | undefined): boolean {
+  if (!address) return false;
+  return (
+    address.line1.trim().length > 0 &&
+    address.city.trim().length > 0 &&
+    address.state.trim().length >= 2 &&
+    address.postalCode.trim().length >= 5
+  );
+}
+
+export function isProductDeliveryComplete(delivery: StoreProductDelivery): boolean {
+  if (delivery.method === "pickup") return true;
+  return isShippingAddressComplete(delivery.shippingAddress);
+}
+
+export function formatShippingAddressOneLine(address: StoreShippingAddress): string {
+  const parts = [
+    address.line1.trim(),
+    address.line2.trim() || null,
+    `${address.city.trim()}, ${address.state.trim()} ${address.postalCode.trim()}`,
+  ].filter(Boolean);
+  return parts.join(", ");
+}
+
+export function productDeliverySummary(delivery: StoreProductDelivery): string {
+  if (delivery.method === "pickup") return "Pick up at campus";
+  if (!delivery.shippingAddress) return "Shipping";
+  return `Ship to: ${formatShippingAddressOneLine(delivery.shippingAddress)}`;
+}
+
+export type StoreCheckoutStepKey = "cart" | "contact" | "delivery" | "children" | "payment";
+
+export function buildStoreCheckoutSteps(options: {
+  hasProducts: boolean;
+  hasPrograms: boolean;
+}): StoreCheckoutStepKey[] {
+  const steps: StoreCheckoutStepKey[] = ["cart", "contact"];
+  if (options.hasProducts) steps.push("delivery");
+  if (options.hasPrograms) steps.push("children");
+  steps.push("payment");
+  return steps;
+}
+
+export const STORE_CHECKOUT_STEP_LABELS: Record<StoreCheckoutStepKey, string> = {
+  cart: "Cart",
+  contact: "Contact",
+  delivery: "Delivery",
+  children: "Children",
+  payment: "Payment",
+};

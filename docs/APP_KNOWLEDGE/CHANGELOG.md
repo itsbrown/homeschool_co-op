@@ -1,12 +1,10 @@
 # App knowledge changelog
 
-## 2026-07-01 (School Analytics Platform)
 
-- **Feature:** School Analytics page (`/school-admin/analytics`) — Engagement, Cart Abandonment, Student Progress tabs with demographic filters.
-- **Progress:** Progress Insights tab on Assessments; parent `/parent/progress` Charts tab with reading/math APIs; Lexile parser + `progress-analytics.ts`.
-- **Telemetry:** `user_activity_events`, `checkout_funnel_events` tables; `POST /api/telemetry/activity` and `/checkout-funnel`; `ActivityTelemetry` in `App.tsx`.
-- **Tests:** Integration specs under `server/tests/integration/*analytics*`; E2E `school-analytics-engagement`, `school-analytics-cart-abandonment`, `parent-progress-charts`.
-- **Docs:** [school-analytics.md](domains/school-analytics.md).
+## 2026-07-01 (Public store — product pickup vs shipping)
+
+- **Checkout:** Carts with products include a Delivery step — pick up at campus or ship (full address required).
+- **Persistence:** `productDelivery` on checkout snapshot + order metadata; shown on success page, confirmation email, admin sign-ups CSV.
 
 ## 2026-07-01 (Public store — header description)
 

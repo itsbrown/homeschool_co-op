@@ -2005,6 +2005,16 @@ export async function sendStorePurchaseConfirmationEmail(data: {
   paidLines: Array<{ title: string; childName?: string; lineTotalCents: number }>;
   waitlistLines: Array<{ title: string; childName?: string; waitlistPosition?: number | null }>;
   merchLines: Array<{ title: string; quantity?: number; lineTotalCents: number }>;
+  productDelivery?: {
+    method: 'pickup' | 'shipping';
+    shippingAddress?: {
+      line1: string;
+      line2?: string;
+      city: string;
+      state: string;
+      postalCode: string;
+    };
+  } | null;
   documents: Array<{ id: number; title: string; fileName: string; downloadUrl?: string }>;
   attachments?: Array<{ filename: string; content: Buffer; type: string }>;
 }): Promise<boolean> {
@@ -2080,6 +2090,27 @@ export async function sendStorePurchaseConfirmationEmail(data: {
     </div>`
       : '';
 
+  const deliverySection =
+    data.productDelivery && data.merchLines.length > 0
+      ? `
+    <div style="margin-top:20px;padding:14px 16px;background:#F9FAFB;border-radius:6px;border:1px solid #E5E7EB;">
+      <p style="margin:0 0 6px 0;font-weight:600;color:#1F2937;">Product delivery</p>
+      <p style="margin:0;color:#4B5563;font-size:14px;">
+        ${
+          data.productDelivery.method === 'pickup'
+            ? 'Pick up at campus — the school will follow up with pickup details.'
+            : data.productDelivery.shippingAddress
+              ? `Ship to:<br/>${data.productDelivery.shippingAddress.line1}${
+                  data.productDelivery.shippingAddress.line2
+                    ? `<br/>${data.productDelivery.shippingAddress.line2}`
+                    : ''
+                }<br/>${data.productDelivery.shippingAddress.city}, ${data.productDelivery.shippingAddress.state} ${data.productDelivery.shippingAddress.postalCode}`
+              : 'Shipping address on file'
+        }
+      </p>
+    </div>`
+      : '';
+
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#111827;">
       <div style="background:#1D4ED8;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0;">
@@ -2098,6 +2129,8 @@ export async function sendStorePurchaseConfirmationEmail(data: {
             <td style="padding:14px 0;text-align:right;font-weight:bold;">${formatMoney(data.orderTotalCents)}</td>
           </tr>
         </table>
+
+        ${deliverySection}
 
         ${docSection}
 
@@ -2131,6 +2164,16 @@ export async function sendStorePurchaseConfirmationEmail(data: {
     ...data.merchLines.map(
       (m) => `- ${m.title}${m.quantity && m.quantity > 1 ? ` x${m.quantity}` : ''}: ${formatMoney(m.lineTotalCents)}`,
     ),
+    ...(data.productDelivery && data.merchLines.length > 0
+      ? [
+          '',
+          data.productDelivery.method === 'pickup'
+            ? 'Product delivery: Pick up at campus'
+            : data.productDelivery.shippingAddress
+              ? `Product delivery: Ship to ${data.productDelivery.shippingAddress.line1}, ${data.productDelivery.shippingAddress.city}, ${data.productDelivery.shippingAddress.state} ${data.productDelivery.shippingAddress.postalCode}`
+              : 'Product delivery: Shipping',
+        ]
+      : []),
     '',
     `Total: ${formatMoney(data.orderTotalCents)}`,
     '',
