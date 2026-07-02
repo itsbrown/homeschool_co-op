@@ -10,10 +10,12 @@ import {
 } from "@/lib/store-catalog-display";
 import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 import { StoreCatalogItemActions } from "@/components/store/StoreCatalogItemActions";
+import { StoreItemShareButton } from "@/components/store/StoreItemShareButton";
 
 type StoreCatalogCardProps = {
   item: StoreCatalogItem;
   schoolSlug: string;
+  sharerUserId?: number | null;
   onAddProduct: (item: StoreCatalogItem) => void;
   onAddProgram: (item: StoreCatalogItem, variant: "half_day" | "full_day") => void;
 };
@@ -21,6 +23,7 @@ type StoreCatalogCardProps = {
 export function StoreCatalogCard({
   item,
   schoolSlug,
+  sharerUserId = null,
   onAddProduct,
   onAddProgram,
 }: StoreCatalogCardProps) {
@@ -81,14 +84,24 @@ export function StoreCatalogCard({
           <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
         )}
 
-        <Link
-          href={detailPath}
-          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline w-fit"
-          data-testid={`store-view-details-${item.listingId}`}
-        >
-          {item.listingType === "product" ? "View product details" : "View program details"}
-          <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={detailPath}
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            data-testid={`store-view-details-${item.listingId}`}
+          >
+            {item.listingType === "product" ? "View product details" : "View program details"}
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+          <StoreItemShareButton
+            item={item}
+            schoolSlug={schoolSlug}
+            sharerUserId={sharerUserId}
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-muted-foreground hover:text-primary"
+          />
+        </div>
 
         <div className="mt-auto pt-1">
           <StoreCatalogItemActions

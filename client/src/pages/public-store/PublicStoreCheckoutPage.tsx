@@ -27,6 +27,11 @@ import {
   type StoreProductDelivery,
 } from "@/lib/store-checkout";
 import { loginPathWithReturnTo } from "@/lib/auth-return-to";
+import { useCaptureStoreShareReferral } from "@/hooks/useCaptureStoreShareReferral";
+import {
+  getStoreShareReferral,
+  getStoreShareReferralUserId,
+} from "@/lib/store-share-attribution";
 
 type SnapshotLine = {
   lineId: string;
@@ -79,6 +84,7 @@ export default function PublicStoreCheckoutPage() {
   const { schoolSlug = "" } = useParams<{ schoolSlug: string }>();
   const [, setLocation] = useLocation();
   const { isAuthenticated, user } = useAuth();
+  useCaptureStoreShareReferral(schoolSlug);
   const { toast } = useToast();
   const [cart, setCart] = useState<StoreCartState>(() => loadStoreCart(schoolSlug));
 
@@ -245,6 +251,8 @@ export default function PublicStoreCheckoutPage() {
 
   const submitCheckout = async () => {
     const token = localStorage.getItem("supabase_token");
+    const referral = getStoreShareReferral(schoolSlug);
+    const referredByUserId = getStoreShareReferralUserId(schoolSlug);
     const assignments = programLines.map((line) => ({
       lineId: line.lineId,
       childId: childAssignments[line.lineId]?.childId,
@@ -263,6 +271,8 @@ export default function PublicStoreCheckoutPage() {
         emergencyContact: hasPrograms ? emergencyContact : undefined,
         childAssignments: assignments,
         productDelivery: hasProducts ? productDelivery : undefined,
+        referredByUserId: referredByUserId ?? undefined,
+        referralCapturedAt: referral?.capturedAt,
       }),
     });
 

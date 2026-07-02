@@ -46,6 +46,9 @@ export type StoreSignupRow = {
   totalCostCents: number;
   totalPaidCents: number;
   quantity: number | null;
+  referralUserId: number | null;
+  referralName: string | null;
+  referralEmail: string | null;
 };
 
 type StatusFilter = "all" | "enrolled" | "waitlist" | "pending_payment" | "product";
@@ -103,6 +106,9 @@ function exportSignupsCsv(rows: StoreSignupRow[], filenamePrefix: string) {
     "Total (USD)",
     "Paid (USD)",
     "Quantity",
+    "Referral user ID",
+    "Referral name",
+    "Referral email",
   ];
 
   const escape = (value: string | number | null | undefined) => {
@@ -137,6 +143,9 @@ function exportSignupsCsv(rows: StoreSignupRow[], filenamePrefix: string) {
       escape((row.totalCostCents / 100).toFixed(2)),
       escape((row.totalPaidCents / 100).toFixed(2)),
       escape(row.quantity),
+      escape(row.referralUserId),
+      escape(row.referralName),
+      escape(row.referralEmail),
     ].join(",");
   });
 
@@ -183,6 +192,8 @@ export function StoreSignupsTab() {
         row.parentPhone,
         row.orderNumber,
         row.emergencyContactName,
+        row.referralName,
+        row.referralEmail,
       ]
         .filter(Boolean)
         .join(" ")
@@ -286,6 +297,7 @@ export function StoreSignupsTab() {
                   <TableHead>Child</TableHead>
                   <TableHead>Parent</TableHead>
                   <TableHead>Emergency</TableHead>
+                  <TableHead>Referral</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Paid</TableHead>
                 </TableRow>
@@ -337,6 +349,18 @@ export function StoreSignupsTab() {
                             <p className="text-xs text-muted-foreground">
                               {row.emergencyContactRelationship}
                             </p>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {row.referralUserId ? (
+                        <>
+                          <p>{row.referralName ?? `User #${row.referralUserId}`}</p>
+                          {row.referralEmail && (
+                            <p className="text-xs text-muted-foreground">{row.referralEmail}</p>
                           )}
                         </>
                       ) : (

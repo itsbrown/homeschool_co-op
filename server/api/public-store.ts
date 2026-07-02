@@ -36,7 +36,7 @@ import {
   persistStoreEmergencyContact,
 } from '../lib/store-checkout-contact';
 import { storeProductDeliverySchema } from '../lib/store-product-fulfillment';
-import { storage } from '../storage';
+import { resolveStoreShareReferral } from '../lib/store-share-attribution';
 
 const router = Router();
 
@@ -85,6 +85,8 @@ const checkoutBodySchema = snapshotBodySchema.extend({
     }),
   ),
   productDelivery: storeProductDeliverySchema.optional(),
+  referredByUserId: z.number().int().positive().optional(),
+  referralCapturedAt: z.string().datetime().optional(),
 });
 
 async function optionalUserId(req: any): Promise<number | null> {
@@ -291,6 +293,12 @@ router.post('/:storeSlug/checkout', async (req, res) => {
     const accessToken = generateStoreAccessToken();
     const expiresAt = new Date(Date.now() + STORE_SNAPSHOT_TTL_MS);
 
+    const referral = await resolveStoreShareReferral({
+      referredByUserId: parsed.data.referredByUserId,
+      buyerParentId: parentResult.parentId,
+      capturedAt: parsed.data.referralCapturedAt,
+    });
+
     const pendingOrder = await createStoreOrder({
       schoolId: school.id,
       parentId: parentResult.parentId,
@@ -302,6 +310,7 @@ router.post('/:storeSlug/checkout', async (req, res) => {
       metadata: {
         snapshotId,
         ...(parsed.data.productDelivery ? { productDelivery: parsed.data.productDelivery } : {}),
+        ...(referral ? { referral } : {}),
       },
     });
 
@@ -321,6 +330,7 @@ router.post('/:storeSlug/checkout', async (req, res) => {
         parentPhone: parsed.data.parent.phone ?? null,
         emergencyContact: parsed.data.emergencyContact ?? null,
         productDelivery: parsed.data.productDelivery ?? null,
+        referral,
         childAssignments,
         pendingStoreOrderId: pendingOrder.id,
         accessToken,
@@ -342,7 +352,10 @@ router.post('/:storeSlug/checkout', async (req, res) => {
         storeOrderId: pendingOrder.id,
         childIds: childAssignments.map((c) => c.childId),
         cartValueCents: snapshot.amountDueCents,
-        metadata: { parentName: `${parsed.data.parent.firstName} ${parsed.data.parent.lastName}` },
+        metadata: {
+          parentName: `${parsed.data.parent.firstName} ${parsed.data.parent.lastName}`,
+          ...(referral ? { referralUserId: referral.userId } : {}),
+        },
       });
     } catch (funnelErr) {
       console.warn('checkout funnel telemetry (public store):', funnelErr);

@@ -11,10 +11,14 @@ import { formatStoreCartMoney } from "@/lib/store-cart";
 import { PublicStoreHeader } from "@/components/store/PublicStoreHeader";
 import { PublicStoreMemberBanner } from "@/components/store/PublicStoreMemberBanner";
 import { StoreCatalogCard } from "@/components/store/StoreCatalogCard";
+import { useCaptureStoreShareReferral } from "@/hooks/useCaptureStoreShareReferral";
+import { useStoreSharerUserId } from "@/hooks/useStoreSharerUserId";
 
 export default function PublicStorePage() {
   const { schoolSlug = "" } = useParams<{ schoolSlug: string }>();
   const { isAuthenticated } = useAuth();
+  useCaptureStoreShareReferral(schoolSlug);
+  const sharerUserId = useStoreSharerUserId(isAuthenticated);
   const {
     cartCount,
     cartTotal,
@@ -110,6 +114,7 @@ export default function PublicStorePage() {
                       key={`${item.listingType}-${item.listingId}`}
                       item={item}
                       schoolSlug={schoolSlug}
+                      sharerUserId={sharerUserId}
                       onAddProduct={addProduct}
                       onAddProgram={onAddProgram}
                     />

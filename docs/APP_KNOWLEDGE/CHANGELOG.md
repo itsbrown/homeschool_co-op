@@ -8,6 +8,12 @@
 - **Tests:** Integration specs under `server/tests/integration/*analytics*`; E2E `school-analytics-engagement`, `school-analytics-cart-abandonment`, `parent-progress-charts`.
 - **Docs:** [school-analytics.md](domains/school-analytics.md).
 
+## 2026-07-02 (Public store — share links & referral attribution)
+
+- **Share:** Catalog cards and item detail include Share — message auto-includes title, price, description, and link. Logged-in users append `?userId={users.id}`; guests share without param.
+- **Attribution:** `?userId=` captured in sessionStorage (last-touch per store) and sent at checkout; persisted on `store_orders.metadata.referral` and admin Sign-ups table/CSV.
+- **E2E:** `e2e/public-store-share.spec.ts` — share UI, clipboard message, referral capture, checkout payload, admin sign-ups referral column.
+
 ## 2026-07-01 (Public store — product pickup vs shipping)
 
 - **Checkout:** Carts with products include a Delivery step — pick up at campus or ship (full address required).

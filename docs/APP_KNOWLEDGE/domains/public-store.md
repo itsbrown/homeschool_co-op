@@ -33,7 +33,8 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 ## Storefront UX
 
 - **Browse** (`/store/:storeSlug`): Cards are teasers only (2-line description). Price, type badge, and dates show on the card; **“View program/product details”** opens the full page. School description shows once below the header (not in the sticky bar).
-- **Detail** (`/store/:storeSlug/:itemSlug`): Same route for programs, sessions, and merch — layout adapts by `listingType` (stock/shipping copy for products; schedule/enrollment copy for programs). Full description is never truncated.
+- **Detail** (`/store/:storeSlug/:itemSlug`): Same route for programs, sessions, and merch — layout adapts by `listingType` (stock/shipping copy for products; schedule/enrollment copy for programs). Full description is never truncated. **Share** button builds a message with description + link (`?userId=` when logged in).
+- **Referral:** Landing with `?userId=` stores referrer in session; checkout saves `metadata.referral` on the order (self-referrals rejected server-side).
 - **Sections:** When both exist, catalog groups **Programs & classes** (2-col grid) and **Shop** (3-col grid for merch).
 
 ## API
@@ -42,7 +43,7 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 - `GET /api/public/store/:storeSlug/catalog` — published listings (each item includes `slug`)
 - `GET /api/public/store/:storeSlug/catalog/:catalogKey` — single item by **slug** or legacy numeric `listingId`
 - `POST /api/public/store/:storeSlug/snapshot` — pricing (optional auth)
-- `POST /api/public/store/:storeSlug/checkout` — Stripe Checkout Session or waitlist-only fulfillment
+- `POST /api/public/store/:storeSlug/checkout` — Stripe Checkout Session or waitlist-only fulfillment; accepts optional `referredByUserId` + `referralCapturedAt` for share attribution
 - `GET /api/public/store/:storeSlug/order/:token` — guest success page (branding, formatted order number, line items, child names)
 - `GET /api/school-admin/public-store/programs` — admin: sessions + classes with listing state
 - `GET /api/school-admin/public-store/signups` — program + product sign-ups with parent/child/emergency contact
@@ -91,6 +92,10 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 - `client/src/pages/public-store/PublicStoreCheckoutPage.tsx`
 - `client/src/pages/public-store/PublicStoreSuccessPage.tsx`
 - `server/lib/store-signups.ts`
+- `server/lib/store-share-attribution.ts`
+- `client/src/lib/store-item-share.ts`
+- `client/src/lib/store-share-attribution.ts`
+- `client/src/components/store/StoreItemShareButton.tsx`
 - `client/src/components/store/StoreSignupsTab.tsx`
 - `server/migrations/251-public-store.sql`
 - `server/migrations/252-session-cover-image.sql`
