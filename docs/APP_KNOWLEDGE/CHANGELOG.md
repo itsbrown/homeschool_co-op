@@ -10,7 +10,7 @@
 
 ## 2026-07-02 (Public store — share links & referral attribution)
 
-- **Share:** Catalog cards and item detail include Share — message auto-includes title, price, description, and link. Logged-in users append `?userId={users.id}`; guests share without param.
+- **Share:** Catalog cards and item detail open a share menu — Facebook, X, LinkedIn, email, copy message, plus optional native share (AirDrop/Messages on macOS). Logged-in users append `?userId={users.id}`; guests share without param.
 - **Attribution:** `?userId=` captured in sessionStorage (last-touch per store) and sent at checkout; persisted on `store_orders.metadata.referral` and admin Sign-ups table/CSV.
 - **E2E:** `e2e/public-store-share.spec.ts` — share UI, clipboard message, referral capture, checkout payload, admin sign-ups referral column.
 

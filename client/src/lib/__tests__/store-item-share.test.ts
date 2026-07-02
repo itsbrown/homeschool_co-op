@@ -1,6 +1,7 @@
 import {
   buildStoreItemSharePayload,
   buildStoreItemShareUrl,
+  buildStoreItemSocialShareLinks,
   truncateStoreShareText,
 } from "@/lib/store-item-share";
 import type { StoreCatalogItem } from "@/lib/store-catalog";
@@ -49,5 +50,16 @@ describe("store item share", () => {
     const long = "a".repeat(300);
     expect(truncateStoreShareText(long).length).toBe(280);
     expect(truncateStoreShareText(long).endsWith("…")).toBe(true);
+  });
+
+  it("buildStoreItemSocialShareLinks builds platform URLs", () => {
+    const payload = buildStoreItemSharePayload(sampleItem, "american-seekers-academy", {
+      origin: "https://example.com",
+    });
+    const links = buildStoreItemSocialShareLinks(payload);
+    expect(links.facebook).toContain("facebook.com/sharer");
+    expect(links.twitter).toContain("twitter.com/intent/tweet");
+    expect(links.linkedin).toContain("linkedin.com/sharing");
+    expect(links.email).toMatch(/^mailto:/);
   });
 });

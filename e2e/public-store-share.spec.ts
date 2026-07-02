@@ -76,6 +76,8 @@ test.describe("public store share and referral attribution", () => {
 
     await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId(`store-share-${product.listingId}`).click();
+    await expect(page.getByTestId(`store-share-menu-${product.listingId}`)).toBeVisible();
+    await page.getByTestId(`store-share-copy-${product.listingId}`).click();
 
     await expectShareClipboardContainsItem(page, {
       title: product.title,
@@ -188,6 +190,8 @@ test.describe("public store share and referral attribution", () => {
     await waitForSessionUserId(page, parent.id);
 
     await page.getByTestId(`store-share-${product!.listingId}`).click();
+    await expect(page.getByTestId(`store-share-menu-${product!.listingId}`)).toBeVisible();
+    await page.getByTestId(`store-share-copy-${product!.listingId}`).click();
 
     await expectShareClipboardContainsItem(page, {
       title: product!.title,

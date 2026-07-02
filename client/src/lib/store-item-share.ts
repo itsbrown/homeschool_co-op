@@ -53,3 +53,27 @@ export function buildStoreItemSharePayload(
 
   return { url, title: item.title, text };
 }
+
+export type StoreItemSocialShareLinks = {
+  facebook: string;
+  twitter: string;
+  linkedin: string;
+  email: string;
+};
+
+/** Direct share URLs for Facebook, X, LinkedIn, and email (not OS share sheet). */
+export function buildStoreItemSocialShareLinks(payload: StoreItemSharePayload): StoreItemSocialShareLinks {
+  const encodedUrl = encodeURIComponent(payload.url);
+  const encodedTitle = encodeURIComponent(payload.title);
+  const encodedText = encodeURIComponent(payload.text);
+  const descriptionLine = payload.text.split("\n\n").slice(1, -1).join("\n\n");
+  const encodedQuote = encodeURIComponent(descriptionLine || payload.title);
+  const emailBody = `${payload.text}`;
+
+  return {
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedQuote}`,
+    twitter: `https://twitter.com/intent/tweet?text=${encodedText}`,
+    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+    email: `mailto:?subject=${encodedTitle}&body=${encodeURIComponent(emailBody)}`,
+  };
+}
