@@ -1,6 +1,6 @@
 # Student progress & assessments
 
-**Last updated:** 2026-06-01
+**Last updated:** 2026-07-01
 
 ## Two lanes
 
@@ -15,11 +15,12 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 
 | Role | Route | Notes |
 |------|-------|-------|
-| Parent | `/parent/progress` | Hub: overview, this session, reading link, AI summary |
+| Parent | `/parent/progress` | Hub: **Charts** (reading/math API), overview, this session, AI summary |
 | Parent | `/parent/assessments` | Reading charts + Lexile history |
 | Educator | `/educator/assessments` | Tabs: record assessment, **Progress** (log form), Lexile |
 | Educator | Student detail | Quick **Log progress** dialog |
-| School admin | `/school-admin/assessments` | Types/books + **Progress catalog** + **Sessions & reports** tabs |
+| School admin | `/school-admin/assessments` | Types/books + **Progress catalog** + **Sessions & reports** + **Progress insights** |
+| School admin | `/school-admin/analytics` | Engagement, cart abandonment, student progress (see [school-analytics.md](./school-analytics.md)) |
 
 ## Key behaviors
 
@@ -42,6 +43,9 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 | `server/tests/progress-insights-rate-limit.test.ts` | AI insights 429 at rate limit |
 | `server/tests/integration/f14-quarterly-report.integration.test.ts` | Full quarter workflow (`TEST_DATABASE_URL`) |
 | `server/tests/integration/progress-api.test.ts` | DB smoke (`TEST_DATABASE_URL`) |
+| `server/tests/integration/progress-analytics-school.test.ts` | Progress analytics school + child APIs |
+| `server/tests/parse-lexile-range.test.ts` | Lexile parser unit tests |
+| `e2e/parent-progress-charts.spec.ts` | Parent Charts tab (`setup-progress-scenario`, Supabase) |
 
 **Run validation bundle:**
 
@@ -65,7 +69,7 @@ RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your
 
 - Educator assessment POST must use `score` and `lesson`, not legacy `scoreValue` / `lessonNumber`.
 - Progress log without active enrolled session → 400 / UI “no active session” alert.
-- `ParentProgressPage` reading tab links to `/parent/assessments` (do not nest `MyAssessmentsPage` — double shell).
+- `ParentProgressPage` **Charts** tab uses `/api/progress/analytics/child/:childId`; detailed reading history remains on `/parent/assessments`.
 - Admin progress catalog uses same `/api/progress/subjects` as educators; subject **create** is admin-only.
 
 ## NY | Progress report (IHIP-aligned)

@@ -10,6 +10,7 @@ import { finalizePaymentAfterStripeSuccess } from '@/lib/finalizePaymentAfterStr
 import { useAuth } from '@/components/SupabaseProvider';
 import { useCart } from '@/contexts/CartContext';
 import { trackPurchase } from '@/lib/analytics';
+import { recordCheckoutFunnelStep } from '@/lib/telemetryClient';
 
 export default function CartSuccess() {
   const [, setLocation] = useLocation();
@@ -109,6 +110,13 @@ export default function CartSuccess() {
                   })),
                   cart.total || 0
                 );
+                void recordCheckoutFunnelStep({
+                  step: 'purchase',
+                  lane: 'member_cart',
+                  classIds: cart.items.map((item: any) => item.classId),
+                  childIds: cart.items.map((item: any) => item.childId),
+                  cartValueCents: cart.total || 0,
+                });
               }
             } catch (e) {
               console.error('Failed to track purchase:', e);

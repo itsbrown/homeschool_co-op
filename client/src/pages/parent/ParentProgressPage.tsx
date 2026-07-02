@@ -6,6 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, TrendingUp, BookOpen, FileDown } from 'lucide-react';
+import { ProgressHeadlineCard } from '@/components/progress-charts/ProgressHeadlineCard';
+import { ChildReadingProgressChart } from '@/components/progress-charts/ChildReadingProgressChart';
+import { ChildMathProgressChart } from '@/components/progress-charts/ChildMathProgressChart';
 import { Button } from '@/components/ui/button';
 import { downloadProgressReportPdf } from '@/lib/downloadProgressReport';
 import { useToast } from '@/hooks/use-toast';
@@ -94,6 +97,11 @@ export default function ParentProgressPage() {
   const activeChildId = selectedChildId ?? progressData[0]?.child?.id ?? null;
   const activeChild = progressData.find((p: any) => p.child.id === activeChildId);
 
+  const { data: childAnalytics, isLoading: analyticsLoading } = useQuery({
+    queryKey: activeChildId ? [`/api/progress/analytics/child/${activeChildId}`] : ['skip'],
+    enabled: !!activeChildId,
+  });
+
   return (
     <ParentAppShell>
       <div className="space-y-6 max-w-5xl mx-auto p-4">
@@ -179,12 +187,38 @@ export default function ParentProgressPage() {
               </Card>
             )}
 
-            <Tabs defaultValue="overview">
+            <Tabs defaultValue="charts">
               <TabsList>
+                <TabsTrigger value="charts">Charts</TabsTrigger>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="session">This session</TabsTrigger>
-                <TabsTrigger value="reading">Reading</TabsTrigger>
               </TabsList>
+              <TabsContent value="charts" className="mt-4 space-y-4" data-testid="parent-progress-charts-tab">
+                {analyticsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : childAnalytics ? (
+                  <>
+                    <ProgressHeadlineCard
+                      title={childAnalytics.reading?.headline || "Reading progress"}
+                      description={childAnalytics.math?.headline}
+                    />
+                    <ChildReadingProgressChart
+                      series={childAnalytics.reading?.series || []}
+                      childGradeLevel={activeChild?.child?.gradeLevel}
+                    />
+                    <ChildMathProgressChart series={childAnalytics.math?.series || []} />
+                    <p className="text-sm text-muted-foreground">
+                      <Link href="/parent/assessments" className="text-emerald-600 hover:underline">
+                        View detailed assessment history →
+                      </Link>
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground text-sm">Charts will appear when assessment data is recorded.</p>
+                )}
+              </TabsContent>
               <TabsContent value="overview" className="mt-4 space-y-3">
                 {activeChild?.current?.length === 0 && (
                   <p className="text-muted-foreground">No subject progress recorded yet.</p>
@@ -209,20 +243,6 @@ export default function ParentProgressPage() {
                     </CardContent>
                   </Card>
                 ))}
-              </TabsContent>
-              <TabsContent value="reading" className="mt-4">
-                <Card>
-                  <CardContent className="py-6">
-                    <p className="text-sm text-muted-foreground mb-4">
-                      View reading assessment charts, Lexile growth, and assessment history.
-                    </p>
-                    <Link href="/parent/assessments">
-                      <a className="inline-flex items-center gap-2 text-emerald-600 font-medium hover:underline">
-                        <BookOpen className="h-4 w-4" /> Open reading assessments
-                      </a>
-                    </Link>
-                  </CardContent>
-                </Card>
               </TabsContent>
             </Tabs>
           </>
