@@ -431,6 +431,8 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
 
   MembershipStatusService.initializeMembershipStatusJob();
   startEnrollmentReminderScheduler();
+  const { startCheckoutFunnelAbandonJob } = await import('./services/checkout-funnel-abandon-job.js');
+  startCheckoutFunnelAbandonJob();
   startScheduledPaymentReminderJob();
   startCreditExpirationJob();
   startReconciliationJob();

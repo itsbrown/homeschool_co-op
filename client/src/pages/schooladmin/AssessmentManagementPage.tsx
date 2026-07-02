@@ -194,7 +194,7 @@ export default function AssessmentManagementPage() {
   
   const { data: schoolLocations = [] } = useQuery<Location[]>({
     queryKey: ['/api/locations'],
-    enabled: !!user?.email && activeTab === 'all',
+    enabled: !!user?.email && (activeTab === 'all' || activeTab === 'progress-insights'),
   });
 
   const createTypeMutation = useMutation({
@@ -742,7 +742,9 @@ export default function AssessmentManagementPage() {
           </TabsContent>
 
           <TabsContent value="progress-insights">
-            <ProgressInsightsTab />
+            <ProgressInsightsTab
+              locations={schoolLocations.map((l) => ({ id: l.id, name: l.name }))}
+            />
           </TabsContent>
         </Tabs>
 

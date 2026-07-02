@@ -6,6 +6,13 @@ import { ProficiencyBandsChart } from "@/components/progress-charts/ProficiencyB
 import { ProgressChartExportCard } from "@/components/progress-charts/ProgressChartExportCard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useState } from "react";
 
 function currentSchoolYear(): string {
@@ -18,9 +25,13 @@ function currentSchoolYear(): string {
 
 interface ProgressInsightsTabProps {
   schoolName?: string;
+  locations?: { id: number; name: string }[];
 }
 
-export default function ProgressInsightsTab({ schoolName = "Our School" }: ProgressInsightsTabProps) {
+export default function ProgressInsightsTab({
+  schoolName = "Our School",
+  locations = [],
+}: ProgressInsightsTabProps) {
   const [schoolYear, setSchoolYear] = useState(currentSchoolYear());
   const [locationId, setLocationId] = useState("");
 
@@ -59,8 +70,23 @@ export default function ProgressInsightsTab({ schoolName = "Our School" }: Progr
           <Input value={schoolYear} onChange={(e) => setSchoolYear(e.target.value)} />
         </div>
         <div className="space-y-1">
-          <Label>Location ID (optional)</Label>
-          <Input value={locationId} onChange={(e) => setLocationId(e.target.value)} placeholder="Filter by campus" />
+          <Label>Campus</Label>
+          <Select
+            value={locationId || "all"}
+            onValueChange={(v) => setLocationId(v === "all" ? "" : v)}
+          >
+            <SelectTrigger data-testid="select-progress-insights-location">
+              <SelectValue placeholder="All campuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All campuses</SelectItem>
+              {locations.map((l) => (
+                <SelectItem key={l.id} value={String(l.id)}>
+                  {l.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-07-02 (School analytics v1 gaps)
+
+- **Abandon cron:** `checkout-funnel-abandon-job.ts` emits `abandon` after 24h idle (6h tick).
+- **Public store purchase funnel:** `recordCheckoutFunnelPurchase` on store fulfillment; stable `public-store-{orderId}` correlation.
+- **Progress Insights:** campus dropdown (locations by name) instead of raw location ID.
+
 ## 2026-07-01 (School Analytics Platform)
 
 - **Feature:** School Analytics page (`/school-admin/analytics`) — Engagement, Cart Abandonment, Student Progress tabs with demographic filters.

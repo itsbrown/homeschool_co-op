@@ -421,6 +421,9 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       // Start enrollment payment reminder scheduler
       startEnrollmentReminderScheduler();
 
+      const { startCheckoutFunnelAbandonJob } = await import('./services/checkout-funnel-abandon-job.js');
+      startCheckoutFunnelAbandonJob();
+
       startCreditExpirationJob();
       
       // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
@@ -451,6 +454,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
             const { backupService: backup } = await import('./services/backupService.js');
             const { MembershipStatusService: MembershipSvc } = await import('./services/membership-status-service.js');
             const { stopEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
+            const { stopCheckoutFunnelAbandonJob } = await import('./services/checkout-funnel-abandon-job.js');
             const { stopScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
             const { stopCreditExpirationJob } = await import('./services/creditExpirationService.js');
             const { stopLocationActivationScheduler } = await import(
@@ -459,6 +463,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
             backup.stopAutomaticBackups();
             MembershipSvc.stopMembershipStatusJob();
             stopEnrollmentReminderScheduler();
+            stopCheckoutFunnelAbandonJob();
             stopScheduledPaymentReminderJob();
             stopCreditExpirationJob();
             stopLocationActivationScheduler();

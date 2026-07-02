@@ -103,4 +103,74 @@ describeWithDb('Integration: checkout funnel', () => {
     expect(typeof res.body.summary.totalAbandoned).toBe('number');
     expect(Array.isArray(res.body.abandoned)).toBe(true);
   });
+
+  it('emitStaleCheckoutAbandonEvents marks idle checkouts after 24h', async () => {
+    const { getDb } = await import('../../db');
+    const { checkoutFunnelEvents } = await import('../../../shared/schema');
+    const { emitStaleCheckoutAbandonEvents } = await import('../../lib/school-analytics');
+    const { eq } = await import('drizzle-orm');
+
+    await request(app)
+      .post('/api/telemetry/checkout-funnel')
+      .set('x-test-user-email', parentEmail)
+      .send({
+        correlationId,
+        lane: 'member_cart',
+        step: 'begin_checkout',
+        cartValueCents: 18000,
+      });
+
+    const db = await getDb();
+    await db
+      .update(checkoutFunnelEvents)
+      .set({ createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000) })
+      .where(eq(checkoutFunnelEvents.correlationId, correlationId));
+
+    const { emitted } = await emitStaleCheckoutAbandonEvents();
+    expect(emitted).toBe(1);
+
+    const res = await request(app)
+      .get('/api/school-analytics/cart-abandonment')
+      .set('x-test-user-email', adminEmail);
+    expect(res.body.funnel.some((f: { step: string }) => f.step === 'abandon')).toBe(true);
+  });
+
+  it('recordCheckoutFunnelPurchase is idempotent per correlation', async () => {
+    const { recordCheckoutFunnelPurchase } = await import('../../lib/school-analytics');
+    const parent = await storage.getUserByEmail(parentEmail);
+    const schoolId = parent!.schoolId!;
+
+    await request(app)
+      .post('/api/telemetry/checkout-funnel')
+      .set('x-test-user-email', parentEmail)
+      .send({
+        correlationId,
+        lane: 'public_store',
+        step: 'begin_checkout',
+        cartValueCents: 9900,
+      });
+
+    await recordCheckoutFunnelPurchase({
+      schoolId,
+      lane: 'public_store',
+      correlationId,
+      parentId: parent!.id,
+      parentEmail,
+      cartValueCents: 9900,
+    });
+    await recordCheckoutFunnelPurchase({
+      schoolId,
+      lane: 'public_store',
+      correlationId,
+      parentId: parent!.id,
+      parentEmail,
+      cartValueCents: 9900,
+    });
+
+    const res = await request(app)
+      .get('/api/school-analytics/cart-abandonment')
+      .set('x-test-user-email', adminEmail);
+    const purchaseCount = res.body.funnel.find((f: { step: string }) => f.step === 'purchase')?.count ?? 0;
+    expect(purchaseCount).toBe(1);
+  });
 });

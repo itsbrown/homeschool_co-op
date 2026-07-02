@@ -17,6 +17,7 @@ import {
   type StoreChildRef,
 } from './store-guest-checkout';
 import { sendStoreOrderConfirmationEmail } from './store-confirmation-email';
+import { recordCheckoutFunnelPurchase } from './school-analytics';
 
 export async function fulfillStoreCheckoutFromPaymentIntent(
   paymentIntent: Stripe.PaymentIntent,
@@ -213,6 +214,25 @@ export async function fulfillStoreCheckoutFromWebhook(params: {
     console.error('Store confirmation email failed (non-fatal):', emailErr);
   }
 
+  try {
+    await recordCheckoutFunnelPurchase({
+      schoolId: snapshot.schoolId,
+      lane: 'public_store',
+      storeOrderId: storeOrder.id,
+      correlationId: (payload.funnelCorrelationId as string | undefined)
+        ?? (storeOrder.metadata as any)?.funnelCorrelationId
+        ?? `public-store-${storeOrder.id}`,
+      parentId: payload.parentId ?? parentUser?.id ?? null,
+      parentEmail: snapshot.parentEmail ?? payload.parentEmail,
+      childIds: childAssignments.map((c: { childId?: number }) => c.childId).filter(Boolean) as number[],
+      enrollmentIds: [...paidCreated, ...waitlistCreated].map((c) => c.enrollmentId),
+      cartValueCents: params.paymentIntent.amount,
+      metadata: { parentName: snapshot.parentName ?? payload.parentName },
+    });
+  } catch (funnelErr) {
+    console.warn('checkout funnel purchase (public store):', funnelErr);
+  }
+
   return true;
 }
 
@@ -267,6 +287,23 @@ export async function fulfillStoreCheckoutWithoutPayment(snapshotId: string) {
       });
     } catch (emailErr) {
       console.error('Store confirmation email failed (non-fatal):', emailErr);
+    }
+
+    try {
+      await recordCheckoutFunnelPurchase({
+        schoolId: snapshot.schoolId,
+        lane: 'public_store',
+        storeOrderId: storeOrder.id,
+        correlationId: (payload.funnelCorrelationId as string | undefined) ?? `public-store-${storeOrder.id}`,
+        parentId: payload.parentId,
+        parentEmail: snapshot.parentEmail ?? payload.parentEmail,
+        childIds: childAssignments.map((c: { childId?: number }) => c.childId).filter(Boolean) as number[],
+        enrollmentIds: created.map((c) => c.enrollmentId),
+        cartValueCents: storeOrder.totalCents ?? 0,
+        metadata: { parentName: snapshot.parentName ?? payload.parentName },
+      });
+    } catch (funnelErr) {
+      console.warn('checkout funnel purchase (public store waitlist):', funnelErr);
     }
   }
 
