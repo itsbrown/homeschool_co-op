@@ -2,6 +2,11 @@ import React, { lazy, useEffect } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient, handleExpiredSession } from "./lib/queryClient";
+import {
+  clearAuthReturnTo,
+  loginPathWithReturnTo,
+  resolveAuthReturnDestination,
+} from "./lib/auth-return-to";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupabaseProvider, useAuth } from "@/components/SupabaseProvider";
@@ -426,15 +431,15 @@ function Router() {
     // Redirect to login if not authenticated (except for public routes)
     if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/') && !location.startsWith('/forms/') && !location.startsWith('/qr/') && !location.startsWith('/store/') && !location.startsWith('/fundraiser/')) {
       console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
-      setLocation('/login?returnTo=' + encodeURIComponent(location));
+      setLocation(loginPathWithReturnTo(location));
     }
 
     // Redirect authenticated users away from login page (honor returnTo)
     if (isAuthenticated && location === '/login' && isAccountReady && effectiveRole) {
       console.log(`🔄 Redirecting authenticated user away from login page`);
-      const params = new URLSearchParams(window.location.search);
-      const returnTo = params.get('returnTo');
-      setLocation(returnTo?.startsWith('/') ? returnTo : '/dashboard');
+      const destination = resolveAuthReturnDestination('/dashboard');
+      clearAuthReturnTo();
+      setLocation(destination);
     }
   }, [isAuthenticated, isLoading, location, isAccountReady, effectiveRole, setLocation]);
 

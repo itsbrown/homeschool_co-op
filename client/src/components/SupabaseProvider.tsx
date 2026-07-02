@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { createClient, User, Session } from "@supabase/supabase-js";
 import { queryClient } from "@/lib/queryClient";
+import {
+  buildOAuthLoginRedirectUrl,
+  clearAuthReturnTo,
+  stripOAuthTokensFromUrl,
+  syncAuthReturnToFromUrl,
+} from "@/lib/auth-return-to";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -145,11 +151,12 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
       if (event === "SIGNED_IN" && session?.user) {
         console.log("✅ User signed in successfully, checking for redirect...");
 
-        // Clean up OAuth tokens from URL without redirect (let App.tsx handle routing)
-        const currentUrl = window.location.href;
-        if (currentUrl.includes("#access_token=") || currentUrl.includes("?code=")) {
+        if (
+          window.location.href.includes("#access_token=") ||
+          window.location.search.includes("code=")
+        ) {
           console.log("🔄 Cleaning up auth tokens from URL...");
-          window.history.replaceState({}, document.title, window.location.pathname);
+          stripOAuthTokensFromUrl();
         }
       }
     });
@@ -211,6 +218,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
       sessionStorage.removeItem('userEmailHint');
       sessionStorage.removeItem('supabaseUserId');
       sessionStorage.removeItem('userId');
+      clearAuthReturnTo();
 
       // Sign out from Supabase (do this after clearing state)
       const { error } = await supabaseClient.auth.signOut({ scope: 'global' });
@@ -234,13 +242,13 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
   };
 
   const signInWithGoogle = async () => {
-    // Always use current domain for OAuth redirects
-    const redirectUrl = window.location.origin;
+    syncAuthReturnToFromUrl();
+    const redirectTo = buildOAuthLoginRedirectUrl();
 
     const { data, error } = await supabaseClient.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: redirectUrl,
+        redirectTo,
       },
     });
     return { data, error };

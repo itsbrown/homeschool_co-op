@@ -28,6 +28,11 @@
 
 - **Fix:** Program add-to-cart required two clicks — `confirmAddProgram` read stale `pendingProgram` state after `setPendingProgram`, and guests had to confirm a sign-in modal. Programs now add on first click; sign-in remains optional at checkout.
 
+## 2026-07-01 (Auth — persist returnTo through OAuth)
+
+- **Fix:** `returnTo` stored in `sessionStorage` before login/OAuth; Google OAuth `redirectTo` lands on `/login?returnTo=…`; OAuth URL cleanup strips `code`/`access_token` but keeps `returnTo`.
+- **E2E:** `public-store.spec.ts` — login from checkout returns to checkout with cart preserved.
+
 ## 2026-07-01 (Public store — member banner Enroll link)
 
 - **UI:** Member banner hides **Enroll** when the store catalog has no session listings (classes/products only); copy switches to “manage programs” instead of “enroll via the member portal”.

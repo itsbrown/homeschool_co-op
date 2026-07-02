@@ -9,6 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
+import {
+  clearAuthReturnTo,
+  resolveAuthReturnDestination,
+  syncAuthReturnToFromUrl,
+} from '@/lib/auth-return-to';
 
 export const SupabaseLogin: React.FC = () => {
   const { signIn, signInWithGoogle, user, isAuthenticated } = useAuth();
@@ -71,6 +76,11 @@ export const SupabaseLogin: React.FC = () => {
     }
   }, []);
 
+  // Persist returnTo from query string as soon as login page loads (before OAuth).
+  useEffect(() => {
+    syncAuthReturnToFromUrl();
+  }, []);
+
   const effectiveRole = activeRole || rolesBootstrapRole;
   const isFinishingLogin =
     isAuthenticated && !!user && (isLoadingRoles || isSettingUpAccount);
@@ -86,9 +96,8 @@ export const SupabaseLogin: React.FC = () => {
     if (registrationRequired) {
       return;
     }
-    const params = new URLSearchParams(window.location.search);
-    const returnTo = params.get('returnTo');
-    const destination = returnTo?.startsWith('/') ? returnTo : '/dashboard';
+    const destination = resolveAuthReturnDestination("/dashboard");
+    clearAuthReturnTo();
     console.log('👤 User logged in with role, redirecting to', destination);
     setLocation(destination);
   }, [

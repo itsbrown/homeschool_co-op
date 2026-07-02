@@ -9,6 +9,7 @@ import {
 import {
   postEnsurePublicStoreSchema,
   postSetupPublicStoreScenario,
+  postSetupCartScenario,
 } from "./helpers/testSeed";
 import { runPresignedUpload } from "./helpers/presignedUploadFlow";
 
@@ -581,5 +582,49 @@ test.describe("public store programs", () => {
     expect(orderJson.order.status).toBe("paid");
     expect(orderJson.order.orderNumber).toMatch(/^\d{8}-\d{5}$/);
     expect(orderJson.lines.some((l) => l.child?.firstName === "Camp")).toBeTruthy();
+  });
+
+  test("login from checkout returns to checkout with cart items preserved", async ({
+    page,
+    request,
+  }) => {
+    const {
+      addStoreProgramToCartAsGuest,
+      expectStoreCartLineCount,
+      loginFromStoreCheckoutAndReturn,
+      openStoreCheckoutFromCart,
+    } = await import("./helpers/publicStoreCheckout");
+
+    const { response, json } = await postSetupPublicStoreScenario(request, {
+      withPublishedProduct: false,
+      withClass: true,
+      withPublishedClassListing: true,
+      classPriceCents: 5000,
+    });
+    test.skip(!response.ok(), `seed failed (${response.status()})`);
+
+    const cartSeed = await postSetupCartScenario(request, { linkSupabaseAuth: true });
+    test.skip(
+      !cartSeed.response.ok() || cartSeed.json?.data?.supabaseLinked !== true,
+      "parent Supabase link unavailable",
+    );
+
+    const slug = json!.data!.storeSlug;
+    const checkoutPath = `/store/${slug}/checkout`;
+    const parent = cartSeed.json!.data!.parent;
+
+    await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
+    await addStoreProgramToCartAsGuest(page, /Add — \$50\.00/);
+    await openStoreCheckoutFromCart(page);
+    await expect(page).toHaveURL(new RegExp(checkoutPath.replace(/\//g, "\\/")));
+
+    await loginFromStoreCheckoutAndReturn(
+      page,
+      checkoutPath,
+      parent.email,
+      parent.password,
+    );
+    await expectStoreCartLineCount(page, 1);
+    await expect(page.getByTestId("store-cart-review")).toBeVisible();
   });
 });

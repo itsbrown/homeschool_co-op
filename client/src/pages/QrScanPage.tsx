@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
+import { loginPathWithReturnTo } from "@/lib/auth-return-to";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Loader2, CheckCircle, XCircle, Clock, LogIn, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -178,7 +179,7 @@ export default function QrScanPage() {
           <Button
             className="w-full"
             onClick={() =>
-              setLocation(`/login?returnTo=${encodeURIComponent(window.location.pathname)}`)
+              setLocation(loginPathWithReturnTo(window.location.pathname))
             }
           >
             <LogIn className="h-4 w-4 mr-2" />

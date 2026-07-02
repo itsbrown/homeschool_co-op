@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatStoreCartMoney } from "@/lib/store-cart";
+import { loginPathWithReturnTo } from "@/lib/auth-return-to";
 
 type PublicStoreHeaderProps = {
   storeName?: string;
@@ -34,7 +35,7 @@ export function PublicStoreHeader({
         <div className="flex shrink-0 items-center gap-2">
           {!isAuthenticated ? (
             <Button variant="outline" asChild className="hidden sm:inline-flex">
-              <Link href={`/login?returnTo=${encodeURIComponent(window.location.pathname)}`}>
+              <Link href={loginPathWithReturnTo(window.location.pathname)}>
                 Sign in
               </Link>
             </Button>

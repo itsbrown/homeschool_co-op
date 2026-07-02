@@ -31,6 +31,47 @@ export async function addStoreProgramToCartAsGuest(
   await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
 }
 
+/** Sign in from checkout Step 3 link; expects return to checkout with cart intact. */
+export async function loginFromStoreCheckoutAndReturn(
+  page: Page,
+  checkoutPath: string,
+  email: string,
+  password: string,
+): Promise<void> {
+  await page.getByTestId("store-checkout-step1-continue").click();
+  await page.getByTestId("store-checkout-parent-first-name").fill("Store");
+  await page.getByTestId("store-checkout-parent-last-name").fill("Parent");
+  await page.getByTestId("store-checkout-parent-email").fill(email);
+  await page.getByTestId("store-checkout-parent-phone").fill("5555550100");
+  await page.getByTestId("store-checkout-emergency-first-name").fill("Emergency");
+  await page.getByTestId("store-checkout-emergency-last-name").fill("Contact");
+  await page.getByTestId("store-checkout-emergency-phone").fill("5555550199");
+  await page.getByTestId("store-checkout-emergency-relationship").fill("Aunt");
+  await page.getByTestId("store-checkout-step2-continue").click();
+  await page.getByRole("link", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/login(\?|$)/);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign In" }).click();
+  await expect(page).toHaveURL(new RegExp(`${checkoutPath.replace(/\//g, "\\/")}(\\?|$)`), {
+    timeout: 45_000,
+  });
+}
+
+export async function expectStoreCartLineCount(page: Page, expectedLines: number): Promise<void> {
+  const count = await page.evaluate(() => {
+    try {
+      const raw = sessionStorage.getItem("public_store_cart_v1");
+      if (!raw) return 0;
+      const parsed = JSON.parse(raw) as { lines?: unknown[] };
+      return parsed.lines?.length ?? 0;
+    } catch {
+      return 0;
+    }
+  });
+  expect(count).toBe(expectedLines);
+}
+
 export async function openStoreCheckoutFromCart(page: Page): Promise<void> {
   await page.getByTestId("store-cart-button").click();
 }

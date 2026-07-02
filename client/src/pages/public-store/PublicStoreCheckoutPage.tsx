@@ -19,6 +19,7 @@ import {
   type StoreEmergencyContact,
   type StoreParentContact,
 } from "@/lib/store-checkout";
+import { loginPathWithReturnTo } from "@/lib/auth-return-to";
 
 type SnapshotLine = {
   lineId: string;
@@ -252,7 +253,7 @@ export default function PublicStoreCheckoutPage() {
         description: data.message,
         variant: "destructive",
       });
-      setLocation(`/login?returnTo=${encodeURIComponent(`/store/${schoolSlug}/checkout`)}`);
+      setLocation(loginPathWithReturnTo(`/store/${schoolSlug}/checkout`));
       return;
     }
     if (!res.ok) {
@@ -472,7 +473,7 @@ export default function PublicStoreCheckoutPage() {
               {!isAuthenticated && (
                 <p className="text-sm rounded-md bg-blue-50 border border-blue-100 p-3">
                   <Link
-                    href={`/login?returnTo=${encodeURIComponent(`/store/${schoolSlug}/checkout`)}`}
+                    href={loginPathWithReturnTo(`/store/${schoolSlug}/checkout`)}
                     className="text-blue-700 underline font-medium"
                   >
                     Sign in

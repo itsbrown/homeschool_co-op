@@ -6,6 +6,7 @@ import {
   handleRegistrationRequired,
   isRegistrationRequiredBody,
 } from "@/lib/registration-required";
+import { loginPathWithReturnTo } from "@/lib/auth-return-to";
 
 // ---------------------------------------------------------------------------
 // Task 266 — global "service unavailable" signal.
@@ -224,8 +225,8 @@ export async function handleExpiredSession(
     }
 
     if (!isOnPublicPath) {
-      const returnTo = encodeURIComponent(currentPath + window.location.search);
-      const redirectUrl = `/login?session_expired=1&returnTo=${returnTo}`;
+      const returnPath = currentPath + window.location.search;
+      const redirectUrl = loginPathWithReturnTo(returnPath, { session_expired: "1" });
 
       // Mid-session callers get a brief toast first; initial-bootstrap callers
       // (e.g. the role-loading query) opt out via { suppressToast: true } and
