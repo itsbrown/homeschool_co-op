@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-07-01 (Public store — header description)
+
+- **UI:** Removed clamped school description from sticky store header; full intro text shows once on the browse page body (`store-intro-description`).
+
 ## 2026-07-01 (Public store — auth redirect E2E)
 
 - **E2E:** `e2e/public-store-auth-redirect.spec.ts` — login from store browse, item detail, merch checkout contact, and program checkout children step; asserts `returnTo`, cart persistence, member banner.

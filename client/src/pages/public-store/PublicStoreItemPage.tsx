@@ -104,7 +104,6 @@ export default function PublicStoreItemPage() {
     <div className="min-h-screen bg-slate-50 pb-24">
       <PublicStoreHeader
         storeName={(store as { name?: string })?.name}
-        storeDescription={(store as { description?: string })?.description}
         cartCount={cartCount}
         cartTotal={cartTotal}
         cartPulse={cartPulse}

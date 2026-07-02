@@ -59,7 +59,6 @@ export default function PublicStorePage() {
     <div className="min-h-screen bg-slate-50 pb-24">
       <PublicStoreHeader
         storeName={store?.name}
-        storeDescription={store?.description}
         cartCount={cartCount}
         cartTotal={cartTotal}
         cartPulse={cartPulse}
@@ -70,6 +69,14 @@ export default function PublicStorePage() {
       {isMemberOfStore && <PublicStoreMemberBanner items={items} />}
 
       <main className="mx-auto max-w-6xl px-4 py-8">
+        {store?.description?.trim() && (
+          <p
+            className="mb-8 max-w-3xl text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap"
+            data-testid="store-intro-description"
+          >
+            {store.description}
+          </p>
+        )}
         {catalogData && items.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-white px-6 py-16 text-center">
             <p className="text-lg font-medium text-slate-900">Nothing listed yet</p>

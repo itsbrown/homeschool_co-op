@@ -6,7 +6,6 @@ import { loginPathWithReturnTo } from "@/lib/auth-return-to";
 
 type PublicStoreHeaderProps = {
   storeName?: string;
-  storeDescription?: string | null;
   cartCount: number;
   cartTotal: number;
   cartPulse?: boolean;
@@ -16,7 +15,6 @@ type PublicStoreHeaderProps = {
 
 export function PublicStoreHeader({
   storeName,
-  storeDescription,
   cartCount,
   cartTotal,
   cartPulse,
@@ -28,9 +26,6 @@ export function PublicStoreHeader({
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
         <div className="min-w-0 pr-4">
           <h1 className="text-2xl font-semibold truncate">{storeName ?? "Store"}</h1>
-          {storeDescription && (
-            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{storeDescription}</p>
-          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!isAuthenticated ? (

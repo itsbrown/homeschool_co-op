@@ -32,7 +32,7 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 
 ## Storefront UX
 
-- **Browse** (`/store/:storeSlug`): Cards are teasers only (2-line description). Price, type badge, and dates show on the card; **“View program/product details”** opens the full page.
+- **Browse** (`/store/:storeSlug`): Cards are teasers only (2-line description). Price, type badge, and dates show on the card; **“View program/product details”** opens the full page. School description shows once below the header (not in the sticky bar).
 - **Detail** (`/store/:storeSlug/:itemSlug`): Same route for programs, sessions, and merch — layout adapts by `listingType` (stock/shipping copy for products; schedule/enrollment copy for programs). Full description is never truncated.
 - **Sections:** When both exist, catalog groups **Programs & classes** (2-col grid) and **Shop** (3-col grid for merch).
 
