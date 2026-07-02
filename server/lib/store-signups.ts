@@ -12,6 +12,7 @@ import {
   formatStoreProductDeliveryLabel,
   type StoreProductDelivery,
 } from './store-product-fulfillment';
+import type { StoreOrderReferralMetadata } from './store-share-attribution';
 
 export type StoreSignupRow = {
   id: string;
@@ -39,6 +40,9 @@ export type StoreSignupRow = {
   quantity: number | null;
   productFulfillmentMethod: string | null;
   shippingAddress: string | null;
+  referralUserId: number | null;
+  referralName: string | null;
+  referralEmail: string | null;
 };
 
 function parentDisplayName(user: {
@@ -71,6 +75,22 @@ function programTypeForEnrollment(e: {
   if (e.sessionId) return 'session';
   if (e.marketplaceClassId || e.classId) return 'class';
   return null;
+}
+
+function referralFromOrder(order: { metadata?: unknown } | null | undefined): {
+  referralUserId: number | null;
+  referralName: string | null;
+  referralEmail: string | null;
+} {
+  const referral = (order?.metadata as { referral?: StoreOrderReferralMetadata } | null)?.referral;
+  if (!referral?.userId) {
+    return { referralUserId: null, referralName: null, referralEmail: null };
+  }
+  return {
+    referralUserId: referral.userId,
+    referralName: referral.name ?? null,
+    referralEmail: referral.email ?? null,
+  };
 }
 
 export async function getPublicStoreSignups(schoolId: number): Promise<StoreSignupRow[]> {
@@ -122,6 +142,7 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
     const parent = parentById.get(e.parentId);
     const child = childById.get(e.childId);
     const order = meta.storeOrderId ? orderById.get(meta.storeOrderId) : undefined;
+    const referral = referralFromOrder(order);
 
     return {
       id: `enrollment-${e.id}`,
@@ -149,6 +170,7 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
       quantity: null,
       productFulfillmentMethod: null,
       shippingAddress: null,
+      ...referral,
     };
   });
 
@@ -172,6 +194,7 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
     const order = orderByIdAll.get(item.storeOrderId);
     const productDelivery = (order?.metadata as { productDelivery?: StoreProductDelivery } | null)
       ?.productDelivery;
+    const referral = referralFromOrder(order);
     return {
       id: `product-${item.id}`,
       kind: 'product',
@@ -203,6 +226,7 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
           : productDelivery?.method === 'pickup'
             ? 'Pick up at campus'
             : null,
+      ...referral,
     };
   });
 
@@ -241,6 +265,9 @@ export function buildStoreSignupsCsv(rows: StoreSignupRow[]): string {
     'Quantity',
     'Fulfillment',
     'Shipping / pickup',
+    'Referral user ID',
+    'Referral name',
+    'Referral email',
   ];
 
   const lines = rows.map((row) => {
@@ -273,6 +300,9 @@ export function buildStoreSignupsCsv(rows: StoreSignupRow[]): string {
       csvEscape(row.quantity),
       csvEscape(row.productFulfillmentMethod),
       csvEscape(row.shippingAddress),
+      csvEscape(row.referralUserId),
+      csvEscape(row.referralName),
+      csvEscape(row.referralEmail),
     ].join(',');
   });
 

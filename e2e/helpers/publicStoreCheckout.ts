@@ -149,12 +149,16 @@ export async function installStoreCheckoutFulfillInterceptor(
   page: Page,
   request: APIRequestContext,
   storeSlug: string,
+  options?: { onCheckoutPost?: (body: Record<string, unknown>) => void },
 ): Promise<void> {
   await page.route("**/api/public/store/**/checkout", async (route) => {
     if (route.request().method() !== "POST") {
       await route.continue();
       return;
     }
+
+    const postBody = route.request().postDataJSON() as Record<string, unknown>;
+    options?.onCheckoutPost?.(postBody);
 
     const response = await route.fetch();
     const json = (await response.json()) as {

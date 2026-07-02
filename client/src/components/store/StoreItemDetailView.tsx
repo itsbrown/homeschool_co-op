@@ -12,10 +12,12 @@ import {
 } from "@/lib/store-catalog-display";
 import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 import { StoreCatalogItemActions } from "@/components/store/StoreCatalogItemActions";
+import { StoreItemShareButton } from "@/components/store/StoreItemShareButton";
 
 type StoreItemDetailViewProps = {
   item: StoreCatalogItem;
   schoolSlug: string;
+  sharerUserId?: number | null;
   onAddProduct: (item: StoreCatalogItem) => void;
   onAddProgram: (item: StoreCatalogItem, variant: "half_day" | "full_day") => void;
 };
@@ -23,6 +25,7 @@ type StoreItemDetailViewProps = {
 export function StoreItemDetailView({
   item,
   schoolSlug,
+  sharerUserId = null,
   onAddProduct,
   onAddProgram,
 }: StoreItemDetailViewProps) {
@@ -123,6 +126,15 @@ export function StoreItemDetailView({
               layout="detail"
               onAddProduct={onAddProduct}
               onAddProgram={onAddProgram}
+            />
+
+            <StoreItemShareButton
+              item={item}
+              schoolSlug={schoolSlug}
+              sharerUserId={sharerUserId}
+              variant="outline"
+              size="default"
+              className="w-full"
             />
           </div>
 
