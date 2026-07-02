@@ -3534,9 +3534,11 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
       sessionCoverImage:
         typeof req.body?.sessionCoverImage === 'string' ? req.body.sessionCoverImage : null,
       withPublishedSessionListing: req.body?.withPublishedSessionListing === true,
+      withParent: req.body?.withParent === true,
     });
 
     let adminSupabaseLinked = false;
+    let parentSupabaseLinked = false;
     if (req.body?.linkSupabaseAuthAdmin === true) {
       const supabaseUrl = process.env.SUPABASE_URL;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -3560,11 +3562,40 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
       }
     }
 
+    if (req.body?.linkSupabaseAuthParent === true) {
+      if (!seed.parent) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuthParent requires withParent: true in setup-public-store-scenario',
+        });
+      }
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuthParent requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      try {
+        parentSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.parent.id,
+          email: seed.parent.email,
+          password: seed.parent.password,
+          role: 'parent',
+          schoolId: seed.school.id,
+          displayName: 'Store E2E Parent',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthParent failed:', e);
+        parentSupabaseLinked = false;
+      }
+    }
+
     res.json({
       success: true,
       data: {
         ...seed,
         adminSupabaseLinked,
+        parentSupabaseLinked,
       },
     });
   } catch (error) {

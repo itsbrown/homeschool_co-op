@@ -336,6 +336,18 @@ export default function PublicStoreCheckoutPage() {
               <CardTitle>Parent / guardian contact</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {!isAuthenticated && (
+                <p className="text-sm rounded-md bg-blue-50 border border-blue-100 p-3">
+                  <Link
+                    href={loginPathWithReturnTo(`/store/${schoolSlug}/checkout`)}
+                    className="text-blue-700 underline font-medium"
+                    data-testid="store-checkout-sign-in"
+                  >
+                    Sign in
+                  </Link>{" "}
+                  to use your saved contact info and registered children.
+                </p>
+              )}
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -475,6 +487,7 @@ export default function PublicStoreCheckoutPage() {
                   <Link
                     href={loginPathWithReturnTo(`/store/${schoolSlug}/checkout`)}
                     className="text-blue-700 underline font-medium"
+                    data-testid="store-checkout-sign-in-children"
                   >
                     Sign in
                   </Link>{" "}

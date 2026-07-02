@@ -297,6 +297,9 @@ export type SetupPublicStoreScenarioResponse = {
   success: boolean;
   data?: {
     adminSupabaseLinked?: boolean;
+    parentSupabaseLinked?: boolean;
+    parent?: { id: number; email: string; password: string };
+    child?: { id: number; firstName: string; lastName: string };
     admin: { id: number; email: string; password: string };
     school: { id: number; name: string; storeSlug: string };
     storeSlug: string;

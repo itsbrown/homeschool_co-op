@@ -9,7 +9,6 @@ import {
 import {
   postEnsurePublicStoreSchema,
   postSetupPublicStoreScenario,
-  postSetupCartScenario,
 } from "./helpers/testSeed";
 import { runPresignedUpload } from "./helpers/presignedUploadFlow";
 
@@ -122,13 +121,14 @@ test.describe("public store", () => {
 
     const itemRes = await request.get(`/api/public/store/${slug}/catalog/${listingId}`);
     expect(itemRes.ok()).toBeTruthy();
-    const itemBody = (await itemRes.json()) as { item: { description: string; title: string } };
+    const itemBody = (await itemRes.json()) as { item: { description: string; title: string; slug: string } };
     expect(itemBody.item.title).toBe(classData.title);
     expect(itemBody.item.description).toContain("Playwright seeded store class");
+    expect(itemBody.item.slug).toBeTruthy();
 
     await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId(`store-item-link-${listingId}`).click();
-    await expect(page).toHaveURL(new RegExp(`/store/${slug}/item/${listingId}`));
+    await expect(page).toHaveURL(new RegExp(`/store/${slug}/${itemBody.item.slug}`));
     await expect(page.getByTestId("store-item-detail")).toBeVisible();
     await expect(page.getByTestId("store-item-title")).toHaveText(classData.title);
     await expect(page.getByTestId("store-item-description")).toContainText(
@@ -594,29 +594,26 @@ test.describe("public store programs", () => {
       loginFromStoreCheckoutAndReturn,
       openStoreCheckoutFromCart,
     } = await import("./helpers/publicStoreCheckout");
+    const { seedPublicStoreWithLinkedParent, storePathRegex } = await import(
+      "./helpers/publicStoreAuth"
+    );
 
-    const { response, json } = await postSetupPublicStoreScenario(request, {
+    const seeded = await seedPublicStoreWithLinkedParent(request, {
       withPublishedProduct: false,
       withClass: true,
       withPublishedClassListing: true,
       classPriceCents: 5000,
     });
-    test.skip(!response.ok(), `seed failed (${response.status()})`);
+    test.skip(!seeded.ok, seeded.reason);
 
-    const cartSeed = await postSetupCartScenario(request, { linkSupabaseAuth: true });
-    test.skip(
-      !cartSeed.response.ok() || cartSeed.json?.data?.supabaseLinked !== true,
-      "parent Supabase link unavailable",
-    );
-
-    const slug = json!.data!.storeSlug;
+    const slug = seeded.seed.slug;
     const checkoutPath = `/store/${slug}/checkout`;
-    const parent = cartSeed.json!.data!.parent;
+    const parent = seeded.seed.parent;
 
     await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
     await addStoreProgramToCartAsGuest(page, /Add — \$50\.00/);
     await openStoreCheckoutFromCart(page);
-    await expect(page).toHaveURL(new RegExp(checkoutPath.replace(/\//g, "\\/")));
+    await expect(page).toHaveURL(storePathRegex(checkoutPath));
 
     await loginFromStoreCheckoutAndReturn(
       page,

@@ -30,11 +30,17 @@ Same as platform file-storage skill:
 
 Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/store-*` rows must be re-uploaded.
 
+## Storefront UX
+
+- **Browse** (`/store/:storeSlug`): Cards are teasers only (2-line description). Price, type badge, and dates show on the card; **“View program/product details”** opens the full page.
+- **Detail** (`/store/:storeSlug/:itemSlug`): Same route for programs, sessions, and merch — layout adapts by `listingType` (stock/shipping copy for products; schedule/enrollment copy for programs). Full description is never truncated.
+- **Sections:** When both exist, catalog groups **Programs & classes** (2-col grid) and **Shop** (3-col grid for merch).
+
 ## API
 
 - `GET /api/public/store/:storeSlug` — branding
-- `GET /api/public/store/:storeSlug/catalog` — published listings
-- `GET /api/public/store/:storeSlug/catalog/:listingId` — single item detail (full description)
+- `GET /api/public/store/:storeSlug/catalog` — published listings (each item includes `slug`)
+- `GET /api/public/store/:storeSlug/catalog/:catalogKey` — single item by **slug** or legacy numeric `listingId`
 - `POST /api/public/store/:storeSlug/snapshot` — pricing (optional auth)
 - `POST /api/public/store/:storeSlug/checkout` — Stripe Checkout Session or waitlist-only fulfillment
 - `GET /api/public/store/:storeSlug/order/:token` — guest success page (branding, formatted order number, line items, child names)
@@ -77,6 +83,10 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 - `server/services/fileUploadService.ts` — `storePrograms`, `storeProducts` categories
 - `client/src/lib/uploadClient.ts` — presigned client
 - `client/src/lib/store-checkout.ts` — checkout helpers + order number format
+- `client/src/components/store/StoreCatalogCard.tsx` — browse card
+- `client/src/components/store/StoreItemDetailView.tsx` — detail page (program vs merch layout)
+- `client/src/lib/store-catalog-display.ts` — price/date labels, catalog sections
+- `server/lib/store-listing-slug.ts` — title → slug assignment (collision suffix `-2`, …)
 - `client/src/components/store/StoreCheckoutChildFields.tsx`
 - `client/src/pages/public-store/PublicStoreCheckoutPage.tsx`
 - `client/src/pages/public-store/PublicStoreSuccessPage.tsx`

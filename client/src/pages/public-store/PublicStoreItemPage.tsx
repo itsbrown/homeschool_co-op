@@ -1,33 +1,18 @@
 import { Link, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/SupabaseProvider";
 import { fetchParentMemberId, PARENT_MEMBER_ID_QUERY_KEY } from "@/lib/parent-member-id";
 import { usePublicStoreCart } from "@/hooks/usePublicStoreCart";
 import type { StoreCatalogItem } from "@/lib/store-catalog";
 import { PublicStoreHeader } from "@/components/store/PublicStoreHeader";
-import { StoreCatalogItemActions } from "@/components/store/StoreCatalogItemActions";
 import { PublicStoreMemberBanner } from "@/components/store/PublicStoreMemberBanner";
-import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
+import { StoreItemDetailView } from "@/components/store/StoreItemDetailView";
 import { formatStoreCartMoney } from "@/lib/store-cart";
-import { ShoppingCart } from "lucide-react";
-import { safeFormatDate } from "@/utils/safeFormatDate";
-
-const STORE_DATE_FORMAT = "MMM d, yyyy";
-
-function formatDateRange(start?: string | null, end?: string | null): string | null {
-  if (!start && !end) return null;
-  if (start && end) {
-    return `${safeFormatDate(start, STORE_DATE_FORMAT)} – ${safeFormatDate(end, STORE_DATE_FORMAT)}`;
-  }
-  if (start) return `Starts ${safeFormatDate(start, STORE_DATE_FORMAT)}`;
-  return `Through ${safeFormatDate(end!, STORE_DATE_FORMAT)}`;
-}
 
 export default function PublicStoreItemPage() {
-  const { schoolSlug = "", listingId = "" } = useParams<{ schoolSlug: string; listingId: string }>();
+  const { schoolSlug = "", itemSlug = "" } = useParams<{ schoolSlug: string; itemSlug: string }>();
   const { isAuthenticated } = useAuth();
   const {
     cartCount,
@@ -66,18 +51,17 @@ export default function PublicStoreItemPage() {
   });
 
   const { data, isLoading, isError } = useQuery<{ item: StoreCatalogItem }>({
-    queryKey: ["/api/public/store", schoolSlug, "catalog", listingId],
+    queryKey: ["/api/public/store", schoolSlug, "catalog", itemSlug],
     queryFn: async () => {
-      const res = await fetch(`/api/public/store/${schoolSlug}/catalog/${listingId}`);
+      const res = await fetch(`/api/public/store/${schoolSlug}/catalog/${itemSlug}`);
       if (!res.ok) throw new Error("Item not found");
       return res.json();
     },
-    enabled: !!schoolSlug && !!listingId,
+    enabled: !!schoolSlug && !!itemSlug,
   });
 
   const item = data?.item;
   const catalogItems = catalogData?.items ?? [];
-  const dateRange = item ? formatDateRange(item.startDate, item.endDate) : null;
   const isMemberOfStore =
     isAuthenticated && memberData?.schoolId != null && memberData.schoolId === (store as { schoolId?: number })?.schoolId;
 
@@ -91,7 +75,7 @@ export default function PublicStoreItemPage() {
           isAuthenticated={isAuthenticated}
           onCheckout={goToCheckout}
         />
-        <main className="mx-auto max-w-3xl px-4 py-12 text-muted-foreground">Loading…</main>
+        <main className="mx-auto max-w-6xl px-4 py-12 text-muted-foreground">Loading…</main>
       </div>
     );
   }
@@ -106,7 +90,7 @@ export default function PublicStoreItemPage() {
           isAuthenticated={isAuthenticated}
           onCheckout={goToCheckout}
         />
-        <main className="mx-auto max-w-3xl px-4 py-12 space-y-4 text-center">
+        <main className="mx-auto max-w-6xl px-4 py-12 space-y-4 text-center">
           <p className="text-muted-foreground">This item is not available.</p>
           <Button asChild variant="outline">
             <Link href={`/store/${schoolSlug}`}>Back to store</Link>
@@ -129,68 +113,16 @@ export default function PublicStoreItemPage() {
       />
 
       {isMemberOfStore && (
-        <PublicStoreMemberBanner items={catalogItems} containerClassName="max-w-3xl" />
+        <PublicStoreMemberBanner items={catalogItems} containerClassName="max-w-6xl" />
       )}
 
-      <main className="mx-auto max-w-3xl px-4 py-6 space-y-6" data-testid="store-item-detail">
-        <Button variant="ghost" size="sm" asChild className="-ml-2">
-          <Link href={`/store/${schoolSlug}`}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to store
-          </Link>
-        </Button>
-
-        <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-          <StoreProductCardImage
-            src={item.imageUrl}
-            alt={item.title}
-            className="rounded-none aspect-[16/10] sm:aspect-[2/1]"
-            data-testid={
-              item.listingType === "product" ? "store-product-image" : `store-${item.listingType}-image`
-            }
-          />
-
-          <div className="p-6 space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <h2 className="text-2xl font-semibold tracking-tight" data-testid="store-item-title">
-                {item.title}
-              </h2>
-              {item.membersOnly && <Badge variant="secondary">Members only</Badge>}
-            </div>
-
-            {dateRange && (
-              <p className="text-sm text-muted-foreground" data-testid="store-item-dates">
-                {dateRange}
-              </p>
-            )}
-
-            {item.listingType === "product" && item.priceCents != null && (
-              <p className="text-xl font-medium tabular-nums">
-                ${(item.priceCents / 100).toFixed(2)}
-              </p>
-            )}
-
-            {item.description ? (
-              <div
-                className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap"
-                data-testid="store-item-description"
-              >
-                {item.description}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No description provided.</p>
-            )}
-
-            <div className="pt-2 border-t">
-              <StoreCatalogItemActions
-                item={item}
-                layout="detail"
-                onAddProduct={addProduct}
-                onAddProgram={onAddProgram}
-              />
-            </div>
-          </div>
-        </div>
+      <main className="mx-auto max-w-6xl px-4 py-6">
+        <StoreItemDetailView
+          item={item}
+          schoolSlug={schoolSlug}
+          onAddProduct={addProduct}
+          onAddProgram={onAddProgram}
+        />
       </main>
 
       {cartCount > 0 && (
@@ -205,7 +137,6 @@ export default function PublicStoreItemPage() {
           </Button>
         </div>
       )}
-
     </div>
   );
 }

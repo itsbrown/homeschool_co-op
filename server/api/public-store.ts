@@ -11,8 +11,6 @@ import {
 } from '../lib/store-config';
 import {
   getSchoolByStoreSlug,
-  getPublishedStoreListings,
-  getPublishedStoreListingById,
   saveStoreCheckoutSnapshot,
   getStoreCheckoutSnapshot,
   createStoreOrder,
@@ -27,7 +25,10 @@ import {
 import { fulfillStoreCheckoutWithoutPayment } from '../lib/store-fulfillment';
 import { resolveStoreDeliveryDocuments } from '../lib/store-documents';
 import { ensureDeliveryDocumentShareTokens } from '../lib/store-confirmation-email';
-import { buildStoreCatalogItem } from '../lib/store-catalog-items';
+import {
+  getPublishedStoreCatalogWithSlugs,
+  resolvePublishedStoreCatalogItem,
+} from '../lib/store-catalog-items';
 import {
   formatStoreOrderNumber,
   persistStoreEmergencyContact,
@@ -126,35 +127,20 @@ router.get('/:storeSlug/catalog', async (req, res) => {
     const school = await resolveStoreContext(req.params.storeSlug);
     if (!school) return res.status(404).json({ message: 'Store not found' });
 
-    const listings = await getPublishedStoreListings(school.id);
-    const catalog = [];
-
-    for (const listing of listings) {
-      const item = await buildStoreCatalogItem(listing);
-      if (item) catalog.push(item);
-    }
-
-    res.json({ items: catalog.sort((a, b) => a.sortOrder - b.sortOrder) });
+    const catalog = await getPublishedStoreCatalogWithSlugs(school.id);
+    res.json({ items: catalog });
   } catch (err) {
     console.error('GET catalog:', err);
     res.status(500).json({ message: 'Failed to load catalog' });
   }
 });
 
-router.get('/:storeSlug/catalog/:listingId', async (req, res) => {
+router.get('/:storeSlug/catalog/:catalogKey', async (req, res) => {
   try {
     const school = await resolveStoreContext(req.params.storeSlug);
     if (!school) return res.status(404).json({ message: 'Store not found' });
 
-    const listingId = parseInt(req.params.listingId, 10);
-    if (!Number.isFinite(listingId)) {
-      return res.status(400).json({ message: 'Invalid listing id' });
-    }
-
-    const listing = await getPublishedStoreListingById(school.id, listingId);
-    if (!listing) return res.status(404).json({ message: 'Item not found' });
-
-    const item = await buildStoreCatalogItem(listing);
+    const item = await resolvePublishedStoreCatalogItem(school.id, req.params.catalogKey);
     if (!item) return res.status(404).json({ message: 'Item not found' });
 
     res.json({ item });

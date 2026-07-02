@@ -1,6 +1,7 @@
 import {
   AUTH_RETURN_TO_KEY,
   buildOAuthLoginRedirectUrl,
+  consumeAuthReturnDestination,
   loginPathWithReturnTo,
   resolveAuthReturnDestination,
   stripOAuthTokensFromUrl,
@@ -54,6 +55,14 @@ describe("auth-return-to", () => {
     stripOAuthTokensFromUrl();
     expect(window.location.pathname).toBe("/login");
     expect(window.location.search).toBe("?returnTo=%2Fstore%2Fx%2Fcheckout");
+  });
+
+  it("consumeAuthReturnDestination clears storage after first read", () => {
+    sessionStorage.setItem(AUTH_RETURN_TO_KEY, "/store/from-storage/checkout");
+    window.history.replaceState({}, "", "/login");
+    expect(consumeAuthReturnDestination()).toBe("/store/from-storage/checkout");
+    expect(sessionStorage.getItem(AUTH_RETURN_TO_KEY)).toBeNull();
+    expect(consumeAuthReturnDestination()).toBe("/dashboard");
   });
 
   it("buildOAuthLoginRedirectUrl includes returnTo on login URL", () => {

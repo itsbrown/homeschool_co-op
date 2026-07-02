@@ -1,5 +1,23 @@
 # App knowledge changelog
 
+## 2026-07-01 (Public store — auth redirect E2E)
+
+- **E2E:** `e2e/public-store-auth-redirect.spec.ts` — login from store browse, item detail, merch checkout contact, and program checkout children step; asserts `returnTo`, cart persistence, member banner.
+- **Seed:** `setup-public-store-scenario` supports `withParent` + `linkSupabaseAuthParent` (same-school parent for store login tests).
+- **UI:** Checkout contact step includes Sign in link (`store-checkout-sign-in`); header uses `store-header-sign-in`.
+- **Fix:** Removed duplicate `/login` redirect in `App.tsx`; `SupabaseLogin` uses `consumeAuthReturnDestination()` so `returnTo` is not cleared twice (was sending users to `/dashboard` instead of the store).
+
+## 2026-07-01 (Public store — catalog & detail UX)
+
+- **Browse:** Cards show type badge, price, dates, 2-line teaser, and explicit “View program/product details” link; sections split **Programs & classes** vs **Shop** when both exist.
+- **Detail:** Same slug URL for all listing types; layout adapts — merch shows stock + product copy; programs show schedule + enrollment copy; full description never clamped; desktop sticky purchase panel.
+
+## 2026-07-01 (Public store — slug URLs for catalog items)
+
+- **URLs:** Item detail pages use `/store/:storeSlug/:itemSlug` (e.g. `kayak-quest-week-1`) instead of `/store/:slug/item/:listingId`.
+- **API:** Catalog items include `slug`; `GET …/catalog/:catalogKey` accepts slug or legacy numeric id.
+- **Legacy:** `/store/:slug/item/:id` redirects to the canonical slug URL.
+
 ## 2026-07-01 (Parent dashboard — registered campus on children & enrollments)
 
 - **API:** `GET /api/parent/children`, `/api/parent/children/:id`, and `/api/parent/enrollments` now include `locationName` (and `registeredLocationName` on enrollments) resolved from `users.location_id` with child `location_id` fallback via `server/lib/parent-registered-location.ts`.
@@ -44,7 +62,7 @@
 
 ## 2026-07-01 (Public store — item detail pages)
 
-- **UI:** `/store/:slug/item/:listingId` shows full description, hero image, dates, and add-to-cart; catalog cards link via title/image and “View details”.
+- **UI:** `/store/:slug/item/:listingId` shows full description, hero image, dates, and add-to-cart; catalog cards link via title/image and “View details”. *(Superseded by slug URLs — see changelog entry above.)*
 - **API:** `GET /api/public/store/:storeSlug/catalog/:listingId`; shared `buildStoreCatalogItem` in `server/lib/store-catalog-items.ts`.
 
 ## 2026-07-01 (Upload client — Bearer auth for presigned uploads)

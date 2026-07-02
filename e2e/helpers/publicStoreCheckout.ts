@@ -1,5 +1,8 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { testApiToken } from "./testSeed";
+import { loginFromStoreCheckoutChildrenStep } from "./publicStoreAuth";
+
+export { expectStoreCartLineCount } from "./publicStoreAuth";
 
 export type StoreGuestCheckoutContact = {
   firstName: string;
@@ -31,7 +34,7 @@ export async function addStoreProgramToCartAsGuest(
   await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
 }
 
-/** Sign in from checkout Step 3 link; expects return to checkout with cart intact. */
+/** Sign in from checkout children step; expects return to checkout with cart intact. */
 export async function loginFromStoreCheckoutAndReturn(
   page: Page,
   checkoutPath: string,
@@ -48,28 +51,7 @@ export async function loginFromStoreCheckoutAndReturn(
   await page.getByTestId("store-checkout-emergency-phone").fill("5555550199");
   await page.getByTestId("store-checkout-emergency-relationship").fill("Aunt");
   await page.getByTestId("store-checkout-step2-continue").click();
-  await page.getByRole("link", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/login(\?|$)/);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign In" }).click();
-  await expect(page).toHaveURL(new RegExp(`${checkoutPath.replace(/\//g, "\\/")}(\\?|$)`), {
-    timeout: 45_000,
-  });
-}
-
-export async function expectStoreCartLineCount(page: Page, expectedLines: number): Promise<void> {
-  const count = await page.evaluate(() => {
-    try {
-      const raw = sessionStorage.getItem("public_store_cart_v1");
-      if (!raw) return 0;
-      const parsed = JSON.parse(raw) as { lines?: unknown[] };
-      return parsed.lines?.length ?? 0;
-    } catch {
-      return 0;
-    }
-  });
-  expect(count).toBe(expectedLines);
+  await loginFromStoreCheckoutChildrenStep(page, checkoutPath, email, password);
 }
 
 export async function openStoreCheckoutFromCart(page: Page): Promise<void> {

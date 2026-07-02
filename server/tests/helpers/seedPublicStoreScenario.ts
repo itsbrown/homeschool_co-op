@@ -21,6 +21,8 @@ export type PublicStoreSeedResult = {
     imageUrl: string | null;
   };
   listing: { id: number; isPublished: boolean };
+  parent?: { id: number; email: string; password: string };
+  child?: { id: number; firstName: string; lastName: string };
   class?: {
     id: number;
     title: string;
@@ -57,6 +59,9 @@ export async function seedPublicStoreScenario(
     sessionFullDayPriceCents?: number;
     sessionCoverImage?: string | null;
     withPublishedSessionListing?: boolean;
+    /** Create a parent (+ child) enrolled at the store school for login E2E. */
+    withParent?: boolean;
+    parentPassword?: string;
   } = {},
 ): Promise<PublicStoreSeedResult> {
   await ensurePublicStoreSchema();
@@ -204,6 +209,35 @@ export async function seedPublicStoreScenario(
       coverImage: sessionRow.coverImage ?? null,
       listingId: sessionListingId,
       listingPublished: sessionListingPublished,
+    };
+  }
+
+  if (options.withParent) {
+    const parentPassword = options.parentPassword ?? adminPassword;
+    const parentEmail = `store_parent_${uniqueId}@test.com`;
+    const parent = await testDb.createTestUser({
+      email: parentEmail,
+      username: `storeparent_${uniqueId}`,
+      name: 'Store E2E Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    await storage.updateUser(parent.id, {
+      password: await bcrypt.hash(parentPassword, 10),
+    });
+    const child = await testDb.createTestChild(parent.id, {
+      firstName: 'Store',
+      lastName: 'Child',
+      birthdate: '2015-03-15',
+      gradeLevel: '4th Grade',
+      schoolId: school.id,
+      parentEmail,
+    });
+    result.parent = { id: parent.id, email: parentEmail, password: parentPassword };
+    result.child = {
+      id: child.id,
+      firstName: child.firstName,
+      lastName: child.lastName,
     };
   }
 

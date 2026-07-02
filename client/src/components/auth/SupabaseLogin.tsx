@@ -10,8 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import {
-  clearAuthReturnTo,
-  resolveAuthReturnDestination,
+  consumeAuthReturnDestination,
   syncAuthReturnToFromUrl,
 } from '@/lib/auth-return-to';
 
@@ -96,8 +95,7 @@ export const SupabaseLogin: React.FC = () => {
     if (registrationRequired) {
       return;
     }
-    const destination = resolveAuthReturnDestination("/dashboard");
-    clearAuthReturnTo();
+    const destination = consumeAuthReturnDestination("/dashboard");
     console.log('👤 User logged in with role, redirecting to', destination);
     setLocation(destination);
   }, [

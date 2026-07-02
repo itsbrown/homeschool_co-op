@@ -44,6 +44,26 @@ export function resolveAuthReturnDestination(fallback = "/dashboard"): string {
   return fallback;
 }
 
+/** Read post-login destination once and clear stored returnTo (avoids double-redirect races). */
+export function consumeAuthReturnDestination(fallback = "/dashboard"): string {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromParam = params.get("returnTo") || params.get("redirect");
+    if (fromParam && isSafeReturnPath(fromParam)) {
+      clearAuthReturnTo();
+      return fromParam;
+    }
+    const stored = sessionStorage.getItem(AUTH_RETURN_TO_KEY);
+    if (stored && isSafeReturnPath(stored)) {
+      clearAuthReturnTo();
+      return stored;
+    }
+  } catch {
+    // ignore
+  }
+  return fallback;
+}
+
 export function clearAuthReturnTo(): void {
   try {
     sessionStorage.removeItem(AUTH_RETURN_TO_KEY);

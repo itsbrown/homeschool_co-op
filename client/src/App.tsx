@@ -2,11 +2,7 @@ import React, { lazy, useEffect } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient, handleExpiredSession } from "./lib/queryClient";
-import {
-  clearAuthReturnTo,
-  loginPathWithReturnTo,
-  resolveAuthReturnDestination,
-} from "./lib/auth-return-to";
+import { loginPathWithReturnTo } from "./lib/auth-return-to";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupabaseProvider, useAuth } from "@/components/SupabaseProvider";
@@ -91,6 +87,9 @@ const FundraiserStorePage = lazy(() => import("./pages/FundraiserStorePage"));
 const FundraiserSuccessPage = lazy(() => import("./pages/FundraiserSuccessPage"));
 const PublicStorePage = lazy(() => import("./pages/public-store/PublicStorePage"));
 const PublicStoreItemPage = lazy(() => import("./pages/public-store/PublicStoreItemPage"));
+const PublicStoreItemLegacyRedirect = lazy(
+  () => import("./pages/public-store/PublicStoreItemLegacyRedirect"),
+);
 const PublicStoreCheckoutPage = lazy(() => import("./pages/public-store/PublicStoreCheckoutPage"));
 const PublicStoreSuccessPage = lazy(() => import("./pages/public-store/PublicStoreSuccessPage"));
 const PublicStoreManagerPage = lazy(() => import("./pages/schooladmin/PublicStoreManagerPage"));
@@ -433,15 +432,7 @@ function Router() {
       console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
       setLocation(loginPathWithReturnTo(location));
     }
-
-    // Redirect authenticated users away from login page (honor returnTo)
-    if (isAuthenticated && location === '/login' && isAccountReady && effectiveRole) {
-      console.log(`🔄 Redirecting authenticated user away from login page`);
-      const destination = resolveAuthReturnDestination('/dashboard');
-      clearAuthReturnTo();
-      setLocation(destination);
-    }
-  }, [isAuthenticated, isLoading, location, isAccountReady, effectiveRole, setLocation]);
+  }, [isAuthenticated, isLoading, location, setLocation]);
 
   // Handle OAuth callbacks (Auth0 and Supabase)
   React.useEffect(() => {
@@ -772,7 +763,8 @@ function Router() {
       <Route path="/fundraiser/success" component={FundraiserSuccessPage} />
       <Route path="/store/:schoolSlug/checkout" component={PublicStoreCheckoutPage} />
       <Route path="/store/:schoolSlug/success" component={PublicStoreSuccessPage} />
-      <Route path="/store/:schoolSlug/item/:listingId" component={PublicStoreItemPage} />
+      <Route path="/store/:schoolSlug/item/:listingId" component={PublicStoreItemLegacyRedirect} />
+      <Route path="/store/:schoolSlug/:itemSlug" component={PublicStoreItemPage} />
       <Route path="/store/:schoolSlug" component={PublicStorePage} />
       <Route path="/forms/:slug" component={DynamicFormPage} />
       <Route path="/product-order/:slug" component={ProductOrderFormPage} />

@@ -13,7 +13,7 @@ export function PublicStoreMemberBanner({
   const hasStoreSessions = items.some((item) => item.listingType === "session");
 
   return (
-    <div className="bg-blue-50 border-b border-blue-100">
+    <div className="bg-blue-50 border-b border-blue-100" data-testid="public-store-member-banner">
       <div
         className={`mx-auto ${containerClassName} px-4 py-3 text-sm flex flex-wrap gap-3 items-center`}
       >

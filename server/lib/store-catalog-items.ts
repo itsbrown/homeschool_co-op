@@ -84,3 +84,35 @@ export async function buildStoreCatalogItem(
 
   return null;
 }
+
+/** Build published catalog rows with URL slugs assigned per school catalog. */
+export async function getPublishedStoreCatalogWithSlugs(
+  schoolId: number,
+): Promise<(StoreCatalogItem & { slug: string })[]> {
+  const { getPublishedStoreListings } = await import('./store-storage');
+  const { attachSlugsToCatalogItems } = await import('./store-listing-slug');
+
+  const listings = await getPublishedStoreListings(schoolId);
+  const catalog: StoreCatalogItem[] = [];
+  for (const listing of listings) {
+    const item = await buildStoreCatalogItem(listing);
+    if (item) catalog.push(item);
+  }
+  const sorted = catalog.sort((a, b) => a.sortOrder - b.sortOrder);
+  return attachSlugsToCatalogItems(sorted);
+}
+
+/** Resolve a catalog URL key (numeric listing id or title slug). */
+export async function resolvePublishedStoreCatalogItem(
+  schoolId: number,
+  catalogKey: string,
+): Promise<(StoreCatalogItem & { slug: string }) | null> {
+  const numericId = parseInt(catalogKey, 10);
+  const catalog = await getPublishedStoreCatalogWithSlugs(schoolId);
+
+  if (Number.isFinite(numericId) && String(numericId) === catalogKey.trim()) {
+    return catalog.find((item) => item.listingId === numericId) ?? null;
+  }
+
+  return catalog.find((item) => item.slug === catalogKey) ?? null;
+}

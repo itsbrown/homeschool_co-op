@@ -1,18 +1,16 @@
-import { Link, useParams } from "wouter";
+import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/SupabaseProvider";
 import { fetchParentMemberId, PARENT_MEMBER_ID_QUERY_KEY } from "@/lib/parent-member-id";
 import { usePublicStoreCart } from "@/hooks/usePublicStoreCart";
-import { storeItemDetailPath, type StoreCatalogItem } from "@/lib/store-catalog";
+import type { StoreCatalogItem } from "@/lib/store-catalog";
+import { groupStoreCatalogItems } from "@/lib/store-catalog-display";
 import { formatStoreCartMoney } from "@/lib/store-cart";
-import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 import { PublicStoreHeader } from "@/components/store/PublicStoreHeader";
-import { StoreCatalogItemActions } from "@/components/store/StoreCatalogItemActions";
 import { PublicStoreMemberBanner } from "@/components/store/PublicStoreMemberBanner";
+import { StoreCatalogCard } from "@/components/store/StoreCatalogCard";
 
 export default function PublicStorePage() {
   const { schoolSlug = "" } = useParams<{ schoolSlug: string }>();
@@ -53,6 +51,7 @@ export default function PublicStorePage() {
   });
 
   const items = catalogData?.items ?? [];
+  const sections = groupStoreCatalogItems(items);
   const isMemberOfStore =
     isAuthenticated && memberData?.schoolId != null && memberData.schoolId === store?.schoolId;
 
@@ -70,9 +69,9 @@ export default function PublicStorePage() {
 
       {isMemberOfStore && <PublicStoreMemberBanner items={items} />}
 
-      <main className="mx-auto max-w-5xl px-4 py-8">
+      <main className="mx-auto max-w-6xl px-4 py-8">
         {catalogData && items.length === 0 ? (
-          <div className="rounded-lg border border-dashed bg-white px-6 py-16 text-center">
+          <div className="rounded-xl border border-dashed bg-white px-6 py-16 text-center">
             <p className="text-lg font-medium text-slate-900">Nothing listed yet</p>
             <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
               This store is active, but no programs or products have been published. Check back
@@ -80,60 +79,36 @@ export default function PublicStorePage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {items.map((item) => (
-          <Card
-            key={`${item.listingType}-${item.listingId}`}
-            className="overflow-hidden flex flex-col"
-            data-testid={`store-catalog-item-${item.listingType}-${item.listingId}`}
-          >
-            <Link href={storeItemDetailPath(schoolSlug, item.listingId)} className="block group">
-              <StoreProductCardImage
-                src={item.imageUrl}
-                alt={item.title}
-                className="group-hover:opacity-95 transition-opacity"
-                data-testid={
-                  item.listingType === "product"
-                    ? "store-product-image"
-                    : `store-${item.listingType}-image`
-                }
-              />
-            </Link>
-            <CardHeader className="pb-2">
-              <div className="flex items-start justify-between gap-2">
-                <CardTitle className="text-lg">
-                  <Link
-                    href={storeItemDetailPath(schoolSlug, item.listingId)}
-                    className="hover:text-primary hover:underline"
-                    data-testid={`store-item-link-${item.listingId}`}
+          <div className="space-y-12">
+            {sections.map((section) => (
+              <section key={section.id} aria-labelledby={`store-section-${section.id}`}>
+                <div className="mb-6 max-w-2xl">
+                  <h2
+                    id={`store-section-${section.id}`}
+                    className="text-xl font-semibold tracking-tight text-slate-900"
                   >
-                    {item.title}
-                  </Link>
-                </CardTitle>
-                {item.membersOnly && <Badge variant="secondary">Members only</Badge>}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 flex-1 flex flex-col">
-              {item.description && (
-                <p className="text-sm text-muted-foreground line-clamp-3 flex-1">{item.description}</p>
-              )}
-              <div className="flex flex-col gap-3 mt-auto w-full pt-1">
-                <StoreCatalogItemActions
-                  item={item}
-                  onAddProduct={addProduct}
-                  onAddProgram={onAddProgram}
-                />
-                <Button
-                  variant="outline"
-                  className="w-full min-h-11"
-                  asChild
-                  data-testid={`store-view-details-${item.listingId}`}
+                    {section.title}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{section.description}</p>
+                </div>
+                <div
+                  className={
+                    section.id === "shop"
+                      ? "grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+                      : "grid gap-5 md:grid-cols-2"
+                  }
                 >
-                  <Link href={storeItemDetailPath(schoolSlug, item.listingId)}>View details</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                  {section.items.map((item) => (
+                    <StoreCatalogCard
+                      key={`${item.listingType}-${item.listingId}`}
+                      item={item}
+                      schoolSlug={schoolSlug}
+                      onAddProduct={addProduct}
+                      onAddProgram={onAddProgram}
+                    />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
@@ -151,7 +126,6 @@ export default function PublicStorePage() {
           </Button>
         </div>
       )}
-
     </div>
   );
 }
