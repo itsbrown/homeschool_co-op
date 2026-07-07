@@ -40,7 +40,7 @@ export default function SchoolAnalyticsPage() {
           </TabsContent>
 
           <TabsContent value="progress" className="mt-6">
-            <ProgressInsightsTab schoolName={school?.name} />
+            <ProgressInsightsTab schoolName={school?.name} locations={locations} />
           </TabsContent>
         </Tabs>
       </div>

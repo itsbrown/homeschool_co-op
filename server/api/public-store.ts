@@ -10,7 +10,6 @@ import {
   STORE_SNAPSHOT_TTL_MS,
 } from '../lib/store-config';
 import { insertCheckoutFunnelEvent } from '../lib/school-analytics';
-import { randomUUID } from 'crypto';
 import {
   getSchoolByStoreSlug,
   saveStoreCheckoutSnapshot,
@@ -314,6 +313,8 @@ router.post('/:storeSlug/checkout', async (req, res) => {
       },
     });
 
+    const funnelCorrelationId = `public-store-${pendingOrder.id}`;
+
     await saveStoreCheckoutSnapshot({
       id: snapshotId,
       schoolId: school.id,
@@ -331,6 +332,7 @@ router.post('/:storeSlug/checkout', async (req, res) => {
         emergencyContact: parsed.data.emergencyContact ?? null,
         productDelivery: parsed.data.productDelivery ?? null,
         referral,
+        funnelCorrelationId,
         childAssignments,
         pendingStoreOrderId: pendingOrder.id,
         accessToken,
@@ -344,7 +346,7 @@ router.post('/:storeSlug/checkout', async (req, res) => {
     try {
       await insertCheckoutFunnelEvent({
         schoolId: school.id,
-        correlationId: randomUUID(),
+        correlationId: funnelCorrelationId,
         parentId: parentResult.parentId,
         parentEmail: parsed.data.parent.email,
         lane: 'public_store',
@@ -354,6 +356,7 @@ router.post('/:storeSlug/checkout', async (req, res) => {
         cartValueCents: snapshot.amountDueCents,
         metadata: {
           parentName: `${parsed.data.parent.firstName} ${parsed.data.parent.lastName}`,
+          funnelCorrelationId,
           ...(referral ? { referralUserId: referral.userId } : {}),
         },
       });

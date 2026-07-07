@@ -33,6 +33,127 @@ export async function insertCheckoutFunnelEvents(rows: InsertCheckoutFunnelEvent
   await db.insert(checkoutFunnelEvents).values(rows);
 }
 
+const ABANDON_STALE_MS = 24 * 60 * 60 * 1000;
+const ABANDON_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** Emit `abandon` for checkout attempts idle 24h+ with no purchase (idempotent per correlation). */
+export async function emitStaleCheckoutAbandonEvents(): Promise<{ emitted: number }> {
+  const db = await getDb();
+  const staleBefore = new Date(Date.now() - ABANDON_STALE_MS);
+  const since = new Date(Date.now() - ABANDON_LOOKBACK_MS);
+
+  const events = await db
+    .select()
+    .from(checkoutFunnelEvents)
+    .where(gte(checkoutFunnelEvents.createdAt, since))
+    .orderBy(desc(checkoutFunnelEvents.createdAt));
+
+  const byCorrelation = new Map<string, typeof events>();
+  for (const e of events) {
+    const list = byCorrelation.get(e.correlationId) || [];
+    list.push(e);
+    byCorrelation.set(e.correlationId, list);
+  }
+
+  const rows: InsertCheckoutFunnelEvent[] = [];
+  for (const [correlationId, evts] of byCorrelation) {
+    if (evts.some((e) => e.step === "purchase" || e.step === "abandon")) continue;
+
+    const latest = evts.reduce((a, b) => (a.createdAt > b.createdAt ? a : b));
+    if (latest.createdAt > staleBefore) continue;
+
+    rows.push({
+      schoolId: latest.schoolId,
+      correlationId,
+      parentId: latest.parentId,
+      parentEmail: latest.parentEmail,
+      lane: latest.lane,
+      step: "abandon",
+      enrollmentIds: (latest.enrollmentIds as number[]) || [],
+      storeOrderId: latest.storeOrderId,
+      classIds: (latest.classIds as number[]) || [],
+      childIds: (latest.childIds as number[]) || [],
+      cartValueCents: latest.cartValueCents,
+      metadata: {
+        ...((latest.metadata as Record<string, unknown>) || {}),
+        autoAbandon: true,
+        lastStep: latest.step,
+      },
+    });
+  }
+
+  if (rows.length) await insertCheckoutFunnelEvents(rows);
+  return { emitted: rows.length };
+}
+
+/** Record a `purchase` funnel step, reusing correlation from prior events when possible. */
+export async function recordCheckoutFunnelPurchase(params: {
+  schoolId: number;
+  lane: "member_cart" | "public_store";
+  correlationId?: string;
+  storeOrderId?: number | null;
+  parentId?: number | null;
+  parentEmail?: string | null;
+  enrollmentIds?: number[];
+  classIds?: number[];
+  childIds?: number[];
+  cartValueCents?: number;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  const db = await getDb();
+  let correlationId = params.correlationId;
+
+  if (!correlationId && params.storeOrderId) {
+    const [prior] = await db
+      .select()
+      .from(checkoutFunnelEvents)
+      .where(eq(checkoutFunnelEvents.storeOrderId, params.storeOrderId))
+      .orderBy(desc(checkoutFunnelEvents.createdAt))
+      .limit(1);
+    correlationId = prior?.correlationId;
+  }
+
+  if (!correlationId && params.storeOrderId) {
+    correlationId = `public-store-${params.storeOrderId}`;
+  }
+
+  if (!correlationId) return;
+
+  const [existingPurchase] = await db
+    .select({ id: checkoutFunnelEvents.id })
+    .from(checkoutFunnelEvents)
+    .where(
+      and(
+        eq(checkoutFunnelEvents.correlationId, correlationId),
+        eq(checkoutFunnelEvents.step, "purchase"),
+      ),
+    )
+    .limit(1);
+  if (existingPurchase) return;
+
+  const [latest] = await db
+    .select()
+    .from(checkoutFunnelEvents)
+    .where(eq(checkoutFunnelEvents.correlationId, correlationId))
+    .orderBy(desc(checkoutFunnelEvents.createdAt))
+    .limit(1);
+
+  await insertCheckoutFunnelEvent({
+    schoolId: params.schoolId,
+    correlationId,
+    parentId: params.parentId ?? latest?.parentId ?? undefined,
+    parentEmail: params.parentEmail ?? latest?.parentEmail ?? undefined,
+    lane: params.lane,
+    step: "purchase",
+    enrollmentIds: params.enrollmentIds ?? (latest?.enrollmentIds as number[]) ?? [],
+    storeOrderId: params.storeOrderId ?? latest?.storeOrderId ?? undefined,
+    classIds: params.classIds ?? (latest?.classIds as number[]) ?? [],
+    childIds: params.childIds ?? (latest?.childIds as number[]) ?? [],
+    cartValueCents: params.cartValueCents ?? latest?.cartValueCents ?? 0,
+    metadata: params.metadata ?? (latest?.metadata as Record<string, unknown>) ?? {},
+  });
+}
+
 export type AnalyticsFilters = {
   from?: Date;
   to?: Date;

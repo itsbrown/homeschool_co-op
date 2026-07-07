@@ -1,6 +1,6 @@
 # School analytics
 
-**Last updated:** 2026-07-01
+**Last updated:** 2026-07-02
 
 Unified school-admin analytics: **app engagement**, **cart abandonment**, and **student progress** (literacy charts). Parent-facing progress charts use the same progress analytics service with parent scoping.
 
@@ -61,9 +61,11 @@ Engagement and cart reports slice by **child demographics** (primary enrolled ch
 |------|------|--------|
 | App usage | `client/src/components/ActivityTelemetry.tsx` | page_view, login, heartbeat |
 | Member cart | `CartContext.tsx`, `CartCheckout.tsx`, `CartSuccess.tsx` | funnel steps |
-| Public store | `server/api/public-store.ts` | `begin_checkout` on checkout POST |
+| Public store | `server/api/public-store.ts`, `server/lib/store-fulfillment.ts` | `begin_checkout` on checkout POST; `purchase` on fulfillment |
 
 `users.last_login` updates when a `login` activity event is persisted (`telemetry-activity.ts`).
+
+**Abandon cron:** `server/services/checkout-funnel-abandon-job.ts` runs every 6h (with other background jobs) and emits `abandon` when a correlation has no `purchase` and last activity is 24h+ ago.
 
 ## Key server files
 
@@ -71,6 +73,7 @@ Engagement and cart reports slice by **child demographics** (primary enrolled ch
 - `server/lib/progress-analytics.ts` — literacy cohort + child time-series
 - `server/lib/parse-lexile-range.ts` — Lexile normalization
 - `server/api/school-analytics.ts`, `telemetry-activity.ts`, `progress-analytics.ts`
+- `server/services/checkout-funnel-abandon-job.ts` — stale checkout abandon scheduler
 
 ## Key client files
 
@@ -107,5 +110,5 @@ Engagement and cart reports slice by **child demographics** (primary enrolled ch
 
 - `/api/analytics` must be mounted in **both** `server/index.ts` and `server/app-init.ts` (My School Statistics 404 if missing).
 - `useAnalytics` alone does not persist events — `ActivityTelemetry` must be mounted in `App.tsx`.
-- Cart funnel `correlation_id` should stay stable per checkout attempt (client `telemetryClient.ts`).
+- Cart funnel `correlation_id` should stay stable per checkout attempt (client `telemetryClient.ts`; public store uses `public-store-{orderId}`).
 - Progress child API returns 403 if parent does not own the child.
