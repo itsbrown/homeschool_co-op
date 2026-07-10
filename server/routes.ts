@@ -45,6 +45,7 @@ import accountImportRouter from "./api/account-import";
 import paymentCleanupRouter from "./api/payment-cleanup";
 import { uploadKnowledgeBaseFiles, getProcessingStatus, getProcessingStats } from "./api/knowledge-base-upload";
 import customFormsRouter from "./api/custom-forms";
+import formBuilderAiRouter from "./api/form-builder-ai";
 import fundraisersRouter from "./api/fundraisers";
 import discountsRouter from "./api/discounts";
 import enrollmentConflictsRouter from "./api/enrollment-conflicts";
@@ -2657,6 +2658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/user", autoPayRouter);
   app.use("/api/admin/users", adminPaymentMethodsRouter);
   app.use("/api/custom-forms", customFormsRouter);
+  app.use("/api/form-builder-ai", formBuilderAiRouter);
   app.use("/api/fundraisers", fundraisersRouter);
   
   // School Admin Child Management endpoints (with JWT auth for school admins)

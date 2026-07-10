@@ -2690,6 +2690,7 @@ export const customForms = pgTable("custom_forms", {
     redirectUrl: null,
     notifyOnSubmission: true,
     notificationEmails: [],
+    sendSubmitterConfirmation: false,
   }).notNull(),
   
   // Conditional logic configuration
@@ -2801,6 +2802,7 @@ export const insertCustomFormSchema = createInsertSchema(customForms)
       redirectUrl: z.string().nullable().default(null),
       notifyOnSubmission: z.boolean().default(true),
       notificationEmails: z.array(z.string().email()).default([]),
+      sendSubmitterConfirmation: z.boolean().default(false),
     }).default({
       requireAuth: true,
       allowMultipleSubmissions: false,
@@ -2809,6 +2811,7 @@ export const insertCustomFormSchema = createInsertSchema(customForms)
       redirectUrl: null,
       notifyOnSubmission: true,
       notificationEmails: [],
+      sendSubmitterConfirmation: false,
     }),
     conditionalLogic: z.array(z.any()).default([]),
   });

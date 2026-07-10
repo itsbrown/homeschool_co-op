@@ -116,6 +116,16 @@ const response = await anthropic.messages.create({
 - **XSS prevention**: AI response content must NEVER use `dangerouslySetInnerHTML`. Use safe React rendering with manual string parsing (see `SafeMessageContent` component)
 - **Routing rule**: All "Browse on your own" links in the concierge must point to `/parent/home` (legacy dashboard), not `/dashboard`, to avoid routing loop
 
+### 8. Form Smart Builder
+- **Purpose**: School-admin conversational form designer — proposes field drafts for review; never auto-publishes
+- **Endpoint**: `POST /api/form-builder-ai/chat` (mounted in `routes.ts`)
+- **Apply**: `POST /api/custom-forms/forms/:formId/apply-draft` — writes fields; does not set `isActive` / public
+- **Model**: `claude-sonnet-4-20250514` (tool-use); E2E uses `FORM_BUILDER_AI_MOCK=1`
+- **Rate limit**: 20/min (5 in CI via `FORM_BUILDER_AI_RATE_LIMIT`)
+- **Frontend**: `FormSmartBuilderPanel` on `FormEditorPage`
+- **Tools**: `list_templates`, `get_current_form`, `propose_form_draft`, `clone_template_into_draft`
+- **Safety**: Draft-only until admin Apply; no MCP — in-app Claude tools like Parent Concierge
+
 ## Knowledge Base Content Extraction
 
 ### Priority Chain for `extractContextFromKnowledgeBases()`

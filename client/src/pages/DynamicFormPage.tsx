@@ -283,6 +283,7 @@ export default function DynamicFormPage() {
   const [, params] = useRoute('/forms/:slug');
   const { toast } = useToast();
   const [submitted, setSubmitted] = useState(false);
+  const [honeypot, setHoneypot] = useState('');
   const slug = params?.slug || '';
   
   const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
@@ -290,6 +291,8 @@ export default function DynamicFormPage() {
   const { data: form, isLoading } = useQuery<CustomForm>({
     queryKey: [`/api/custom-forms/forms/by-slug/${slug}`],
     enabled: !!slug,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const buildValidationSchema = (fields: FormFieldType[]) => {
@@ -448,6 +451,7 @@ export default function DynamicFormPage() {
         submittedBy: null,
         submitterEmail,
         submitterName,
+        honeypot,
       };
       
       console.log('Payload:', payload);
@@ -797,6 +801,23 @@ export default function DynamicFormPage() {
           <CardContent>
             <Form {...form_hook}>
               <form onSubmit={form_hook.handleSubmit(onSubmit)} className="space-y-6">
+                {/* Honeypot — hidden from users; bots that fill it are rejected */}
+                <div
+                  aria-hidden="true"
+                  style={{ position: 'absolute', left: '-10000px', top: 'auto', width: 1, height: 1, overflow: 'hidden' }}
+                >
+                  <label htmlFor="form-website">Website</label>
+                  <input
+                    id="form-website"
+                    name="website"
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                    data-testid="input-honeypot"
+                  />
+                </div>
                 {form.fields.map((field) => (
                   <div key={field.id}>{renderField(field)}</div>
                 ))}

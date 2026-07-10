@@ -1,5 +1,13 @@
 # App knowledge changelog
 
+## 2026-07-10 (Custom forms best-in-class + AI Smart Builder)
+
+- **Editor:** Debounced field PUTs, functional state, query invalidation; Preview → admin preview; by-slug `staleTime: 0`.
+- **Submit:** Admin + submitter emails (`notifyOnSubmission` / `sendSubmitterConfirmation`); honeypot; rate limit; duplicate + required-field enforcement.
+- **AI:** `POST /api/form-builder-ai/chat` + `FormSmartBuilderPanel` + `apply-draft` (draft only, no auto-publish); `FORM_BUILDER_AI_MOCK` for E2E.
+- **E2E:** `form-editor-fields`, `form-submission-notify-spam`, `form-smart-builder` — catalogued in E2E_COMMANDS.
+- **Docs:** [custom-forms-public-access.md](domains/custom-forms-public-access.md).
+
 ## 2026-07-02 (School analytics v1 gaps)
 
 - **Abandon cron:** `checkout-funnel-abandon-job.ts` emits `abandon` after 24h idle (6h tick).
