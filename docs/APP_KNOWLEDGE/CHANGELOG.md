@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-07-10 (CI auth sync + Postgres health-check clarity)
+
+- **Auth sync:** `UserSyncService.syncAuth0User` looks up by `supabaseId`/`auth0Id` then `LOWER(email)` so E2E seeds do not hit `users_email_lower_idx` on login.
+- **CI:** `pg_isready -U test -d asa_test` — `POSTGRES_USER=test` is the role; DB name remains `asa_test` (not a mismatch with `DATABASE_URL`).
+
 ## 2026-07-10 (Custom forms best-in-class + AI Smart Builder)
 
 - **Editor:** Debounced field PUTs, functional state, query invalidation; Preview → admin preview; by-slug `staleTime: 0`.
