@@ -54,6 +54,7 @@ import ManageUserRolesDialog from '@/components/admin/ManageUserRolesDialog';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { useToast } from '@/hooks/use-toast';
 import { useSchoolAdmin } from '@/hooks/useSchoolAdmin';
+import { useCan } from '@/hooks/useEffectivePermissions';
 import { apiRequest } from '@/lib/queryClient';
 
 export default function UsersPage() {
@@ -72,6 +73,7 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
   const { schoolId, isLoading: isLoadingSchool, userProfile } = useSchoolAdmin();
   const { toast } = useToast();
+  const canManageStaff = useCan('canManageStaff');
 
   // Fetch locations for the school
   const { data: locationsData = [] } = useQuery<any[]>({
@@ -379,6 +381,7 @@ export default function UsersPage() {
               variant="outline"
               className="flex items-center gap-2"
               data-testid="button-import-users"
+              disabled={!canManageStaff}
             >
               <Upload className="h-4 w-4" />
               Import Users
@@ -387,6 +390,7 @@ export default function UsersPage() {
               onClick={() => setShowCreateDialog(true)}
               className="flex items-center gap-2"
               data-testid="button-create-user"
+              disabled={!canManageStaff}
             >
               <UserPlus className="h-4 w-4" />
               Create User

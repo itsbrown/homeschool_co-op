@@ -52,6 +52,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSchoolFeatures } from '@/lib/useSchoolFeatures';
+import { useEffectivePermissions } from '@/hooks/useEffectivePermissions';
+import { NAV_REGISTRY } from '@shared/permissions';
 
 interface SchoolData {
   id: number;
@@ -242,12 +244,44 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   });
   const { user, isAuthenticated, signOut } = useAuth();
   const { activeRole, availableRoles, hasRole } = useRole();
-  // Whether user can see admin nav groups (director or schoolAdmin role at any school)
-  const showAdminNavGroups = hasRole(['director', 'schoolAdmin', 'superAdmin', 'admin']);
+  const {
+    showAdminNavGroups,
+    can,
+    canShowGroup,
+    canShowItem,
+  } = useEffectivePermissions();
+
+  const hasSuperAdminRole =
+    availableRoles.some((r) => r.role.toLowerCase() === 'superadmin') || hasRole('superAdmin');
+  const { showPublicStoreInNav } = useSchoolFeatures();
+  const baseNavGroups = buildAdminNavGroups(showAdminNavGroups || showPublicStoreInNav || hasSuperAdminRole);
+
+  // Filter groups/items by effective permissions (fail closed for non-bypass)
+  const navGroups = baseNavGroups
+    .map((group) => {
+      if (showAdminNavGroups) return group;
+      if (!canShowGroup(group.title as import('@shared/permissions').NavGroupId)) {
+        return { ...group, items: [] };
+      }
+      return {
+        ...group,
+        items: group.items.filter((item) =>
+          canShowItem({
+            required:
+              (NAV_REGISTRY.find((r) => r.href === item.href)?.required as import('@shared/permissions').PermissionKey) ||
+              'canManageClasses',
+          }),
+        ),
+      };
+    })
+    .filter((group) => group.items.length > 0);
+
+  // Show permission-filtered admin groups when bypass OR staff has any granted sections
+  const showPermissionNav = showAdminNavGroups || navGroups.length > 0;
 
   // Auto-expand group containing current route
   useEffect(() => {
-    if (showAdminNavGroups) {
+    if (showPermissionNav) {
       for (const group of navGroups) {
         const hasActiveItem = group.items.some(item => 
           location === item.href || location.startsWith(`${item.href}/`)
@@ -257,7 +291,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
         }
       }
     }
-  }, [location, showAdminNavGroups]);
+  }, [location, showPermissionNav]);
 
   // Save expanded state to localStorage (guarded for SSR safety)
   useEffect(() => {
@@ -281,30 +315,15 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
       return next;
     });
   };
-  
-  const hasSuperAdminRole =
-    availableRoles.some((r) => r.role.toLowerCase() === 'superadmin') || hasRole('superAdmin');
-  const { showPublicStoreInNav } = useSchoolFeatures();
-  // School admins always need the config UI; public storefront is gated separately.
-  const navGroups = buildAdminNavGroups(showAdminNavGroups || showPublicStoreInNav || hasSuperAdminRole);
 
   // Fetch school data for logo and name (for any school-scoped role)
   const { data: schoolData } = useQuery<SchoolData>({
     queryKey: ['/api/school-admin/my-school'],
-    enabled: !!user && hasRole(['schoolAdmin', 'superAdmin', 'educator', 'director']),
+    enabled: !!user && (showAdminNavGroups || hasRole(['educator', 'director', 'teacher'])),
   });
 
-  // Fetch staff permissions for non-admin staff members
-  const { data: staffPermissionsData } = useQuery<{
-    userLocations: Array<{ permissions: { canManageClasses?: boolean } }>;
-    schoolWide?: { permissions: { canManageClasses?: boolean } } | null;
-  }>({
-    queryKey: ['/api/school-admin/user-locations/my-permissions'],
-    enabled: !!user && !showAdminNavGroups,
-  });
-  const canManageClasses =
-    staffPermissionsData?.schoolWide?.permissions?.canManageClasses === true ||
-    staffPermissionsData?.userLocations?.some((ul) => ul.permissions?.canManageClasses) === true;
+  // Staff academics shortcut when not full admin nav
+  const canManageClasses = can('canManageClasses');
 
   // Reset logo load failed states when school logo changes
   useEffect(() => {
@@ -441,7 +460,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             </Link>
 
             {/* Grouped Navigation - for users with admin or director roles */}
-            {showAdminNavGroups && navGroups.map((group) => {
+            {showPermissionNav && navGroups.map((group) => {
               const isGroupExpanded = expandedGroups.has(group.title);
               const hasActiveItem = group.items.some(item => 
                 location === item.href || location.startsWith(`${item.href}/`)
@@ -506,7 +525,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             })}
 
             {/* Educator-specific nav items (separate from Dashboard/Settings which are always shown) */}
-            {!showAdminNavGroups && educatorNavItems.filter(item => 
+            {!showPermissionNav && educatorNavItems.filter(item => 
               item.href !== '/dashboard' && item.href !== '/schools/settings'
             ).map((item) => {
               const isActive = location === item.href || location.startsWith(`${item.href}/`);
@@ -529,7 +548,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             })}
 
             {/* Class management nav items for staff with canManageClasses permission */}
-            {!showAdminNavGroups && canManageClasses && (
+            {!showPermissionNav && canManageClasses && (
               <>
                 {!isCollapsed && (
                   <div className="px-3 pt-3 pb-1">
@@ -699,7 +718,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                   </Link>
 
                   {/* Grouped Navigation - for users with admin or director roles */}
-                  {showAdminNavGroups && navGroups.map((group) => {
+                  {showPermissionNav && navGroups.map((group) => {
                     const isGroupExpanded = expandedGroups.has(group.title);
                     const hasActiveItem = group.items.some(item => 
                       location === item.href || location.startsWith(`${item.href}/`)
@@ -761,7 +780,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                   })}
 
                   {/* Educator-specific nav items (separate from Dashboard/Settings which are always shown) */}
-                  {!showAdminNavGroups && educatorNavItems.filter(item => 
+                  {!showPermissionNav && educatorNavItems.filter(item => 
                     item.href !== '/dashboard' && item.href !== '/schools/settings'
                   ).map((item) => {
                     const isActive = location === item.href || location.startsWith(`${item.href}/`);
@@ -784,7 +803,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                   })}
 
                   {/* Class management nav items for staff with canManageClasses permission */}
-                  {!showAdminNavGroups && canManageClasses && (
+                  {!showPermissionNav && canManageClasses && (
                     <>
                       <div className="px-3 pt-3 pb-1">
                         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Academics</span>

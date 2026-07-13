@@ -105,6 +105,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | Spec | Command | What it covers | Prerequisites |
 |------|---------|----------------|---------------|
 | [`e2e/smoke.spec.ts`](../e2e/smoke.spec.ts) | `npm run test:e2e -- e2e/smoke.spec.ts` | `/` HTML shell; `/api/cart/snapshot` returns JSON | Dev server on :5000 |
+| [`e2e/permissions-nav.spec.ts`](../e2e/permissions-nav.spec.ts) | `npm run test:e2e -- e2e/permissions-nav.spec.ts` | School-admin finance deep link → login or forbidden (permissions smoke) | Dev server on :5000 |
 | [`e2e/public-custom-forms.spec.ts`](../e2e/public-custom-forms.spec.ts) | `npm run test:e2e -- e2e/public-custom-forms.spec.ts` | Public `/forms/:slug`, API, **resume `upload-attachment`**, browser upload + submit | `DATABASE_URL`; seed `setup-public-form-scenario`; stub storage via `PLAYWRIGHT_WEB_SERVER` |
 | [`e2e/parent-dashboard.spec.ts`](../e2e/parent-dashboard.spec.ts) | `npm run test:e2e -- e2e/parent-dashboard.spec.ts` | Unauthenticated dashboard gating | — |
 

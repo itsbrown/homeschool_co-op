@@ -1,5 +1,14 @@
 # App knowledge changelog
 
+## 2026-07-13 (Permission-driven nav + scoping)
+
+- **Registry:** [`shared/permissions.ts`](../../shared/permissions.ts) — typed keys, nav map, API samples, aggregation (fail closed).
+- **School-wide:** `user_school_permissions` = regional manager (`canAccessEntireSchool`); location staff via `user_locations`.
+- **API:** `GET /api/me/effective-permissions`; `requirePermission` on sample school-admin routes; `PERMISSIONS_ENFORCEMENT` off|observe|enforce.
+- **UI:** Sidebars + `SchoolRouteGuard` + Forbidden page; Staff Permissions toggle help maps to nav groups.
+- **SQL:** [`server/migrations/permissions-scoping.sql`](../../server/migrations/permissions-scoping.sql) (no db:push); verify `scripts/verify-permissions-schema.mjs`.
+- **Docs:** [PERMISSIONS_ROLLOUT.md](../PERMISSIONS_ROLLOUT.md); E2E `e2e/permissions-nav.spec.ts`.
+
 ## 2026-07-02 (School analytics v1 gaps)
 
 - **Abandon cron:** `checkout-funnel-abandon-job.ts` emits `abandon` after 24h idle (6h tick).

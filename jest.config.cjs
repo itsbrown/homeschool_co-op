@@ -14,6 +14,7 @@ module.exports = {
   testMatch: [
     '<rootDir>/client/**/__tests__/**/*.{ts,tsx}',
     '<rootDir>/client/**/*.{spec,test}.{ts,tsx}',
+    '<rootDir>/shared/**/__tests__/**/*.{ts,tsx}',
   ],
   transform: {
     '^.+\\.(t|j)sx?$': ['ts-jest', {

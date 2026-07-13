@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useSyncExternalStore } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole, silentRoleContextUpdate } from "@/contexts/RoleContext";
+import { useEffectivePermissions } from "@/hooks/useEffectivePermissions";
 import { CartProvider } from "@/contexts/CartContext";
 import { LayoutShellProvider } from "@/contexts/LayoutShellContext";
 import ParentSidebar from "./ParentSidebar";
@@ -97,11 +98,8 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
     if (isAcademicsRoute) setAcademicsSectionOpen(true);
   }, [isEducatorRoute, isSchoolAdminRoute, isAcademicsRoute]);
 
-  const { data: permissionsData } = useQuery<{ userLocations: Array<{ permissions: { canManageClasses?: boolean } }> }>({
-    queryKey: ['/api/school-admin/user-locations/my-permissions'],
-    enabled: !!user,
-  });
-  const canManageClasses = permissionsData?.userLocations?.[0]?.permissions?.canManageClasses ?? false;
+  const { can } = useEffectivePermissions();
+  const canManageClasses = can('canManageClasses');
 
   useEffect(() => {
     if (isEducatorRoute) {

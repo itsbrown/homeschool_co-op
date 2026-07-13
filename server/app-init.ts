@@ -30,6 +30,7 @@ import adminRefundsRouter from "./api/admin-refunds";
 import membershipRouter from "./api/membership";
 import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
+import meRouter from "./api/me";
 import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import errorTelemetryRouter from "./api/error-telemetry";
 import sendgridWebhookRouter from "./api/sendgrid-webhook";
@@ -195,6 +196,7 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/payment-import", paymentImport);
   app.use("/api/account-import", accountImport);
   app.use("/api/user", userRolesRouter);
+  app.use("/api/me", meRouter);
   app.use("/api/user", autoPayRouter);
   app.use("/api/admin/users", adminPaymentMethodsRouter);
   app.use("/api/telemetry/errors", errorTelemetryRouter);

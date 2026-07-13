@@ -14,6 +14,7 @@ import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmai
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { clearPermissionCache } from '../middleware/locationPermissions';
+import { attachAccessScope, requirePermission } from '../middleware/access-scope';
 import rateLimit from 'express-rate-limit';
 import { getDb } from '../db';
 import { ensureSchoolRegistrationCode } from '../lib/school-registration-code';
@@ -658,7 +659,7 @@ async function setupSchool(req: any, res: any) {
 router.post("/setup-school", setupSchool);
 
 // Get classes for the school
-router.get("/classes", supabaseAuth, requireSchoolContext, async (req: any, res: any) => {
+router.get("/classes", supabaseAuth, requireSchoolContext, attachAccessScope, requirePermission('canManageClasses'), async (req: any, res: any) => {
   try {
     // [FIX:v3.0] School ID injected by middleware from database
     const schoolId = req.schoolId;
@@ -1510,7 +1511,7 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
 });
 
 // Get staff members for the school - using user_roles as source of truth
-router.get("/staff", supabaseAuth, async (req: any, res: any) => {
+router.get("/staff", supabaseAuth, attachAccessScope, requirePermission('canManageStaff'), async (req: any, res: any) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
@@ -2311,7 +2312,7 @@ router.get("/departments", supabaseAuth, async (req: any, res) => {
 });
 
 // Get students for the school
-router.get("/students", supabaseAuth, async (req: any, res) => {
+router.get("/students", supabaseAuth, attachAccessScope, requirePermission('canManageStudents'), async (req: any, res) => {
   try {
     // [FIX:v3.0] Use database as source of truth, not JWT token
     const schoolId = await getSchoolIdFromRequest(req, res);
@@ -3747,7 +3748,7 @@ router.get("/metrics/enrollment", supabaseAuth, async (req: any, res) => {
 });
 
 // Financial Metrics
-router.get("/metrics/financial", supabaseAuth, async (req: any, res) => {
+router.get("/metrics/financial", supabaseAuth, attachAccessScope, requirePermission('canViewReports'), async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
@@ -7849,7 +7850,7 @@ router.post('/credits/create', async (req, res) => {
 });
 
 // GET /api/school-admin/notifications/tracking - Get notifications with recipient tracking stats
-router.get('/notifications/tracking', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+router.get('/notifications/tracking', supabaseAuth, requireSchoolContext, attachAccessScope, requirePermission('canSendNotifications'), async (req: any, res) => {
   try {
     const userId = req.user?.id;
     const schoolId = req.schoolId ? Number(req.schoolId) : null;

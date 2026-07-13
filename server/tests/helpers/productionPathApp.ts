@@ -61,6 +61,9 @@ export async function createProductionPathApp(): Promise<Application> {
   app.use('/api/schools', schoolsRouter);
   app.use('/api/school-admin', schoolAdminRouter);
 
+  const meRouter = (await import('../../api/me')).default;
+  app.use('/api/me', meRouter);
+
   return app;
 }
 

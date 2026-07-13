@@ -147,6 +147,8 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req: any, res) => {
   try {
+    // Prefer user_locations / user_school_permissions (canManageClasses).
+    // Legacy users.permissions.canCreateClasses=false remains an explicit deny for teachers.
     if (req.user?.role === 'teacher' && req.user?.permissions?.canCreateClasses === false) {
       return res.status(403).json({ error: 'permission denied' });
     }

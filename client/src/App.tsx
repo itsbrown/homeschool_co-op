@@ -13,6 +13,7 @@ import { FormTracker } from "@/components/FormTracker";
 import { ActivityTelemetry } from "@/components/ActivityTelemetry";
 import { InteractiveTutorialProvider } from "@/components/tutorials/InteractiveTutorial";
 import PaymentHelpAssistant from "@/components/payments/PaymentHelpAssistant";
+import { SchoolRouteGuard } from "@/components/auth/SchoolRouteGuard";
 
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -265,7 +266,7 @@ function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
   if (activeRole === 'parent') {
     return <ParentAppShell>{children}</ParentAppShell>;
   }
-  return <>{children}</>;
+  return <SchoolRouteGuard>{children}</SchoolRouteGuard>;
 }
 
 function PublicStoreManagerRoute() {
@@ -334,9 +335,9 @@ function DashboardRouter() {
     );
   }
 
-  // For school admin - route to school admin interface
-  if (['schoolAdmin'].includes(activeRole)) {
-    console.log(`🏫 Routing school admin to MySchoolPage`);
+  // For school admin and director - route to school admin interface
+  if (['schoolAdmin', 'director'].includes(activeRole)) {
+    console.log(`🏫 Routing ${activeRole} to MySchoolPage`);
     return <MySchoolPage key={`dashboard-${activeRole}`} />;
   }
 
