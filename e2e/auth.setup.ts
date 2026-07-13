@@ -12,6 +12,8 @@ const authFile = path.join(process.cwd(), "playwright", ".auth", "parent.json");
  *   E2E_PARENT_PASSWORD=...
  */
 setup("authenticate parent", async ({ page }) => {
+  setup.setTimeout(90_000);
+
   const email = process.env.E2E_PARENT_EMAIL;
   const password = process.env.E2E_PARENT_PASSWORD;
   if (!email || !password) {
@@ -33,6 +35,8 @@ setup("authenticate parent", async ({ page }) => {
     .catch(() => false);
 
   if (!leftLogin) {
+    // Write empty storage so dependents that somehow run don't crash on missing file.
+    await page.context().storageState({ path: authFile });
     setup.skip(
       true,
       `E2E_PARENT_* could not leave /login (app user missing in test DB — seed that parent or unset E2E_PARENT_EMAIL)`,
