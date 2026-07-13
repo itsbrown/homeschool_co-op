@@ -19,11 +19,13 @@ const publicSubmitLimiter = rateLimit({
   max: process.env.FORM_SUBMIT_RATE_LIMIT
     ? parseInt(process.env.FORM_SUBMIT_RATE_LIMIT, 10)
     : process.env.CI === 'true' || process.env.NODE_ENV === 'test'
-      ? 8
+      ? 40
       : 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: 'Too many submissions. Please try again later.' },
+  // Per-form buckets so one form's E2E burst cannot starve unrelated public forms.
+  keyGenerator: (req) => `${req.ip ?? 'unknown'}:form:${req.params.formId ?? 'unknown'}`,
 });
 
 async function getActivePublicForm(formId: number) {

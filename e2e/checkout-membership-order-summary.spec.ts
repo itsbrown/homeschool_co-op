@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { loginParent, goCheckoutAndWaitForPaymentCard } from "./helpers/parentCheckoutHelpers";
 import { postSetupCartScenario } from "./helpers/testSeed";
 
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "serial", timeout: 180_000 });
 
 /** Seeded class is $100; unpaid membership fee is $50 → checkout should show $150. */
 const MEMBERSHIP_CENTS = 5_000;

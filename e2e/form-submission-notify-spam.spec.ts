@@ -131,10 +131,12 @@ test.describe("form submission notify and spam", () => {
     const { response, json } = await postSetupPublicFormScenario(request);
     test.skip(!response.ok() || !json?.success || !json.data, "seed failed");
     const form = json!.data!.publicForm;
+    const limit = Number(process.env.FORM_SUBMIT_RATE_LIMIT || "40");
+    const attempts = Math.max(limit + 5, 45);
 
     let saw429 = false;
-    // CI/test max is 8 per 15 min — send enough to trip (shared IP may already have hits)
-    for (let i = 0; i < 20; i++) {
+    // CI/test max is shared per IP — send enough to trip (may already have hits from earlier tests)
+    for (let i = 0; i < attempts; i++) {
       const unique = `${Date.now()}_${i}`;
       const res = await request.post(`/api/custom-forms/forms/${form.id}/submit`, {
         data: {
@@ -154,7 +156,7 @@ test.describe("form submission notify and spam", () => {
     }
     test.skip(
       !saw429 && !process.env.CI,
-      "Rate limit not hit — restart server with FORM_SUBMIT_RATE_LIMIT=8 (CI webServer sets this)",
+      "Rate limit not hit — restart server with FORM_SUBMIT_RATE_LIMIT set (CI webServer sets this)",
     );
     expect(saw429).toBeTruthy();
   });

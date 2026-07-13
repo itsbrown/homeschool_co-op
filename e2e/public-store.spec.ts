@@ -303,8 +303,11 @@ test.describe("public store", () => {
     await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
     await page.getByTestId("store-cart-button").click();
     await expect(page).toHaveURL(new RegExp(`/store/${slug}/checkout`));
+    // Steps are cart → contact → delivery (merch); step1 continue lands on contact.
     await page.getByTestId("store-checkout-step1-continue").click();
-    await expect(page.getByTestId("store-checkout-delivery")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("store-checkout-parent-first-name")).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("guest merch checkout collects shipping address", async ({ page, request }) => {

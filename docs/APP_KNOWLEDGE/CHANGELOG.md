@@ -1,5 +1,13 @@
 # App knowledge changelog
 
+## 2026-07-13 (E2E CI harden — PR #49)
+
+- **Auth setup:** soft-skip when `E2E_PARENT_*` cannot leave `/login` (ephemeral CI DB / `REGISTRATION_REQUIRED`).
+- **Stripe:** payment specs skip unless a real `sk_test_*` secret is set (docs sample key is not valid).
+- **Registration E2E:** wait for locations `?code=` (not only `schoolId=`); `selectOption` uses string labels.
+- **Store E2E:** guest cart asserts contact after step1; referral checkout seeds `$0` merch to avoid Stripe.
+- **Forms rate limit:** per-form limiter keys + higher CI cap so spam burst does not starve other form specs.
+
 ## 2026-07-10 (CI auth sync + Postgres health-check clarity)
 
 - **Auth sync:** `UserSyncService.syncAuth0User` looks up by `supabaseId`/`auth0Id` then `LOWER(email)` so E2E seeds do not hit `users_email_lower_idx` on login.

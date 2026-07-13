@@ -68,8 +68,12 @@ const webServerEnv = {
   VITE_E2E_EXPOSE_CART: envOr("VITE_E2E_EXPOSE_CART", "true"),
   /** Deterministic Form Smart Builder drafts without calling Anthropic. */
   FORM_BUILDER_AI_MOCK: envOr("FORM_BUILDER_AI_MOCK", "1"),
-  /** Lower public form submit cap so spam E2E can assert 429. */
-  FORM_SUBMIT_RATE_LIMIT: envOr("FORM_SUBMIT_RATE_LIMIT", "8"),
+  /**
+   * Public form submit cap (IP-based). Keep high enough that form notify/spam
+   * bursts do not starve later specs (e.g. public-custom-forms). The spam
+   * 429 test still trips this by sending max+1 requests.
+   */
+  FORM_SUBMIT_RATE_LIMIT: envOr("FORM_SUBMIT_RATE_LIMIT", "40"),
   FORM_BUILDER_AI_RATE_LIMIT: envOr("FORM_BUILDER_AI_RATE_LIMIT", "5"),
   /** Align biweekly installment math with integration golden fixture (session dates in E2E seed). */
   TEST_CHECKOUT_ANCHOR_ISO: envOr(

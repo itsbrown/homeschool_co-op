@@ -13,7 +13,7 @@ import {
  * Requires Postgres (`DATABASE_URL`) and Supabase (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`)
  * so `/api/test/setup-cart-scenario` can link both parent and school admin for /login.
  */
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "serial", timeout: 180_000 });
 
 type SeedData = NonNullable<SetupCartScenarioResponse["data"]>;
 

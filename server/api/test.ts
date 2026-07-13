@@ -3517,6 +3517,8 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
     const seed = await seedPublicStoreScenario(new TestDatabase(), {
       productImageUrl:
         typeof req.body?.productImageUrl === 'string' ? req.body.productImageUrl : null,
+      productPriceCents:
+        typeof req.body?.productPriceCents === 'number' ? req.body.productPriceCents : undefined,
       withPublishedProduct: req.body?.withPublishedProduct !== false,
       withClass: req.body?.withClass === true,
       classTitle: typeof req.body?.classTitle === 'string' ? req.body.classTitle : undefined,

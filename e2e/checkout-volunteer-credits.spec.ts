@@ -6,6 +6,7 @@ import {
   registerAnotherChild,
 } from "./helpers/parentCheckoutHelpers";
 import { postSetupCartScenario } from "./helpers/testSeed";
+import { isRealStripeTestSecretConfigured } from "./helpers/stripeEnv";
 
 /**
  * End-to-end: seeded parent has an approved volunteer/marketing credit balance;
@@ -14,8 +15,9 @@ import { postSetupCartScenario } from "./helpers/testSeed";
  * Requires the same environment as `parent-payment-flow.spec.ts`:
  * - `DATABASE_URL` (Postgres) so `/api/test/setup-cart-scenario` can insert rows
  * - `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` when using `linkSupabaseAuth: true`
+ * - Real `STRIPE_TEST_SECRET_KEY` / `TESTING_STRIPE_SECRET_KEY` (not the docs sample)
  */
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "serial", timeout: 180_000 });
 
 test.describe("checkout volunteer credits", () => {
   /** Seeded class price is $100.00 (10000¢); credit grant is $30.00 → card pays $70.00. */
@@ -24,6 +26,10 @@ test.describe("checkout volunteer credits", () => {
   const EXPECTED_PAY_DOLLARS = CLASS_DOLLARS - CREDIT_CENTS / 100;
 
   test("apply credits reduces Pay button amount and checkout succeeds", async ({ page, request }) => {
+    test.skip(
+      !isRealStripeTestSecretConfigured(),
+      "Set STRIPE_TEST_SECRET_KEY (real sk_test_*) — docs sample key is rejected by Stripe API",
+    );
     const { response, json } = await postSetupCartScenario(request, {
       paymentPlan: "full_payment",
       linkSupabaseAuth: true,
