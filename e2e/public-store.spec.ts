@@ -259,7 +259,9 @@ test.describe("public store", () => {
     await expect(page.getByText("Image uploaded", { exact: true })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText("Store image saved")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Store image saved", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByTestId("image-upload-preview").first()).toHaveAttribute(
       "src",
       /^\/public\/store-programs\//,
