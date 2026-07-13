@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { getDb } from '../db';
 import { customForms, customFormFields, customFormSubmissions, schools, insertCustomFormSchema, insertCustomFormFieldSchema, insertCustomFormSubmissionSchema } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
@@ -25,7 +25,8 @@ const publicSubmitLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: 'Too many submissions. Please try again later.' },
   // Per-form buckets so one form's E2E burst cannot starve unrelated public forms.
-  keyGenerator: (req) => `${req.ip ?? 'unknown'}:form:${req.params.formId ?? 'unknown'}`,
+  keyGenerator: (req) =>
+    `${ipKeyGenerator(req.ip ?? 'unknown')}:form:${req.params.formId ?? 'unknown'}`,
 });
 
 async function getActivePublicForm(formId: number) {
