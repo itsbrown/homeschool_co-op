@@ -11,12 +11,17 @@ export async function loginSchoolAdmin(page: Page, email: string, password: stri
 
 export async function openParentCreditsTab(page: Page, parentId: number) {
   const profilePath = `/schools/users/${parentId}?tab=family`;
+  await page.evaluate(() => localStorage.setItem("activeRole", "schoolAdmin"));
   const profileResponse = page.waitForResponse(
-    (r) => r.url().includes(`/api/parent-profile/${parentId}`) && r.ok(),
+    (r) =>
+      (r.url().includes(`/api/parent-profile/${parentId}`) ||
+        r.url().includes(`/api/parent-profile/${parentId}/`)) &&
+      r.request().method() === "GET",
     { timeout: 60_000 },
   );
   await page.goto(profilePath, { waitUntil: "domcontentloaded" });
-  await profileResponse;
+  const res = await profileResponse;
+  expect(res.ok(), `parent-profile GET failed: ${res.status()}`).toBeTruthy();
   await page.getByRole("tab", { name: "Credits" }).click();
   await expect(page.getByTestId("button-award-credit")).toBeVisible({ timeout: 30_000 });
 }

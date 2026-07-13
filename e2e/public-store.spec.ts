@@ -256,7 +256,9 @@ test.describe("public store", () => {
     const uploadRes = await uploadResponse;
     expect(uploadRes.ok(), `upload request-url failed: ${uploadRes.status()}`).toBeTruthy();
 
-    await expect(page.getByText("Image uploaded")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Image uploaded", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByText("Store image saved")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("image-upload-preview").first()).toHaveAttribute(
       "src",
@@ -575,7 +577,8 @@ test.describe("public store programs", () => {
       withPublishedProduct: false,
       withClass: true,
       withPublishedClassListing: true,
-      classPriceCents: 5000,
+      // $0 avoids Stripe Checkout Session creation (CI has no real STRIPE_TEST_SECRET_KEY).
+      classPriceCents: 0,
     });
     test.skip(!response.ok(), `seed failed (${response.status()}): ${json?.error ?? json?.details}`);
 
@@ -586,7 +589,7 @@ test.describe("public store programs", () => {
 
     await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByText(classTitle)).toBeVisible();
-    await addStoreProgramToCartAsGuest(page, /Add — \$50\.00/);
+    await addStoreProgramToCartAsGuest(page, /Add — \$0\.00/);
     await openStoreCheckoutFromCart(page);
     await expect(page).toHaveURL(new RegExp(`/store/${slug}/checkout`));
 
