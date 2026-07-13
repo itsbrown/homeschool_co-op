@@ -566,6 +566,12 @@ test.describe("public store programs", () => {
   });
 
   test("guest checkout and payment completes for published class", async ({ page, request }) => {
+    const { isRealStripeTestSecretConfigured } = await import("./helpers/stripeEnv");
+    test.skip(
+      !isRealStripeTestSecretConfigured(),
+      "Paid class checkout needs a real STRIPE_TEST_SECRET_KEY (Checkout Session create)",
+    );
+
     const {
       addStoreProgramToCartAsGuest,
       completeStoreGuestCheckout,
@@ -579,8 +585,7 @@ test.describe("public store programs", () => {
       withPublishedProduct: false,
       withClass: true,
       withPublishedClassListing: true,
-      // $0 avoids Stripe Checkout Session creation (CI has no real STRIPE_TEST_SECRET_KEY).
-      classPriceCents: 0,
+      classPriceCents: 5000,
     });
     test.skip(!response.ok(), `seed failed (${response.status()}): ${json?.error ?? json?.details}`);
 
@@ -590,8 +595,8 @@ test.describe("public store programs", () => {
     await installStoreCheckoutFulfillInterceptor(page, request, slug);
 
     await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByText(classTitle)).toBeVisible();
-    await addStoreProgramToCartAsGuest(page, /Add — \$0\.00/);
+    await expect(page.getByText(classTitle)).toBeVisible({ timeout: 15_000 });
+    await addStoreProgramToCartAsGuest(page, /Add — \$50\.00/);
     await openStoreCheckoutFromCart(page);
     await expect(page).toHaveURL(new RegExp(`/store/${slug}/checkout`));
 
