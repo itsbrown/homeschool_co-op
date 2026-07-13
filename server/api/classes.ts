@@ -2,6 +2,10 @@ import express from "express";
 import { storage } from "../storage";
 import { sendWaitlistJoinedEmail, sendWaitlistPromotedEmail } from "../lib/email-service";
 import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
+import {
+  aggregateEffectivePermissions,
+  legacyCanCreateClassesAllowed,
+} from "@shared/permissions";
 
 const router = express.Router();
 
@@ -148,8 +152,15 @@ router.get('/', async (req, res) => {
 router.post('/', async (req: any, res) => {
   try {
     // Prefer user_locations / user_school_permissions (canManageClasses).
-    // Legacy users.permissions.canCreateClasses=false remains an explicit deny for teachers.
-    if (req.user?.role === 'teacher' && req.user?.permissions?.canCreateClasses === false) {
+    // Legacy users.permissions.canCreateClasses is only an explicit deny when no location grant;
+    // see legacyCanCreateClassesAllowed — do not treat JSONB true as authorization.
+    const effective =
+      req.accessScope ??
+      aggregateEffectivePermissions({
+        activeRole: req.user?.role || '',
+        allRoles: (req.user as { allRoles?: string[] })?.allRoles,
+      });
+    if (req.user?.role === 'teacher' && !legacyCanCreateClassesAllowed(effective, req.user?.permissions)) {
       return res.status(403).json({ error: 'permission denied' });
     }
     const classItem = await storage.createClass(req.body as any);

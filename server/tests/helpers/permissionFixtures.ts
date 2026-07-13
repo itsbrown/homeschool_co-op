@@ -2,7 +2,7 @@
  * Permission fixtures for integration tests.
  */
 import { testDb } from './testDatabase';
-import { storage } from '../../../storage';
+import { storage } from '../../storage';
 
 export type PermissionScenarioName =
   | 'full_school_admin'

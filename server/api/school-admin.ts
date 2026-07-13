@@ -14,7 +14,7 @@ import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmai
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { clearPermissionCache } from '../middleware/locationPermissions';
-import { attachAccessScope, requirePermission } from '../middleware/access-scope';
+import { attachAccessScope, requirePermission, locationFilterIds } from '../middleware/access-scope';
 import rateLimit from 'express-rate-limit';
 import { getDb } from '../db';
 import { ensureSchoolRegistrationCode } from '../lib/school-registration-code';
@@ -762,6 +762,16 @@ router.get("/classes", supabaseAuth, requireSchoolContext, attachAccessScope, re
 
     // Apply additional filters if needed
     let filteredClasses = classesWithEnrollment;
+
+    // Location-scoped staff: only classes at accessible locations (null = school-wide)
+    const classLocationIds = locationFilterIds(req.accessScope);
+    if (classLocationIds !== null) {
+      const allowed = new Set(classLocationIds);
+      filteredClasses = filteredClasses.filter(
+        (cls) => cls.locationId != null && allowed.has(cls.locationId),
+      );
+    }
+
     if (req.query.search) {
       const searchTerm = (req.query.search as string).toLowerCase();
       filteredClasses = filteredClasses.filter(cls => 
@@ -1486,6 +1496,33 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
     // Pass staffRecord for department/locationId enrichment
     const responseStaff = transformUserRoleStaffToFrontend(roleRecord as UserRole, user, [], true, staffRecord);
     console.log("✅ Step 7 complete");
+
+    // Step 7b: Default user_locations row when invite includes a campus (permissions start closed)
+    if (locationId) {
+      try {
+        const existingUl = await storage.getUserLocationsByUserId(user.id);
+        const alreadyAssigned = existingUl.some(
+          (ul) => ul.locationId === Number(locationId) && ul.isActive,
+        );
+        if (!alreadyAssigned) {
+          await storage.createUserLocation({
+            userId: user.id,
+            locationId: Number(locationId),
+            accessLevel: 'view',
+            canViewReports: false,
+            canManageStaff: false,
+            canManageClasses: false,
+            canManageStudents: false,
+            canSendNotifications: false,
+            canViewParentContacts: false,
+            isActive: true,
+          });
+          console.log(`✅ Created user_locations for invited user ${user.id} at location ${locationId}`);
+        }
+      } catch (locationError) {
+        console.error(`⚠️ Failed to create user_locations on invite for ${user.id}:`, locationError);
+      }
+    }
     
     console.log("🔍 Step 8: Sending invitation email (fire-and-forget)");
     sendStaffInvitationEmail(email, firstName, lastName, role, department, invitationToken, message)
@@ -1617,7 +1654,17 @@ router.get("/staff", supabaseAuth, attachAccessScope, requirePermission('canMana
     });
 
     // Filter out null entries
-    const validStaff = staffWithDetails.filter((s: any) => s !== null);
+    let validStaff = staffWithDetails.filter((s: any) => s !== null);
+
+    // Location-scoped staff: only members assigned to accessible locations
+    const staffLocationIds = locationFilterIds(req.accessScope);
+    if (staffLocationIds !== null) {
+      const allowed = new Set(staffLocationIds);
+      validStaff = validStaff.filter((s: any) => {
+        const locId = s.locationId ?? userLocationMap.get(s.userId ?? s.id);
+        return locId != null && allowed.has(locId);
+      });
+    }
     
     res.json(validStaff);
   } catch (error) {
@@ -2486,7 +2533,16 @@ router.get("/students", supabaseAuth, attachAccessScope, requirePermission('canM
       ...studentsFromSchoolStudents,
       ...studentsFromParentRelationships
     ];
-    const validStudents = allStudentsWithDetails.filter(student => student !== null);
+    let validStudents = allStudentsWithDetails.filter(student => student !== null);
+
+    // Location-scoped staff: only students at accessible locations
+    const studentLocationIds = locationFilterIds(req.accessScope);
+    if (studentLocationIds !== null) {
+      const allowed = new Set(studentLocationIds);
+      validStudents = validStudents.filter(
+        (student: any) => student.locationId != null && allowed.has(student.locationId),
+      );
+    }
     
     console.log(`✅ Successfully processed ${validStudents.length} students with details (${schoolStudents.length} from school_students + ${additionalChildren.length} from parent relationships)`);
     res.json(validStudents);

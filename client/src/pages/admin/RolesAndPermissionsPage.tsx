@@ -495,6 +495,17 @@ export default function RolesAndPermissionsPage() {
   return (
     <AdminLayout pageTitle="Roles & Permissions">
       <div className="container py-8">
+        <div
+          className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          data-testid="roles-permissions-docs-only-banner"
+        >
+          <strong>Documentation only.</strong> This matrix is a static product overview.
+          Live staff access is controlled by location / school-wide grants in{" "}
+          <code className="text-xs">user_locations</code> and{" "}
+          <code className="text-xs">user_school_permissions</code> (see Staff Permissions),
+          with the canonical registry in <code className="text-xs">shared/permissions.ts</code>.
+          Do not treat this page as the source of truth for API or nav enforcement.
+        </div>
         <h1 className="text-3xl font-bold mb-2">Roles & Permissions Overview</h1>
         <p className="text-muted-foreground mb-8">
           Comprehensive guide to user roles and feature permissions in the ASA Platform

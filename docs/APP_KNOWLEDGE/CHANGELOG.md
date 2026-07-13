@@ -1,5 +1,18 @@
 # App knowledge changelog
 
+## 2026-07-13 (Schedule & lesson planning E2E audit)
+
+- **Domain doc:** [schedule-and-lesson-planning.md](domains/schedule-and-lesson-planning.md) — product loop, mount gaps (`schedule-builder` / `schedule-ai` only in `app-init.ts`), SPA HTML-200 false-pass risk, parent role mismatch on published week plans, E2E coverage matrix (effectively none).
+- **Hub:** linked new domain doc from README index.
+
+## 2026-07-13 (Permissions — list scoping + remaining plan gaps)
+
+- **Data scoping:** `locationFilterIds` on school-admin `GET /staff`, `/students`, `/classes`.
+- **Invite defaults:** `POST /staff/invite` creates closed `user_locations` when `locationId` set.
+- **Legacy:** `legacyCanCreateClassesAllowed` on classes POST; Roles page docs-only banner; `Sidebar.tsx` marked out of scope.
+- **Tests:** enforce/audit/active-role integration; access-scope unit; four-shell contract.
+- **Skill:** `asa-auth-patterns` — effective permissions section.
+
 ## 2026-07-13 (Permission-driven nav + scoping)
 
 - **Registry:** [`shared/permissions.ts`](../../shared/permissions.ts) — typed keys, nav map, API samples, aggregation (fail closed).

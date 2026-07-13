@@ -18,6 +18,8 @@ Env `PERMISSIONS_ENFORCEMENT`:
 - `observe` (default) — nav filtered; API logs would-deny, still allows
 - `enforce` — API returns 403 when grant missing
 
+List APIs (`GET /staff`, `/students`, `/classes`) also filter by `accessibleLocationIds` unless school-wide / bypass.
+
 ## Replit / production DB (no `db:push`)
 
 ```bash
@@ -39,15 +41,23 @@ npx tsx server/scripts/backfill-staff-user-locations.ts --apply
 
 - **Per location** — flags unlock matching sidebar groups (see toggle help text).
 - **School-wide access** — regional manager; entire school read/write for granted flags.
+- **Invite with campus** — `POST /staff/invite` creates a default closed `user_locations` row when `locationId` is set.
 
 ## Client API
 
 - `GET /api/me/effective-permissions` — source of truth for nav / guards
 - Hook: `useEffectivePermissions` / `useCan`
+- Route guard: `SchoolRouteGuard` + Forbidden page
+- `/admin/roles` matrix is **docs only** — live grants are Staff Permissions + registry
+
+## Legacy notes
+
+- `client/.../Sidebar.tsx` is out of scope for permission nav (prefer Unified / Parent / Educator shells).
+- `users.permissions.canCreateClasses` — use `legacyCanCreateClassesAllowed`; JSONB `true` is not authorization.
 
 ## Tests
 
 ```bash
-npm run test:client -- --testPathPattern=permissions
-npm run test:server -- --testPathPattern=integration/permissions
+npm run test:client -- --testPathPattern="permissions|permission-shells|SchoolRouteGuard"
+npm run test:server -- --testPathPattern="permissions|access-scope-middleware"
 ```
