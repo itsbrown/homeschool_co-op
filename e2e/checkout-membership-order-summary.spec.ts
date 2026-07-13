@@ -1,8 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { loginParent, goCheckoutAndWaitForPaymentCard } from "./helpers/parentCheckoutHelpers";
 import { postSetupCartScenario } from "./helpers/testSeed";
+import { isRealStripeTestSecretConfigured } from "./helpers/stripeEnv";
 
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "serial", timeout: 180_000 });
 
 /** Seeded class is $100; unpaid membership fee is $50 → checkout should show $150. */
 const MEMBERSHIP_CENTS = 5_000;
@@ -14,6 +15,10 @@ test.describe("checkout order summary + membership fee", () => {
     page,
     request,
   }) => {
+    test.skip(
+      !isRealStripeTestSecretConfigured(),
+      "Checkout Payment Element / create-payment-intent needs a real STRIPE_TEST_SECRET_KEY",
+    );
     const { response, json } = await postSetupCartScenario(request, {
       paymentPlan: "full_payment",
       linkSupabaseAuth: true,

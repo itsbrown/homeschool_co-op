@@ -105,7 +105,10 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | Spec | Command | What it covers | Prerequisites |
 |------|---------|----------------|---------------|
 | [`e2e/smoke.spec.ts`](../e2e/smoke.spec.ts) | `npm run test:e2e -- e2e/smoke.spec.ts` | `/` HTML shell; `/api/cart/snapshot` returns JSON | Dev server on :5000 |
-| [`e2e/public-custom-forms.spec.ts`](../e2e/public-custom-forms.spec.ts) | `npm run test:e2e -- e2e/public-custom-forms.spec.ts` | Public `/forms/:slug`, API, **resume `upload-attachment`**, browser upload + submit | `DATABASE_URL`; seed `setup-public-form-scenario`; stub storage via `PLAYWRIGHT_WEB_SERVER` |
+| [`e2e/public-custom-forms.spec.ts`](../e2e/public-custom-forms.spec.ts) | `npm run test:e2e -- e2e/public-custom-forms.spec.ts` | Public `/forms/:slug`, API, **resume upload**, browser upload + submit | `DATABASE_URL`; seed `setup-public-form-scenario`; stub storage via `PLAYWRIGHT_WEB_SERVER` |
+| [`e2e/form-editor-fields.spec.ts`](../e2e/form-editor-fields.spec.ts) | `npm run test:e2e -- e2e/form-editor-fields.spec.ts` | School-admin Form Editor: add/update/delete field persist; publish → public form shows field | `setup-public-form-scenario` + `linkSupabaseAuthAdmin` |
+| [`e2e/form-submission-notify-spam.spec.ts`](../e2e/form-submission-notify-spam.spec.ts) | `npm run test:e2e -- e2e/form-submission-notify-spam.spec.ts` | Submit persist; admin + submitter `email_log`; honeypot; required fields; duplicate block; submit rate limit 429 | `setup-public-form-scenario`; `GET /api/test/email-log`; `FORM_SUBMIT_RATE_LIMIT` |
+| [`e2e/form-smart-builder.spec.ts`](../e2e/form-smart-builder.spec.ts) | `npm run test:e2e -- e2e/form-smart-builder.spec.ts` | AI Smart Builder chat → draft → apply-draft; no auto-publish; AI rate limit | `setup-public-form-scenario` + `linkSupabaseAuthAdmin`; `FORM_BUILDER_AI_MOCK=1` |
 | [`e2e/parent-dashboard.spec.ts`](../e2e/parent-dashboard.spec.ts) | `npm run test:e2e -- e2e/parent-dashboard.spec.ts` | Unauthenticated dashboard gating | — |
 
 ### Postgres + Supabase (skips if seed/auth fails)
@@ -159,7 +162,8 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 
 | Endpoint | Used by |
 |----------|---------|
-| `POST /api/test/setup-public-form-scenario` | `public-custom-forms.spec.ts` |
+| `POST /api/test/setup-public-form-scenario` | `public-custom-forms`, `form-editor-fields`, `form-submission-notify-spam`, `form-smart-builder` |
+| `GET /api/test/email-log` | `form-submission-notify-spam` |
 | `POST /api/test/setup-registration-scenario` | `school-code-registration`, `parent-full-journey` |
 | `POST /api/test/setup-session-enrollment-scenario` | `session-enrollment-flow` |
 | `POST /api/test/setup-cart-scenario` | Payment, credits, membership, profile credits, help issue submission |

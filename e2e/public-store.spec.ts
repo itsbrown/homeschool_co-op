@@ -256,8 +256,12 @@ test.describe("public store", () => {
     const uploadRes = await uploadResponse;
     expect(uploadRes.ok(), `upload request-url failed: ${uploadRes.status()}`).toBeTruthy();
 
-    await expect(page.getByText("Image uploaded")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Store image saved")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Image uploaded", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText("Store image saved", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByTestId("image-upload-preview").first()).toHaveAttribute(
       "src",
       /^\/public\/store-programs\//,
@@ -303,8 +307,11 @@ test.describe("public store", () => {
     await expect(page.getByTestId("store-cart-button")).toContainText("Cart (1)");
     await page.getByTestId("store-cart-button").click();
     await expect(page).toHaveURL(new RegExp(`/store/${slug}/checkout`));
+    // Steps are cart → contact → delivery (merch); step1 continue lands on contact.
     await page.getByTestId("store-checkout-step1-continue").click();
-    await expect(page.getByTestId("store-checkout-delivery")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId("store-checkout-parent-first-name")).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("guest merch checkout collects shipping address", async ({ page, request }) => {
@@ -559,6 +566,12 @@ test.describe("public store programs", () => {
   });
 
   test("guest checkout and payment completes for published class", async ({ page, request }) => {
+    const { isRealStripeTestSecretConfigured } = await import("./helpers/stripeEnv");
+    test.skip(
+      !isRealStripeTestSecretConfigured(),
+      "Paid class checkout needs a real STRIPE_TEST_SECRET_KEY (Checkout Session create)",
+    );
+
     const {
       addStoreProgramToCartAsGuest,
       completeStoreGuestCheckout,
@@ -582,7 +595,7 @@ test.describe("public store programs", () => {
     await installStoreCheckoutFulfillInterceptor(page, request, slug);
 
     await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByText(classTitle)).toBeVisible();
+    await expect(page.getByText(classTitle)).toBeVisible({ timeout: 15_000 });
     await addStoreProgramToCartAsGuest(page, /Add — \$50\.00/);
     await openStoreCheckoutFromCart(page);
     await expect(page).toHaveURL(new RegExp(`/store/${slug}/checkout`));

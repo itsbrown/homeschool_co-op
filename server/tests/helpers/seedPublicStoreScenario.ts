@@ -62,6 +62,8 @@ export async function seedPublicStoreScenario(
     /** Create a parent (+ child) enrolled at the store school for login E2E. */
     withParent?: boolean;
     parentPassword?: string;
+    /** Override merch unit price (use 0 for Stripe-free checkout E2E). */
+    productPriceCents?: number;
   } = {},
 ): Promise<PublicStoreSeedResult> {
   await ensurePublicStoreSchema();
@@ -101,7 +103,8 @@ export async function seedPublicStoreScenario(
     schoolId: school.id,
     name: `E2E Merch ${uniqueId}`,
     description: 'Playwright seeded merch item',
-    priceCents: 1999,
+    priceCents:
+      typeof options.productPriceCents === 'number' ? options.productPriceCents : 1999,
     imageUrl: options.productImageUrl ?? null,
     isActive: true,
     sortOrder: 0,

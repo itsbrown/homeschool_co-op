@@ -210,6 +210,8 @@ export type SetupPublicFormScenarioResponse = {
   success: boolean;
   data?: {
     school: { id: number; name: string };
+    admin: { id: number; email: string; password: string };
+    adminSupabaseLinked?: boolean;
     publicForm: {
       id: number;
       slug: string;
@@ -217,6 +219,14 @@ export type SetupPublicFormScenarioResponse = {
       fieldIds: { fullName: number; email: number; resume: number; agree: number };
     };
     membersForm: { id: number; slug: string };
+    emptyForm: { id: number; slug: string; title: string; isActive: boolean; accessLevel: string };
+    notifyForm: {
+      id: number;
+      slug: string;
+      title: string;
+      fieldIds: { fullName: number; email: number };
+      notificationEmail: string;
+    };
   };
   error?: string;
   details?: string;
@@ -224,13 +234,14 @@ export type SetupPublicFormScenarioResponse = {
 
 export async function postSetupPublicFormScenario(
   request: APIRequestContext,
+  body: Record<string, unknown> = {},
 ): Promise<{ response: APIResponse; json: SetupPublicFormScenarioResponse | null }> {
   const response = await request.post("/api/test/setup-public-form-scenario", {
     headers: {
       "X-Test-Token": testApiToken(),
       "Content-Type": "application/json",
     },
-    data: {},
+    data: body,
   });
   let json: SetupPublicFormScenarioResponse | null = null;
   try {

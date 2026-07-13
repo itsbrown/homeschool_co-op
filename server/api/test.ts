@@ -3517,6 +3517,8 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
     const seed = await seedPublicStoreScenario(new TestDatabase(), {
       productImageUrl:
         typeof req.body?.productImageUrl === 'string' ? req.body.productImageUrl : null,
+      productPriceCents:
+        typeof req.body?.productPriceCents === 'number' ? req.body.productPriceCents : undefined,
       withPublishedProduct: req.body?.withPublishedProduct !== false,
       withClass: req.body?.withClass === true,
       classTitle: typeof req.body?.classTitle === 'string' ? req.body.classTitle : undefined,
@@ -3716,14 +3718,78 @@ router.post('/setup-public-form-scenario', async (req: Request, res: Response) =
     );
     const seed = await seedPublicFormScenario(new TestDatabase());
 
+    let adminSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthAdmin === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuthAdmin requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      try {
+        adminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.admin.id,
+          email: seed.admin.email,
+          password: seed.admin.password,
+          role: 'schoolAdmin',
+          schoolId: seed.school.id,
+          displayName: 'Form E2E Admin',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthAdmin failed (form scenario):', e);
+        adminSupabaseLinked = false;
+      }
+    }
+
     res.json({
       success: true,
-      data: seed,
+      data: {
+        ...seed,
+        adminSupabaseLinked,
+      },
     });
   } catch (error) {
     console.error('❌ setup-public-form-scenario:', error);
     res.status(500).json({
       error: 'Failed to setup public form scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/test/email-log?recipient=&type=
+ * Returns recent email_log rows for Playwright assertions (form notifications, etc.).
+ */
+router.get('/email-log', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required' });
+    }
+    const { emailLog } = await import('@shared/schema');
+    const { eq, and, desc } = await import('drizzle-orm');
+
+    const recipient = typeof req.query.recipient === 'string' ? req.query.recipient : null;
+    const type = typeof req.query.type === 'string' ? req.query.type : null;
+
+    const conditions = [];
+    if (recipient) conditions.push(eq(emailLog.recipientEmail, recipient));
+    if (type) conditions.push(eq(emailLog.type, type));
+
+    const rows = await db
+      .select()
+      .from(emailLog)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(desc(emailLog.id))
+      .limit(20);
+
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('❌ email-log:', error);
+    res.status(500).json({
+      error: 'Failed to query email log',
       details: error instanceof Error ? error.message : String(error),
     });
   }

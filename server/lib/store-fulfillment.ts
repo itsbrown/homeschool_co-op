@@ -265,6 +265,34 @@ export async function fulfillStoreCheckoutWithoutPayment(snapshotId: string) {
     storeOrderId: payload.pendingStoreOrderId,
   });
 
+  for (const line of lines.filter((l: any) => l.listingType === 'product')) {
+    if (!payload.pendingStoreOrderId) break;
+    const product = await getStoreProductById(line.sourceId);
+    if (product?.inventoryQty != null) {
+      const { updateStoreProduct } = await import('./store-storage');
+      await updateStoreProduct(product.id, {
+        inventoryQty: Math.max(0, product.inventoryQty - (line.quantity ?? 1)),
+      });
+    }
+    await createStoreOrderItem({
+      storeOrderId: payload.pendingStoreOrderId,
+      listingId: line.listingId,
+      productId: line.sourceId,
+      name: line.title,
+      quantity: line.quantity ?? 1,
+      unitPriceCents: line.unitPriceCents,
+      lineTotalCents: line.lineTotalCents,
+      metadata: {},
+    });
+  }
+
+  if (payload.pendingStoreOrderId) {
+    await updateStoreOrder(payload.pendingStoreOrderId, {
+      status: 'paid',
+      totalCents: snapshot.amountDueCents ?? 0,
+    });
+  }
+
   await markStoreSnapshotFulfilled(snapshotId, {
     storeOrderId: payload.pendingStoreOrderId,
   });
