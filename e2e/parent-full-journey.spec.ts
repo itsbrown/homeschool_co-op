@@ -6,6 +6,7 @@
 import { test, expect } from "@playwright/test";
 import { postSetupRegistrationScenario } from "./helpers/testSeed";
 import { isRealSupabaseConfigured } from "./helpers/supabaseEnv";
+import { isRealStripeTestSecretConfigured } from "./helpers/stripeEnv";
 import {
   loginParent,
   waitForSupabaseToken,
@@ -33,6 +34,10 @@ test.describe("parent full journey (registration → sessions → autopay)", () 
     test.skip(
       !isRealSupabaseConfigured(),
       "Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to a real test project (see .env.e2e.example)",
+    );
+    test.skip(
+      !isRealStripeTestSecretConfigured(),
+      "Set STRIPE_TEST_SECRET_KEY (real sk_test_*) — docs sample key is rejected by Stripe API",
     );
   });
 

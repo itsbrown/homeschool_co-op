@@ -1,5 +1,27 @@
 # App knowledge changelog
 
+## 2026-07-13 (Railway cloud-dev Postgres)
+
+- **SSL:** `database-url.mjs` treats Railway (`.rlwy.net`, `.railway.app`, `.railway.internal`) as managed TLS hosts in development.
+- **Bootstrap:** `ci-db-push.mjs` uses the same SSL helper (empty Railway DB → schema via `db:push --force`).
+- **Clone:** `migrate-dev-db-from-neon.ts` accepts `SOURCE_DATABASE_URL` / `PROD_DATABASE_URL` / `NEON_DATABASE_URL`; Railway public proxy allowed as dest (Neon/Supabase/RDS still blocked).
+- **Faithful prod clone:** prefer `pg_dump`/`pg_restore` over table-copy when prod schema drifts (`role` enum `Mentor`, money columns as `numeric`, etc.). Verified Railway public DB matches prod counts (users/schools/enrollments/payments).
+- **Architecture:** [architecture.md](architecture.md) — database environments table.
+
+## 2026-07-13 (Parent weekly schedule + progress + admin KPIs)
+
+- **Seed:** `POST /api/test/setup-schedule-builder-scenario` (Seekers/Yankee, published+draft plans, attendance, Supabase link flags).
+- **APIs:** parent `my-week-plans`; progress `scheduled-lessons`; school-admin `academics/kpi` (+ CSV).
+- **UI:** parent weekly schedule (print root); Parent Progress Scheduled lessons; Attendance **Lesson plans** tab.
+- **Tests:** Jest schedule-builder / progress / KPI / attendance suites; Playwright `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`; parent-profile-routes uses `my-week-plans` + JSON content-type.
+- **Docs:** [schedule-and-lesson-planning.md](domains/schedule-and-lesson-planning.md), [E2E_COMMANDS.md](../E2E_COMMANDS.md); progress domain cross-link.
+
+## 2026-07-13 (Parent weekly schedule + classId templates)
+
+- **Schedule builder auth:** `CONSUMER_READ_ROLES` on published plan / skeleton read GETs; new `GET /parent/my-week-plans` for enrolled-class published plans.
+- **Admin UI:** Weekly Templates bind `classId` (not title-as-value) on skeleton create/edit.
+- **Parent UI:** `/parent/weekly-schedule` in sidebar + shell; page loads per-child week plans with week nav + print root.
+
 ## 2026-07-13 (Schedule & lesson planning E2E audit)
 
 - **Domain doc:** [schedule-and-lesson-planning.md](domains/schedule-and-lesson-planning.md) — product loop, mount gaps (`schedule-builder` / `schedule-ai` only in `app-init.ts`), SPA HTML-200 false-pass risk, parent role mismatch on published week plans, E2E coverage matrix (effectively none).
@@ -21,6 +43,28 @@
 - **UI:** Sidebars + `SchoolRouteGuard` + Forbidden page; Staff Permissions toggle help maps to nav groups.
 - **SQL:** [`server/migrations/permissions-scoping.sql`](../../server/migrations/permissions-scoping.sql) (no db:push); verify `scripts/verify-permissions-schema.mjs`.
 - **Docs:** [PERMISSIONS_ROLLOUT.md](../PERMISSIONS_ROLLOUT.md); E2E `e2e/permissions-nav.spec.ts`.
+
+## 2026-07-13 (E2E CI harden — PR #49)
+
+- **Auth setup:** soft-skip when `E2E_PARENT_*` cannot leave `/login` (ephemeral CI DB / `REGISTRATION_REQUIRED`).
+- **Stripe:** payment specs skip unless a real `sk_test_*` secret is set (docs sample key is not valid).
+- **Registration E2E:** wait for locations `?code=` (not only `schoolId=`); `selectOption` uses string labels.
+- **Store E2E:** guest cart asserts contact after step1; referral checkout seeds `$0` merch to avoid Stripe.
+- **Forms rate limit:** per-form limiter keys + higher CI cap so spam burst does not starve other form specs.
+
+## 2026-07-10 (CI auth sync + Postgres health-check clarity)
+
+- **Auth sync:** `UserSyncService.syncAuth0User` looks up by `supabaseId`/`auth0Id` then `LOWER(email)` so E2E seeds do not hit `users_email_lower_idx` on login.
+- **CI:** `pg_isready -U test -d asa_test` — `POSTGRES_USER=test` is the role; DB name remains `asa_test` (not a mismatch with `DATABASE_URL`).
+
+## 2026-07-10 (Custom forms best-in-class + AI Smart Builder)
+
+- **Editor:** Debounced field PUTs, functional state, query invalidation; Preview → admin preview; by-slug `staleTime: 0`.
+- **Submit:** Admin + submitter emails (`notifyOnSubmission` / `sendSubmitterConfirmation`); honeypot; rate limit; duplicate + required-field enforcement.
+- **AI:** `POST /api/form-builder-ai/chat` + `FormSmartBuilderPanel` + `apply-draft` (draft only, no auto-publish); `FORM_BUILDER_AI_MOCK` for E2E.
+- **E2E:** `form-editor-fields`, `form-submission-notify-spam`, `form-smart-builder` — catalogued in E2E_COMMANDS.
+- **Docs:** [custom-forms-public-access.md](domains/custom-forms-public-access.md).
+
 
 ## 2026-07-02 (School analytics v1 gaps)
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
+import FormSmartBuilderPanel from '@/components/forms/FormSmartBuilderPanel';
 
 interface FormField {
   id: number;
@@ -59,7 +60,12 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
   const style = { transform: CSS.Transform.toString(transform), transition };
 
   return (
-    <div ref={setNodeRef} style={style} className="bg-white border rounded-lg p-4 mb-3">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="bg-white border rounded-lg p-4 mb-3"
+      data-testid={`field-card-${field.id}`}
+    >
       <div className="flex items-start gap-3">
         <button {...attributes} {...listeners} className="mt-2 cursor-move text-gray-400 hover:text-gray-600">
           <GripVertical className="h-5 w-5" />
@@ -69,7 +75,7 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
             <div>
               <Label className="text-xs">Field Type</Label>
               <Select value={field.fieldType} onValueChange={(value) => onUpdate({ fieldType: value })}>
-                <SelectTrigger className="h-9">
+                <SelectTrigger className="h-9" data-testid={`select-field-type-${field.id}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -97,6 +103,7 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
                 onChange={(e) => onUpdate({ label: e.target.value })}
                 placeholder="Field label"
                 className="h-9"
+                data-testid={`input-field-label-${field.id}`}
               />
             </div>
           </div>
@@ -108,12 +115,14 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
                 onChange={(e) => onUpdate({ placeholder: e.target.value })}
                 placeholder="Placeholder text"
                 className="h-9"
+                data-testid={`input-field-placeholder-${field.id}`}
               />
             </div>
             <div className="flex items-center gap-2 mt-5">
               <Switch
                 checked={field.isRequired}
                 onCheckedChange={(checked) => onUpdate({ isRequired: checked })}
+                data-testid={`switch-field-required-${field.id}`}
               />
               <Label className="text-xs">Required</Label>
             </div>
@@ -217,6 +226,7 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
           size="sm"
           onClick={onDelete}
           className="text-destructive hover:text-destructive"
+          data-testid={`button-delete-field-${field.id}`}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -243,6 +253,9 @@ export default function FormEditorPage() {
     platformFeeType: 'none' as string,
     platformFeeAmount: 0,
   });
+  const fieldUpdateTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const pendingFieldUpdates = useRef<Record<number, Partial<FormField>>>({});
+  const fieldsSnapshotRef = useRef<FormField[]>([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -263,7 +276,9 @@ export default function FormEditorPage() {
 
   useEffect(() => {
     if (form) {
-      setFields(form.fields || []);
+      const nextFields = form.fields || [];
+      setFields(nextFields);
+      fieldsSnapshotRef.current = nextFields;
       setFormSettings(form.settings || {});
       setFormData({
         title: form.title,
@@ -277,6 +292,23 @@ export default function FormEditorPage() {
       });
     }
   }, [form]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(fieldUpdateTimers.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  const invalidateFormQueries = useCallback(() => {
+    if (formId) {
+      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/forms/${formId}`] });
+    }
+    if (form?.slug) {
+      queryClient.invalidateQueries({
+        queryKey: [`/api/custom-forms/forms/by-slug/${form.slug}`],
+      });
+    }
+  }, [formId, form?.slug]);
 
   // Add new field mutation
   const addFieldMutation = useMutation({
@@ -295,8 +327,20 @@ export default function FormEditorPage() {
       return response.json();
     },
     onSuccess: (newField) => {
-      setFields([...fields, newField]);
+      setFields(prev => {
+        const next = [...prev, newField];
+        fieldsSnapshotRef.current = next;
+        return next;
+      });
+      invalidateFormQueries();
       toast({ title: 'Success', description: 'Field added' });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to add field',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -325,8 +369,20 @@ export default function FormEditorPage() {
       return response.json();
     },
     onSuccess: (newField) => {
-      setFields([...fields, newField]);
+      setFields(prev => {
+        const next = [...prev, newField];
+        fieldsSnapshotRef.current = next;
+        return next;
+      });
+      invalidateFormQueries();
       toast({ title: 'Success', description: 'Product added' });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to add product',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -336,8 +392,22 @@ export default function FormEditorPage() {
       const response = await apiRequest("PUT", `/api/custom-forms/fields/${fieldId}`, updates);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (updatedField: FormField) => {
+      setFields(prev => {
+        const next = prev.map(f => (f.id === updatedField.id ? { ...f, ...updatedField } : f));
+        fieldsSnapshotRef.current = next;
+        return next;
+      });
+      invalidateFormQueries();
       toast({ title: 'Success', description: 'Field updated' });
+    },
+    onError: (error: any, variables) => {
+      setFields(fieldsSnapshotRef.current);
+      toast({
+        title: 'Error',
+        description: error?.message || `Failed to update field ${variables.fieldId}`,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -348,8 +418,20 @@ export default function FormEditorPage() {
       return response.json();
     },
     onSuccess: (_, fieldId) => {
-      setFields(fields.filter(f => f.id !== fieldId));
+      setFields(prev => {
+        const next = prev.filter(f => f.id !== fieldId);
+        fieldsSnapshotRef.current = next;
+        return next;
+      });
+      invalidateFormQueries();
       toast({ title: 'Success', description: 'Field deleted' });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to delete field',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -361,7 +443,14 @@ export default function FormEditorPage() {
     },
     onSuccess: () => {
       toast({ title: 'Success', description: 'Form saved successfully' });
-      queryClient.invalidateQueries({ queryKey: [`/api/custom-forms/forms/${formId}`] });
+      invalidateFormQueries();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to save form',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -371,22 +460,42 @@ export default function FormEditorPage() {
       const response = await apiRequest("PUT", `/api/custom-forms/forms/${formId}/fields/reorder`, { fieldOrders });
       return response.json();
     },
+    onSuccess: () => {
+      invalidateFormQueries();
+    },
   });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const oldIndex = fields.findIndex((f) => f.id === active.id);
-      const newIndex = fields.findIndex((f) => f.id === over.id);
-      const newFields = arrayMove(fields, oldIndex, newIndex).map((f, index) => ({ ...f, order: index }));
-      setFields(newFields);
-      reorderFieldsMutation.mutate(newFields.map(f => ({ id: f.id, order: f.order })));
+      setFields(prev => {
+        const oldIndex = prev.findIndex((f) => f.id === active.id);
+        const newIndex = prev.findIndex((f) => f.id === over.id);
+        const newFields = arrayMove(prev, oldIndex, newIndex).map((f, index) => ({ ...f, order: index }));
+        fieldsSnapshotRef.current = newFields;
+        reorderFieldsMutation.mutate(newFields.map(f => ({ id: f.id, order: f.order })));
+        return newFields;
+      });
     }
   };
 
   const updateField = (fieldId: number, updates: Partial<FormField>) => {
-    setFields(fields.map(f => f.id === fieldId ? { ...f, ...updates } : f));
-    updateFieldMutation.mutate({ fieldId, updates });
+    setFields(prev => prev.map(f => (f.id === fieldId ? { ...f, ...updates } : f)));
+    pendingFieldUpdates.current[fieldId] = {
+      ...(pendingFieldUpdates.current[fieldId] || {}),
+      ...updates,
+    };
+    if (fieldUpdateTimers.current[fieldId]) {
+      clearTimeout(fieldUpdateTimers.current[fieldId]);
+    }
+    fieldUpdateTimers.current[fieldId] = setTimeout(() => {
+      const payload = pendingFieldUpdates.current[fieldId];
+      delete pendingFieldUpdates.current[fieldId];
+      delete fieldUpdateTimers.current[fieldId];
+      if (payload) {
+        updateFieldMutation.mutate({ fieldId, updates: payload });
+      }
+    }, 400);
   };
 
   const saveForm = () => {
@@ -436,11 +545,19 @@ export default function FormEditorPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate(`/forms/${form.slug}`)}>
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/school-admin/forms/${formId}/preview`)}
+            data-testid="button-preview-form"
+          >
             <Eye className="h-4 w-4 mr-2" />
             Preview
           </Button>
-          <Button onClick={saveForm} disabled={updateFormMutation.isPending}>
+          <Button
+            onClick={saveForm}
+            disabled={updateFormMutation.isPending}
+            data-testid="button-save-form"
+          >
             <Save className="h-4 w-4 mr-2" />
             {updateFormMutation.isPending ? 'Saving...' : 'Save Form'}
           </Button>
@@ -454,12 +571,23 @@ export default function FormEditorPage() {
         </TabsList>
 
         <TabsContent value="fields" className="space-y-4">
+          <FormSmartBuilderPanel
+            formId={formId!}
+            onDraftApplied={() => {
+              invalidateFormQueries();
+            }}
+          />
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Form Fields</CardTitle>
                 <div className="flex gap-2">
-                  <Button onClick={() => addFieldMutation.mutate()} disabled={addFieldMutation.isPending} variant="outline">
+                  <Button
+                    onClick={() => addFieldMutation.mutate()}
+                    disabled={addFieldMutation.isPending}
+                    variant="outline"
+                    data-testid="button-add-field"
+                  >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Field
                   </Button>
@@ -518,6 +646,7 @@ export default function FormEditorPage() {
                 <Switch
                   checked={formData.isActive}
                   onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+                  data-testid="switch-form-active"
                 />
                 <Label>Form is active</Label>
               </div>
@@ -527,7 +656,7 @@ export default function FormEditorPage() {
                   value={formData.accessLevel}
                   onValueChange={(value) => setFormData({ ...formData, accessLevel: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="select-access-level">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -563,8 +692,41 @@ export default function FormEditorPage() {
                 <Switch
                   checked={formSettings.notifyOnSubmission || false}
                   onCheckedChange={(checked) => setFormSettings({ ...formSettings, notifyOnSubmission: checked })}
+                  data-testid="switch-notify-on-submission"
                 />
                 <Label>Send email notifications on submission</Label>
+              </div>
+              {formSettings.notifyOnSubmission && (
+                <div>
+                  <Label>Notification emails (comma-separated)</Label>
+                  <Input
+                    value={(formSettings.notificationEmails || []).join(', ')}
+                    onChange={(e) =>
+                      setFormSettings({
+                        ...formSettings,
+                        notificationEmails: e.target.value
+                          .split(',')
+                          .map((s: string) => s.trim())
+                          .filter(Boolean),
+                      })
+                    }
+                    placeholder="admin@school.com, director@school.com"
+                    data-testid="input-notification-emails"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Leave blank to notify the school admin account email.
+                  </p>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={formSettings.sendSubmitterConfirmation || false}
+                  onCheckedChange={(checked) =>
+                    setFormSettings({ ...formSettings, sendSubmitterConfirmation: checked })
+                  }
+                  data-testid="switch-submitter-confirmation"
+                />
+                <Label>Send confirmation email to submitter</Label>
               </div>
             </CardContent>
           </Card>

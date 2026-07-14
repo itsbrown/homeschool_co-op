@@ -107,6 +107,9 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/smoke.spec.ts`](../e2e/smoke.spec.ts) | `npm run test:e2e -- e2e/smoke.spec.ts` | `/` HTML shell; `/api/cart/snapshot` returns JSON | Dev server on :5000 |
 | [`e2e/permissions-nav.spec.ts`](../e2e/permissions-nav.spec.ts) | `npm run test:e2e -- e2e/permissions-nav.spec.ts` | School-admin finance deep link → login or forbidden (permissions smoke) | Dev server on :5000 |
 | [`e2e/public-custom-forms.spec.ts`](../e2e/public-custom-forms.spec.ts) | `npm run test:e2e -- e2e/public-custom-forms.spec.ts` | Public `/forms/:slug`, API, **resume `upload-attachment`**, browser upload + submit | `DATABASE_URL`; seed `setup-public-form-scenario`; stub storage via `PLAYWRIGHT_WEB_SERVER` |
+| [`e2e/form-editor-fields.spec.ts`](../e2e/form-editor-fields.spec.ts) | `npm run test:e2e -- e2e/form-editor-fields.spec.ts` | School-admin Form Editor: add/update/delete field persist; publish → public form shows field | `setup-public-form-scenario` + `linkSupabaseAuthAdmin` |
+| [`e2e/form-submission-notify-spam.spec.ts`](../e2e/form-submission-notify-spam.spec.ts) | `npm run test:e2e -- e2e/form-submission-notify-spam.spec.ts` | Submit persist; admin + submitter `email_log`; honeypot; required fields; duplicate block; submit rate limit 429 | `setup-public-form-scenario`; `GET /api/test/email-log`; `FORM_SUBMIT_RATE_LIMIT` |
+| [`e2e/form-smart-builder.spec.ts`](../e2e/form-smart-builder.spec.ts) | `npm run test:e2e -- e2e/form-smart-builder.spec.ts` | AI Smart Builder chat → draft → apply-draft; no auto-publish; AI rate limit | `setup-public-form-scenario` + `linkSupabaseAuthAdmin`; `FORM_BUILDER_AI_MOCK=1` |
 | [`e2e/parent-dashboard.spec.ts`](../e2e/parent-dashboard.spec.ts) | `npm run test:e2e -- e2e/parent-dashboard.spec.ts` | Unauthenticated dashboard gating | — |
 
 ### Postgres + Supabase (skips if seed/auth fails)
@@ -125,6 +128,10 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/school-analytics-engagement.spec.ts`](../e2e/school-analytics-engagement.spec.ts) | `npm run test:e2e -- e2e/school-analytics-engagement.spec.ts` | School Analytics → Engagement tab + `/api/school-analytics/engagement` | `setup-cart-scenario` (`linkSupabaseAuthAdmin`) |
 | [`e2e/school-analytics-cart-abandonment.spec.ts`](../e2e/school-analytics-cart-abandonment.spec.ts) | `npm run test:e2e -- e2e/school-analytics-cart-abandonment.spec.ts` | School Analytics → Cart Abandonment tab + funnel API | `setup-cart-scenario` (`linkSupabaseAuthAdmin`) |
 | [`e2e/parent-progress-charts.spec.ts`](../e2e/parent-progress-charts.spec.ts) | `npm run test:e2e -- e2e/parent-progress-charts.spec.ts` | Parent `/parent/progress` Charts tab + child analytics API | `setup-progress-scenario` (`linkSupabaseAuth`) |
+| [`e2e/schedule-builder-publish.spec.ts`](../e2e/schedule-builder-publish.spec.ts) | `npm run test:e2e -- e2e/schedule-builder-publish.spec.ts` | Admin Week Planner: edit draft block → publish | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/parent-weekly-schedule.spec.ts`](../e2e/parent-weekly-schedule.spec.ts) | `npm run test:e2e -- e2e/parent-weekly-schedule.spec.ts` | Parent `/parent/weekly-schedule` enrolled-class sections + print root | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/parent-progress-scheduled-lessons.spec.ts`](../e2e/parent-progress-scheduled-lessons.spec.ts) | `npm run test:e2e -- e2e/parent-progress-scheduled-lessons.spec.ts` | Parent progress “Scheduled lessons” + completion pills | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/school-admin-academics-kpi.spec.ts`](../e2e/school-admin-academics-kpi.spec.ts) | `npm run test:e2e -- e2e/school-admin-academics-kpi.spec.ts` | Attendance → Lesson plans tab: completion % + attendance KPI | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 
 **Supabase:** Real project required (`isRealSupabaseConfigured()` or `supabaseLinked === true`).
 
@@ -160,7 +167,8 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 
 | Endpoint | Used by |
 |----------|---------|
-| `POST /api/test/setup-public-form-scenario` | `public-custom-forms.spec.ts` |
+| `POST /api/test/setup-public-form-scenario` | `public-custom-forms`, `form-editor-fields`, `form-submission-notify-spam`, `form-smart-builder` |
+| `GET /api/test/email-log` | `form-submission-notify-spam` |
 | `POST /api/test/setup-registration-scenario` | `school-code-registration`, `parent-full-journey` |
 | `POST /api/test/setup-session-enrollment-scenario` | `session-enrollment-flow` |
 | `POST /api/test/setup-cart-scenario` | Payment, credits, membership, profile credits, help issue submission |
@@ -168,6 +176,7 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `GET /api/test/technical-support-issue/:id` | `help-issue-submission.spec.ts` (persistence verify) |
 | `POST /api/test/setup-credit-lookup-scenario` | `credit-management-parent-lookup` |
 | `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard` |
+| `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi` |
 | `POST /api/test/ensure-public-store-schema` | `public-store.spec.ts` |
 | `POST /api/test/setup-public-store-scenario` | `public-store.spec.ts`, `public-store-share.spec.ts` |
 | `POST /api/test/fulfill-store-checkout` | `public-store.spec.ts`, `public-store-share.spec.ts` (simulates Stripe webhook after guest checkout) |

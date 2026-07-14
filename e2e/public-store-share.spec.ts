@@ -106,6 +106,8 @@ test.describe("public store share and referral attribution", () => {
 
     const { response, json } = await postSetupPublicStoreScenario(request, {
       linkSupabaseAuthAdmin: true,
+      // $0 merch uses fulfill-without-payment (no Stripe secret required in CI).
+      productPriceCents: 0,
       productImageUrl: "/uploads/store-products/e2e-share-ref.png",
     });
     test.skip(

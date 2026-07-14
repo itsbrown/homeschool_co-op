@@ -38,7 +38,8 @@ test.describe("school-code parent registration", () => {
     const locationsPromise = page.waitForResponse(
       (r) =>
         r.url().includes("/api/public/registration/locations") &&
-        r.url().includes(`schoolId=${school.id}`) &&
+        (r.url().includes(`code=${encodeURIComponent(registrationCode)}`) ||
+          r.url().includes(`schoolId=${school.id}`)) &&
         r.ok(),
       { timeout: 45_000 },
     );
@@ -51,7 +52,12 @@ test.describe("school-code parent registration", () => {
     const locationSelect = page.getByTestId("registration-location-select");
     await expect(locationSelect).toBeVisible({ timeout: 15_000 });
     const firstCampus = locationsOnSchool[0]?.name ?? "Brighton";
-    await locationSelect.selectOption({ label: new RegExp(firstCampus, "i") });
+    // Playwright selectOption label must be a string (not RegExp).
+    const optionLabels = await locationSelect.locator("option").allTextContents();
+    const campusLabel =
+      optionLabels.find((label) => label.toLowerCase().includes(firstCampus.toLowerCase())) ??
+      firstCampus;
+    await locationSelect.selectOption({ label: campusLabel });
 
     await page.getByTestId("registration-parent-first-name").fill("E2E");
     await page.getByLabel("Last Name").first().fill("Parent");

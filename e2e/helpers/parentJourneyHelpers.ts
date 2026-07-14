@@ -41,7 +41,12 @@ export async function registerParentWithChildren(
 
   const locationSelect = page.getByTestId("registration-location-select");
   await expect(locationSelect).toBeVisible({ timeout: 15_000 });
-  await locationSelect.selectOption({ label: new RegExp(campusName, "i") });
+  // Playwright selectOption label must be a string (not RegExp).
+  const optionLabels = await locationSelect.locator("option").allTextContents();
+  const campusLabel =
+    optionLabels.find((label) => label.toLowerCase().includes(campusName.toLowerCase())) ??
+    campusName;
+  await locationSelect.selectOption({ label: campusLabel });
 
   await page.getByTestId("registration-parent-first-name").fill("E2E");
   await page.getByLabel("Last Name").first().fill("Journey");

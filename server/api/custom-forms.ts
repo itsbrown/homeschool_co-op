@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { getDb } from '../db';
 import { customForms, customFormFields, customFormSubmissions, schools, insertCustomFormSchema, insertCustomFormFieldSchema, insertCustomFormSubmissionSchema } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
@@ -6,8 +7,27 @@ import { z } from 'zod';
 import { jwtCheck, requireSchoolAccess } from '../middleware/auth0-auth';
 import { fileUploadService } from '../services/fileUploadService';
 import { ObjectStorageService } from '../replit_integrations/object_storage';
+import {
+  sendFormSubmissionNotifications,
+  validateFormSubmission,
+} from '../lib/custom-form-submission';
 
 const router = Router();
+
+const publicSubmitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.FORM_SUBMIT_RATE_LIMIT
+    ? parseInt(process.env.FORM_SUBMIT_RATE_LIMIT, 10)
+    : process.env.CI === 'true' || process.env.NODE_ENV === 'test'
+      ? 40
+      : 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many submissions. Please try again later.' },
+  // Per-form buckets so one form's E2E burst cannot starve unrelated public forms.
+  keyGenerator: (req) =>
+    `${ipKeyGenerator(req.ip ?? 'unknown')}:form:${req.params.formId ?? 'unknown'}`,
+});
 
 async function getActivePublicForm(formId: number) {
   const db = await getDb();
@@ -188,7 +208,7 @@ router.get('/forms/by-slug-auth/:slug', jwtCheck, async (req: any, res) => {
 });
 
 // Submit form (public access only - for backward compatibility)
-router.post('/forms/:formId/submit', async (req, res) => {
+router.post('/forms/:formId/submit', publicSubmitLimiter, async (req, res) => {
   try {
     const formId = parseInt(req.params.formId);
     const db = await getDb();
@@ -206,11 +226,32 @@ router.post('/forms/:formId/submit', async (req, res) => {
     if (!form) {
       return res.status(404).json({ message: 'Form not found or not public' });
     }
+
+    const honeypot = req.body?.honeypot ?? req.body?.website ?? null;
+    const responseData = (req.body?.responseData || {}) as Record<string, unknown>;
+    const submitterEmailRaw = req.body?.submitterEmail ?? null;
+    const submitterEmail =
+      typeof submitterEmailRaw === 'string' ? submitterEmailRaw.trim().toLowerCase() : null;
+    const ipAddress = req.ip || null;
+
+    const validationError = await validateFormSubmission({
+      form,
+      responseData,
+      submitterEmail,
+      ipAddress,
+      honeypot,
+    });
+    if (validationError) {
+      const status = validationError === 'Submission rejected' ? 400 : 400;
+      return res.status(status).json({ message: validationError });
+    }
     
     const submissionData = insertCustomFormSubmissionSchema.parse({
       ...req.body,
       formId,
-      ipAddress: req.ip,
+      responseData,
+      submitterEmail,
+      ipAddress,
       userAgent: req.headers['user-agent'],
     });
     
@@ -218,8 +259,18 @@ router.post('/forms/:formId/submit', async (req, res) => {
       .insert(customFormSubmissions)
       .values(submissionData)
       .returning();
-    
-    // TODO: Send email notifications if configured
+
+    try {
+      await sendFormSubmissionNotifications({
+        form,
+        submissionId: newSubmission.id,
+        submitterEmail: newSubmission.submitterEmail,
+        submitterName: newSubmission.submitterName,
+        responseData: (newSubmission.responseData || {}) as Record<string, unknown>,
+      });
+    } catch (notifyError) {
+      console.error('Form submission notification error:', notifyError);
+    }
     
     res.status(201).json(newSubmission);
   } catch (error) {
@@ -249,11 +300,31 @@ router.post('/forms/:formId/submit-auth', jwtCheck, async (req: any, res) => {
     if (!form) {
       return res.status(404).json({ message: 'Form not found or not accepting submissions' });
     }
+
+    const honeypot = req.body?.honeypot ?? req.body?.website ?? null;
+    const responseData = (req.body?.responseData || {}) as Record<string, unknown>;
+    const submitterEmailRaw = req.body?.submitterEmail ?? req.auth?.email ?? null;
+    const submitterEmail =
+      typeof submitterEmailRaw === 'string' ? submitterEmailRaw.trim().toLowerCase() : null;
+    const ipAddress = req.ip || null;
+
+    const validationError = await validateFormSubmission({
+      form,
+      responseData,
+      submitterEmail,
+      ipAddress,
+      honeypot,
+    });
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
+    }
     
     const submissionData = insertCustomFormSubmissionSchema.parse({
       ...req.body,
       formId,
-      ipAddress: req.ip,
+      responseData,
+      submitterEmail,
+      ipAddress,
       userAgent: req.headers['user-agent'],
     });
     
@@ -261,8 +332,18 @@ router.post('/forms/:formId/submit-auth', jwtCheck, async (req: any, res) => {
       .insert(customFormSubmissions)
       .values(submissionData)
       .returning();
-    
-    // TODO: Send email notifications if configured
+
+    try {
+      await sendFormSubmissionNotifications({
+        form,
+        submissionId: newSubmission.id,
+        submitterEmail: newSubmission.submitterEmail,
+        submitterName: newSubmission.submitterName,
+        responseData: (newSubmission.responseData || {}) as Record<string, unknown>,
+      });
+    } catch (notifyError) {
+      console.error('Form submission notification error:', notifyError);
+    }
     
     res.status(201).json(newSubmission);
   } catch (error) {
@@ -276,6 +357,89 @@ router.post('/forms/:formId/submit-auth', jwtCheck, async (req: any, res) => {
 
 // AUTHENTICATED ROUTES (after jwtCheck) - require login
 router.use(jwtCheck);
+
+// Apply an AI / bulk field draft (replaces fields when replaceExisting is true)
+router.post('/forms/:formId/apply-draft', async (req: any, res) => {
+  try {
+    const formId = parseInt(req.params.formId);
+    const db = await getDb();
+
+    const [form] = await db.select().from(customForms).where(eq(customForms.id, formId));
+    if (!form) return res.status(404).json({ message: 'Form not found' });
+    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const draftSchema = z.object({
+      title: z.string().optional(),
+      description: z.string().nullable().optional(),
+      replaceExisting: z.boolean().default(true),
+      fields: z.array(z.object({
+        fieldType: z.string(),
+        label: z.string(),
+        placeholder: z.string().nullable().optional(),
+        helpText: z.string().nullable().optional(),
+        isRequired: z.boolean().optional(),
+        order: z.number().optional(),
+        fieldConfig: z.record(z.any()).optional(),
+        validationRules: z.record(z.any()).optional(),
+      })).min(1),
+      settings: z.record(z.any()).optional(),
+    });
+
+    const draft = draftSchema.parse(req.body);
+
+    if (draft.title || draft.description !== undefined || draft.settings) {
+      await db
+        .update(customForms)
+        .set({
+          ...(draft.title ? { title: draft.title } : {}),
+          ...(draft.description !== undefined ? { description: draft.description } : {}),
+          ...(draft.settings
+            ? {
+                settings: {
+                  ...(form.settings as object),
+                  ...draft.settings,
+                },
+              }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(customForms.id, formId));
+    }
+
+    if (draft.replaceExisting) {
+      await db.delete(customFormFields).where(eq(customFormFields.formId, formId));
+    }
+
+    const created = [];
+    for (let i = 0; i < draft.fields.length; i++) {
+      const f = draft.fields[i];
+      const fieldData = insertCustomFormFieldSchema.parse({
+        formId,
+        fieldType: f.fieldType,
+        label: f.label,
+        placeholder: f.placeholder ?? null,
+        helpText: f.helpText ?? null,
+        isRequired: f.isRequired ?? false,
+        order: f.order ?? i,
+        fieldConfig: f.fieldConfig ?? {},
+        validationRules: f.validationRules ?? {},
+      });
+      const [row] = await db.insert(customFormFields).values(fieldData).returning();
+      created.push(row);
+    }
+
+    const [updatedForm] = await db.select().from(customForms).where(eq(customForms.id, formId));
+    res.json({ form: updatedForm, fields: created });
+  } catch (error) {
+    console.error('Error applying form draft:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
+    res.status(500).json({ message: 'Error applying form draft' });
+  }
+});
 
 // Get all template forms (available to all authenticated users)
 router.get('/templates', async (req: any, res) => {

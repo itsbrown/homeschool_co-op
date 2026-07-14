@@ -10,10 +10,18 @@ import {
   postSeedUpcomingScheduledPayment,
   testApiToken,
 } from "./helpers/testSeed";
+import { isRealStripeTestSecretConfigured } from "./helpers/stripeEnv";
 
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "serial", timeout: 180_000 });
 
 test.describe("parent payment journey (DB seed + Supabase login)", () => {
+  test.beforeEach(() => {
+    test.skip(
+      !isRealStripeTestSecretConfigured(),
+      "Set STRIPE_TEST_SECRET_KEY (real sk_test_*) — docs sample key is rejected by Stripe API",
+    );
+  });
+
   test("register child, pay in full at checkout, reach success", async ({ page, request }) => {
     const { response, json } = await postSetupCartScenario(request, {
       paymentPlan: "full_payment",
