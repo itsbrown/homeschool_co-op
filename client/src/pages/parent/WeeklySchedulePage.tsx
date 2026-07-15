@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, CalendarDays, CheckCircle2, Loader2, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -366,14 +367,11 @@ export default function WeeklySchedulePage() {
   const { data, isLoading } = useQuery<MyWeekPlansResponse>({
     queryKey: ["/api/schedule-builder/parent/my-week-plans", weekStart],
     queryFn: async () => {
-      const res = await fetch(
+      // Use apiRequest so Supabase Bearer token is sent (E2E / SPA have no cookie session).
+      const res = await apiRequest(
+        "GET",
         `/api/schedule-builder/parent/my-week-plans?weekStart=${encodeURIComponent(weekStart)}`,
-        { credentials: "include" },
       );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Failed to load weekly schedules");
-      }
       return res.json();
     },
   });
