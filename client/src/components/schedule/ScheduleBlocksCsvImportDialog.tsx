@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 export const SCHEDULE_BLOCK_CSV_FIELDS = [
   {
@@ -66,17 +67,100 @@ export const SCHEDULE_BLOCK_CSV_FIELDS = [
   },
 ] as const;
 
+/** Week Planner content fields — matched to template slots by day + start time. */
+export const WEEK_PLAN_BLOCK_CSV_FIELDS = [
+  {
+    key: "day_of_week",
+    label: "Day of week",
+    required: true,
+    description: "Full day name (e.g. Monday)",
+  },
+  {
+    key: "start_time",
+    label: "Start time",
+    required: true,
+    description: "Must match an existing template slot (HH:MM)",
+  },
+  {
+    key: "end_time",
+    label: "End time",
+    required: false,
+    description: "Optional (not used for matching)",
+  },
+  {
+    key: "block_type",
+    label: "Block type",
+    required: false,
+    description: "Optional (template owns block type)",
+  },
+  {
+    key: "title",
+    label: "Title",
+    required: true,
+    description: "Lesson title — template CSVs use default_title",
+  },
+  {
+    key: "description",
+    label: "Description",
+    required: false,
+    description: "Lesson description / overview",
+  },
+  {
+    key: "objectives",
+    label: "Objectives",
+    required: false,
+    description: "Semicolon-separated list",
+  },
+  {
+    key: "lesson_link",
+    label: "Lesson link",
+    required: false,
+    description: "URL to lesson materials",
+  },
+  {
+    key: "notes",
+    label: "Notes",
+    required: false,
+    description: "Extra notes for this week",
+  },
+] as const;
+
+type FieldDef = {
+  key: string;
+  label: string;
+  required: boolean;
+  description: string;
+};
+
 type Step = "mapping" | "preview" | "importing" | "success" | "error";
 
-type Props = {
+type SkeletonProps = {
+  mode?: "skeleton";
   open: boolean;
   templateId: number;
   templateName: string;
+  weekPlanId?: never;
+  weekLabel?: never;
   file: File | null;
   csvText: string | null;
   onClose: () => void;
   onImported?: (imported: number) => void;
 };
+
+type WeekPlanProps = {
+  mode: "week-plan";
+  open: boolean;
+  weekPlanId: number;
+  weekLabel: string;
+  templateId?: never;
+  templateName?: never;
+  file: File | null;
+  csvText: string | null;
+  onClose: () => void;
+  onImported?: (imported: number) => void;
+};
+
+export type ScheduleBlocksCsvImportDialogProps = SkeletonProps | WeekPlanProps;
 
 function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
   const lines = text
@@ -121,7 +205,7 @@ function parseCsv(text: string): { headers: string[]; rows: Record<string, strin
   return { headers, rows };
 }
 
-function autoDetectMapping(headers: string[]): Record<string, string> {
+function autoDetectMapping(headers: string[], fields: FieldDef[]): Record<string, string> {
   const mapping: Record<string, string> = {};
   const used = new Set<string>();
   const aliases: Record<string, string[]> = {
@@ -130,11 +214,17 @@ function autoDetectMapping(headers: string[]): Record<string, string> {
     end_time: ["end_time", "end", "end time", "ends"],
     block_type: ["block_type", "type", "block type"],
     default_title: ["default_title", "title", "name", "block title", "default title"],
+    // Week-plan title also accepts template CSV's default_title
+    title: ["title", "default_title", "name", "block title", "default title", "lesson title"],
     subject_area: ["subject_area", "subject", "topic", "subject area"],
     sort_order: ["sort_order", "order", "sort", "sort order"],
+    description: ["description", "default_description", "desc", "overview"],
+    objectives: ["objectives", "objective", "learning objectives"],
+    lesson_link: ["lesson_link", "link", "url", "lesson url", "lesson link"],
+    notes: ["notes", "note", "comments"],
   };
 
-  for (const field of SCHEDULE_BLOCK_CSV_FIELDS) {
+  for (const field of fields) {
     const opts = aliases[field.key] || [field.key];
     const match = headers.find((h) => {
       if (used.has(h)) return false;
@@ -149,24 +239,49 @@ function autoDetectMapping(headers: string[]): Record<string, string> {
   return mapping;
 }
 
-function isHintRow(row: Record<string, string>, mapping: Record<string, string>): boolean {
+/** Detect skeleton/template CSV shape (default_title, no week-plan title/content cols). */
+export function looksLikeSkeletonCsv(headers: string[]): boolean {
+  const norm = headers.map((h) => h.toLowerCase().trim().replace(/\s+/g, "_"));
+  const hasDefaultTitle = norm.includes("default_title");
+  const hasTitle = norm.includes("title");
+  const hasWeekContent =
+    norm.includes("description") ||
+    norm.includes("objectives") ||
+    norm.includes("lesson_link") ||
+    norm.includes("notes");
+  return hasDefaultTitle && !hasTitle && !hasWeekContent;
+}
+
+function isHintRow(row: Record<string, string>, mapping: Record<string, string>, mode: "skeleton" | "week-plan"): boolean {
   const day = (row[mapping.day_of_week] || "").toLowerCase();
   const start = row[mapping.start_time] || "";
   const end = row[mapping.end_time] || "";
-  const title = (row[mapping.default_title] || "").toLowerCase();
+  const titleKey = mode === "skeleton" ? "default_title" : "title";
+  const title = (row[mapping[titleKey]] || "").toLowerCase();
+  const lessonLink = mapping.lesson_link ? row[mapping.lesson_link] || "" : "";
+
+  if (mode === "week-plan" && title.includes("science basics") && lessonLink.includes("example.com")) {
+    return true;
+  }
   return day === "monday" && start.startsWith("08:00") && end.startsWith("09:00") && title.includes("math 101");
 }
 
-export function ScheduleBlocksCsvImportDialog({
-  open,
-  templateId,
-  templateName,
-  file,
-  csvText,
-  onClose,
-  onImported,
-}: Props) {
+export function ScheduleBlocksCsvImportDialog(props: ScheduleBlocksCsvImportDialogProps) {
+  const {
+    open,
+    file,
+    csvText,
+    onClose,
+    onImported,
+  } = props;
+  const mode = props.mode ?? "skeleton";
   const { toast } = useToast();
+  const fields: FieldDef[] =
+    mode === "week-plan" ? [...WEEK_PLAN_BLOCK_CSV_FIELDS] : [...SCHEDULE_BLOCK_CSV_FIELDS];
+
+  const targetLabel =
+    mode === "week-plan" ? props.weekLabel : props.templateName;
+
   const parsed = useMemo(() => {
     if (!csvText) return { headers: [] as string[], rows: [] as Record<string, string>[] };
     try {
@@ -175,28 +290,34 @@ export function ScheduleBlocksCsvImportDialog({
       return { headers: [], rows: [] };
     }
   }, [csvText]);
+
   const [step, setStep] = useState<Step>("mapping");
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [importCount, setImportCount] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
+  const skeletonShaped = useMemo(
+    () => mode === "week-plan" && looksLikeSkeletonCsv(parsed.headers),
+    [mode, parsed.headers],
+  );
+
   useEffect(() => {
     if (!open) return;
     setStep("mapping");
-    setMapping(autoDetectMapping(parsed.headers));
+    setMapping(autoDetectMapping(parsed.headers, fields));
     setImportCount(0);
     setErrorMessage(null);
     setValidationErrors([]);
-  }, [open, csvText]);
+  }, [open, csvText, mode]);
 
-  const requiredOk = SCHEDULE_BLOCK_CSV_FIELDS.filter((f) => f.required).every((f) => !!mapping[f.key]);
+  const requiredOk = fields.filter((f) => f.required).every((f) => !!mapping[f.key]);
   const mappedCount = Object.values(mapping).filter(Boolean).length;
 
   const dataRows = useMemo(() => {
     if (!mapping.day_of_week) return parsed.rows;
-    return parsed.rows.filter((r) => !isHintRow(r, mapping));
-  }, [parsed.rows, mapping]);
+    return parsed.rows.filter((r) => !isHintRow(r, mapping, mode));
+  }, [parsed.rows, mapping, mode]);
 
   const previewRows = dataRows.slice(0, 5);
 
@@ -216,21 +337,36 @@ export function ScheduleBlocksCsvImportDialog({
       const formData = new FormData();
       formData.append("file", file);
       formData.append("mapping", JSON.stringify(mapping));
-      const res = await apiRequest(
-        "POST",
-        `/api/schedule-builder/skeletons/${templateId}/blocks/import-csv`,
-        formData,
-      );
+
+      const url =
+        mode === "week-plan"
+          ? `/api/schedule-builder/week-plans/${props.weekPlanId}/blocks/import-csv`
+          : `/api/schedule-builder/skeletons/${props.templateId}/blocks/import-csv`;
+
+      const res = await apiRequest("POST", url, formData);
       const data = await res.json();
-      const imported = Number(data.imported ?? 0);
+      const imported = Number(
+        mode === "week-plan" ? (data.updated ?? 0) : (data.imported ?? 0),
+      );
       setImportCount(imported);
-      await queryClient.invalidateQueries({
-        queryKey: ["/api/schedule-builder/skeletons", templateId, "blocks"],
-      });
+
+      if (mode === "week-plan") {
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/schedule-builder/week-plans", props.weekPlanId],
+        });
+      } else {
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/schedule-builder/skeletons", props.templateId, "blocks"],
+        });
+      }
+
       setStep("success");
       toast({
         title: "CSV import complete",
-        description: `Imported ${imported} time block${imported === 1 ? "" : "s"} into ${templateName}.`,
+        description:
+          mode === "week-plan"
+            ? `Updated ${imported} block${imported === 1 ? "" : "s"} on ${targetLabel}.`
+            : `Imported ${imported} time block${imported === 1 ? "" : "s"} into ${targetLabel}.`,
       });
       onImported?.(imported);
     } catch (err: any) {
@@ -273,11 +409,16 @@ export function ScheduleBlocksCsvImportDialog({
           <div>
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5" />
-              Import time blocks — {templateName}
+              {mode === "week-plan"
+                ? `Import week content — ${targetLabel}`
+                : `Import time blocks — ${targetLabel}`}
             </h2>
             <p className="text-sm text-muted-foreground mt-2">
               {step === "mapping" && "Step 1 of 2 — Map your CSV columns to schedule fields."}
-              {step === "preview" && "Step 2 of 2 — Review mapped rows, then confirm. Existing blocks will be replaced."}
+              {step === "preview" &&
+                (mode === "week-plan"
+                  ? "Step 2 of 2 — Review mapped rows, then confirm. Matching slots (day + start time) will be updated."
+                  : "Step 2 of 2 — Review mapped rows, then confirm. Existing blocks will be replaced.")}
               {step === "importing" && "Importing…"}
               {step === "success" && "Import finished successfully."}
               {step === "error" && "Import could not be completed."}
@@ -293,11 +434,26 @@ export function ScheduleBlocksCsvImportDialog({
         <div className="flex-1 min-h-0 overflow-y-auto py-4 space-y-4">
           {step === "mapping" && (
             <div className="space-y-4" data-testid="schedule-csv-mapping-step">
+              {skeletonShaped && (
+                <div
+                  className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"
+                  data-testid="schedule-csv-skeleton-shape-hint"
+                >
+                  This file looks like a <strong>Weekly Template</strong> CSV (
+                  <code className="text-xs">default_title</code>, etc.). We mapped{" "}
+                  <code className="text-xs">default_title</code> → Title so you can fill matching
+                  week slots. To change the recurring schedule itself, import on{" "}
+                  <Link href="/schools/schedule-builder" className="underline font-medium">
+                    Weekly Templates
+                  </Link>
+                  .
+                </div>
+              )}
               <p className="text-sm text-muted-foreground">
                 Auto-detected <Badge variant="secondary">{mappedCount}</Badge> column
                 {mappedCount === 1 ? "" : "s"}. Adjust anything that looks wrong.
               </p>
-              {SCHEDULE_BLOCK_CSV_FIELDS.map((field) => (
+              {fields.map((field) => (
                 <div key={field.key} className="flex items-start gap-3">
                   <div className="w-40 shrink-0 pt-2">
                     <Label className="text-sm font-medium">
@@ -332,16 +488,27 @@ export function ScheduleBlocksCsvImportDialog({
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 flex gap-2">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <span>
-                  Confirming will <strong>replace all existing blocks</strong> on{" "}
-                  <strong>{templateName}</strong> with {dataRows.length} row
-                  {dataRows.length === 1 ? "" : "s"} from this CSV.
+                  {mode === "week-plan" ? (
+                    <>
+                      Confirming will <strong>overwrite block content</strong> on{" "}
+                      <strong>{targetLabel}</strong> for {dataRows.length} row
+                      {dataRows.length === 1 ? "" : "s"} matched by day + start time. Unmatched
+                      slots are unchanged; rows that do not match a template slot will error.
+                    </>
+                  ) : (
+                    <>
+                      Confirming will <strong>replace all existing blocks</strong> on{" "}
+                      <strong>{targetLabel}</strong> with {dataRows.length} row
+                      {dataRows.length === 1 ? "" : "s"} from this CSV.
+                    </>
+                  )}
                 </span>
               </div>
               <div className="overflow-x-auto border rounded-md">
                 <table className="text-xs w-full border-collapse">
                   <thead>
                     <tr className="bg-muted">
-                      {SCHEDULE_BLOCK_CSV_FIELDS.filter((f) => mapping[f.key]).map((f) => (
+                      {fields.filter((f) => mapping[f.key]).map((f) => (
                         <th key={f.key} className="border px-2 py-1 text-left font-medium">
                           {f.label}
                         </th>
@@ -351,7 +518,7 @@ export function ScheduleBlocksCsvImportDialog({
                   <tbody>
                     {previewRows.map((row, i) => (
                       <tr key={i} className="even:bg-muted/30">
-                        {SCHEDULE_BLOCK_CSV_FIELDS.filter((f) => mapping[f.key]).map((f) => (
+                        {fields.filter((f) => mapping[f.key]).map((f) => (
                           <td key={f.key} className="border px-2 py-1 truncate max-w-[140px]">
                             {row[mapping[f.key]] || "—"}
                           </td>
@@ -376,7 +543,9 @@ export function ScheduleBlocksCsvImportDialog({
               <CheckCircle2 className="h-10 w-10 text-green-600" />
               <p className="text-lg font-semibold">Import complete</p>
               <p className="text-sm text-muted-foreground">
-                {importCount} time block{importCount === 1 ? "" : "s"} imported into {templateName}.
+                {mode === "week-plan"
+                  ? `${importCount} block${importCount === 1 ? "" : "s"} updated on ${targetLabel}.`
+                  : `${importCount} time block${importCount === 1 ? "" : "s"} imported into ${targetLabel}.`}
               </p>
             </div>
           )}

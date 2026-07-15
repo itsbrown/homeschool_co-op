@@ -1105,15 +1105,63 @@ router.post(
 
       if (records.length === 0) return res.status(400).json({ message: "CSV file is empty" });
 
-      // Skip hint rows
-      const isHintRow = (r: any) =>
-        (r.title || "").toLowerCase().includes("science basics") &&
-        (r.lesson_link || "").includes("example.com");
+      // Optional column mapping from FormData: { canonicalField: sourceHeader }
+      let columnMapping: Record<string, string> | null = null;
+      const rawMapping = req.body?.mapping;
+      if (typeof rawMapping === "string" && rawMapping.trim()) {
+        try {
+          const parsedMapping = JSON.parse(rawMapping);
+          if (parsedMapping && typeof parsedMapping === "object" && !Array.isArray(parsedMapping)) {
+            columnMapping = parsedMapping as Record<string, string>;
+          }
+        } catch {
+          return res.status(400).json({ message: "Invalid mapping JSON" });
+        }
+      }
 
-      const dataRows = records.filter((r) => !isHintRow(r));
+      const remapRecord = (r: any): any => {
+        if (!columnMapping) return r;
+        const out: Record<string, string> = {};
+        for (const [canonical, sourceCol] of Object.entries(columnMapping)) {
+          if (!sourceCol) continue;
+          out[canonical] = r[sourceCol] ?? "";
+        }
+        // Preserve unmapped canonical keys so default_title fallback still works
+        // when the client mapped title ← default_title (already in out.title).
+        return { ...r, ...out };
+      };
+
+      // Skip week-plan hint row and skeleton/template example hint row
+      const isHintRow = (r: any) => {
+        const title = (r.title || r.default_title || "").toLowerCase();
+        const lessonLink = r.lesson_link || "";
+        if (title.includes("science basics") && lessonLink.includes("example.com")) return true;
+        const day = (r.day_of_week || "").toLowerCase();
+        const start = String(r.start_time || "").substring(0, 5);
+        const end = String(r.end_time || "").substring(0, 5);
+        return day === "monday" && start === "08:00" && end === "09:00" && title.includes("math 101");
+      };
+
+      const dataRows = records.map(remapRecord).filter((r) => !isHintRow(r));
+
+      const skeletonBlocks = await storage.getSkeletonBlocksBySkeletonId(plan.skeletonId);
+      const slotKey = (dayOfWeek: number, startTime: string) => `${dayOfWeek}|${startTime}`;
+      const skeletonBySlot = new Map<string, { id: number }>();
+      for (const sb of skeletonBlocks) {
+        const normalizedStart = normalizeTimeHhMm(sb.startTime);
+        if (!normalizedStart) continue;
+        skeletonBySlot.set(slotKey(sb.dayOfWeek, normalizedStart), { id: sb.id });
+      }
 
       const errors: string[] = [];
-      const updates: { dayOfWeek: number; startTime: string; data: any }[] = [];
+      const updates: Array<{
+        skeletonBlockId: number;
+        title: string | null;
+        description: string | null;
+        objectives: string[];
+        lessonLink: string | null;
+        notes: string | null;
+      }> = [];
 
       for (let i = 0; i < dataRows.length; i++) {
         const r = dataRows[i];
@@ -1121,7 +1169,7 @@ router.post(
         const dayStr = (r.day_of_week || "").trim();
         const dayNum = DAY_NAME_TO_NUMBER[dayStr];
         if (dayNum === undefined) {
-          errors.push(`Row ${rowNum}: Invalid day_of_week "${dayStr}".`);
+          errors.push(`Row ${rowNum}: Invalid day_of_week "${dayStr}". Must be a full day name (e.g. Monday).`);
           continue;
         }
         const startTime = normalizeTimeHhMm(r.start_time);
@@ -1129,22 +1177,35 @@ router.post(
           errors.push(`Row ${rowNum}: Invalid start_time "${r.start_time}". Use HH:MM format (e.g. 08:45 or 8:45).`);
           continue;
         }
-        const objectives = (r.objectives || "").split(";").map((s: string) => s.trim()).filter(Boolean);
+        const skeleton = skeletonBySlot.get(slotKey(dayNum, startTime));
+        if (!skeleton) {
+          errors.push(
+            `Row ${rowNum}: No weekly template block matches ${dayStr} at ${startTime}. Import only updates existing template slots (or use Weekly Templates CSV import to change the skeleton).`,
+          );
+          continue;
+        }
+        // Template CSVs use default_title; week-plan CSVs use title. Accept both.
+        const title = (r.title || r.default_title || "").trim() || null;
+        const objectives = (r.objectives || "")
+          .split(";")
+          .map((s: string) => s.trim())
+          .filter(Boolean);
         updates.push({
-          dayOfWeek: dayNum,
-          startTime,
-          data: {
-            title: (r.title || "").trim() || null,
-            description: (r.description || "").trim() || null,
-            objectives,
-            lessonLink: (r.lesson_link || "").trim() || null,
-            notes: (r.notes || "").trim() || null,
-          },
+          skeletonBlockId: skeleton.id,
+          title,
+          description: (r.description || "").trim() || null,
+          objectives,
+          lessonLink: (r.lesson_link || "").trim() || null,
+          notes: (r.notes || "").trim() || null,
         });
       }
 
       if (errors.length > 0) {
         return res.status(400).json({ message: "Validation errors in CSV", errors });
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ message: "No data rows to import after filtering hint/example rows" });
       }
 
       const userId = req.user?.id;
