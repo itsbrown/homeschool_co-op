@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-07-15
+
+- Soft interactive-tutorial spotlight/scrim (no dark aggressive pulse); stable `interactiveTutorialContext` so Vite HMR cannot crash Week Planner / Schedule Builder tours; Help Tutorials lists schedule builder walkthrough for school-admin roles.
+
 ## 2026-07-14 (Week Planner CSV mapping + import fix)
 
 - Week Planner CSV now uses shared `ScheduleBlocksCsvImportDialog` (`mode="week-plan"`): map → preview → confirm; surfaces server validation errors.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,11 +14,13 @@ import {
   BookOpen,
   Play,
   FileText,
-  Sparkles
+  Sparkles,
+  LayoutGrid,
 } from 'lucide-react';
 import { useInteractiveTutorial } from './tutorials/InteractiveTutorial';
 import { getTutorialById } from './tutorials/tutorialDefinitions';
 import SmartTutorialAssistant from './tutorials/SmartTutorialAssistant';
+import { useRole } from '@/contexts/RoleContext';
 
 interface HelpTutorialsProps {
   isOpen: boolean;
@@ -41,7 +43,9 @@ interface TutorialStep {
   tip?: string;
 }
 
-const tutorials: Tutorial[] = [
+const SCHOOL_ADMIN_ROLES = new Set(['schooladmin', 'admin', 'superadmin', 'director']);
+
+const parentTutorials: Tutorial[] = [
   {
     id: 'register-child',
     title: 'Register Your Child',
@@ -173,6 +177,67 @@ const tutorials: Tutorial[] = [
   }
 ];
 
+const schoolAdminTutorials: Tutorial[] = [
+  {
+    id: 'schedule-builder',
+    title: 'Schedule Builder & Week Planner',
+    description: 'Templates, week plans, and publishing for parents',
+    icon: LayoutGrid,
+    iconColor: 'text-indigo-600',
+    hasInteractiveMode: true,
+    steps: [
+      {
+        title: 'Open Weekly Templates',
+        content: 'Go to Academics → Weekly Templates (/schools/schedule-builder). This is where you define the reusable weekly skeleton for a class.',
+      },
+      {
+        title: 'Create or select a template',
+        content: 'Click New Template, name it, and bind it to a marketplace class. The Class field stores the real class id parents match via enrollment.',
+        tip: 'Operating days control which day columns appear for time blocks.',
+      },
+      {
+        title: 'Add recurring time blocks',
+        content: 'Expand a template and use Add Block, or Upload CSV to import many blocks at once (map columns → preview → confirm).',
+      },
+      {
+        title: 'Plan a specific week',
+        content: 'Open Academics → Week Planner. Select the template, create a week, and edit block titles/descriptions for that week.',
+      },
+      {
+        title: 'Publish',
+        content: 'Click Publish on a draft week so parents see it on their Weekly Schedule for enrolled classes.',
+        tip: 'Draft weeks stay admin-only until published.',
+      },
+      {
+        title: 'Optional: lesson plans KPI',
+        content: 'Attendance → Lesson plans shows completion and attendance aggregates after weeks are in use.',
+      },
+    ],
+  },
+  {
+    id: 'get-help',
+    title: 'Getting Help',
+    description: 'How to reach out when you need assistance',
+    icon: HelpCircle,
+    iconColor: 'text-orange-600',
+    hasInteractiveMode: true,
+    steps: [
+      {
+        title: 'Use the Help Button',
+        content: 'Click the "Need Help?" button in the bottom-right corner of any page. This gives you quick access to support options.',
+      },
+      {
+        title: 'Tutorials & Guides',
+        content: 'Choose Tutorials & Guides for interactive walkthroughs, including Schedule Builder.',
+      },
+      {
+        title: 'Report an Issue',
+        content: 'Use Report an Issue for platform bugs. Include what page you were on and what you expected to happen.',
+      },
+    ],
+  },
+];
+
 type ViewMode = 'list' | 'select-mode' | 'read-guide';
 
 export default function HelpTutorials({ isOpen, onClose }: HelpTutorialsProps) {
@@ -180,6 +245,12 @@ export default function HelpTutorials({ isOpen, onClose }: HelpTutorialsProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showSmartGuide, setShowSmartGuide] = useState(false);
+  const { activeRole } = useRole();
+
+  const tutorials = useMemo(() => {
+    const role = (activeRole || '').toLowerCase();
+    return SCHOOL_ADMIN_ROLES.has(role) ? schoolAdminTutorials : parentTutorials;
+  }, [activeRole]);
   
   const { startTutorial } = useInteractiveTutorial();
 

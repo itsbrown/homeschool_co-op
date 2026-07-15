@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useInteractiveTutorial } from "./InteractiveTutorial";
+import { useInteractiveTutorial } from "./interactiveTutorialContext";
 import { scheduleBuilderTutorial } from "./tutorialDefinitions";
 
 export const SCHEDULE_BUILDER_TOUR_KEY = "schedule_builder_tour_seen";

@@ -217,6 +217,7 @@ export const getHelpTutorial: InteractiveTutorialDefinition = {
   ],
 };
 
+/** School-admin walkthrough: Weekly Templates → Week Planner → Publish. */
 export const scheduleBuilderTutorial: InteractiveTutorialDefinition = {
   id: "schedule-builder",
   title: "Schedule Builder & Week Planner",
@@ -300,14 +301,13 @@ export const scheduleBuilderTutorial: InteractiveTutorialDefinition = {
 };
 
 export const allTutorials: InteractiveTutorialDefinition[] = [
-  scheduleBuilderTutorial,
   registerChildTutorial,
   enrollChildTutorial,
   paymentCheckoutTutorial,
   getHelpTutorial,
+  scheduleBuilderTutorial,
 ];
 
 export const getTutorialById = (id: string): InteractiveTutorialDefinition | undefined => {
   return allTutorials.find(t => t.id === id);
 };
-

@@ -1,46 +1,20 @@
-import { useState, useEffect, useCallback, createContext, useContext } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, ChevronLeft, ChevronRight, CheckCircle, Play, MousePointerClick } from "lucide-react";
 import HighlightElement from "./HighlightElement";
+import {
+  InteractiveTutorialContext,
+  type InteractiveTutorialContextType,
+  type InteractiveTutorialDefinition,
+} from "./interactiveTutorialContext";
 
-export interface TutorialStep {
-  target: string;
-  title: string;
-  content: string;
-  placement?: "top" | "bottom" | "left" | "right" | "center";
-  route?: string;
-  waitForNavigation?: boolean;
-  actionText?: string;
-}
-
-export interface InteractiveTutorialDefinition {
-  id: string;
-  title: string;
-  description: string;
-  steps: TutorialStep[];
-}
-
-interface InteractiveTutorialContextType {
-  activeTutorial: InteractiveTutorialDefinition | null;
-  currentStep: number;
-  startTutorial: (tutorial: InteractiveTutorialDefinition) => void;
-  endTutorial: () => void;
-  nextStep: () => void;
-  previousStep: () => void;
-  isActive: boolean;
-}
-
-const InteractiveTutorialContext = createContext<InteractiveTutorialContextType | null>(null);
-
-export function useInteractiveTutorial() {
-  const context = useContext(InteractiveTutorialContext);
-  if (!context) {
-    throw new Error("useInteractiveTutorial must be used within InteractiveTutorialProvider");
-  }
-  return context;
-}
+export type {
+  TutorialStep,
+  InteractiveTutorialDefinition,
+} from "./interactiveTutorialContext";
+export { useInteractiveTutorial } from "./interactiveTutorialContext";
 
 interface InteractiveTutorialProviderProps {
   children: React.ReactNode;
@@ -244,23 +218,27 @@ function InteractiveTutorialOverlay({
     }
   };
 
+  const showSpotlight = !isCentered && elementFound;
+
   return (
     <>
+      {/* Soft visual scrim when centered/no target; transparent blocker when spotlight paints the wash */}
       <div
-        className="fixed inset-0 bg-black/50 z-[9997]"
+        className={`fixed inset-0 z-[9997] ${showSpotlight ? "" : "tutorial-scrim"}`}
         data-testid="tutorial-overlay"
+        aria-hidden
       />
 
-      {!isCentered && elementFound && (
-        <HighlightElement 
-          target={stepData.target} 
+      {showSpotlight && (
+        <HighlightElement
+          target={stepData.target}
           onElementClick={onNext}
           pulseAnimation={true}
         />
       )}
 
       <Card
-        className="fixed z-[10000] w-[400px] max-w-[90vw] shadow-2xl animate-in fade-in-0 zoom-in-95"
+        className="fixed z-[10000] w-[400px] max-w-[90vw] border border-border/80 bg-card shadow-lg animate-in fade-in-0 zoom-in-95"
         style={{
           top: tooltipPosition.top,
           left: tooltipPosition.left,

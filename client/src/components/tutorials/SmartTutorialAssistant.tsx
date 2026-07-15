@@ -122,7 +122,7 @@ export default function SmartTutorialAssistant({ isOpen, onClose }: SmartTutoria
       
       const overlay = document.createElement('div');
       overlay.id = 'smart-tutorial-overlay';
-      overlay.className = 'fixed inset-0 bg-black/30 z-[9998] pointer-events-none';
+      overlay.className = 'tutorial-scrim fixed inset-0 z-[9998] pointer-events-none';
       document.body.appendChild(overlay);
     }
   }, [clearHighlight]);
@@ -232,14 +232,16 @@ export default function SmartTutorialAssistant({ isOpen, onClose }: SmartTutoria
         .smart-tutorial-highlight {
           position: relative;
           z-index: 9999 !important;
-          box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.3) !important;
           border-radius: 8px;
-          animation: smart-tutorial-pulse 2s ease-in-out infinite;
+          outline: 2px solid hsl(var(--primary) / 0.4);
+          outline-offset: 3px;
+          box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1), 0 4px 16px hsl(220 20% 20% / 0.06) !important;
+          animation: smart-tutorial-breathe 3s ease-in-out infinite;
         }
-        
-        @keyframes smart-tutorial-pulse {
-          0%, 100% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.3); }
-          50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.3), 0 0 30px rgba(59, 130, 246, 0.4); }
+
+        @keyframes smart-tutorial-breathe {
+          0%, 100% { outline-color: hsl(var(--primary) / 0.35); }
+          50% { outline-color: hsl(var(--primary) / 0.55); }
         }
       `}</style>
 
