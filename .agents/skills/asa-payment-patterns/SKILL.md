@@ -296,6 +296,7 @@ Previously, the cart display and payment processor used independent calculation 
 - **Auto-pay double-charges a fully-paid enrollment** → scheduler processes any `pending` scheduled payment without checking enrollment balance first → always call `storage.getProgramEnrollmentById()` and verify `effectiveBalance <= 0` before the Stripe call; skip rather than charge on any lookup error (see `server/services/auto-pay-scheduler.ts`)
 - **Comp leaves overdue installments on the books** → cancellation logic filters only `status = 'pending'`, missing `overdue` records → always filter `p.status === 'pending' || p.status === 'overdue'` when cancelling or reducing scheduled payments after a comp
 - **Outstanding Balance card doesn't update after a credit-only payment** → payment success handler invalidated `/api/payment-history` and `/api/scheduled-payments` but missed `/api/parent/enrollments` → the Outstanding Balance card reads from the enrollment query; always include `["/api/parent/enrollments"]` in post-payment cache invalidation alongside the other payment query keys
+- **Collections Overview shows Auto-pay on (0) despite `users.auto_pay_enabled`** → `loadParentInfo` must select `users.autoPayEnabled` via drizzle; never iterate `db.execute(...).rows` under postgres-js (returns an array, no `.rows`) — see `server/lib/financial-collections.ts` and payments domain doc
 
 ## Best Practices
 

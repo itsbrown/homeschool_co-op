@@ -86,6 +86,7 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
       creditsToApply,
       savePaymentMethodForAutoPay: bodySavePaymentMethod,
       enableAutoPayAfterCheckout: bodyEnableAutoPayAfterCheckout,
+      confirmCreditsOnlyCheckout: bodyConfirmCreditsOnlyCheckout,
     } = req.body;
 
     const checkoutPlan = normalizeCheckoutPaymentPlanRequest(
@@ -658,6 +659,40 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         payableTotalCents === 0 &&
         appliedVolunteerCreditsCents > 0
       ) {
+        // Never auto-finalize on passive create-payment-intent (page load / plan toggle).
+        // Credits-only must be an explicit parent confirmation.
+        if (bodyConfirmCreditsOnlyCheckout !== true) {
+          console.log('🎟️ Credits cover cart — awaiting explicit confirmCreditsOnlyCheckout', {
+            appliedVolunteerCreditsCents,
+            totalWithMembership,
+          });
+          return res.json({
+            creditOnlyEligible: true,
+            creditOnlyCheckout: false,
+            creditsApplied: appliedVolunteerCreditsCents,
+            payableAmount: 0,
+            enrollmentIds,
+            paymentPlan,
+            hasActiveSubscription,
+            subscriptionInfo: existingSubscription
+              ? {
+                  id: existingSubscription.id,
+                  status: existingSubscription.status,
+                  currentPeriodEnd: (() => {
+                    try {
+                      const ts = existingSubscription.current_period_end;
+                      if (!ts || typeof ts !== 'number') return null;
+                      const date = new Date(ts * 1000);
+                      return isNaN(date.getTime()) ? null : date.toISOString();
+                    } catch {
+                      return null;
+                    }
+                  })(),
+                }
+              : null,
+          });
+        }
+
         try {
           const coc = await completeCartCreditsOnlyCheckout({
             parentEmail: userEmail,

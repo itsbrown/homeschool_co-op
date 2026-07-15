@@ -3973,38 +3973,40 @@ export class DatabaseStorage implements IStorage {
     description?: string
   ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
     const db = await getDb();
-    const usageLogs: UnifiedCreditUsageLog[] = [];
-    let totalFinalized = 0;
-    const pendingHolds = await db
-      .select()
-      .from(creditHolds)
-      .where(and(eq(creditHolds.checkoutSessionId, checkoutSessionId), eq(creditHolds.status, 'pending')));
-    for (const hold of pendingHolds) {
-      const [credit] = await db.select().from(credits).where(eq(credits.id, hold.creditId));
-      if (!credit) continue;
-      const newUsedAmount = credit.usedAmountCents + hold.amountCents;
-      const newStatus: CreditStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
-      await db
-        .update(credits)
-        .set({ usedAmountCents: newUsedAmount, status: newStatus, updatedAt: new Date() })
-        .where(eq(credits.id, credit.id));
-      const [usageLog] = await db
-        .insert(unifiedCreditUsageLogs)
-        .values({
-          creditId: hold.creditId,
-          paymentHistoryId,
-          amountCents: hold.amountCents,
-          description: description || hold.description || `Credit applied from hold #${hold.id}`,
-        })
-        .returning();
-      usageLogs.push(usageLog);
-      await db
-        .update(creditHolds)
-        .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
-        .where(eq(creditHolds.id, hold.id));
-      totalFinalized += hold.amountCents;
-    }
-    return { finalizedCount: pendingHolds.length, totalFinalized, usageLogs };
+    return db.transaction(async (tx) => {
+      const usageLogs: UnifiedCreditUsageLog[] = [];
+      let totalFinalized = 0;
+      const pendingHolds = await tx
+        .select()
+        .from(creditHolds)
+        .where(and(eq(creditHolds.checkoutSessionId, checkoutSessionId), eq(creditHolds.status, 'pending')));
+      for (const hold of pendingHolds) {
+        const [credit] = await tx.select().from(credits).where(eq(credits.id, hold.creditId));
+        if (!credit) continue;
+        const newUsedAmount = credit.usedAmountCents + hold.amountCents;
+        const newStatus: CreditStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
+        await tx
+          .update(credits)
+          .set({ usedAmountCents: newUsedAmount, status: newStatus, updatedAt: new Date() })
+          .where(eq(credits.id, credit.id));
+        const [usageLog] = await tx
+          .insert(unifiedCreditUsageLogs)
+          .values({
+            creditId: hold.creditId,
+            paymentHistoryId,
+            amountCents: hold.amountCents,
+            description: description || hold.description || `Credit applied from hold #${hold.id}`,
+          })
+          .returning();
+        usageLogs.push(usageLog);
+        await tx
+          .update(creditHolds)
+          .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
+          .where(eq(creditHolds.id, hold.id));
+        totalFinalized += hold.amountCents;
+      }
+      return { finalizedCount: pendingHolds.length, totalFinalized, usageLogs };
+    });
   }
 
   async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {

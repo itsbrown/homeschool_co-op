@@ -60,6 +60,8 @@ type AuthoritativeDataType = {
   schoolSettings: any;
   appliedPromoCode: string | null;
   payableAmount: number;
+  /** Credits baked into payableAmount / paymentPlans for this snapshot. */
+  snapshotCreditsApplied: number;
   paymentPlans: CheckoutPaymentPlanOption[];
   snapshotGeneratedAt?: number;
   isFreeEnrollment: boolean;
@@ -327,6 +329,9 @@ export default function CartCheckout() {
   const [applyCredits, setApplyCredits] = useState(false);
   const [creditsToApply, setCreditsToApply] = useState<number>(0);
   const [loadingCredits, setLoadingCredits] = useState(false);
+  /** Server said credits cover the cart — wait for explicit confirm (never auto-spend). */
+  const [creditOnlyEligible, setCreditOnlyEligible] = useState(false);
+  const [confirmingCreditsOnly, setConfirmingCreditsOnly] = useState(false);
   
   // Free enrollment state (for 100% discount requiring admin approval)
   const [freeEnrollmentRequested, setFreeEnrollmentRequested] = useState(false);
@@ -497,6 +502,7 @@ export default function CartCheckout() {
       setCreditsToApply(maxApplicable);
     } else {
       setCreditsToApply(0);
+      setCreditOnlyEligible(false);
     }
   }, [applyCredits, availableCredits, actualPayableAmount]);
 
@@ -688,25 +694,46 @@ export default function CartCheckout() {
     return () => clearTimeout(timeoutId);
   }, [selectedPaymentPlan, paymentFrequency])
 
-  // Effect to recreate payment intent and refresh snapshot when credits are toggled
+  // Effect to refresh snapshot + payment intent when credits are toggled.
+  // Must run even when clientSecret is missing (e.g. after a failed credits-only
+  // attempt) — otherwise payment-plan UI keeps a stale credit-reduced snapshot
+  // while the Apply checkbox is unchecked.
+  const prevCreditsToApplyRef = useRef<number | null>(null);
   useEffect(() => {
     const hasCartContent =
       cart.items.length > 0 || !!cart.membership || effectiveMembershipCents > 0;
-    
-    // Also don't recreate if we have a checkout conflict (prevents infinite loop)
-    if (!clientSecret || !isAuthenticated || !hasCartContent || isInitialLoad || hasCheckoutConflict) {
+
+    if (!isAuthenticated || !hasCartContent || isInitialLoad || hasCheckoutConflict) {
       return;
     }
-    
-    const timeoutId = setTimeout(async () => {
-      console.log('💳 Credits changed, recreating payment intent with creditsToApply:', creditsToApply);
+
+    // Skip the initial mount (null → 0) so we don't thrash PI creation / accidental credits-only.
+    if (prevCreditsToApplyRef.current === null) {
+      prevCreditsToApplyRef.current = creditsToApply;
+      return;
+    }
+    if (prevCreditsToApplyRef.current === creditsToApply) {
+      return;
+    }
+    prevCreditsToApplyRef.current = creditsToApply;
+
+    const timeoutId = setTimeout(() => {
+      console.log('💳 Credits changed, refreshing snapshot/PI with creditsToApply:', creditsToApply, 'applyCredits:', applyCredits);
       setClientSecret('');
-      // Pass forceRefresh=true to ensure fresh snapshot with current credits amount
+      const displayPayable = Math.max(0, actualPayableAmount - (applyCredits ? creditsToApply : 0));
+      if (displayPayable === 0 && applyCredits && creditsToApply > 0) {
+        createPaymentIntent(null, true);
+        return;
+      }
+      if (displayPayable === 0) {
+        setLoading(false);
+        return;
+      }
       createPaymentIntent(null, true);
     }, 300);
-    
+
     return () => clearTimeout(timeoutId);
-  }, [creditsToApply]);
+  }, [creditsToApply, applyCredits]);
 
   const prevCartItemsRef = useRef<string>('');
   
@@ -849,6 +876,7 @@ export default function CartCheckout() {
         schoolSettings: snapshot.pricing.schoolSettings,
         appliedPromoCode: promoCode, // Store the promo code used for this snapshot
         payableAmount: snapshot.totals.payableAmount,
+        snapshotCreditsApplied: snapshot.credits?.applied ?? creditsAmount ?? 0,
         paymentPlans: snapshot.paymentPlans || [],
         snapshotGeneratedAt: snapshot.generatedAt,
         // Authoritative server-derived free-enrollment flag — see type comment.
@@ -909,6 +937,7 @@ export default function CartCheckout() {
     freshAuthData?: AuthoritativeDataType | null,
     forceRefresh: boolean = false,
     includeTrustSignal: boolean = false,
+    confirmCreditsOnly: boolean = false,
   ) => {
     try {
       setLoading(true);
@@ -1064,8 +1093,10 @@ export default function CartCheckout() {
           membership: membershipPayload,
           // Use promo code from authoritative data if available, otherwise fall back to cart state
           promoCode: useAuthData ? currentAuthData.appliedPromoCode : (cart.appliedPromoCode?.code || null),
-          // Volunteer credits to apply (in cents)
-          creditsToApply: creditsToApply,
+          // Volunteer credits to apply (in cents) — only when Apply checkbox is on
+          creditsToApply: applyCredits ? creditsToApply : 0,
+          // Required to actually spend credits when they cover the full cart
+          confirmCreditsOnlyCheckout: confirmCreditsOnly === true,
           savePaymentMethodForAutoPay:
             checkoutPlan.paymentPlan === 'biweekly' ||
             localStorage.getItem('pendingAutoPay') === 'true',
@@ -1111,6 +1142,15 @@ export default function CartCheckout() {
             setAuthoritativeData({
               itemsTotal: preservedItemsTotal,
               membershipAmount: conflictData.authoritative.membershipAmount || 0,
+              membershipTotal:
+                conflictData.authoritative.membershipTotal ??
+                authoritativeData?.membershipTotal ??
+                conflictData.authoritative.membershipAmount ??
+                0,
+              membershipFeeAmount:
+                conflictData.authoritative.membershipFeeAmount ??
+                authoritativeData?.membershipFeeAmount ??
+                0,
               membershipAlreadyPaid: membershipAlreadyPaid,
               // Use 409 response values directly - server now includes full metadata
               membershipRequired: conflictData.authoritative.membershipRequired ?? authoritativeData?.membershipRequired ?? false,
@@ -1123,6 +1163,11 @@ export default function CartCheckout() {
               appliedPromoCode: authoritativeData?.appliedPromoCode ?? (cart.appliedPromoCode?.code || null),
               // Preserve payable amount and payment plans from previous snapshot
               payableAmount: conflictData.authoritative.payableAmount ?? authoritativeData?.payableAmount ?? actualPayableAmount,
+              snapshotCreditsApplied:
+                conflictData.authoritative.creditsApplied ??
+                conflictData.authoritative.snapshotCreditsApplied ??
+                authoritativeData?.snapshotCreditsApplied ??
+                creditsToApply,
               paymentPlans: conflictData.authoritative.paymentPlans ?? authoritativeData?.paymentPlans ?? [],
               // Preserve free-enrollment flag from previous snapshot — a 409 conflict
               // doesn't re-derive it, so we conservatively fall back to the prior value.
@@ -1240,11 +1285,24 @@ export default function CartCheckout() {
 
       const data = await response.json();
       
-      // Handle credit-only checkout (when credits fully cover the order)
+      // Credits cover the cart, but parent has not confirmed yet — do not spend.
+      if (data.creditOnlyEligible && !data.creditOnlyCheckout) {
+        console.log('🎟️ Credits cover cart — waiting for explicit confirmation', data);
+        setCreditOnlyEligible(true);
+        setClientSecret('');
+        retryCountRef.current = 0;
+        setRetryCount(0);
+        setLoading(false);
+        return;
+      }
+      setCreditOnlyEligible(false);
+
+      // Handle credit-only checkout (when credits fully cover the order) — only after confirm
       if (data.creditOnlyCheckout) {
         console.log('🎫 Credit-only checkout completed:', data);
         retryCountRef.current = 0;
         setRetryCount(0);
+        setCreditOnlyEligible(false);
         
         // Clear the cart since credits have been consumed
         // Skip cancellation since enrollments are now pending_admin_approval (not pending_payment)
@@ -1404,12 +1462,23 @@ export default function CartCheckout() {
                     cart.discounts.freeAfterThree > 0 || 
                     (cart.discounts.appliedDiscounts && cart.discounts.appliedDiscounts.length > 0);
 
+  /** Prefer server payable/plans only when the snapshot's credit amount matches the checkbox. */
+  const effectiveCreditsForDisplay = applyCredits ? creditsToApply : 0;
+  const snapshotCreditsMatchCheckbox =
+    authoritativeData != null &&
+    (authoritativeData.snapshotCreditsApplied ?? 0) === effectiveCreditsForDisplay;
+
+  const displayPayableAmount = snapshotCreditsMatchCheckbox
+    ? authoritativeData!.payableAmount
+    : Math.max(0, actualPayableAmount - effectiveCreditsForDisplay);
+
   const getPaymentPlanOptions = () => {
-    // Use server-provided payment plans when available (authoritative pricing)
-    // This ensures payment plans correctly reflect applied credits
-    if (authoritativeData?.paymentPlans && authoritativeData.paymentPlans.length > 0) {
-      // Map server plans to client format with additional UI properties
-      // CRITICAL: Include numberOfPayments from server to ensure correct payment count display
+    // Use server-provided payment plans only when credits in that snapshot match the UI.
+    if (
+      snapshotCreditsMatchCheckbox &&
+      authoritativeData?.paymentPlans &&
+      authoritativeData.paymentPlans.length > 0
+    ) {
       return authoritativeData.paymentPlans
         .filter(plan => plan.id !== 'deposit')
         .map(plan => ({
@@ -1421,19 +1490,16 @@ export default function CartCheckout() {
         features: plan.features,
         dueDate: undefined,
         installments: plan.id === 'biweekly' ? { frequency: 'biweekly' } : undefined,
-        // Server-authoritative payment count - ensures display matches actual schedule
         numberOfPayments: plan.numberOfPayments,
         totalAmount: plan.totalAmount,
         finalPaymentAmount: plan.finalPaymentAmount
       }));
     }
 
-    // Fallback to client calculation if no server data (should rarely happen)
-    // Use payable amount from authoritative data if available, otherwise calculate from cart
-    const totalAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
+    const totalAmount = displayPayableAmount;
     
     const fullAmount = totalAmount;
-    const biweeklyAmount = Math.round(totalAmount / 4); // Estimated 4 payments
+    const biweeklyAmount = Math.round(totalAmount / 4);
     
     return [
       {
@@ -1454,7 +1520,7 @@ export default function CartCheckout() {
         name: 'Biweekly Payment Plan',
         description: 'Automatic payments every 2 weeks; last payment at least 2 weeks before your latest class ends',
         amount: biweeklyAmount,
-        numberOfPayments: 4, // Fallback estimate - server will provide actual count
+        numberOfPayments: 4,
         features: [
           'Pay every 2 weeks based on class schedule',
           'Payments end at least two weeks before the latest class end date in your cart',
@@ -1463,23 +1529,18 @@ export default function CartCheckout() {
         ],
         installments: {
           frequency: 'biweekly',
-          // Count and amounts will be calculated dynamically based on class dates
         }
       }
     ];
   };
 
   const getSelectedPlanAmount = () => {
-    // Use server-provided payable amount when available
-    const payableAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
+    const payableAmount = displayPayableAmount;
     
-    // For biweekly plans, send the FULL payable amount to backend
-    // The backend will calculate the payment schedule and divide it properly
     if (selectedPaymentPlan === 'biweekly') {
       return payableAmount;
     }
     
-    // For other plans, return the calculated plan amount (already includes membership via payableAmount)
     const plans = getPaymentPlanOptions();
     const selectedPlan = plans.find(plan => plan.id === selectedPaymentPlan);
     return selectedPlan ? selectedPlan.amount : payableAmount;
@@ -1487,19 +1548,17 @@ export default function CartCheckout() {
 
   // Get the amount to display on the Pay button (first payment amount)
   const getButtonDisplayAmount = () => {
-    // For biweekly plans, use server-provided first payment amount from payment plans
-    // This ensures button matches the displayed plan amount (server-authoritative)
     if (selectedPaymentPlan === 'biweekly') {
-      const biweeklyPlan = authoritativeData?.paymentPlans?.find(p => p.id === 'biweekly');
-      if (biweeklyPlan?.amount) {
-        return biweeklyPlan.amount;
+      if (snapshotCreditsMatchCheckbox) {
+        const biweeklyPlan = authoritativeData?.paymentPlans?.find(p => p.id === 'biweekly');
+        if (biweeklyPlan?.amount) {
+          return biweeklyPlan.amount;
+        }
       }
-      // Fallback only if server data not available
-      const payableAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
+      const payableAmount = displayPayableAmount;
       return Math.ceil(payableAmount / 4);
     }
     
-    // For all other plans, show the full selected plan amount
     return getSelectedPlanAmount();
   };
 
@@ -1874,7 +1933,7 @@ export default function CartCheckout() {
                     </>
                   )}
 
-                  {creditsToApply > 0 && (
+                  {applyCredits && creditsToApply > 0 && (
                     <div className="flex justify-between text-sm text-amber-600">
                       <span className="flex items-center gap-1">
                         <Award className="h-3 w-3" />
@@ -1887,7 +1946,7 @@ export default function CartCheckout() {
                   <Separator />
                   <div className="flex justify-between font-medium text-lg">
                     <span>Total:</span>
-                    <span>{formatCurrency(Math.max(0, actualPayableAmount - creditsToApply))}</span>
+                    <span>{formatCurrency(displayPayableAmount)}</span>
                   </div>
                 </div>
               </CardContent>
@@ -2119,7 +2178,7 @@ export default function CartCheckout() {
                     </div>
                     <div className="text-right">
                       {(() => {
-                        const payableAmount = authoritativeData?.payableAmount ?? actualPayableAmount;
+                        const payableAmount = displayPayableAmount;
                         const selectedPlan = getPaymentPlanOptions().find(p => p.id === selectedPaymentPlan);
                         
                         if (selectedPaymentPlan === 'biweekly') {
@@ -2355,7 +2414,43 @@ export default function CartCheckout() {
                       </AlertDescription>
                     </Alert>
                   )}
-                  {!stripeReady ? (
+                  {creditOnlyEligible && applyCredits && creditsToApply > 0 ? (
+                    <div className="space-y-4" data-testid="credits-only-confirm">
+                      <Alert>
+                        <Award className="h-4 w-4" />
+                        <AlertDescription>
+                          Your credits cover this order ({formatCurrency(creditsToApply)}).
+                          Nothing will be charged to a card. Confirm to apply credits and complete enrollment.
+                        </AlertDescription>
+                      </Alert>
+                      <Button
+                        className="w-full"
+                        size="lg"
+                        disabled={confirmingCreditsOnly || mustSignAgreement || agreementStatusLoading}
+                        data-testid="button-confirm-credits-only"
+                        onClick={async () => {
+                          setConfirmingCreditsOnly(true);
+                          try {
+                            await createPaymentIntent(null, true, false, true);
+                          } finally {
+                            setConfirmingCreditsOnly(false);
+                          }
+                        }}
+                      >
+                        {confirmingCreditsOnly ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Applying credits…
+                          </>
+                        ) : (
+                          <>
+                            <Award className="mr-2 h-4 w-4" />
+                            Apply credits &amp; complete enrollment
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : !stripeReady ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                       <span className="ml-2 text-muted-foreground">Initializing payment system...</span>

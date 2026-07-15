@@ -118,6 +118,8 @@ pending → finalized  (payment succeeds → hold becomes usage)
         → expired    (hold TTL exceeded → auto-released)
 ```
 
+**Invariant:** `finalizeCreditHolds` must run in a **DB transaction** (credit used_amount + usage log + hold status). Updating `used_amount` before a failing usage-log insert (e.g. bad `payment_history_id`) permanently burns credits with no audit row.
+
 This prevents double-spending when a user has multiple checkout sessions.
 
 ## Credit Usage Logging
@@ -126,10 +128,14 @@ Every credit consumption is logged for audit:
 ```
 unified_credit_usage_logs:
   creditId          → credits.id
-  paymentHistoryId  → stripe_payment_history.id (which payment it was applied to)
+  paymentHistoryId  → stripe_payment_history.id (nullable; NEVER payments.id — FK will fail)
   amountCents       → how much was consumed from this credit
   description       → human-readable description
 ```
+
+**Cart credits-only checkout:** create/link a `stripe_payment_history` row for the synthetic intent (`credit_only_cart_*`), then `finalizeCreditHolds(session, stripeHistory.id)`. Passing `payments.id` causes `unified_credit_usage_logs_payment_history_id_fkey` and “Failed to complete credits-only checkout”.
+
+**Never auto-spend on PI create:** `create-payment-intent` only finalizes credits-only when `confirmCreditsOnlyCheckout: true`. Passive page-load / plan-toggle calls return `creditOnlyEligible` so the parent must click confirm.
 
 ## Volunteer Credit Integration
 

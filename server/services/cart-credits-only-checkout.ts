@@ -194,9 +194,26 @@ async function fulfillMembershipCreditsOnly(
   }
 }
 
+async function cartCreditsUsageAlreadyLogged(
+  syntheticPaymentIntentId: string,
+): Promise<boolean> {
+  const history = await storage.getStripePaymentByIntentId(syntheticPaymentIntentId);
+  if (history) {
+    const byHistory = await storage.getUnifiedCreditUsageLogsByPaymentHistoryId(history.id);
+    if (byHistory.length > 0) return true;
+  }
+  const byCheckoutDesc = await storage.getUnifiedCreditUsageLogsByCheckoutPaymentIntentId(
+    syntheticPaymentIntentId,
+  );
+  return byCheckoutDesc.length > 0;
+}
+
 /**
  * When the cart total is fully covered by volunteer credits (no card charge),
  * reserve and finalize credits, update enrollments + membership, and record a payment row.
+ *
+ * `finalizeCreditHolds` must receive stripe_payment_history.id (or null) — never payments.id
+ * (FK: unified_credit_usage_logs.payment_history_id → stripe_payment_history.id).
  */
 export async function completeCartCreditsOnlyCheckout(params: {
   parentEmail: string;
@@ -232,10 +249,15 @@ export async function completeCartCreditsOnlyCheckout(params: {
     membershipYear,
   });
 
-  const existing = await storage.getPaymentByStripeId(syntheticPaymentIntentId);
+  const existingPayment = await storage.getPaymentByStripeId(syntheticPaymentIntentId);
+  if (existingPayment && (await cartCreditsUsageAlreadyLogged(syntheticPaymentIntentId))) {
+    // Fully completed earlier — do not re-apply enrollment/membership balances.
+    return { creditsApplied: appliedVolunteerCreditsCents, syntheticPaymentIntentId };
+  }
 
   const holdSessionId = `cart_credits_${syntheticPaymentIntentId}`;
   let holdCreated = false;
+  let createdPaymentId: number | null = null;
 
   try {
     const breakdown = authoritativeAmountResult.breakdown;
@@ -263,59 +285,78 @@ export async function completeCartCreditsOnlyCheckout(params: {
       membershipOwedCents,
     });
 
-    if (!existing) {
-      const { totalHeld } = await storage.createCreditHolds(
-        parentId,
-        appliedVolunteerCreditsCents,
-        holdSessionId,
-        `Cart checkout credits-only (${syntheticPaymentIntentId})`,
-        60,
-      );
-      if (totalHeld < appliedVolunteerCreditsCents) {
-        throw new Error(`INSUFFICIENT_CREDIT_HOLD: need ${appliedVolunteerCreditsCents}, held ${totalHeld}`);
-      }
-      holdCreated = true;
+    const parentUser = await storage.getUser(parentId);
+    let stripeHistory = await storage.getStripePaymentByIntentId(syntheticPaymentIntentId);
+    if (!stripeHistory) {
+      stripeHistory = await storage.saveStripePayment({
+        userId: parentId,
+        paymentIntentId: syntheticPaymentIntentId,
+        customerId: parentUser?.stripeCustomerId || `credit_only_cart_${parentId}`,
+        subscriptionId: null,
+        amount: 0,
+        currency: 'usd',
+        status: 'succeeded',
+        paymentMethod: 'credits',
+        description: `Credits-only cart checkout (${syntheticPaymentIntentId})`,
+        stripeCreatedAt: new Date(),
+      });
     }
+
+    const { totalHeld } = await storage.createCreditHolds(
+      parentId,
+      appliedVolunteerCreditsCents,
+      holdSessionId,
+      `Cart checkout credits-only (${syntheticPaymentIntentId})`,
+      60,
+    );
+    if (totalHeld < appliedVolunteerCreditsCents) {
+      throw new Error(`INSUFFICIENT_CREDIT_HOLD: need ${appliedVolunteerCreditsCents}, held ${totalHeld}`);
+    }
+    holdCreated = true;
 
     const createdPayment =
-      existing ??
+      existingPayment ??
       (await storage.createPayment({
-      schoolId,
-      parentId,
-      parentEmail,
-      childName: 'Cart checkout',
-      className: enrollmentIds.length > 1 ? `${enrollmentIds.length} classes` : 'Class',
-      description: `Credits-only checkout — volunteer credits applied`,
-      amount: 0,
-      currency: 'usd',
-      status: 'completed',
-      stripePaymentIntentId: syntheticPaymentIntentId,
-      stripeChargeId: null,
-      stripeRefundId: null,
-      originalPaymentId: null,
-      enrollmentIds,
-      paymentMethod: 'other',
-      metadata: {
-        creditOnlyCheckout: true,
-        creditsAppliedCents: appliedVolunteerCreditsCents,
-        totalWithMembershipCents: totalWithMembership,
-        creditAllocation: creditSplit,
-        allocationBreakdown: {
-          membershipCents: creditSplit.membershipCredits,
-          classPoolCents: creditSplit.enrollmentCredits,
-          grossCents: appliedVolunteerCreditsCents,
+        schoolId,
+        parentId,
+        parentEmail,
+        childName: 'Cart checkout',
+        className: enrollmentIds.length > 1 ? `${enrollmentIds.length} classes` : 'Class',
+        description: `Credits-only checkout — volunteer credits applied`,
+        amount: 0,
+        currency: 'usd',
+        status: 'completed',
+        stripePaymentIntentId: syntheticPaymentIntentId,
+        stripeChargeId: null,
+        stripeRefundId: null,
+        originalPaymentId: null,
+        enrollmentIds,
+        paymentMethod: 'other',
+        metadata: {
+          creditOnlyCheckout: true,
+          creditsAppliedCents: appliedVolunteerCreditsCents,
+          totalWithMembershipCents: totalWithMembership,
+          creditAllocation: creditSplit,
+          allocationBreakdown: {
+            membershipCents: creditSplit.membershipCredits,
+            classPoolCents: creditSplit.enrollmentCredits,
+            grossCents: appliedVolunteerCreditsCents,
+          },
+          stripePaymentHistoryId: stripeHistory.id,
         },
-      },
-      paymentDate: new Date(),
-    }));
-
-    if (!existing) {
-      await storage.finalizeCreditHolds(
-        holdSessionId,
-        createdPayment.id,
-        `Cart credits-only checkout payment #${createdPayment.id}`,
-      );
+        paymentDate: new Date(),
+      }));
+    if (!existingPayment) {
+      createdPaymentId = createdPayment.id;
     }
+
+    // FK target is stripe_payment_history.id — not payments.id
+    await storage.finalizeCreditHolds(
+      holdSessionId,
+      stripeHistory.id,
+      `Cart credits-only checkout ${syntheticPaymentIntentId}`,
+    );
+    holdCreated = false;
 
     if (serverMembership && creditSplit.membershipCredits > 0) {
       await fulfillMembershipCreditsOnly(
@@ -356,6 +397,18 @@ export async function completeCartCreditsOnlyCheckout(params: {
     if (holdCreated) {
       try {
         await storage.releaseCreditHolds(holdSessionId);
+      } catch {
+        /* best-effort */
+      }
+    }
+    // Drop orphan payments row so retry does not skip credit finalize / double-apply balances.
+    if (createdPaymentId != null) {
+      try {
+        const { getDb } = await import('../db');
+        const { payments } = await import('@shared/schema');
+        const { eq } = await import('drizzle-orm');
+        const db = await getDb();
+        await db.delete(payments).where(eq(payments.id, createdPaymentId));
       } catch {
         /* best-effort */
       }
