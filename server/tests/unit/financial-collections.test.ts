@@ -50,4 +50,13 @@ describe('financial-collections regression guards', () => {
     expect(financialReportsSource).toContain('buildCollectionsOverview');
     expect(financialReportsSource).toContain('/collections-overview');
   });
+
+  it('loads parent autoPayEnabled via drizzle select (not execute().rows)', () => {
+    expect(financialCollectionsSource).toContain('autoPayEnabled: users.autoPayEnabled');
+    expect(financialCollectionsSource).toContain('autoPayFamilies');
+    expect(financialCollectionsSource).toContain("tags.push('auto_pay')");
+    // Regression: postgres-js execute returns an array; `.rows` was undefined and the empty catch zeroed the chip
+    expect(financialCollectionsSource).not.toMatch(/autoPayRows\.rows/);
+    expect(financialCollectionsSource).not.toMatch(/COALESCE\(auto_pay_enabled/);
+  });
 });

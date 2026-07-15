@@ -37,6 +37,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 | [domains/public-store.md](./domains/public-store.md) | Public storefront `/store/:slug`, store lane checkout, admin |
 | [runbooks/merge-replit-prod.md](./runbooks/merge-replit-prod.md) | Merge → Replit → prod SQL |
 | [runbooks/public-mentor-application-form.md](./runbooks/public-mentor-application-form.md) | Mentor form: seed, clone/provision, public URL |
+| [runbooks/checkout-payment-e2e-audit.md](./runbooks/checkout-payment-e2e-audit.md) | Member-cart payment options matrix + Playwright specs |
 | [CHANGELOG.md](./CHANGELOG.md) | Knowledge updates by date |
 
 ### Existing project docs (authoritative for depth)

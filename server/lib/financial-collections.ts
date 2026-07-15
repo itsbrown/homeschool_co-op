@@ -72,29 +72,17 @@ async function loadParentInfo(parentIds: number[]) {
 
   const db = await getDb();
   const uniqueIds = [...new Set(parentIds)];
+  // Select autoPayEnabled via drizzle — do not use db.execute(...).rows (postgres-js returns an array).
   const rows = await db
     .select({
       id: users.id,
       name: users.name,
       email: users.email,
       phone: users.phone,
+      autoPayEnabled: users.autoPayEnabled,
     })
     .from(users)
     .where(inArray(users.id, uniqueIds));
-
-  const autoPayById = new Map<number, boolean>();
-  try {
-    const autoPayRows = await db.execute(sql`
-      SELECT id, COALESCE(auto_pay_enabled, false) AS auto_pay_enabled
-      FROM users
-      WHERE id IN (${sql.join(uniqueIds.map((id) => sql`${id}`), sql`, `)})
-    `);
-    for (const row of autoPayRows.rows as Array<{ id: number; auto_pay_enabled: boolean }>) {
-      autoPayById.set(Number(row.id), Boolean(row.auto_pay_enabled));
-    }
-  } catch {
-    // Column may be missing before init-db runs; treat as auto-pay off
-  }
 
   for (const row of rows) {
     map.set(row.id, {
@@ -102,7 +90,7 @@ async function loadParentInfo(parentIds: number[]) {
       name: row.name || row.email,
       email: row.email,
       phone: row.phone ?? null,
-      autoPayEnabled: autoPayById.get(row.id) ?? false,
+      autoPayEnabled: Boolean(row.autoPayEnabled),
     });
   }
   return map;

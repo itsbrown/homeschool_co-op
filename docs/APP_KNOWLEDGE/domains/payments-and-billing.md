@@ -259,11 +259,24 @@ Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current ba
 
 - `pending_payment` + **$0 paid** + never attended → **cancel** enrollment; do not balance-correct or send correction email (Jackie Schleyer enr 433/434).
 
+## Collections Overview — “Auto-pay on”
+
+School-admin **Financial Reports → Collections Overview** counts `summary.autoPayFamilies` from `buildCollectionsOverview` in `server/lib/financial-collections.ts`.
+
+**Criteria (intended):** family has `totalOwedCents > 0` (tuition effective balance and/or membership owed) **and** `users.auto_pay_enabled = true` for that parent. Not derived from payment plans, Stripe customer alone, or `scheduled_payments.metadata.autoPay`.
+
+**Payment plan ≠ auto-pay:** biweekly/custom installments create `scheduled_payments` (`hasPaymentPlan`); auto-pay is a separate user opt-in (`PATCH /api/user/auto-pay`, or checkout `enableAutoPayAfterCheckout` → `users.auto_pay_enabled`). Scheduler also requires `stripe_default_payment_method_id` before charging.
+
+**Auto-Pay Charge History** (`GET .../auto-pay-history` → `fetchAutoPayHistoryRecords`): `scheduled_payments` for the school with `processed_at` in range and (`completion_source LIKE '%autopay%'` OR `charged_by = 'auto_pay'`). Parent Pay Now rows (`charged_by = parent_manual` / `stripe_checkout`) do not count.
+
+**Invariant:** `loadParentInfo` selects `users.autoPayEnabled` via drizzle (same query as name/email/phone). Do **not** read autopay via `db.execute(...).rows` — under postgres-js, `execute` returns a row array (no `.rows`); an empty `catch` previously forced every family to `autoPayEnabled: false` → **Auto-pay on (0)**.
+
 ## Key files
 
 | Area | Path |
 |------|------|
 | Effective balance | `shared/schema.ts` — `computeEffectiveBalance`, `resolveEnrollmentEffectiveBalance` |
+| Collections / autopay history | `server/lib/financial-collections.ts`, `client/.../CollectionsOverviewTab.tsx` |
 | Cart / checkout pricing | `server/utils/cart-pricing.ts`, `server/api/stripe.ts` |
 | Credit ledger | `server/services/` (FIFO consumption), `unified_credit_usage_logs` |
 | Family balance (email/UI) | `server/lib/family-balance-email.ts` |
@@ -291,3 +304,4 @@ Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current ba
 | Parent says paid; no `stripe_customer_id` on user | Customer id may live in enrollment `metadata.stripeCustomerId` | Email search finds all Stripe customers; check PI metadata |
 | Membership `amount_paid` jumps by 2x on first checkout installment | Membership fulfillment called twice for same PI in webhook path (`webhook-handler` + `processBalancePayment`) | Ensure one fulfillment call per PI; audit `membership_enrollments` rows where checkout-note `updated_at > created_at` |
 | Admin shows $441 “paid” per session; Payments tab empty; PI `requires_payment_method` | Phantom `total_paid` — ledger updated without succeeded payment | Reset via `fix-kendra-crofoot-session-phantom-paid-production.ts` pattern; implement [ledger parity plan](../../plans/enrollment-ledger-stripe-parity.md) |
+| Collections Overview **Auto-pay on (0)** but parents have plans / `auto_pay_enabled` | Was: `loadParentInfo` used `db.execute().rows` (undefined under postgres-js); catch → all false | Fixed: select `users.autoPayEnabled` via drizzle in `loadParentInfo` |

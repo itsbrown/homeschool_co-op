@@ -1,5 +1,41 @@
 # App knowledge changelog
 
+## 2026-07-14 (Collections Overview Auto-pay on = 0 — fixed)
+
+- **UI bug, not empty data:** ASA prod has **5** owing parents with `users.auto_pay_enabled` (plus 2 more with flag but no collections balance). Charge history Jul 2026 is correctly $0 (no `charged_by=auto_pay` / autopay `completion_source` rows; next autopay-on dues start ~Jul 19).
+- **Root cause:** `loadParentInfo` in `server/lib/financial-collections.ts` iterated `db.execute(...).rows`; drizzle/postgres-js returns an array → catch forced every family `autoPayEnabled: false`.
+- **Fix:** select `users.autoPayEnabled` in the existing drizzle parent query; unit guard against `execute().rows` / raw `COALESCE(auto_pay_enabled`.
+- **Doc:** [payments-and-billing.md](./domains/payments-and-billing.md) — Collections Overview criteria + pitfall (marked fixed).
+
+## 2026-07-14 (Checkout payment options E2E audit)
+
+- **Runbook:** [checkout-payment-e2e-audit.md](../runbooks/checkout-payment-e2e-audit.md) — matrix of pay-in-full, biweekly, Pay Now, partial/credits-only, membership.
+- **Spec:** `e2e/checkout-payment-options-audit.spec.ts` (incl. no auto-spend when credits unchecked + confirm for credits-only).
+- **Catalog:** [E2E_COMMANDS.md](../../E2E_COMMANDS.md).
+- **Helpers:** `goCheckoutAndWaitForPaymentCard` waits for enrollments + Pay button (not Loading); `registerAnotherChild` uses Grade/Gender labels + `exact: true` for Male.
+- **Blocker observed:** local `VITE_TESTING_STRIPE_PUBLIC_KEY` rejected by Stripe (`elements/sessions` 401 Invalid API Key) while `TESTING_STRIPE_SECRET_KEY` still works — rotate publishable key from Dashboard for same account, then re-run audit.
+
+## 2026-07-14 (Credits auto-spent on checkout load)
+
+- **Cause:** `POST /create-payment-intent` (called on page load / plan toggle) immediately ran `completeCartCreditsOnlyCheckout` whenever credits covered the cart — no Pay click required.
+- **Fix:** Require `confirmCreditsOnlyCheckout: true` to spend; otherwise return `creditOnlyEligible`. Checkout shows **Apply credits & complete enrollment**. CartSuccess handles `?creditOnly=true`.
+
+## 2026-07-14 (Cart total dropping on reload)
+
+- **Cause:** Checkout cart line price = enrollment `remainingBalance`. Broken credits-only attempts (and a later $60 credits-only) wrote `totalPaid` down ($780→$60→$0) while UI still looked mid-checkout.
+- **Ledger bug:** `finalizeCreditHolds` updated `credits.used_amount` then failed inserting usage logs (bad `payment_history_id`) **without a transaction** — credits burned with no log.
+- **Fixes:** transactional `finalizeCreditHolds`; PI only sends credits when Apply is checked; credit-toggle effect skips initial mount; repaired credit #22 `used_amount` to match usage logs for jocimarie test parent.
+
+## 2026-07-14 (Checkout credits checkbox vs displayed total)
+
+- **Bug:** After applying then unchecking credits (or after a failed credits-only attempt), Pay-in-Full / plan amounts could keep a **stale snapshot** that still subtracted credits while “Apply to order” was off.
+- **Fix:** Track `snapshotCreditsApplied`; only trust snapshot `payableAmount`/`paymentPlans` when it matches `creditsToApply`; always refresh snapshot/PI on credit toggle even if `clientSecret` is missing.
+
+## 2026-07-14 (Credits-only cart checkout FK)
+
+- **Error:** “Failed to complete credits-only checkout” — `finalizeCreditHolds` was given `payments.id`; FK requires `stripe_payment_history.id`.
+- **Fix:** `cart-credits-only-checkout.ts` writes/links synthetic `stripe_payment_history`, finalizes against that id; cleans orphan `payments` on failure; skips re-apply only when usage logs already exist.
+
 ## 2026-07-13 (E2E CI harden — PR #49)
 
 - **Auth setup:** soft-skip when `E2E_PARENT_*` cannot leave `/login` (ephemeral CI DB / `REGISTRATION_REQUIRED`).
