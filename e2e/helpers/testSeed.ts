@@ -289,6 +289,66 @@ export async function postSetupProgressScenario(
   return { response, json };
 }
 
+export type SetupScheduleBuilderScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    adminSupabaseLinked?: boolean;
+    educatorSupabaseLinked?: boolean;
+    parentSupabaseLinked?: boolean;
+    weekStart: string;
+    school: { id: number; name: string; registrationCode: string };
+    admin: { id: number; email: string; password: string };
+    educator: { id: number; email: string; password: string };
+    parent: { id: number; email: string; password: string };
+    classes: {
+      seekers: { id: number; title: string };
+      yankee: { id: number; title: string };
+    };
+    children: {
+      seekers: { id: number; firstName: string; lastName: string };
+      yankee: { id: number; firstName: string; lastName: string };
+    };
+    enrollments: { seekersId: number; yankeeId: number };
+    skeletons: { seekersId: number; yankeeId: number };
+    weekPlans: {
+      seekersPublishedId: number;
+      yankeePublishedId: number;
+      seekersDraftId: number;
+    };
+    blocks: {
+      seekersCompletedId: number;
+      yankeeIncompleteId: number;
+      seekersDraftBlockId: number;
+      seekersTitle: string;
+      yankeeTitle: string;
+    };
+    attendance?: { sessionId: number; classId: number };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupScheduleScenario(
+  request: APIRequestContext,
+  body: { linkSupabaseAuth?: boolean } = {},
+): Promise<{ response: APIResponse; json: SetupScheduleBuilderScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-schedule-builder-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupScheduleBuilderScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupScheduleBuilderScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export async function postSeedUpcomingScheduledPayment(
   request: APIRequestContext,
   body: { enrollmentId: number; amountCents?: number; paymentPlan?: string },

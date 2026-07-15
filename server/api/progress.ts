@@ -542,4 +542,95 @@ router.get('/parent/my-children', supabaseAuth, async (req: Request, res: Respon
   }
 });
 
+/** Scheduled week-plan lessons for a child (parallel to progress logs; class-level completion). */
+router.get('/parent/:childId/scheduled-lessons', supabaseAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req.user as any).id;
+    const childId = parseInt(req.params.childId, 10);
+    if (isNaN(childId)) return res.status(400).json({ message: 'Invalid child ID' });
+
+    const children = await storage.getChildrenByParentId(userId);
+    const child = children.find((c) => c.id === childId);
+    if (!child) return res.status(403).json({ message: 'Access denied' });
+
+    const schoolId =
+      child.schoolId ||
+      (req.user as any).schoolId ||
+      (await storage.getUser(userId))?.schoolId;
+    if (!schoolId) return res.json({ lessons: [] });
+
+    const enrollments = await storage.getEnrollmentsByChildId(childId);
+    const classIds = [
+      ...new Set(
+        enrollments
+          .map((e: any) => e.marketplaceClassId ?? e.classId)
+          .filter((id: number | null | undefined): id is number => typeof id === 'number' && id > 0),
+      ),
+    ];
+    if (classIds.length === 0) return res.json({ lessons: [] });
+
+    const from = typeof req.query.from === 'string' ? req.query.from : undefined;
+    const to = typeof req.query.to === 'string' ? req.query.to : undefined;
+
+    const plans = await storage.getPublishedWeekPlansForClassIds(schoolId, classIds);
+    const filtered = plans.filter((p) => {
+      if (!p.weekStartDate) return true;
+      if (from && p.weekStartDate < from) return false;
+      if (to && p.weekStartDate > to) return false;
+      return true;
+    });
+
+    const lessons: Array<{
+      blockId: number;
+      title: string;
+      description: string | null;
+      classId: number | null;
+      classTitle: string | null;
+      weekNumber: number;
+      weekStartDate: string | null;
+      dayOfWeek: number | null;
+      startTime: string | null;
+      endTime: string | null;
+      isCompleted: boolean;
+      completedAt: Date | string | null;
+    }> = [];
+
+    for (const plan of filtered) {
+      const [blocks, skeletonBlocks] = await Promise.all([
+        storage.getWeekPlanBlocksByWeekPlanId(plan.id),
+        storage.getSkeletonBlocksBySkeletonId(plan.skeletonId),
+      ]);
+      const skelById = new Map(skeletonBlocks.map((sb) => [sb.id, sb]));
+      for (const b of blocks) {
+        const sb = skelById.get(b.skeletonBlockId);
+        lessons.push({
+          blockId: b.id,
+          title: b.title || b.customTitle || sb?.defaultTitle || 'Untitled',
+          description: b.description || b.customDescription || null,
+          classId: plan.classId,
+          classTitle: plan.classTitle,
+          weekNumber: plan.weekNumber,
+          weekStartDate: plan.weekStartDate,
+          dayOfWeek: sb?.dayOfWeek ?? null,
+          startTime: sb?.startTime ?? null,
+          endTime: sb?.endTime ?? null,
+          isCompleted: !!b.isCompleted,
+          completedAt: b.completedAt ?? null,
+        });
+      }
+    }
+
+    lessons.sort((a, b) => {
+      const d = (a.weekStartDate || '').localeCompare(b.weekStartDate || '');
+      if (d !== 0) return d;
+      return (a.dayOfWeek ?? 0) - (b.dayOfWeek ?? 0) || (a.startTime || '').localeCompare(b.startTime || '');
+    });
+
+    res.json({ lessons });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: 'Failed to fetch scheduled lessons' });
+  }
+});
+
 export default router;

@@ -13,6 +13,8 @@ import {
   credits,
   userRoles,
   membershipEnrollments,
+  classSessions,
+  sessionAttendance,
   type InsertProgramEnrollment,
   type ProgramEnrollment,
   type InsertCredit,
@@ -3945,6 +3947,349 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
     console.error('❌ setup-progress-scenario:', error);
     res.status(500).json({
       error: 'Failed to setup progress scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/setup-schedule-builder-scenario
+ * Seeds admin, parent, two marketplace classes, skeletons+blocks, published week plan,
+ * two children enrolled, optional attendance, optional Supabase link.
+ */
+router.post('/setup-schedule-builder-scenario', async (req: Request, res: Response) => {
+  try {
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    const bcrypt = await import('bcryptjs');
+    const password = 'TestPassword123!';
+
+    const monday = (() => {
+      const d = new Date();
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      d.setDate(diff);
+      return d.toISOString().slice(0, 10);
+    })();
+
+    const admin = await testDb.createTestUser({
+      email: `sched_admin_${uniqueId}@test.com`,
+      username: `schedadmin_${uniqueId}`,
+      name: 'Schedule Test Admin',
+      role: 'schoolAdmin',
+    });
+    await storage.updateUser(admin.id, { password: await bcrypt.hash(password, 10) });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Schedule School ${uniqueId}`,
+      registrationCode: `SCH${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    const educatorEmail = `sched_ed_${uniqueId}@test.com`;
+    const educator = await testDb.createTestUser({
+      email: educatorEmail,
+      username: `scheded_${uniqueId}`,
+      name: 'Schedule Test Educator',
+      role: 'educator',
+      schoolId: school.id,
+    });
+    await storage.updateUser(educator.id, { password: await bcrypt.hash(password, 10) });
+
+    const parentEmail = `sched_parent_${uniqueId}@test.com`;
+    const parent = await testDb.createTestUser({
+      email: parentEmail,
+      username: `schedparent_${uniqueId}`,
+      name: 'Schedule Test Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    await storage.updateUser(parent.id, { password: await bcrypt.hash(password, 10) });
+
+    const db = await getDb();
+    await db.insert(userRoles).values([
+      { userId: admin.id, role: 'schoolAdmin', schoolId: school.id, isPrimary: true },
+      { userId: educator.id, role: 'educator', schoolId: school.id, isPrimary: true },
+      { userId: parent.id, role: 'parent', schoolId: school.id, isPrimary: true },
+    ]);
+
+    const seekers = await testDb.createTestClass(school.id, {
+      title: `Seekers ${uniqueId}`,
+      description: 'E2E Seekers class',
+      price: 10000,
+      status: 'upcoming',
+    });
+    const yankee = await testDb.createTestClass(school.id, {
+      title: `Yankee Doodle ${uniqueId}`,
+      description: 'E2E Yankee Doodle class',
+      price: 10000,
+      status: 'upcoming',
+    });
+
+    const childSeekers = await storage.createChild({
+      parentId: parent.id,
+      parentEmail,
+      firstName: 'Seeker',
+      lastName: `Kid${uniqueId}`,
+      birthdate: '2018-01-15',
+      gradeLevel: '1st',
+      schoolId: school.id,
+    });
+    const childYankee = await storage.createChild({
+      parentId: parent.id,
+      parentEmail,
+      firstName: 'Yankee',
+      lastName: `Kid${uniqueId}`,
+      birthdate: '2016-03-20',
+      gradeLevel: '3rd',
+      schoolId: school.id,
+    });
+
+    const enrollmentBase = {
+      classType: 'marketplace' as const,
+      parentId: parent.id,
+      parentEmail,
+      schoolId: school.id,
+      status: 'enrolled' as const,
+      paymentPlan: 'full_payment' as const,
+      paymentSystemVersion: 'v2_stripe' as const,
+      paymentStatus: 'completed' as const,
+      totalCost: 10000,
+      totalPaid: 10000,
+      remainingBalance: 0,
+      depositRequired: 0,
+      enrollmentDate: new Date(),
+    };
+
+    const [enrollSeekers] = await db
+      .insert(programEnrollments)
+      .values({
+        ...enrollmentBase,
+        childId: childSeekers.id,
+        marketplaceClassId: seekers.id,
+        childName: `${childSeekers.firstName} ${childSeekers.lastName}`,
+        className: seekers.title,
+      })
+      .returning();
+    const [enrollYankee] = await db
+      .insert(programEnrollments)
+      .values({
+        ...enrollmentBase,
+        childId: childYankee.id,
+        marketplaceClassId: yankee.id,
+        childName: `${childYankee.firstName} ${childYankee.lastName}`,
+        className: yankee.title,
+      })
+      .returning();
+
+    const verifyEnroll = await storage.getEnrollmentById(enrollSeekers.id);
+    if (!verifyEnroll) {
+      return res.status(500).json({ error: 'Enrollment round-trip failed' });
+    }
+
+    const skSeekers = await storage.createWeeklySkeleton({
+      schoolId: school.id,
+      classId: seekers.id,
+      name: `Seekers Template ${uniqueId}`,
+      gradeLevel: seekers.title,
+      operatingDays: ['Monday', 'Wednesday'],
+      status: 'active',
+      createdBy: admin.id,
+    });
+    const skYankee = await storage.createWeeklySkeleton({
+      schoolId: school.id,
+      classId: yankee.id,
+      name: `Yankee Template ${uniqueId}`,
+      gradeLevel: yankee.title,
+      operatingDays: ['Tuesday', 'Thursday'],
+      status: 'active',
+      createdBy: admin.id,
+    });
+
+    const blockSeekers = await storage.createSkeletonBlock({
+      skeletonId: skSeekers.id,
+      dayOfWeek: 1,
+      startTime: '09:00',
+      endTime: '10:00',
+      blockType: 'curriculum',
+      defaultTitle: 'Seekers Morning Circle',
+      sortOrder: 0,
+      createdBy: admin.id,
+    });
+    const blockYankee = await storage.createSkeletonBlock({
+      skeletonId: skYankee.id,
+      dayOfWeek: 2,
+      startTime: '09:00',
+      endTime: '10:00',
+      blockType: 'curriculum',
+      defaultTitle: 'Yankee History Block',
+      sortOrder: 0,
+      createdBy: admin.id,
+    });
+
+    const planSeekers = await storage.createWeekPlan({
+      skeletonId: skSeekers.id,
+      schoolId: school.id,
+      weekNumber: 1,
+      weekStartDate: monday,
+      status: 'published',
+      publishedAt: new Date(),
+      createdBy: admin.id,
+    });
+    const planYankee = await storage.createWeekPlan({
+      skeletonId: skYankee.id,
+      schoolId: school.id,
+      weekNumber: 1,
+      weekStartDate: monday,
+      status: 'published',
+      publishedAt: new Date(),
+      createdBy: admin.id,
+    });
+
+    const wpBlockSeekers = await storage.createWeekPlanBlock({
+      weekPlanId: planSeekers.id,
+      skeletonBlockId: blockSeekers.id,
+      title: 'Seekers: Intro to Nature',
+      description: 'Outdoor observation',
+      isCompleted: true,
+      completedBy: admin.id,
+      completedAt: new Date(),
+      updatedBy: admin.id,
+    });
+    const wpBlockYankee = await storage.createWeekPlanBlock({
+      weekPlanId: planYankee.id,
+      skeletonBlockId: blockYankee.id,
+      title: 'Yankee: Colonial Life',
+      description: 'Primary sources',
+      isCompleted: false,
+      updatedBy: admin.id,
+    });
+
+    // Draft plan (must not appear in parent published filter); includes a block for Week Planner E2E
+    const draftPlan = await storage.createWeekPlan({
+      skeletonId: skSeekers.id,
+      schoolId: school.id,
+      weekNumber: 99,
+      weekStartDate: monday,
+      status: 'draft',
+      createdBy: admin.id,
+    });
+    const draftBlock = await storage.createWeekPlanBlock({
+      weekPlanId: draftPlan.id,
+      skeletonBlockId: blockSeekers.id,
+      title: 'Draft: Pending Publish',
+      description: 'Seeded draft block for publish E2E',
+      isCompleted: false,
+      updatedBy: admin.id,
+    });
+
+    const publishedCheck = await storage.getPublishedWeekPlansBySchool(school.id);
+    if (!publishedCheck.some((p) => p.id === planSeekers.id)) {
+      return res.status(500).json({ error: 'Published week plan round-trip failed' });
+    }
+
+    // Optional attendance for Seekers (KPI consistency)
+    const [attendanceSession] = await db
+      .insert(classSessions)
+      .values({
+        classId: seekers.id,
+        schoolId: school.id,
+        educatorId: educator.id,
+        scheduledDate: monday,
+        scheduledStartTime: '09:00',
+        scheduledEndTime: '10:00',
+        status: 'completed',
+      })
+      .returning();
+    await db.insert(sessionAttendance).values({
+      sessionId: attendanceSession.id,
+      childId: childSeekers.id,
+      schoolId: school.id,
+      status: 'present',
+      recordedBy: educator.id,
+    });
+
+    let adminSupabaseLinked = false;
+    let educatorSupabaseLinked = false;
+    let parentSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuth === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      adminSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: admin.id,
+        email: admin.email,
+        password,
+        role: 'schoolAdmin',
+        schoolId: school.id,
+        displayName: admin.name || 'Schedule Test Admin',
+      });
+      educatorSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: educator.id,
+        email: educatorEmail,
+        password,
+        role: 'educator',
+        schoolId: school.id,
+        displayName: educator.name || 'Schedule Test Educator',
+      });
+      parentSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: parent.id,
+        email: parentEmail,
+        password,
+        role: 'parent',
+        schoolId: school.id,
+        displayName: parent.name || 'Schedule Test Parent',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        supabaseLinked: adminSupabaseLinked && educatorSupabaseLinked && parentSupabaseLinked,
+        adminSupabaseLinked,
+        educatorSupabaseLinked,
+        parentSupabaseLinked,
+        weekStart: monday,
+        school: { id: school.id, name: school.name, registrationCode: school.registrationCode },
+        admin: { id: admin.id, email: admin.email, password },
+        educator: { id: educator.id, email: educatorEmail, password },
+        parent: { id: parent.id, email: parentEmail, password },
+        classes: {
+          seekers: { id: seekers.id, title: seekers.title },
+          yankee: { id: yankee.id, title: yankee.title },
+        },
+        children: {
+          seekers: { id: childSeekers.id, firstName: childSeekers.firstName, lastName: childSeekers.lastName },
+          yankee: { id: childYankee.id, firstName: childYankee.firstName, lastName: childYankee.lastName },
+        },
+        enrollments: { seekersId: enrollSeekers.id, yankeeId: enrollYankee.id },
+        skeletons: { seekersId: skSeekers.id, yankeeId: skYankee.id },
+        weekPlans: {
+          seekersPublishedId: planSeekers.id,
+          yankeePublishedId: planYankee.id,
+          seekersDraftId: draftPlan.id,
+        },
+        blocks: {
+          seekersCompletedId: wpBlockSeekers.id,
+          yankeeIncompleteId: wpBlockYankee.id,
+          seekersDraftBlockId: draftBlock.id,
+          seekersTitle: wpBlockSeekers.title,
+          yankeeTitle: wpBlockYankee.title,
+        },
+        attendance: {
+          sessionId: attendanceSession.id,
+          classId: seekers.id,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-schedule-builder-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup schedule builder scenario',
       details: error instanceof Error ? error.message : String(error),
     });
   }

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,6 +105,7 @@ export default function WeekPlannerPage() {
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<WeeklySkeleton[]>({
     queryKey: ["/api/schedule-builder/skeletons"],
+    refetchOnMount: "always",
   });
 
   const { data: skeletonBlocks = [] } = useQuery<SkeletonBlock[]>({
@@ -115,12 +116,27 @@ export default function WeekPlannerPage() {
   const { data: weekPlans = [] } = useQuery<WeekPlan[]>({
     queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"],
     enabled: !!templateId,
+    refetchOnMount: "always",
   });
 
   const { data: selectedWeekData } = useQuery<WeekPlan & { blocks?: WeekPlanBlock[] }>({
     queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId],
     enabled: !!selectedWeekPlanId,
+    refetchOnMount: "always",
   });
+
+  // Prefer keeping a template selected once options exist (avoids empty "Select a template" after create).
+  useEffect(() => {
+    if (selectedTemplateId || templates.length === 0) return;
+    setSelectedTemplateId(String(templates[0].id));
+  }, [templates, selectedTemplateId]);
+
+  // After week plans load, auto-select the latest if none selected.
+  useEffect(() => {
+    if (!templateId || selectedWeekPlanId || weekPlans.length === 0) return;
+    const sorted = [...weekPlans].sort((a, b) => a.weekNumber - b.weekNumber);
+    setSelectedWeekPlanId(sorted[sorted.length - 1].id);
+  }, [templateId, weekPlans, selectedWeekPlanId]);
 
   const { data: aiStatus } = useQuery<{ available: boolean }>({
     queryKey: ["/api/schedule-ai/status"],
@@ -132,10 +148,22 @@ export default function WeekPlannerPage() {
   });
 
   const createWeekMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/schedule-builder/week-plans", data),
-    onSuccess: async (res) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
-      const newPlan = await res.json();
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/schedule-builder/week-plans", data);
+      return res.json() as Promise<WeekPlan>;
+    },
+    onSuccess: async (newPlan) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"],
+      });
+      queryClient.setQueryData<WeekPlan[]>(
+        ["/api/schedule-builder/skeletons", templateId, "week-plans"],
+        (prev) => {
+          const list = prev ?? [];
+          if (list.some((p) => p.id === newPlan.id)) return list;
+          return [...list, newPlan];
+        },
+      );
       setSelectedWeekPlanId(newPlan.id);
       toast({ title: "Week plan created" });
       setNewWeekDialog(false);
@@ -144,20 +172,38 @@ export default function WeekPlannerPage() {
   });
 
   const updateWeekMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/schedule-builder/week-plans/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
-      if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/schedule-builder/week-plans/${id}`, data);
+      return res.json() as Promise<WeekPlan>;
+    },
+    onSuccess: async (updated) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/schedule-builder/week-plans", updated.id],
+      });
       toast({ title: "Week plan updated" });
     },
     onError: (err: any) => toast({ title: "Error updating week plan", description: err.message, variant: "destructive" }),
   });
 
   const deleteWeekMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/schedule-builder/week-plans/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
-      if (selectedWeekPlanId === deleteWeekId) setSelectedWeekPlanId(null);
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/schedule-builder/week-plans/${id}`);
+      return id;
+    },
+    onSuccess: async (id) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"],
+      });
+      queryClient.setQueryData<WeekPlan[]>(
+        ["/api/schedule-builder/skeletons", templateId, "week-plans"],
+        (prev) => (prev ?? []).filter((p) => p.id !== id),
+      );
+      if (selectedWeekPlanId === id || selectedWeekPlanId === deleteWeekId) {
+        setSelectedWeekPlanId(null);
+      }
       toast({ title: "Week plan deleted" });
       setDeleteWeekId(null);
     },
@@ -165,10 +211,22 @@ export default function WeekPlannerPage() {
   });
 
   const cloneWeekMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("POST", `/api/schedule-builder/week-plans/${id}/clone`, data),
-    onSuccess: async (res) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
-      const cloned = await res.json();
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("POST", `/api/schedule-builder/week-plans/${id}/clone`, data);
+      return res.json() as Promise<WeekPlan>;
+    },
+    onSuccess: async (cloned) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"],
+      });
+      queryClient.setQueryData<WeekPlan[]>(
+        ["/api/schedule-builder/skeletons", templateId, "week-plans"],
+        (prev) => {
+          const list = prev ?? [];
+          if (list.some((p) => p.id === cloned.id)) return list;
+          return [...list, cloned];
+        },
+      );
       setSelectedWeekPlanId(cloned.id);
       toast({ title: "Week plan cloned" });
       setCloneDialog(false);
@@ -177,10 +235,16 @@ export default function WeekPlannerPage() {
   });
 
   const createBlockMutation = useMutation({
-    mutationFn: ({ weekPlanId, data }: { weekPlanId: number; data: any }) =>
-      apiRequest("POST", `/api/schedule-builder/week-plans/${weekPlanId}/blocks`, data),
-    onSuccess: () => {
-      if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
+    mutationFn: async ({ weekPlanId, data }: { weekPlanId: number; data: any }) => {
+      const res = await apiRequest("POST", `/api/schedule-builder/week-plans/${weekPlanId}/blocks`, data);
+      return res.json();
+    },
+    onSuccess: async () => {
+      if (selectedWeekPlanId) {
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId],
+        });
+      }
       toast({ title: "Block created" });
       setBlockEditDialog(false);
     },
@@ -188,10 +252,16 @@ export default function WeekPlannerPage() {
   });
 
   const updateBlockMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
-      apiRequest("PATCH", `/api/schedule-builder/week-plan-blocks/${id}`, data),
-    onSuccess: () => {
-      if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/schedule-builder/week-plan-blocks/${id}`, data);
+      return res.json();
+    },
+    onSuccess: async () => {
+      if (selectedWeekPlanId) {
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId],
+        });
+      }
       toast({ title: "Block updated" });
       setBlockEditDialog(false);
     },
@@ -199,20 +269,35 @@ export default function WeekPlannerPage() {
   });
 
   const completeBlockMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("POST", `/api/schedule-builder/week-plan-blocks/${id}/complete`),
-    onSuccess: () => {
-      if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/schedule-builder/week-plan-blocks/${id}/complete`);
+      return res.json();
+    },
+    onSuccess: async () => {
+      if (selectedWeekPlanId) {
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId],
+        });
+      }
       toast({ title: "Block completion toggled" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const generateWeekMutation = useMutation({
-    mutationFn: (data: { skeletonId: number; weekNumber: number }) =>
-      apiRequest("POST", "/api/schedule-ai/generate-week", data),
-    onSuccess: () => {
-      if (selectedWeekPlanId) queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
+    mutationFn: async (data: { skeletonId: number; weekNumber: number }) => {
+      const res = await apiRequest("POST", "/api/schedule-ai/generate-week", data);
+      return res.json();
+    },
+    onSuccess: async () => {
+      if (selectedWeekPlanId) {
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId],
+        });
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"],
+      });
       toast({ title: "Week plan generated with AI" });
     },
     onError: (err: any) => toast({ title: "AI generation failed", description: err.message, variant: "destructive" }),
@@ -426,7 +511,7 @@ export default function WeekPlannerPage() {
           </div>
           <div className="w-64">
             <Select value={selectedTemplateId} onValueChange={(v) => { setSelectedTemplateId(v); setSelectedWeekPlanId(null); }}>
-              <SelectTrigger>
+              <SelectTrigger data-testid="week-planner-template-select">
                 <SelectValue placeholder="Select a template..." />
               </SelectTrigger>
               <SelectContent>
@@ -461,6 +546,7 @@ export default function WeekPlannerPage() {
                       variant={selectedWeekPlanId === wp.id ? "default" : "outline"}
                       size="sm"
                       className="flex-shrink-0 flex items-center gap-2"
+                      data-testid={`week-plan-chip-${wp.id}`}
                       onClick={() => setSelectedWeekPlanId(wp.id)}
                     >
                       <span>Week {wp.weekNumber}</span>
@@ -511,6 +597,7 @@ export default function WeekPlannerPage() {
                           <Button
                             size="sm"
                             variant="outline"
+                            data-testid="week-planner-publish"
                             onClick={() => updateWeekMutation.mutate({ id: selectedWeekPlanId!, data: { status: "published" } })}
                             disabled={updateWeekMutation.isPending}
                           >
@@ -636,7 +723,13 @@ export default function WeekPlannerPage() {
                             </div>
                             <div className="flex items-center gap-1 pt-1 border-t">
                               {wb ? (
-                                <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => openEditBlock(wb)}>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  data-testid={`week-block-edit-${wb.id}`}
+                                  onClick={() => openEditBlock(wb)}
+                                >
                                   <Edit className="h-3 w-3 mr-1" />
                                   Edit
                                 </Button>
@@ -894,7 +987,11 @@ export default function WeekPlannerPage() {
               </Button>
             )}
             <Button variant="outline" onClick={() => setBlockEditDialog(false)}>Cancel</Button>
-            <Button onClick={handleBlockSubmit} disabled={createBlockMutation.isPending || updateBlockMutation.isPending}>
+            <Button
+              onClick={handleBlockSubmit}
+              disabled={createBlockMutation.isPending || updateBlockMutation.isPending}
+              data-testid="week-block-save"
+            >
               {(createBlockMutation.isPending || updateBlockMutation.isPending) ? "Saving..." : editingBlockId ? "Update Block" : "Add Block"}
             </Button>
           </DialogFooter>

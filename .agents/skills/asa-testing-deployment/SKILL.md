@@ -10,7 +10,8 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - **Use "Start application" workflow** (`npm run dev`) — this is the correct workflow. "Start App" is a legacy duplicate.
 - **Frontend binds to port 5000** on `0.0.0.0` — never bind anything else to port 5000.
 - **Never use Docker or virtual environments** — Replit uses Nix; nested virtualization is not supported.
-- **Never edit `vite.config.ts` or `server/vite.ts`** — the Vite setup handles frontend/backend on the same port with all aliases preconfigured.
+- **Never edit `vite.config.ts`** without need — aliases/port are preconfigured.
+- **`server/vite.ts`:** keep SPA fallback from shadowing APIs — both `setupVite` and `serveStatic` must `next()` for `/api/*` (do not serve `index.html` for API paths).
 - **Never edit `package.json` scripts** without explicit user approval.
 - **Never edit `drizzle.config.ts`**.
 
@@ -74,6 +75,8 @@ When you create or extend `e2e/**/*.spec.ts`:
 5. Optional `package.json` script only for suites run very frequently; prefer the `-- e2e/file.spec.ts` form.
 
 **Example (public forms):** [`e2e/public-custom-forms.spec.ts`](../../e2e/public-custom-forms.spec.ts) — `npm run test:e2e -- e2e/public-custom-forms.spec.ts`; seed `setup-public-form-scenario`; runbook [`public-mentor-application-form.md`](../../docs/APP_KNOWLEDGE/runbooks/public-mentor-application-form.md).
+
+**Example (schedule builder):** seed `POST /api/test/setup-schedule-builder-scenario` via `postSetupScheduleScenario` — used by `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`. Domain: [`schedule-and-lesson-planning.md`](../../docs/APP_KNOWLEDGE/domains/schedule-and-lesson-planning.md).
 
 ### What to Test with Playwright
 - Frontend features and multi-page flows
@@ -296,7 +299,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - Don't use the "Start App" workflow — it's a legacy duplicate
 - Don't bind anything other than the frontend to port 5000
 - Don't use Docker, virtual environments, or containerization
-- Don't edit `vite.config.ts`, `server/vite.ts`, or `drizzle.config.ts`
+- Don't edit `vite.config.ts` or `drizzle.config.ts` without cause; `server/vite.ts` may only change for `/api/*` SPA-skip safety
 - Don't edit `package.json` scripts without user approval
 - Don't write Playwright tests that assume empty database state
 - Don't expose or log secrets/API keys in code
@@ -307,7 +310,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 
 ## Key Files
 - `server/index.ts` — Express server entry point; port binding; `Cache-Control` middleware for production
-- `server/vite.ts` — Vite dev server integration (do not edit)
+- `server/vite.ts` — Vite + static SPA; must skip `/api/*` (not forbidden for that fix)
 - `vite.config.ts` — Vite configuration with aliases (do not edit)
 - `drizzle.config.ts` — Drizzle ORM config (do not edit)
 - `shared/schema.ts` — database schema definitions

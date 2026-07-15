@@ -1,15 +1,15 @@
 /**
  * Schedule Builder API — Role Access Matrix (Additive Roles Phase 2)
  *
- * All routes in this file require one of: schoolAdmin | admin | superAdmin | director
- * via requireRole([...]). The director role is explicitly included in every route guard.
+ * Write routes require ADMIN_ROLES: schoolAdmin | admin | superAdmin | director
+ * Consumer read routes use CONSUMER_READ_ROLES (adds parent | teacher | educator):
+ *   GET /week-plans/published, /week-plans/:id, /skeletons/:id, /skeletons/:id/blocks
+ * Parent enrollment-scoped week plans: GET /parent/my-week-plans
  *
  * Test matrix (expected behavior):
- *   - Single-role educator (teacher): view-only access, NO schedule builder write access.
- *     Blocked at requireRole — 'teacher' is not in any allowedRoles array here.
- *   - Multi-role parent + director: full scheduler access.
- *     Passes via req.auth.role === 'director' (active role) or allRoles.includes('director').
- *   - schoolAdmin: behavior completely unchanged. Passes via existing 'schoolAdmin' allowedRoles entry.
+ *   - Single-role educator (teacher): read published plans/skeletons; NO schedule builder write access.
+ *   - Multi-role parent + director: full scheduler access via director.
+ *   - schoolAdmin: behavior completely unchanged for writes.
  *
  * IMPORTANT: Never use requireAdmin — it uses 'school-admin' (hyphen) which does NOT match
  * the DB value 'schoolAdmin' (camelCase). Always use requireRole with explicit camelCase strings.
@@ -42,7 +42,33 @@ const DAY_NAME_TO_NUMBER: Record<string, number> = {
   Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
 };
 const BLOCK_TYPES = ["anchor", "curriculum", "flexible"] as const;
-const TIME_REGEX = /^\d{2}:\d{2}(:\d{2})?$/;
+
+/** Accept Excel-style times (`8:45`, `9:00`) and normalize to `HH:MM`. */
+function normalizeTimeHhMm(raw: unknown): string | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!m) return null;
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+const ADMIN_ROLES = ['schoolAdmin', 'admin', 'superAdmin', 'director'];
+const CONSUMER_READ_ROLES = ['schoolAdmin', 'admin', 'superAdmin', 'director', 'parent', 'teacher', 'educator'];
+
+function getMondayWeekStart(from: Date = new Date()): string {
+  const d = new Date(from);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 function isRtfOrBinary(buf: Buffer): boolean {
   // RTF starts with {\rtf
@@ -99,7 +125,7 @@ router.get(
 router.get(
   "/skeletons/:id",
   supabaseAuth,
-  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  requireRole(CONSUMER_READ_ROLES),
   logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
@@ -200,7 +226,7 @@ router.delete(
 router.get(
   "/skeletons/:skeletonId/blocks",
   supabaseAuth,
-  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  requireRole(CONSUMER_READ_ROLES),
   logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
@@ -354,7 +380,7 @@ router.get(
 router.get(
   "/week-plans/published",
   supabaseAuth,
-  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  requireRole(CONSUMER_READ_ROLES),
   logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
@@ -371,9 +397,128 @@ router.get(
 );
 
 router.get(
+  "/parent/my-week-plans",
+  supabaseAuth,
+  requireRole(['parent', 'schoolAdmin', 'admin', 'superAdmin', 'director']),
+  logDirectorAccess,
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const schoolId = parseInt(req.schoolId);
+      if (isNaN(schoolId)) return res.status(400).json({ message: "Invalid school ID" });
+
+      const weekStartRaw = typeof req.query.weekStart === "string" ? req.query.weekStart.trim() : "";
+      const weekStart = /^\d{4}-\d{2}-\d{2}$/.test(weekStartRaw)
+        ? weekStartRaw
+        : getMondayWeekStart();
+
+      const userId = req.user?.id;
+      if (!userId) return res.status(401).json({ message: "Not authenticated" });
+
+      const children = await storage.getChildrenByParentId(userId);
+      const childClassPairs: Array<{
+        childId: number;
+        childName: string;
+        classId: number;
+      }> = [];
+      const allClassIds = new Set<number>();
+
+      for (const child of children) {
+        const enrollments = await storage.getEnrollmentsByChildId(child.id);
+        const childClassIds = new Set<number>();
+        for (const e of enrollments) {
+          const effectiveClassId = e.marketplaceClassId ?? e.classId;
+          if (effectiveClassId == null) continue;
+          const classId = Number(effectiveClassId);
+          if (isNaN(classId) || childClassIds.has(classId)) continue;
+          childClassIds.add(classId);
+          allClassIds.add(classId);
+          const childName = [child.firstName, child.lastName].filter(Boolean).join(" ").trim()
+            || `Child ${child.id}`;
+          childClassPairs.push({
+            childId: child.id,
+            childName,
+            classId,
+          });
+        }
+      }
+
+      const classIds = Array.from(allClassIds);
+      const publishedPlans = await storage.getPublishedWeekPlansForClassIds(schoolId, classIds, weekStart);
+      const plansByClassId = new Map<number, (typeof publishedPlans)[number]>();
+      for (const plan of publishedPlans) {
+        if (plan.classId != null && !plansByClassId.has(plan.classId)) {
+          plansByClassId.set(plan.classId, plan);
+        }
+      }
+
+      const skeletonCache = new Map<number, any>();
+      const skeletonBlocksCache = new Map<number, any[]>();
+      const weekPlanBlocksCache = new Map<number, any[]>();
+
+      const childrenResponse = [];
+      for (const pair of childClassPairs) {
+        const plan = plansByClassId.get(pair.classId) || null;
+        let blocks: any[] = [];
+        let skeleton: any = null;
+        let skeletonBlocks: any[] = [];
+
+        if (plan) {
+          if (!weekPlanBlocksCache.has(plan.id)) {
+            weekPlanBlocksCache.set(plan.id, await storage.getWeekPlanBlocksByWeekPlanId(plan.id));
+          }
+          blocks = weekPlanBlocksCache.get(plan.id)!;
+
+          if (plan.skeletonId) {
+            if (!skeletonCache.has(plan.skeletonId)) {
+              skeletonCache.set(plan.skeletonId, await storage.getWeeklySkeletonById(plan.skeletonId) || null);
+            }
+            skeleton = skeletonCache.get(plan.skeletonId) || null;
+
+            if (!skeletonBlocksCache.has(plan.skeletonId)) {
+              skeletonBlocksCache.set(
+                plan.skeletonId,
+                await storage.getSkeletonBlocksBySkeletonId(plan.skeletonId),
+              );
+            }
+            skeletonBlocks = skeletonBlocksCache.get(plan.skeletonId)!;
+          }
+        }
+
+        const classTitle =
+          plan?.classTitle
+          || skeleton?.gradeLevel
+          || `Class ${pair.classId}`;
+
+        childrenResponse.push({
+          childId: pair.childId,
+          childName: pair.childName,
+          classId: pair.classId,
+          classTitle,
+          weekPlan: plan
+            ? (() => {
+                const { classId: _c, classTitle: _t, skeletonName: _s, ...weekPlan } = plan as any;
+                return weekPlan;
+              })()
+            : null,
+          blocks,
+          skeleton,
+          skeletonBlocks,
+        });
+      }
+
+      res.json({ weekStart, children: childrenResponse });
+    } catch (error) {
+      console.error("Error fetching parent week plans:", error);
+      res.status(500).json({ message: "Failed to fetch parent week plans" });
+    }
+  }
+);
+
+router.get(
   "/week-plans/:id",
   supabaseAuth,
-  requireRole(['schoolAdmin', 'admin', 'superAdmin', 'director']),
+  requireRole(CONSUMER_READ_ROLES),
   logDirectorAccess,
   requireSchoolContext,
   async (req: any, res) => {
@@ -759,13 +904,37 @@ router.post(
 
       if (records.length === 0) return res.status(400).json({ message: "CSV file is empty" });
 
+      // Optional column mapping from FormData: { canonicalField: sourceHeader }
+      let columnMapping: Record<string, string> | null = null;
+      const rawMapping = req.body?.mapping;
+      if (typeof rawMapping === "string" && rawMapping.trim()) {
+        try {
+          const parsedMapping = JSON.parse(rawMapping);
+          if (parsedMapping && typeof parsedMapping === "object" && !Array.isArray(parsedMapping)) {
+            columnMapping = parsedMapping as Record<string, string>;
+          }
+        } catch {
+          return res.status(400).json({ message: "Invalid mapping JSON" });
+        }
+      }
+
+      const remapRecord = (r: any): any => {
+        if (!columnMapping) return r;
+        const out: Record<string, string> = {};
+        for (const [canonical, sourceCol] of Object.entries(columnMapping)) {
+          if (!sourceCol) continue;
+          out[canonical] = r[sourceCol] ?? "";
+        }
+        return out;
+      };
+
       // Skip the hint row (example/valid values row)
       const isHintRow = (r: any) =>
         (r.day_of_week || "").toLowerCase() === "monday" &&
-        (r.start_time || "") === "08:00" &&
-        (r.end_time || "") === "09:00" &&
+        (r.start_time || "").substring(0, 5) === "08:00" &&
+        (r.end_time || "").substring(0, 5) === "09:00" &&
         (r.default_title || "").toLowerCase().includes("math 101");
-      const dataRows = records.filter((r) => !isHintRow(r));
+      const dataRows = records.map(remapRecord).filter((r) => !isHintRow(r));
 
       const errors: string[] = [];
       const parsedBlocks: any[] = [];
@@ -779,14 +948,14 @@ router.post(
           errors.push(`Row ${rowNum}: Invalid day_of_week "${dayStr}". Must be a full day name (e.g. Monday).`);
           continue;
         }
-        const startTime = (r.start_time || "").trim().substring(0, 5);
-        const endTime = (r.end_time || "").trim().substring(0, 5);
-        if (!TIME_REGEX.test(startTime)) {
-          errors.push(`Row ${rowNum}: Invalid start_time "${r.start_time}". Use HH:MM format.`);
+        const startTime = normalizeTimeHhMm(r.start_time);
+        const endTime = normalizeTimeHhMm(r.end_time);
+        if (!startTime) {
+          errors.push(`Row ${rowNum}: Invalid start_time "${r.start_time}". Use HH:MM format (e.g. 08:45 or 8:45).`);
           continue;
         }
-        if (!TIME_REGEX.test(endTime)) {
-          errors.push(`Row ${rowNum}: Invalid end_time "${r.end_time}". Use HH:MM format.`);
+        if (!endTime) {
+          errors.push(`Row ${rowNum}: Invalid end_time "${r.end_time}". Use HH:MM format (e.g. 08:45 or 8:45).`);
           continue;
         }
         if (endTime <= startTime) {
@@ -955,9 +1124,9 @@ router.post(
           errors.push(`Row ${rowNum}: Invalid day_of_week "${dayStr}".`);
           continue;
         }
-        const startTime = (r.start_time || "").trim().substring(0, 5);
-        if (!TIME_REGEX.test(startTime)) {
-          errors.push(`Row ${rowNum}: Invalid start_time "${r.start_time}".`);
+        const startTime = normalizeTimeHhMm(r.start_time);
+        if (!startTime) {
+          errors.push(`Row ${rowNum}: Invalid start_time "${r.start_time}". Use HH:MM format (e.g. 08:45 or 8:45).`);
           continue;
         }
         const objectives = (r.objectives || "").split(";").map((s: string) => s.trim()).filter(Boolean);
