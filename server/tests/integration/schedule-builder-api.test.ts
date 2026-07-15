@@ -1,6 +1,8 @@
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import { nanoid } from 'nanoid';
+import express from 'express';
+import fileUpload from 'express-fileupload';
 import scheduleBuilderRouter from '../../api/schedule-builder';
 import testRouter from '../../api/test';
 import { buildStaffTestApp } from '../helpers/staffTestApp';
@@ -10,6 +12,22 @@ import { getDb } from '../../db';
 import { programEnrollments, userRoles } from '@shared/schema';
 
 const describeWithDb = process.env.TEST_DATABASE_URL ? describe : describe.skip;
+
+/** App with express-fileupload for CSV import routes (mirrors server/index.ts). */
+function buildScheduleCsvTestApp() {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/test', testRouter);
+  app.use(
+    '/api/schedule-builder',
+    fileUpload({
+      limits: { fileSize: 5 * 1024 * 1024 },
+      abortOnLimit: true,
+    }),
+  );
+  app.use('/api/schedule-builder', scheduleBuilderRouter);
+  return app;
+}
 
 describeWithDb('Integration: schedule-builder API', () => {
   let app: ReturnType<typeof buildStaffTestApp>;
@@ -200,5 +218,57 @@ describeWithDb('Integration: schedule-builder API', () => {
     expect(res.status).toBe(200);
     const forChild = res.body.children.filter((c: any) => c.childId === child.id);
     expect(forChild.length).toBe(0);
+  });
+
+  it('week-plan CSV import maps default_title and updates matched slots', async () => {
+    const csvApp = buildScheduleCsvTestApp();
+    const adminEmail = seed.admin.email;
+    const weekPlanId = seed.weekPlans.seekersDraftId;
+    // Seed seekers skeleton block is Monday 09:00 — template-shaped CSV (default_title)
+    const csv = [
+      'day_of_week,start_time,end_time,block_type,default_title,subject_area,sort_order',
+      'Monday,09:00,10:00,curriculum,Imported Nature Lab,Science,0',
+    ].join('\n');
+
+    const mapping = JSON.stringify({
+      day_of_week: 'day_of_week',
+      start_time: 'start_time',
+      end_time: 'end_time',
+      block_type: 'block_type',
+      title: 'default_title',
+    });
+
+    const res = await request(csvApp)
+      .post(`/api/schedule-builder/week-plans/${weekPlanId}/blocks/import-csv`)
+      .set('x-test-user-email', adminEmail)
+      .field('mapping', mapping)
+      .attach('file', Buffer.from(csv, 'utf-8'), 'week-blocks.csv');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.updated).toBe(1);
+
+    const blocks = await storage.getWeekPlanBlocksByWeekPlanId(weekPlanId);
+    expect(blocks.some((b: any) => b.title === 'Imported Nature Lab')).toBe(true);
+  });
+
+  it('week-plan CSV import returns clear error when day/time does not match template', async () => {
+    const csvApp = buildScheduleCsvTestApp();
+    const adminEmail = seed.admin.email;
+    const weekPlanId = seed.weekPlans.seekersDraftId;
+    const csv = [
+      'day_of_week,start_time,title',
+      'Friday,15:00,No Such Slot',
+    ].join('\n');
+
+    const res = await request(csvApp)
+      .post(`/api/schedule-builder/week-plans/${weekPlanId}/blocks/import-csv`)
+      .set('x-test-user-email', adminEmail)
+      .attach('file', Buffer.from(csv, 'utf-8'), 'bad-slots.csv');
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Validation errors/i);
+    expect(Array.isArray(res.body.errors)).toBe(true);
+    expect(res.body.errors[0]).toMatch(/No weekly template block matches/i);
   });
 });

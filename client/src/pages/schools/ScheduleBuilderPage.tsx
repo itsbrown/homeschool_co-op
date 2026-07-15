@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, Calendar, Clock, ChevronDown, ChevronUp, LayoutGrid, BookOpen, Download, Upload, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, Calendar, Clock, ChevronDown, ChevronUp, LayoutGrid, BookOpen, Download, Upload, Loader2, HelpCircle } from "lucide-react";
 import type { WeeklySkeleton, SkeletonBlock, Session } from "@shared/schema";
 import { ScheduleBlocksCsvImportDialog } from "@/components/schedule/ScheduleBlocksCsvImportDialog";
+import { useScheduleBuilderTour } from "@/components/tutorials/useScheduleBuilderTour";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -76,6 +77,9 @@ const emptyBlockForm: BlockFormData = {
 
 export default function ScheduleBuilderPage() {
   const { toast } = useToast();
+  const { showTourPrompt, launchTour, dismissTourPrompt } = useScheduleBuilderTour({
+    offerFirstVisitPrompt: true,
+  });
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [templateForm, setTemplateForm] = useState<TemplateFormData>(emptyTemplateForm);
@@ -340,15 +344,30 @@ export default function ScheduleBuilderPage() {
   return (
     <SchoolAdminLayout pageTitle="Weekly Templates">
       <div className="flex flex-col space-y-6 p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Weekly Templates</h1>
             <p className="text-muted-foreground mt-1">Create and manage weekly schedule templates with time blocks</p>
           </div>
-          <Button onClick={openCreateTemplate}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Template
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={launchTour}
+              data-tutorial="schedule-tour-btn"
+              data-testid="schedule-tour-btn"
+            >
+              <HelpCircle className="h-4 w-4 mr-2" />
+              How to use
+            </Button>
+            <Button
+              onClick={openCreateTemplate}
+              data-tutorial="schedule-new-template"
+              data-testid="schedule-new-template"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Template
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -356,19 +375,19 @@ export default function ScheduleBuilderPage() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
         ) : templates.length === 0 ? (
-          <Card>
+          <Card data-tutorial="schedule-templates-list" data-testid="schedule-templates-list">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <LayoutGrid className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Templates Yet</h3>
               <p className="text-muted-foreground mb-4">Create a weekly schedule template to define your time block structure.</p>
-              <Button onClick={openCreateTemplate}>
+              <Button onClick={openCreateTemplate} data-testid="schedule-create-first-template">
                 <Plus className="h-4 w-4 mr-2" />
                 Create First Template
               </Button>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-4" data-tutorial="schedule-templates-list" data-testid="schedule-templates-list">
             {templates.map((template) => (
               <TemplateCard
                 key={template.id}
@@ -397,6 +416,28 @@ export default function ScheduleBuilderPage() {
           onClose={closeCsvImport}
         />
       </div>
+
+      <Dialog open={showTourPrompt} onOpenChange={(open) => { if (!open) dismissTourPrompt(false); }}>
+        <DialogContent className="max-w-md" data-testid="schedule-tour-prompt">
+          <DialogHeader>
+            <DialogTitle>New to Weekly Templates?</DialogTitle>
+            <DialogDescription>
+              Take a short tour: create a template, add time blocks, plan a week, then publish so parents can see it.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => dismissTourPrompt(true)} data-testid="schedule-tour-dismiss-forever">
+              Don&apos;t show again
+            </Button>
+            <Button variant="outline" onClick={() => dismissTourPrompt(false)} data-testid="schedule-tour-dismiss">
+              Not now
+            </Button>
+            <Button onClick={launchTour} data-testid="schedule-tour-start">
+              Start tour
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -428,7 +469,7 @@ export default function ScheduleBuilderPage() {
                   });
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger data-tutorial="schedule-class-select" data-testid="schedule-class-select">
                   <SelectValue placeholder="Select a class..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -825,7 +866,13 @@ function BlockEditor({
             <Upload className="h-3.5 w-3.5 mr-1" />
             Upload CSV
           </Button>
-          <Button size="sm" variant="outline" onClick={onAddBlock}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onAddBlock}
+            data-tutorial="schedule-add-block"
+            data-testid="schedule-add-block"
+          >
             <Plus className="h-3.5 w-3.5 mr-1" />
             Add Block
           </Button>

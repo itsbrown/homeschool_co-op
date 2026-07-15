@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { Link, useLocation } from "wouter";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
@@ -16,9 +24,11 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Plus, Copy, Sparkles, Search, CheckCircle2, Edit, History, Trash2,
   ChevronRight, Calendar, Clock, Loader2, ExternalLink, AlertTriangle,
-  ThumbsUp, Lightbulb, X, Download, Upload
+  ThumbsUp, Lightbulb, X, Download, Upload, HelpCircle, Hammer, MoreHorizontal
 } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
+import { useScheduleBuilderTour } from "@/components/tutorials/useScheduleBuilderTour";
+import { ScheduleBlocksCsvImportDialog } from "@/components/schedule/ScheduleBlocksCsvImportDialog";
 
 const DAY_NAMES: Record<number, string> = {
   0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday",
@@ -75,8 +85,11 @@ const emptyBlockForm: BlockFormData = {
 
 export default function WeekPlannerPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const { launchTour } = useScheduleBuilderTour();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [selectedWeekPlanId, setSelectedWeekPlanId] = useState<number | null>(null);
+  const [isBuilding, setIsBuilding] = useState(false);
   const [newWeekDialog, setNewWeekDialog] = useState(false);
   const [newWeekNumber, setNewWeekNumber] = useState("");
   const [newWeekStartDate, setNewWeekStartDate] = useState("");
@@ -94,11 +107,10 @@ export default function WeekPlannerPage() {
   const [historyBlockId, setHistoryBlockId] = useState<number | null>(null);
   const [gapsDialog, setGapsDialog] = useState(false);
   const [gapsResult, setGapsResult] = useState<any>(null);
-  const [csvImportDialog, setCsvImportDialog] = useState(false);
-  const [csvPreviewRows, setCsvPreviewRows] = useState<any[] | null>(null);
-  const [csvImportErrors, setCsvImportErrors] = useState<string[]>([]);
-  const [csvPendingFile, setCsvPendingFile] = useState<File | null>(null);
-  const [csvUploading, setCsvUploading] = useState(false);
+  const [csvImport, setCsvImport] = useState<{
+    file: File;
+    csvText: string;
+  } | null>(null);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
 
   const templateId = selectedTemplateId ? parseInt(selectedTemplateId) : null;
@@ -411,71 +423,77 @@ export default function WeekPlannerPage() {
     }
   };
 
+  const handleBuildFromTemplate = async () => {
+    if (!selectedWeekPlanId) return;
+    if (skeletonBlocks.length === 0) {
+      toast({
+        title: "No template blocks",
+        description: "Add blocks to your Weekly Template first, then Build this week.",
+      });
+      return;
+    }
+    const existingBlocks: WeekPlanBlock[] = (selectedWeekData as any)?.blocks || [];
+    const existingIds = new Set(
+      existingBlocks.map((b) => b.skeletonBlockId).filter(Boolean),
+    );
+    const missing = skeletonBlocks.filter((sb) => !existingIds.has(sb.id));
+    if (missing.length === 0) {
+      toast({ title: "All slots already have content" });
+      return;
+    }
+    setIsBuilding(true);
+    try {
+      await Promise.all(
+        missing.map((sb) =>
+          apiRequest("POST", `/api/schedule-builder/week-plans/${selectedWeekPlanId}/blocks`, {
+            skeletonBlockId: sb.id,
+            title: sb.defaultTitle || null,
+            description: sb.defaultDescription || null,
+            objectives: [],
+            groups: [],
+            lessonLink: null,
+            notes: null,
+          }),
+        ),
+      );
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId],
+      });
+      toast({
+        title: `Created ${missing.length} block${missing.length === 1 ? "" : "s"}`,
+        description: "Filled empty slots from the weekly template.",
+      });
+    } catch (err: any) {
+      toast({ title: "Build failed", description: err.message, variant: "destructive" });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId],
+      });
+    } finally {
+      setIsBuilding(false);
+    }
+  };
+
   const handleCsvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setCsvPendingFile(file);
-    setCsvImportErrors([]);
-    setCsvPreviewRows(null);
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const lines = text.split("\n").filter((l) => l.trim());
-      if (lines.length < 2) {
-        setCsvImportErrors(["CSV file is empty or has no data rows."]);
-        setCsvImportDialog(true);
+      const text = String(ev.target?.result ?? "");
+      if (!text.trim()) {
+        toast({
+          title: "Empty CSV",
+          description: "The selected file has no content.",
+          variant: "destructive",
+        });
         return;
       }
-      const headers = lines[0].split(",").map((h) => h.replace(/^"|"$/g, "").trim());
-      const previewData = lines.slice(1, 6).map((line) => {
-        const vals = line.split(",").map((v) => v.replace(/^"|"$/g, "").trim());
-        const row: Record<string, string> = {};
-        headers.forEach((h, i) => { row[h] = vals[i] || ""; });
-        return row;
-      });
-      setCsvPreviewRows(previewData);
-      setCsvImportDialog(true);
+      setCsvImport({ file, csvText: text });
     };
     reader.readAsText(file);
     e.target.value = "";
   };
 
-  const handleCsvConfirmUpload = async () => {
-    if (!csvPendingFile || !selectedWeekPlanId) return;
-    setCsvUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", csvPendingFile);
-      const res = await apiRequest("POST", `/api/schedule-builder/week-plans/${selectedWeekPlanId}/blocks/import-csv`, formData);
-      const data = await res.json();
-      toast({ title: `Successfully updated ${data.updated} blocks` });
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"] });
-      setCsvImportDialog(false);
-      setCsvPendingFile(null);
-      setCsvPreviewRows(null);
-      setCsvImportErrors([]);
-    } catch (err: any) {
-      const msg: string = err.message || "";
-      const jsonStart = msg.indexOf("{");
-      if (jsonStart !== -1) {
-        try {
-          const parsed = JSON.parse(msg.slice(jsonStart));
-          if (parsed.errors && parsed.errors.length > 0) {
-            setCsvImportErrors(parsed.errors);
-            return;
-          }
-          if (parsed.message) {
-            toast({ title: "Upload failed", description: parsed.message, variant: "destructive" });
-            return;
-          }
-        } catch {}
-      }
-      toast({ title: "Upload failed", description: msg, variant: "destructive" });
-    } finally {
-      setCsvUploading(false);
-    }
-  };
+  const closeCsvImport = () => setCsvImport(null);
 
   const weekPlanBlocks = (selectedWeekData as any)?.blocks || [];
   const blocksByDay: Record<number, { skeletonBlock: SkeletonBlock; weekBlock?: WeekPlanBlock }[]> = {};
@@ -505,21 +523,32 @@ export default function WeekPlannerPage() {
     <SchoolAdminLayout pageTitle="Week Planner">
       <div className="flex flex-col space-y-6 p-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
+          <div data-tutorial="week-planner-heading" data-testid="week-planner-heading">
             <h1 className="text-3xl font-bold tracking-tight">Multi-Week Planner</h1>
             <p className="text-muted-foreground mt-1">Manage week-by-week lesson plans based on weekly templates</p>
           </div>
-          <div className="w-64">
-            <Select value={selectedTemplateId} onValueChange={(v) => { setSelectedTemplateId(v); setSelectedWeekPlanId(null); }}>
-              <SelectTrigger data-testid="week-planner-template-select">
-                <SelectValue placeholder="Select a template..." />
-              </SelectTrigger>
-              <SelectContent>
-                {templates.map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.gradeLevel})</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={launchTour}
+              data-tutorial="week-planner-tour-btn"
+              data-testid="week-planner-tour-btn"
+            >
+              <HelpCircle className="h-4 w-4 mr-2" />
+              How to use
+            </Button>
+            <div className="w-64">
+              <Select value={selectedTemplateId} onValueChange={(v) => { setSelectedTemplateId(v); setSelectedWeekPlanId(null); }}>
+                <SelectTrigger data-tutorial="week-planner-template-select" data-testid="week-planner-template-select">
+                  <SelectValue placeholder="Select a template..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.gradeLevel})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -567,6 +596,8 @@ export default function WeekPlannerPage() {
                   setNewWeekNotes("");
                   setNewWeekDialog(true);
                 }}
+                data-tutorial="week-planner-new-week"
+                data-testid="week-planner-new-week"
               >
                 <Plus className="h-4 w-4 mr-1" />
                 New Week
@@ -592,38 +623,11 @@ export default function WeekPlannerPage() {
                           <p className="text-sm text-muted-foreground mt-2">{selectedWeekData.notes}</p>
                         )}
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedWeekData.status === "draft" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            data-testid="week-planner-publish"
-                            onClick={() => updateWeekMutation.mutate({ id: selectedWeekPlanId!, data: { status: "published" } })}
-                            disabled={updateWeekMutation.isPending}
-                          >
-                            <CheckCircle2 className="h-4 w-4 mr-1" />
-                            Publish
-                          </Button>
-                        )}
-                        {selectedWeekData.status === "published" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateWeekMutation.mutate({ id: selectedWeekPlanId!, data: { status: "completed" } })}
-                            disabled={updateWeekMutation.isPending}
-                          >
-                            <CheckCircle2 className="h-4 w-4 mr-1" />
-                            Complete
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={handleCsvDownload}>
-                          <Download className="h-4 w-4 mr-1" />
-                          Download CSV
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => csvFileInputRef.current?.click()}>
-                          <Upload className="h-4 w-4 mr-1" />
-                          Upload CSV
-                        </Button>
+                      <div
+                        className="flex items-center gap-2"
+                        data-tutorial="week-planner-publish-area"
+                        data-testid="week-planner-publish-area"
+                      >
                         <input
                           ref={csvFileInputRef}
                           type="file"
@@ -631,49 +635,148 @@ export default function WeekPlannerPage() {
                           className="hidden"
                           onChange={handleCsvFileChange}
                         />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setCloneSourceId(selectedWeekPlanId);
-                            setCloneWeekNumber(String(nextWeekNumber));
-                            setCloneWeekStartDate("");
-                            setCloneDialog(true);
-                          }}
-                        >
-                          <Copy className="h-4 w-4 mr-1" />
-                          Clone
-                        </Button>
-                        {aiAvailable && (
-                          <>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => templateId && generateWeekMutation.mutate({ skeletonId: templateId, weekNumber: selectedWeekData.weekNumber })}
-                              disabled={generateWeekMutation.isPending}
+                              disabled={
+                                isBuilding ||
+                                updateWeekMutation.isPending ||
+                                generateWeekMutation.isPending ||
+                                analyzeGapsMutation.isPending
+                              }
                             >
-                              {generateWeekMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
-                              Generate with AI
+                              {(isBuilding ||
+                                updateWeekMutation.isPending ||
+                                generateWeekMutation.isPending ||
+                                analyzeGapsMutation.isPending) ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <MoreHorizontal className="h-4 w-4 mr-1" />
+                              )}
+                              Actions
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => analyzeGapsMutation.mutate({ weekPlanId: selectedWeekPlanId! })}
-                              disabled={analyzeGapsMutation.isPending}
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem
+                              onClick={() => handleBuildFromTemplate()}
+                              disabled={isBuilding}
                             >
-                              {analyzeGapsMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Search className="h-4 w-4 mr-1" />}
-                              Analyze Gaps
-                            </Button>
-                          </>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600"
-                          onClick={() => setDeleteWeekId(selectedWeekPlanId)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                              {isBuilding ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Hammer className="h-4 w-4 mr-2" />
+                              )}
+                              Build
+                            </DropdownMenuItem>
+                            {skeletonBlocks.length === 0 && (
+                              <DropdownMenuItem onClick={() => setLocation("/schools/schedule-builder")}>
+                                <ExternalLink className="h-4 w-4 mr-2" />
+                                Weekly Templates
+                              </DropdownMenuItem>
+                            )}
+                            {selectedWeekData.status === "draft" && (
+                              <DropdownMenuItem
+                                data-testid="week-planner-publish"
+                                onClick={() =>
+                                  updateWeekMutation.mutate({
+                                    id: selectedWeekPlanId!,
+                                    data: { status: "published" },
+                                  })
+                                }
+                                disabled={updateWeekMutation.isPending}
+                              >
+                                {updateWeekMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                                )}
+                                Publish
+                              </DropdownMenuItem>
+                            )}
+                            {selectedWeekData.status === "published" && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  updateWeekMutation.mutate({
+                                    id: selectedWeekPlanId!,
+                                    data: { status: "completed" },
+                                  })
+                                }
+                                disabled={updateWeekMutation.isPending}
+                              >
+                                {updateWeekMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                                )}
+                                Complete
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={handleCsvDownload}>
+                              <Download className="h-4 w-4 mr-2" />
+                              Download CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => csvFileInputRef.current?.click()}>
+                              <Upload className="h-4 w-4 mr-2" />
+                              Upload CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setCloneSourceId(selectedWeekPlanId);
+                                setCloneWeekNumber(String(nextWeekNumber));
+                                setCloneWeekStartDate("");
+                                setCloneDialog(true);
+                              }}
+                            >
+                              <Copy className="h-4 w-4 mr-2" />
+                              Clone
+                            </DropdownMenuItem>
+                            {aiAvailable && (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    templateId &&
+                                    generateWeekMutation.mutate({
+                                      skeletonId: templateId,
+                                      weekNumber: selectedWeekData.weekNumber,
+                                    })
+                                  }
+                                  disabled={generateWeekMutation.isPending}
+                                >
+                                  {generateWeekMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-4 w-4 mr-2" />
+                                  )}
+                                  Generate with AI
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    analyzeGapsMutation.mutate({ weekPlanId: selectedWeekPlanId! })
+                                  }
+                                  disabled={analyzeGapsMutation.isPending}
+                                >
+                                  {analyzeGapsMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Search className="h-4 w-4 mr-2" />
+                                  )}
+                                  Analyze Gaps
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setDeleteWeekId(selectedWeekPlanId)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </CardHeader>
@@ -774,8 +877,11 @@ export default function WeekPlannerPage() {
                 </div>
                 {activeDays.length === 0 && (
                   <Card>
-                    <CardContent className="py-8 text-center text-muted-foreground">
-                      No template blocks found. Add blocks to your template first.
+                    <CardContent className="py-8 text-center text-muted-foreground space-y-3">
+                      <p>No template blocks found. Add blocks to your Weekly Template first.</p>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href="/schools/schedule-builder">Add blocks to your template</Link>
+                      </Button>
                     </CardContent>
                   </Card>
                 )}
@@ -1087,66 +1193,24 @@ export default function WeekPlannerPage() {
           )}
         </DialogContent>
       </Dialog>
-      <Dialog open={csvImportDialog} onOpenChange={(open) => { setCsvImportDialog(open); if (!open) { setCsvPendingFile(null); setCsvPreviewRows(null); setCsvImportErrors([]); } }}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Import Blocks from CSV</DialogTitle>
-            <DialogDescription>
-              Review the rows below. This will <strong>overwrite existing block content</strong> for matched blocks (matched by day and start time).
-            </DialogDescription>
-          </DialogHeader>
-          {csvImportErrors.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded p-3 space-y-1">
-              <p className="text-sm font-semibold text-red-700 flex items-center gap-1">
-                <AlertTriangle className="h-4 w-4" />
-                Validation errors — please fix the CSV and try again:
-              </p>
-              {csvImportErrors.map((err, i) => (
-                <p key={i} className="text-sm text-red-700">{err}</p>
-              ))}
-            </div>
-          )}
-          {csvPreviewRows && csvPreviewRows.length > 0 && csvImportErrors.length === 0 && (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Preview (first 5 data rows, hint row excluded):</p>
-              <div className="overflow-x-auto">
-                <table className="text-xs w-full border-collapse">
-                  <thead>
-                    <tr className="bg-muted">
-                      {Object.keys(csvPreviewRows[0]).map((h) => (
-                        <th key={h} className="border px-2 py-1 text-left font-medium">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {csvPreviewRows.map((row, i) => (
-                      <tr key={i} className="even:bg-muted/30">
-                        {Object.values(row).map((v: any, j) => (
-                          <td key={j} className="border px-2 py-1 truncate max-w-[120px]">{v}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          {csvPreviewRows && csvImportErrors.length === 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800 flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              Existing block content for matching blocks will be overwritten. Blocks not in the CSV will be unchanged.
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCsvImportDialog(false)}>Cancel</Button>
-            {csvPreviewRows && csvImportErrors.length === 0 && (
-              <Button onClick={handleCsvConfirmUpload} disabled={csvUploading}>
-                {csvUploading ? "Importing..." : "Confirm Import"}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ScheduleBlocksCsvImportDialog
+        mode="week-plan"
+        open={!!csvImport && !!selectedWeekPlanId}
+        weekPlanId={selectedWeekPlanId ?? 0}
+        weekLabel={
+          selectedWeekData
+            ? `Week ${selectedWeekData.weekNumber}${selectedTemplate ? ` · ${selectedTemplate.name}` : ""}`
+            : "Week plan"
+        }
+        file={csvImport?.file ?? null}
+        csvText={csvImport?.csvText ?? null}
+        onClose={closeCsvImport}
+        onImported={() => {
+          queryClient.invalidateQueries({
+            queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"],
+          });
+        }}
+      />
     </SchoolAdminLayout>
   );
 }

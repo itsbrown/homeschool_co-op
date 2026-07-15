@@ -1,5 +1,17 @@
 # App knowledge changelog
 
+## 2026-07-14 (Week Planner CSV mapping + import fix)
+
+- Week Planner CSV now uses shared `ScheduleBlocksCsvImportDialog` (`mode="week-plan"`): map → preview → confirm; surfaces server validation errors.
+- **Confirm Import root cause:** API passed `{ dayOfWeek, startTime, data }` but `bulkUpdateWeekPlanBlocks` expects `{ skeletonBlockId, title, … }` → DB/create failures. Import now matches template slots by day+start_time and accepts `default_title` (template CSV shape).
+- Domain: [schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md).
+
+## 2026-07-14 (Week Planner Actions menu + Build)
+
+- Week Planner week-card header: cluttered button row → single **Actions** dropdown; added **Build** (fill empty slots from skeleton `defaultTitle` / `defaultDescription`).
+- Domain: [schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md).
+
+
 ## 2026-07-14 (Collections Overview Auto-pay on = 0 — fixed)
 
 - **UI bug, not empty data:** ASA prod has **5** owing parents with `users.auto_pay_enabled` (plus 2 more with flag but no collections balance). Charge history Jul 2026 is correctly $0 (no `charged_by=auto_pay` / autopay `completion_source` rows; next autopay-on dues start ~Jul 19).
