@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-07-15 (Form editor — no mid-typing field saves)
+
+- Form Builder field label/placeholder/text config: local patch on keystroke, persist on blur (type/required still immediate). Silent field PUT (no "Field updated" toast).
+- Skip overwriting local `fields` from form query while dirty; field update no longer invalidates form queries (prevents mid-edit clobber).
+- E2E: blur after label `fill()` in `e2e/form-editor-fields.spec.ts`.
+- Domain: [custom-forms-public-access.md](./domains/custom-forms-public-access.md).
+
 ## 2026-07-15
 
 - Soft interactive-tutorial spotlight/scrim (no dark aggressive pulse); stable `interactiveTutorialContext` so Vite HMR cannot crash Week Planner / Schedule Builder tours; Help Tutorials lists schedule builder walkthrough for school-admin roles.

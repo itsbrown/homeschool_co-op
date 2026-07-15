@@ -55,7 +55,17 @@ interface Location {
   schoolId: number;
 }
 
-function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpdate: (updates: Partial<FormField>) => void; onDelete: () => void }) {
+function SortableField({
+  field,
+  onPatch,
+  onCommit,
+  onDelete,
+}: {
+  field: FormField;
+  onPatch: (updates: Partial<FormField>) => void;
+  onCommit: (updates?: Partial<FormField>) => void;
+  onDelete: () => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: field.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
 
@@ -74,7 +84,7 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Field Type</Label>
-              <Select value={field.fieldType} onValueChange={(value) => onUpdate({ fieldType: value })}>
+              <Select value={field.fieldType} onValueChange={(value) => onCommit({ fieldType: value })}>
                 <SelectTrigger className="h-9" data-testid={`select-field-type-${field.id}`}>
                   <SelectValue />
                 </SelectTrigger>
@@ -100,7 +110,8 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
               <Label className="text-xs">Label</Label>
               <Input
                 value={field.label}
-                onChange={(e) => onUpdate({ label: e.target.value })}
+                onChange={(e) => onPatch({ label: e.target.value })}
+                onBlur={() => onCommit()}
                 placeholder="Field label"
                 className="h-9"
                 data-testid={`input-field-label-${field.id}`}
@@ -112,7 +123,8 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
               <Label className="text-xs">Placeholder (optional)</Label>
               <Input
                 value={field.placeholder || ''}
-                onChange={(e) => onUpdate({ placeholder: e.target.value })}
+                onChange={(e) => onPatch({ placeholder: e.target.value })}
+                onBlur={() => onCommit()}
                 placeholder="Placeholder text"
                 className="h-9"
                 data-testid={`input-field-placeholder-${field.id}`}
@@ -121,7 +133,7 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
             <div className="flex items-center gap-2 mt-5">
               <Switch
                 checked={field.isRequired}
-                onCheckedChange={(checked) => onUpdate({ isRequired: checked })}
+                onCheckedChange={(checked) => onCommit({ isRequired: checked })}
                 data-testid={`switch-field-required-${field.id}`}
               />
               <Label className="text-xs">Required</Label>
@@ -132,10 +144,10 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
               <Label className="text-xs">Options (one per line)</Label>
               <Textarea
                 value={field.fieldConfig?.options?.join('\n') || ''}
-                onChange={(e) => onUpdate({
+                onChange={(e) => onPatch({
                   fieldConfig: { ...field.fieldConfig, options: e.target.value.split('\n') }
                 })}
-                onBlur={(e) => onUpdate({
+                onBlur={(e) => onCommit({
                   fieldConfig: { ...field.fieldConfig, options: e.target.value.split('\n').filter(o => o.trim()) }
                 })}
                 placeholder="Option 1&#10;Option 2&#10;Option 3"
@@ -149,9 +161,10 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
                 <Label className="text-xs">Product Description</Label>
                 <Textarea
                   value={field.fieldConfig?.description || ''}
-                  onChange={(e) => onUpdate({
+                  onChange={(e) => onPatch({
                     fieldConfig: { ...field.fieldConfig, description: e.target.value }
                   })}
+                  onBlur={() => onCommit()}
                   placeholder="Brief product description"
                   className="h-16"
                 />
@@ -163,9 +176,10 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
                     type="number"
                     step="0.01"
                     value={(field.fieldConfig?.price || 0) / 100}
-                    onChange={(e) => onUpdate({
+                    onChange={(e) => onPatch({
                       fieldConfig: { ...field.fieldConfig, price: Math.round(parseFloat(e.target.value) * 100) }
                     })}
+                    onBlur={() => onCommit()}
                     placeholder="10.00"
                     className="h-9"
                   />
@@ -175,9 +189,10 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
                   <Input
                     type="number"
                     value={field.fieldConfig?.maxQuantity || 10}
-                    onChange={(e) => onUpdate({
+                    onChange={(e) => onPatch({
                       fieldConfig: { ...field.fieldConfig, maxQuantity: parseInt(e.target.value) || 10 }
                     })}
+                    onBlur={() => onCommit()}
                     placeholder="10"
                     className="h-9"
                   />
@@ -196,7 +211,7 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
                           price: Math.round((parseFloat(priceStr) || 0) * 100)
                         };
                       });
-                    onUpdate({
+                    onPatch({
                       fieldConfig: { ...field.fieldConfig, variants }
                     });
                   }}
@@ -210,7 +225,7 @@ function SortableField({ field, onUpdate, onDelete }: { field: FormField; onUpda
                           price: Math.round((parseFloat(priceStr) || 0) * 100)
                         };
                       });
-                    onUpdate({
+                    onCommit({
                       fieldConfig: { ...field.fieldConfig, variants }
                     });
                   }}
@@ -253,9 +268,9 @@ export default function FormEditorPage() {
     platformFeeType: 'none' as string,
     platformFeeAmount: 0,
   });
-  const fieldUpdateTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const pendingFieldUpdates = useRef<Record<number, Partial<FormField>>>({});
   const fieldsSnapshotRef = useRef<FormField[]>([]);
+  const fieldsDirtyRef = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -276,9 +291,12 @@ export default function FormEditorPage() {
 
   useEffect(() => {
     if (form) {
-      const nextFields = form.fields || [];
-      setFields(nextFields);
-      fieldsSnapshotRef.current = nextFields;
+      // Avoid clobbering in-progress field edits when the form query refetches.
+      if (!fieldsDirtyRef.current && Object.keys(pendingFieldUpdates.current).length === 0) {
+        const nextFields = form.fields || [];
+        setFields(nextFields);
+        fieldsSnapshotRef.current = nextFields;
+      }
       setFormSettings(form.settings || {});
       setFormData({
         title: form.title,
@@ -292,12 +310,6 @@ export default function FormEditorPage() {
       });
     }
   }, [form]);
-
-  useEffect(() => {
-    return () => {
-      Object.values(fieldUpdateTimers.current).forEach(clearTimeout);
-    };
-  }, []);
 
   const invalidateFormQueries = useCallback(() => {
     if (formId) {
@@ -386,7 +398,7 @@ export default function FormEditorPage() {
     },
   });
 
-  // Update field mutation
+  // Update field mutation (silent autosave — no toast on success)
   const updateFieldMutation = useMutation({
     mutationFn: async ({ fieldId, updates }: { fieldId: number; updates: Partial<FormField> }) => {
       const response = await apiRequest("PUT", `/api/custom-forms/fields/${fieldId}`, updates);
@@ -394,14 +406,26 @@ export default function FormEditorPage() {
     },
     onSuccess: (updatedField: FormField) => {
       setFields(prev => {
-        const next = prev.map(f => (f.id === updatedField.id ? { ...f, ...updatedField } : f));
-        fieldsSnapshotRef.current = next;
+        // Keep any newer local edits that arrived while the request was in flight.
+        const pending = pendingFieldUpdates.current[updatedField.id];
+        const next = prev.map(f => {
+          if (f.id !== updatedField.id) return f;
+          return { ...f, ...updatedField, ...(pending || {}) };
+        });
+        fieldsSnapshotRef.current = next.map(f => {
+          if (f.id !== updatedField.id) return f;
+          // Snapshot excludes unsaved pending so error rollback stays correct.
+          return { ...f, ...updatedField };
+        });
         return next;
       });
-      invalidateFormQueries();
-      toast({ title: 'Success', description: 'Field updated' });
+      if (Object.keys(pendingFieldUpdates.current).length === 0) {
+        fieldsDirtyRef.current = false;
+      }
     },
     onError: (error: any, variables) => {
+      delete pendingFieldUpdates.current[variables.fieldId];
+      fieldsDirtyRef.current = Object.keys(pendingFieldUpdates.current).length > 0;
       setFields(fieldsSnapshotRef.current);
       toast({
         title: 'Error',
@@ -479,26 +503,35 @@ export default function FormEditorPage() {
     }
   };
 
-  const updateField = (fieldId: number, updates: Partial<FormField>) => {
+  const patchField = (fieldId: number, updates: Partial<FormField>) => {
+    fieldsDirtyRef.current = true;
     setFields(prev => prev.map(f => (f.id === fieldId ? { ...f, ...updates } : f)));
     pendingFieldUpdates.current[fieldId] = {
       ...(pendingFieldUpdates.current[fieldId] || {}),
       ...updates,
     };
-    if (fieldUpdateTimers.current[fieldId]) {
-      clearTimeout(fieldUpdateTimers.current[fieldId]);
+  };
+
+  const commitField = (fieldId: number, updates?: Partial<FormField>) => {
+    if (updates) {
+      patchField(fieldId, updates);
     }
-    fieldUpdateTimers.current[fieldId] = setTimeout(() => {
-      const payload = pendingFieldUpdates.current[fieldId];
-      delete pendingFieldUpdates.current[fieldId];
-      delete fieldUpdateTimers.current[fieldId];
-      if (payload) {
-        updateFieldMutation.mutate({ fieldId, updates: payload });
+    const payload = pendingFieldUpdates.current[fieldId];
+    delete pendingFieldUpdates.current[fieldId];
+    if (!payload || Object.keys(payload).length === 0) {
+      if (Object.keys(pendingFieldUpdates.current).length === 0) {
+        fieldsDirtyRef.current = false;
       }
-    }, 400);
+      return;
+    }
+    updateFieldMutation.mutate({ fieldId, updates: payload });
   };
 
   const saveForm = () => {
+    // Flush any in-progress field edits before saving form settings.
+    Object.keys(pendingFieldUpdates.current).forEach((id) => {
+      commitField(Number(id));
+    });
     updateFormMutation.mutate({
       title: formData.title,
       description: formData.description,
@@ -607,8 +640,13 @@ export default function FormEditorPage() {
                     <SortableField
                       key={field.id}
                       field={field}
-                      onUpdate={(updates) => updateField(field.id, updates)}
-                      onDelete={() => deleteFieldMutation.mutate(field.id)}
+                      onPatch={(updates) => patchField(field.id, updates)}
+                      onCommit={(updates) => commitField(field.id, updates)}
+                      onDelete={() => {
+                        delete pendingFieldUpdates.current[field.id];
+                        fieldsDirtyRef.current = Object.keys(pendingFieldUpdates.current).length > 0;
+                        deleteFieldMutation.mutate(field.id);
+                      }}
                     />
                   ))}
                 </SortableContext>
