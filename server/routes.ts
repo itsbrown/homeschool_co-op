@@ -9,6 +9,7 @@ import { insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMa
 import { getDb } from "./db";
 import { eq } from "drizzle-orm";
 import { supabaseAuth } from "./middleware/supabase-auth";
+import { extractFamilyScheduleTiming } from "./utils/family-schedule";
 
 // Type for authenticated requests with our auth structure
 interface AuthenticatedRequest extends Request {
@@ -530,13 +531,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Lesson routes
+  const resolveLessonAuthorId = (req: any): number | undefined =>
+    req.user?.id ?? req.session?.userId;
+
+  /** AI single-lesson plan (uses Anthropic when configured; 503 when unavailable). */
+  app.post("/api/lessons/generate", isAuthenticated, async (req, res) => {
+    try {
+      const {
+        title,
+        subject,
+        gradeLevel,
+        duration,
+        objectives,
+        learningStyles,
+        additionalNotes,
+        worksheetTypes,
+        knowledgeBaseIds,
+      } = req.body ?? {};
+
+      if (!subject || !gradeLevel || !duration || !objectives) {
+        return res.status(400).json({
+          message: "Required fields are missing",
+          requiredFields: ["subject", "gradeLevel", "duration", "objectives"],
+        });
+      }
+
+      const styles: string[] = Array.isArray(learningStyles) ? learningStyles : [];
+      if (styles.length === 0) {
+        return res.status(400).json({ message: "Select at least one learning style" });
+      }
+
+      const { anthropicService } = await import("./services/anthropic");
+      if (!anthropicService.isAvailable()) {
+        return res.status(503).json({
+          message: "AI lesson generation is unavailable. Configure ANTHROPIC_API_KEY or use Week Planner schedule AI.",
+        });
+      }
+
+      const { generateLessonPlanWithAI } = await import("./services/anthropic");
+      const topic = typeof title === "string" && title.trim() ? title.trim() : subject;
+      const notesSuffix =
+        typeof additionalNotes === "string" && additionalNotes.trim()
+          ? `\nAdditional notes: ${additionalNotes.trim()}`
+          : "";
+      const raw = await generateLessonPlanWithAI(
+        subject,
+        gradeLevel,
+        Number(duration),
+        topic,
+        String(objectives) + notesSuffix,
+        styles,
+      );
+
+      let parsed: Record<string, any> = {};
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = {};
+      }
+
+      const activitiesRaw = Array.isArray(parsed.activities) ? parsed.activities : [];
+      const result = {
+        title: parsed.title || topic,
+        duration: Number(parsed.duration) || Number(duration),
+        objectives: Array.isArray(parsed.objectives)
+          ? parsed.objectives.map(String)
+          : [String(objectives)],
+        materials: Array.isArray(parsed.materials) ? parsed.materials.map(String) : [],
+        activities: activitiesRaw.map((a: any) => ({
+          title: String(a?.name || a?.title || "Activity"),
+          duration: Number(a?.duration) || 10,
+          description: String(a?.description || ""),
+          learningStyles: Array.isArray(a?.learningStyles) ? a.learningStyles.map(String) : styles,
+        })),
+        assessments: parsed.assessment
+          ? [String(parsed.assessment)]
+          : Array.isArray(parsed.assessments)
+            ? parsed.assessments.map(String)
+            : [],
+        extensions: parsed.differentiation
+          ? Object.values(parsed.differentiation).map(String)
+          : Array.isArray(parsed.extensions)
+            ? parsed.extensions.map(String)
+            : [],
+        worksheets: Array.isArray(worksheetTypes)
+          ? worksheetTypes.map((type: string) => ({
+              type,
+              title: `${subject} ${String(type).replace(/_/g, " ")}`,
+              description: `Worksheet template for ${gradeLevel}`,
+            }))
+          : undefined,
+        knowledgeBases: Array.isArray(knowledgeBaseIds) ? knowledgeBaseIds : undefined,
+        rawAi: parsed,
+      };
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error generating lesson plan:", error);
+      res.status(500).json({
+        message: "Failed to generate lesson plan",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
   app.post("/api/lessons", isAuthenticated, async (req, res) => {
     try {
+      const authorId = resolveLessonAuthorId(req);
+      if (!authorId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
       const validatedData = insertLessonSchema.parse(req.body);
 
       const lesson = await storage.createLesson({
         ...validatedData,
-        authorId: req.session.userId
+        authorId,
       });
 
       res.status(201).json(lesson);
@@ -550,7 +659,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/lessons", isAuthenticated, async (req, res) => {
     try {
-      const lessons = await storage.getLessonsByAuthor(req.session.userId);
+      const authorId = resolveLessonAuthorId(req);
+      if (!authorId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const lessons = await storage.getLessonsByAuthor(authorId);
       res.status(200).json(lessons);
     } catch (error) {
       res.status(500).json({ message: "Error fetching lessons" });
@@ -559,6 +672,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/lessons/:id", isAuthenticated, async (req, res) => {
     try {
+      const authorId = resolveLessonAuthorId(req);
+      if (!authorId) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
       const lessonId = parseInt(req.params.id);
       const lesson = await storage.getLesson(lessonId);
 
@@ -567,7 +684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if user is author
-      if (lesson.authorId !== req.session.userId) {
+      if (lesson.authorId !== authorId) {
         return res.status(403).json({ message: "Forbidden" });
       }
 
@@ -2096,72 +2213,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get class details for each enrollment and format as schedule events
       const scheduleEvents = await Promise.all(
         activeEnrollments.map(async (enrollment) => {
-          // Get class details
-          const classId = enrollment.classId || enrollment.programId;
-          const classDetails = await storage.getClassById(classId);
-          
-          if (!classDetails) {
-            console.log(`⚠️ Class not found for enrollment:`, enrollment);
+          try {
+            // Prefer marketplace class id when present (unified enrollments).
+            const classId =
+              enrollment.marketplaceClassId ?? enrollment.classId ?? enrollment.programId;
+            if (classId == null) {
+              console.log(`⚠️ No class id for enrollment:`, enrollment.id);
+              return null;
+            }
+            const classDetails = await storage.getClassById(classId);
+
+            if (!classDetails) {
+              console.log(`⚠️ Class not found for enrollment:`, enrollment.id, classId);
+              return null;
+            }
+
+            const { scheduleDays, startTime, endTime, scheduleLabel } = extractFamilyScheduleTiming(
+              classDetails.schedule,
+              enrollment.variantId,
+            );
+
+            if (scheduleDays.length === 0) {
+              console.log(
+                `⚠️ No recurring days parsed for class ${classDetails.id} (enrollment ${enrollment.id})`,
+              );
+              return null;
+            }
+
+            // Generate recurring events from class start through class end (fallback: +3 months).
+            const events: any[] = [];
+            const startDateObj = new Date(classDetails.startDate || new Date());
+            const endDateObj = classDetails.endDate
+              ? new Date(classDetails.endDate)
+              : (() => {
+                  const d = new Date(startDateObj);
+                  d.setMonth(d.getMonth() + 3);
+                  return d;
+                })();
+
+            const currentDate = new Date(startDateObj);
+            // Normalize to local calendar day iteration
+            currentDate.setHours(12, 0, 0, 0);
+            endDateObj.setHours(23, 59, 59, 999);
+
+            while (currentDate <= endDateObj) {
+              if (scheduleDays.includes(currentDate.getDay())) {
+                events.push({
+                  id: `enrollment-${enrollment.id}-${classDetails.id}-${currentDate.toISOString().slice(0, 10)}`,
+                  title: classDetails.title || enrollment.className,
+                  date: currentDate.toISOString().split('T')[0],
+                  startTime,
+                  endTime,
+                  location: classDetails.location || 'Location TBD',
+                  type: 'class',
+                  childId: enrollment.childId.toString(),
+                  childName: enrollment.childName,
+                  color: '#3b82f6',
+                  description: classDetails.description || '',
+                  programName: classDetails.title,
+                  instructorName: classDetails.instructorName || 'TBD',
+                  schedule: scheduleLabel || classDetails.schedule,
+                });
+              }
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            return events;
+          } catch (enrollmentErr) {
+            console.error(
+              `⚠️ Failed to build schedule events for enrollment ${enrollment.id}:`,
+              enrollmentErr,
+            );
             return null;
           }
-
-          // Parse schedule to get days and times (format: "Monday, Wednesday, Friday 9am-12pm")
-          const scheduleMatch = classDetails.schedule?.match(/(\d+)(am|pm)-(\d+)(am|pm)/);
-          let startTime = '9:00';
-          let endTime = '12:00';
-          
-          if (scheduleMatch) {
-            const startHour = parseInt(scheduleMatch[1]);
-            const startPeriod = scheduleMatch[2];
-            const endHour = parseInt(scheduleMatch[3]);
-            const endPeriod = scheduleMatch[4];
-            
-            startTime = `${startPeriod === 'pm' && startHour !== 12 ? startHour + 12 : startHour}:00`;
-            endTime = `${endPeriod === 'pm' && endHour !== 12 ? endHour + 12 : endHour}:00`;
-          }
-
-          // Parse days of week from schedule
-          const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-          const scheduleDays: number[] = [];
-          
-          daysOfWeek.forEach((day, index) => {
-            if (classDetails.schedule?.toLowerCase().includes(day.toLowerCase())) {
-              scheduleDays.push(index);
-            }
-          });
-
-          // Generate recurring events for the next 3 months
-          const events: any[] = [];
-          const startDateObj = new Date(classDetails.startDate || new Date());
-          const endDateObj = new Date(classDetails.endDate || new Date());
-          endDateObj.setMonth(endDateObj.getMonth() + 3); // Show 3 months ahead
-          
-          const currentDate = new Date(startDateObj);
-          
-          while (currentDate <= endDateObj) {
-            if (scheduleDays.includes(currentDate.getDay())) {
-              events.push({
-                id: `enrollment-${enrollment.id || Math.random()}-${classDetails.id}-${currentDate.toISOString()}`,
-                title: classDetails.title || enrollment.className,
-                date: currentDate.toISOString().split('T')[0],
-                startTime,
-                endTime,
-                location: classDetails.location || 'Location TBD',
-                type: 'class',
-                childId: enrollment.childId.toString(),
-                childName: enrollment.childName,
-                color: '#3b82f6',
-                description: classDetails.description || '',
-                programName: classDetails.title,
-                instructorName: classDetails.instructorName || 'TBD',
-                schedule: classDetails.schedule
-              });
-            }
-            currentDate.setDate(currentDate.getDate() + 1);
-          }
-
-          return events;
-        })
+        }),
       );
 
       // Flatten array of arrays (each enrollment returns multiple events)

@@ -8552,4 +8552,140 @@ router.post('/sessions/:sessionId/generate-qr', supabaseAuth, async (req: any, r
 // NOTE: POST /api/educator/qr-checkin should be added to server/api/educator.ts, not here.
 // That endpoint would validate the QR token, check expiry, verify geolocation, and record attendance.
 
+// GET /api/school-admin/academics/kpi — lesson completion + attendance side-by-side
+router.get('/academics/kpi', supabaseAuth, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const userRolesList = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRolesList.find(
+      (r) => r.role === 'schoolAdmin' || r.role === 'superAdmin' || r.role === 'director',
+    );
+    if (!adminRole?.schoolId) {
+      return res.status(403).json({ error: 'No school admin role found' });
+    }
+
+    const schoolId = adminRole.schoolId;
+    const startDate = typeof req.query.startDate === 'string' ? req.query.startDate : undefined;
+    const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : undefined;
+    const classIdRaw = req.query.classId;
+    const classId =
+      classIdRaw && classIdRaw !== 'all' ? parseInt(String(classIdRaw), 10) : undefined;
+
+    const lesson = await storage.getAcademicsLessonKpi({
+      schoolId,
+      startDate,
+      endDate,
+      classId: Number.isFinite(classId) ? classId : undefined,
+    });
+
+    // Reuse attendance summary aggregates (same school + date + class filters)
+    const summaryRes = await (async () => {
+      const db = await getDb();
+      const sessionConditions: any[] = [eq(classSessions.schoolId, schoolId)];
+      const attendanceConditions: any[] = [eq(sessionAttendance.schoolId, schoolId)];
+      if (startDate) {
+        sessionConditions.push(sql`${classSessions.scheduledDate} >= ${startDate}`);
+        attendanceConditions.push(sql`${classSessions.scheduledDate} >= ${startDate}`);
+      }
+      if (endDate) {
+        sessionConditions.push(sql`${classSessions.scheduledDate} <= ${endDate}`);
+        attendanceConditions.push(sql`${classSessions.scheduledDate} <= ${endDate}`);
+      }
+      if (Number.isFinite(classId)) {
+        sessionConditions.push(eq(classSessions.classId, classId as number));
+        attendanceConditions.push(eq(classSessions.classId, classId as number));
+      }
+
+      const [totalSessionsResult] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(classSessions)
+        .where(and(...sessionConditions));
+
+      const [totalRecordsResult] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(sessionAttendance)
+        .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
+        .where(and(...attendanceConditions));
+
+      const [presentLateResult] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(sessionAttendance)
+        .innerJoin(classSessions, eq(sessionAttendance.sessionId, classSessions.id))
+        .where(
+          and(...attendanceConditions, sql`${sessionAttendance.status} IN ('present', 'late')`),
+        );
+
+      const totalRecords = totalRecordsResult?.count || 0;
+      const presentLateCount = presentLateResult?.count || 0;
+      return {
+        totalSessions: totalSessionsResult?.count || 0,
+        overallAttendanceRate:
+          totalRecords > 0 ? Math.round((presentLateCount / totalRecords) * 10000) / 100 : 0,
+        totalAttendanceRecords: totalRecords,
+        presentOrLate: presentLateCount,
+      };
+    })();
+
+    res.json({
+      lesson,
+      attendance: summaryRes,
+      filters: { startDate: startDate || null, endDate: endDate || null, classId: classId ?? null },
+    });
+  } catch (error) {
+    console.error('[AcademicsKPI] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch academics KPI' });
+  }
+});
+
+router.get('/academics/kpi/export', supabaseAuth, async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const userRolesList = await storage.getUserRolesByUserId(userId);
+    const adminRole = userRolesList.find(
+      (r) => r.role === 'schoolAdmin' || r.role === 'superAdmin' || r.role === 'director',
+    );
+    if (!adminRole?.schoolId) return res.status(403).json({ error: 'No school admin role found' });
+
+    const startDate = typeof req.query.startDate === 'string' ? req.query.startDate : undefined;
+    const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : undefined;
+    const classIdRaw = req.query.classId;
+    const classId =
+      classIdRaw && classIdRaw !== 'all' ? parseInt(String(classIdRaw), 10) : undefined;
+
+    const lesson = await storage.getAcademicsLessonKpi({
+      schoolId: adminRole.schoolId,
+      startDate,
+      endDate,
+      classId: Number.isFinite(classId) ? classId : undefined,
+    });
+
+    const header = [
+      'class_title',
+      'week_number',
+      'week_start_date',
+      'total_blocks',
+      'completed_blocks',
+      'completion_percent',
+    ];
+    const rows = lesson.byClass.map((r) => [
+      r.classTitle,
+      String(r.weekNumber),
+      r.weekStartDate || '',
+      String(r.totalBlocks),
+      String(r.completedBlocks),
+      String(r.completionPercent),
+    ]);
+    const csv = [header, ...rows].map((line) => line.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=lesson-completion-kpi.csv');
+    res.send(csv);
+  } catch (error) {
+    console.error('[AcademicsKPI] Export error:', error);
+    res.status(500).json({ error: 'Failed to export KPI' });
+  }
+});
+
 export default router;

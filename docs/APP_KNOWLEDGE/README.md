@@ -31,6 +31,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 | [domains/ci-and-testing.md](./domains/ci-and-testing.md) | GitHub Actions, Playwright, agent knowledge maintenance |
 | [domains/custom-forms-public-access.md](./domains/custom-forms-public-access.md) | Public Form Builder, mentor app, resume upload, E2E |
 | [../E2E_COMMANDS.md](../E2E_COMMANDS.md) | Playwright: npm scripts, per-spec commands, seeds (**update catalog when adding `e2e/*.spec.ts`**) |
+| [domains/schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md) | Week templates/plans, family schedule jsonb, lessons/AI, progress pills, academics KPI |
 | [domains/student-progress-assessments.md](./domains/student-progress-assessments.md) | F-14 assessments, Lexile, progress tracking audit |
 | [domains/school-analytics.md](./domains/school-analytics.md) | Engagement, cart funnel, progress charts, telemetry |
 | [domains/observability.md](./domains/observability.md) | Sentry, error telemetry, SendGrid webhooks, report audit |

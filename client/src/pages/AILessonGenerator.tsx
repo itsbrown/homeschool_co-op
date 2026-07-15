@@ -30,7 +30,8 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles, Lightbulb, ArrowRight, Book, Clock, Brain, Target, AlertCircle, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { createLesson } from "@/lib/api";
 
 const formSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters"),
@@ -225,106 +226,50 @@ export default function AILessonGenerator() {
     mutationFn: async (data: FormValues) => {
       setIsGenerating(true);
       try {
-        // In a real app, this would be an API call
-        // return await apiRequest("/api/lessons/generate", data);
-        
-        // For now, we'll simulate a response after a delay
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // This is just a placeholder for demonstration
         if (!isAIAvailable) {
-          throw new Error("AI services are currently unavailable. Please try again later.");
+          throw new Error(
+            "AI services are currently unavailable. Configure ANTHROPIC_API_KEY, or use Week Planner → schedule AI for class week plans.",
+          );
         }
-        
-        const result: GeneratedLesson = {
+
+        const res = await apiRequest("POST", "/api/lessons/generate", {
           title: data.title,
+          subject: data.subject,
+          gradeLevel: data.gradeLevel,
           duration: data.duration,
-          objectives: [
-            "Understand the key concepts of " + data.subject,
-            "Apply critical thinking to real-world scenarios",
-            "Demonstrate mastery through hands-on activities"
-          ],
-          materials: [
-            "Textbook or digital resources",
-            "Worksheets or handouts",
-            "Visual aids or manipulatives"
-          ],
-          activities: [
-            {
-              title: "Introduction",
-              duration: Math.round(data.duration * 0.2),
-              description: "Begin with an engaging hook that connects to students' prior knowledge about " + data.subject,
-              learningStyles: ["visual", "auditory"]
-            },
-            {
-              title: "Main Activity",
-              duration: Math.round(data.duration * 0.5),
-              description: "Students will work through concepts with guided practice and collaborative learning",
-              learningStyles: data.learningStyles
-            },
-            {
-              title: "Conclusion",
-              duration: Math.round(data.duration * 0.3),
-              description: "Review key points and check for understanding through summary activities",
-              learningStyles: ["social", "reading"]
-            }
-          ],
-          assessments: [
-            "Formative assessment through questioning and observation",
-            "Exit ticket summarizing main concepts",
-            "Optional extension activity for advanced learners"
-          ],
-          extensions: [
-            "Additional resources for students who want to explore further",
-            "Modifications for different learning needs",
-            "Home learning extension activities"
-          ]
-        };
-        
-        // Generate worksheets if any selected
+          objectives: data.objectives,
+          learningStyles: data.learningStyles,
+          worksheetTypes: data.worksheetTypes,
+          knowledgeBaseIds: data.knowledgeBaseIds,
+          additionalNotes: data.additionalNotes,
+        });
+        const result = (await res.json()) as GeneratedLesson;
+
+        // Attach knowledge base metadata from the local query (IDs already sent to the API)
+        if (data.knowledgeBaseIds && data.knowledgeBaseIds.length > 0) {
+          const selectedKnowledgeBases =
+            knowledgeBasesQuery.data?.filter((kb) => data.knowledgeBaseIds?.includes(kb.id)) || [];
+          if (selectedKnowledgeBases.length > 0) {
+            result.knowledgeBases = selectedKnowledgeBases.map((kb) => ({
+              id: kb.id,
+              title: kb.title,
+              subject: kb.subject,
+              difficulty: kb.difficulty,
+            }));
+          }
+        }
+
+        // Prefer client worksheet templates when types were selected (API returns thin stubs)
         if (data.worksheetTypes && data.worksheetTypes.length > 0) {
           result.worksheets = [];
-          
-          // Create worksheet for each selected type
-          data.worksheetTypes.forEach(type => {
+          data.worksheetTypes.forEach((type) => {
             const worksheetTemplate = getWorksheetTemplate(type, data.subject, data.gradeLevel);
             if (worksheetTemplate) {
               result.worksheets?.push(worksheetTemplate);
             }
           });
         }
-        
-        // Include knowledge base references if any selected
-        if (data.knowledgeBaseIds && data.knowledgeBaseIds.length > 0) {
-          // Find the selected knowledge bases from the query data
-          const selectedKnowledgeBases = knowledgeBasesQuery.data?.filter(kb => 
-            data.knowledgeBaseIds?.includes(kb.id)
-          ) || [];
-          
-          // Include knowledge base information in the generated lesson
-          if (selectedKnowledgeBases.length > 0) {
-            result.knowledgeBases = selectedKnowledgeBases.map(kb => ({
-              id: kb.id,
-              title: kb.title,
-              subject: kb.subject,
-              difficulty: kb.difficulty
-            }));
-            
-            // Enhance the lesson content with knowledge base-specific information
-            if (result.objectives) {
-              result.objectives.push(
-                `Apply concepts from the selected knowledge bases: ${selectedKnowledgeBases.map(kb => kb.title).join(', ')}`
-              );
-            }
-            
-            if (result.materials) {
-              result.materials.push(
-                `Knowledge base resources: ${selectedKnowledgeBases.map(kb => kb.title).join(', ')}`
-              );
-            }
-          }
-        }
-        
+
         return result;
       } catch (error: any) {
         console.error("Generation error:", error);
@@ -355,18 +300,25 @@ export default function AILessonGenerator() {
   const saveLessonMutation = useMutation({
     mutationFn: async () => {
       if (!generatedLesson) return;
-      
-      // This would be an actual API call in a real app
-      // return await apiRequest("/api/lessons", {
-      //   ...generatedLesson,
-      //   ...form.getValues(),
-      //   authorId: user?.id,
-      //   status: "draft",
-      // });
-      
-      // For now, simulate a successful save after a delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return { id: Math.floor(Math.random() * 1000) };
+      const formValues = form.getValues();
+      return await createLesson({
+        title: generatedLesson.title || formValues.title,
+        description: formValues.objectives,
+        subject: formValues.subject,
+        gradeLevel: formValues.gradeLevel,
+        duration: generatedLesson.duration || formValues.duration,
+        content: {
+          objectives: generatedLesson.objectives,
+          materials: generatedLesson.materials,
+          activities: generatedLesson.activities,
+          assessments: generatedLesson.assessments,
+          extensions: generatedLesson.extensions,
+          worksheets: generatedLesson.worksheets,
+          knowledgeBases: generatedLesson.knowledgeBases,
+        },
+        status: "draft",
+        isPublished: false,
+      });
     },
     onSuccess: () => {
       toast({
@@ -375,10 +327,10 @@ export default function AILessonGenerator() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/lessons"] });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Save failed",
-        description: "There was an error saving your lesson. Please try again.",
+        description: error.message || "There was an error saving your lesson. Please try again.",
         variant: "destructive",
       });
     },

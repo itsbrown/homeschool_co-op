@@ -13,6 +13,7 @@ import {
 } from './lib/location-db';
 import { getAllSchoolsCore, getSchoolCoreById, insertSchoolCore } from './lib/school-db';
 import * as apDb from './lib/assessment-progress-db';
+import * as sbDb from './lib/schedule-builder-db';
 import {
   User, InsertUser, users,
   UserRole, userRoles,
@@ -4457,6 +4458,37 @@ export class DatabaseStorage implements IStorage {
   getAssessmentSessionById = apDb.getAssessmentSessionById;
   createAssessmentSession = apDb.createAssessmentSession;
   updateAssessmentSession = apDb.updateAssessmentSession;
+
+  // Schedule builder
+  getWeeklySkeletonsBySchool = sbDb.getWeeklySkeletonsBySchool;
+  getWeeklySkeletonById = sbDb.getWeeklySkeletonById;
+  createWeeklySkeleton = sbDb.createWeeklySkeleton;
+  updateWeeklySkeleton = sbDb.updateWeeklySkeleton;
+  deleteWeeklySkeleton = sbDb.deleteWeeklySkeleton;
+  getSkeletonBlocksBySkeletonId = sbDb.getSkeletonBlocksBySkeletonId;
+  getSkeletonBlockById = sbDb.getSkeletonBlockById;
+  createSkeletonBlock = sbDb.createSkeletonBlock;
+  updateSkeletonBlock = sbDb.updateSkeletonBlock;
+  deleteSkeletonBlock = sbDb.deleteSkeletonBlock;
+  reorderSkeletonBlocks = sbDb.reorderSkeletonBlocks;
+  bulkReplaceSkeletonBlocks = sbDb.bulkReplaceSkeletonBlocks;
+  getWeekPlansBySkeletonId = sbDb.getWeekPlansBySkeletonId;
+  getPublishedWeekPlansBySchool = sbDb.getPublishedWeekPlansBySchool;
+  getWeekPlanById = sbDb.getWeekPlanById;
+  createWeekPlan = sbDb.createWeekPlan;
+  updateWeekPlan = sbDb.updateWeekPlan;
+  deleteWeekPlan = sbDb.deleteWeekPlan;
+  cloneWeekPlan = sbDb.cloneWeekPlan;
+  getWeekPlanBlocksByWeekPlanId = sbDb.getWeekPlanBlocksByWeekPlanId;
+  getWeekPlanBlockById = sbDb.getWeekPlanBlockById;
+  createWeekPlanBlock = sbDb.createWeekPlanBlock;
+  updateWeekPlanBlock = sbDb.updateWeekPlanBlock;
+  deleteWeekPlanBlock = sbDb.deleteWeekPlanBlock;
+  markBlockCompleted = sbDb.markBlockCompleted;
+  getBlockHistory = sbDb.getBlockHistory;
+  bulkUpdateWeekPlanBlocks = sbDb.bulkUpdateWeekPlanBlocks;
+  getPublishedWeekPlansForClassIds = sbDb.getPublishedWeekPlansForClassIds;
+  getAcademicsLessonKpi = sbDb.getAcademicsLessonKpi;
   getQuarterlyProgressMeta = apDb.getQuarterlyProgressMeta;
   upsertQuarterlyProgressMeta = apDb.upsertQuarterlyProgressMeta;
   getQuarterlySkillChecks = apDb.getQuarterlySkillChecks;

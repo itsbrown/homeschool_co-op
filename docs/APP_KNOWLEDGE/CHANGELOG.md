@@ -36,6 +36,14 @@
 - **Error:** “Failed to complete credits-only checkout” — `finalizeCreditHolds` was given `payments.id`; FK requires `stripe_payment_history.id`.
 - **Fix:** `cart-credits-only-checkout.ts` writes/links synthetic `stripe_payment_history`, finalizes against that id; cleans orphan `payments` on failure; skips re-apply only when usage logs already exist.
 
+## 2026-07-14 (Schedule builder publish-ready)
+
+- **Domain:** [schedule-and-lesson-planning.md](domains/schedule-and-lesson-planning.md) — mounts on `index` + `app-init`, CSV `fileUpload` + `csv-stringify`, family jsonb parse, progress scheduled-lessons, academics KPI `classId` on attendance half.
+- **Lessons / AI:** `Lessons.tsx` → live `GET /api/lessons`; `AILessonGenerator` → `POST /api/lessons/generate` (Anthropic) + real save; no silent mocks.
+- **Tests:** Jest schedule-builder / family-schedule / progress / KPI / attendance; Playwright catalog rows for publish, parent week, progress pills, KPI, CSV import. Seed: `setup-schedule-builder-scenario`.
+- **Deferred:** completion → `student_progress_log`; schedule-ai `recommend-resources` UI; family `/schedule` Playwright (unit coverage only).
+
+
 ## 2026-07-13 (E2E CI harden — PR #49)
 
 - **Auth setup:** soft-skip when `E2E_PARENT_*` cannot leave `/login` (ephemeral CI DB / `REGISTRATION_REQUIRED`).

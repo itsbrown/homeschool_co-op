@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Search, Download, Calendar, Users, Clock, AlertTriangle, QrCode, ChevronDown, ChevronUp, BarChart3, Copy, Printer } from "lucide-react";
+import { Loader2, Search, Download, Calendar, Users, Clock, AlertTriangle, QrCode, ChevronDown, ChevronUp, BarChart3, Copy, Printer, BookOpen } from "lucide-react";
 import QRCode from "qrcode";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -110,6 +110,44 @@ export default function AttendanceManagementPage() {
     enabled: !!schoolId,
   });
 
+  const { data: academicsKpi, isLoading: kpiLoading } = useQuery<any>({
+    queryKey: ['/api/school-admin/academics/kpi', sessionFilters.startDate, sessionFilters.endDate, sessionFilters.classId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (sessionFilters.startDate) params.append('startDate', sessionFilters.startDate);
+      if (sessionFilters.endDate) params.append('endDate', sessionFilters.endDate);
+      if (sessionFilters.classId && sessionFilters.classId !== 'all') {
+        params.append('classId', sessionFilters.classId);
+      }
+      const res = await apiRequest('GET', `/api/school-admin/academics/kpi?${params}`);
+      if (!res.ok) throw new Error('Failed to fetch academics KPI');
+      return res.json();
+    },
+    enabled: !!schoolId && activeTab === 'lessons',
+  });
+
+  const exportLessonKpi = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (sessionFilters.startDate) params.append('startDate', sessionFilters.startDate);
+      if (sessionFilters.endDate) params.append('endDate', sessionFilters.endDate);
+      if (sessionFilters.classId && sessionFilters.classId !== 'all') {
+        params.append('classId', sessionFilters.classId);
+      }
+      const res = await apiRequest('GET', `/api/school-admin/academics/kpi/export?${params}`);
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lesson-completion-kpi-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: 'Export failed', description: e.message, variant: 'destructive' });
+    }
+  };
+
   const { data: sessions, isLoading: sessionsLoading } = useQuery<any[]>({
     queryKey: ['/api/school-admin/attendance/sessions', sessionFilters],
     queryFn: async () => {
@@ -210,10 +248,14 @@ export default function AttendanceManagementPage() {
     <SchoolAdminLayout pageTitle="Attendance Management">
       <div className="space-y-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsList className="grid w-full grid-cols-4 max-w-xl">
             <TabsTrigger value="summary">
               <BarChart3 className="h-4 w-4 mr-1" />
               Summary
+            </TabsTrigger>
+            <TabsTrigger value="lessons" data-testid="attendance-tab-lessons">
+              <BookOpen className="h-4 w-4 mr-1" />
+              Lesson plans
             </TabsTrigger>
             <TabsTrigger value="sessions">
               <Calendar className="h-4 w-4 mr-1" />
@@ -364,6 +406,155 @@ export default function AttendanceManagementPage() {
               </>
             ) : (
               <p className="text-muted-foreground text-center py-8">No attendance data available.</p>
+            )}
+          </TabsContent>
+
+          <TabsContent value="lessons" className="space-y-6" data-testid="attendance-lessons-panel">
+            <div className="flex flex-wrap gap-3 items-end justify-between">
+              <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                  <label className="text-sm text-muted-foreground">From</label>
+                  <Input
+                    type="date"
+                    value={sessionFilters.startDate}
+                    onChange={(e) => setSessionFilters((f) => ({ ...f, startDate: e.target.value }))}
+                    className="w-40"
+                    style={{ fontSize: '16px' }}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground">To</label>
+                  <Input
+                    type="date"
+                    value={sessionFilters.endDate}
+                    onChange={(e) => setSessionFilters((f) => ({ ...f, endDate: e.target.value }))}
+                    className="w-40"
+                    style={{ fontSize: '16px' }}
+                  />
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={exportLessonKpi} data-testid="export-lesson-kpi">
+                <Download className="h-4 w-4 mr-1" />
+                Export CSV
+              </Button>
+            </div>
+
+            {kpiLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : academicsKpi ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Lesson completion
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold" data-testid="kpi-lesson-completion">
+                        {academicsKpi.lesson?.completionPercent ?? 0}%
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {academicsKpi.lesson?.completedBlocks ?? 0} / {academicsKpi.lesson?.totalBlocks ?? 0}{' '}
+                        blocks
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Plans published
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">{academicsKpi.lesson?.plansPublished ?? 0}</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Attendance rate
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold" data-testid="kpi-attendance-rate">
+                        {academicsKpi.attendance?.overallAttendanceRate ?? 0}%
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        Sessions in range
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold">
+                        {academicsKpi.attendance?.totalSessions ?? 0}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Completion by class / week</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {(academicsKpi.lesson?.byClass?.length ?? 0) === 0 ? (
+                      <p className="text-muted-foreground text-sm">No published week plans in this range.</p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Class</TableHead>
+                            <TableHead>Week</TableHead>
+                            <TableHead>Start</TableHead>
+                            <TableHead>Completed</TableHead>
+                            <TableHead>%</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {academicsKpi.lesson.byClass.map((row: any, idx: number) => (
+                            <TableRow key={`${row.classId}-${row.weekNumber}-${idx}`}>
+                              <TableCell className="font-medium">{row.classTitle}</TableCell>
+                              <TableCell>{row.weekNumber}</TableCell>
+                              <TableCell>{formatDate(row.weekStartDate)}</TableCell>
+                              <TableCell>
+                                {row.completedBlocks}/{row.totalBlocks}
+                              </TableCell>
+                              <TableCell>{row.completionPercent}%</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {(academicsKpi.lesson?.incomplete?.length ?? 0) > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Incomplete lessons</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {academicsKpi.lesson.incomplete.slice(0, 40).map((item: any) => (
+                        <div key={item.blockId} className="text-sm border-l-2 border-amber-400 pl-3 py-1">
+                          <p className="font-medium">{item.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.classTitle} · Week {item.weekNumber}
+                            {item.weekStartDate ? ` · ${formatDate(item.weekStartDate)}` : ''}
+                          </p>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : (
+              <p className="text-muted-foreground text-center py-8">No KPI data available.</p>
             )}
           </TabsContent>
 

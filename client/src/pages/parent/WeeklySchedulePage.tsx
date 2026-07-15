@@ -3,12 +3,28 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Printer, Download, CalendarDays, CheckCircle2, Loader2, BookOpen } from "lucide-react";
+import { Printer, CalendarDays, CheckCircle2, Loader2, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function getMondayWeekStart(from: Date = new Date()): string {
+  const d = new Date(from);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function shiftWeekStart(weekStart: string, deltaWeeks: number): string {
+  const d = new Date(weekStart + "T00:00:00");
+  d.setDate(d.getDate() + deltaWeeks * 7);
+  return getMondayWeekStart(d);
+}
 
 function formatTime(time: string): string {
   if (!time) return "";
@@ -26,6 +42,22 @@ function formatWeekDate(dateStr: string): string {
 
 interface WeekPlanWithDetails extends WeekPlan {
   blocks: WeekPlanBlock[];
+}
+
+interface ChildWeekEntry {
+  childId: number;
+  childName: string;
+  classId: number;
+  classTitle: string;
+  weekPlan: WeekPlan | null;
+  blocks?: WeekPlanBlock[];
+  skeleton?: WeeklySkeleton | null;
+  skeletonBlocks?: SkeletonBlock[];
+}
+
+interface MyWeekPlansResponse {
+  weekStart: string;
+  children: ChildWeekEntry[];
 }
 
 interface ScheduleGridProps {
@@ -206,6 +238,7 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
   );
 }
 
+/** Fallback when nested skeleton/blocks are not in the list response — fetches detail via existing GETs. */
 function WeekPlanView({ weekPlan }: { weekPlan: WeekPlan }) {
   const { data: planDetails, isLoading: loadingDetails } = useQuery<WeekPlanWithDetails>({
     queryKey: ["/api/schedule-builder/week-plans", weekPlan.id],
@@ -248,7 +281,7 @@ function WeekPlanView({ weekPlan }: { weekPlan: WeekPlan }) {
           Week {weekPlan.weekNumber}
         </Badge>
         <span className="text-sm text-slate-500">
-          Starting {formatWeekDate(weekPlan.weekStartDate)}
+          Starting {formatWeekDate(weekPlan.weekStartDate || "")}
         </span>
       </div>
       {weekPlan.notes && (
@@ -265,11 +298,84 @@ function WeekPlanView({ weekPlan }: { weekPlan: WeekPlan }) {
   );
 }
 
-export default function WeeklySchedulePage() {
-  const [selectedTab, setSelectedTab] = useState<string>("");
+function ChildWeekSection({ entry }: { entry: ChildWeekEntry }) {
+  const heading = `${entry.childName} — ${entry.classTitle}`;
 
-  const { data: publishedPlans, isLoading } = useQuery<WeekPlan[]>({
-    queryKey: ["/api/schedule-builder/week-plans", "published"],
+  if (!entry.weekPlan) {
+    return (
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-slate-800">{heading}</h2>
+        <Card className="border-dashed border-2 border-slate-200">
+          <CardContent className="flex flex-col items-center justify-center py-10 px-4 text-center">
+            <BookOpen className="h-10 w-10 text-slate-300 mb-3" />
+            <p className="text-slate-500 text-sm">
+              No published schedule for this week.
+            </p>
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
+
+  const hasNested =
+    entry.skeleton &&
+    Array.isArray(entry.skeletonBlocks) &&
+    Array.isArray(entry.blocks);
+
+  return (
+    <section className="space-y-3" data-testid={`child-week-section-${entry.childId}-${entry.classId}`}>
+      <h2 className="text-lg font-semibold text-slate-800" data-testid={`child-week-heading-${entry.childId}-${entry.classId}`}>
+        {heading}
+      </h2>
+      {hasNested ? (
+        <div>
+          <div className="mb-4 flex flex-wrap items-center gap-2 print:mb-2">
+            {entry.skeleton!.gradeLevel && (
+              <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50">
+                {entry.skeleton!.gradeLevel}
+              </Badge>
+            )}
+            <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50">
+              Week {entry.weekPlan.weekNumber}
+            </Badge>
+            <span className="text-sm text-slate-500">
+              Starting {formatWeekDate(entry.weekPlan.weekStartDate || "")}
+            </span>
+          </div>
+          {entry.weekPlan.notes && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 print:bg-amber-50">
+              <strong>Note:</strong> {entry.weekPlan.notes}
+            </div>
+          )}
+          <ScheduleGrid
+            weekPlan={{ ...entry.weekPlan, blocks: entry.blocks! }}
+            skeleton={entry.skeleton!}
+            skeletonBlocks={entry.skeletonBlocks!}
+          />
+        </div>
+      ) : (
+        <WeekPlanView weekPlan={entry.weekPlan} />
+      )}
+    </section>
+  );
+}
+
+export default function WeeklySchedulePage() {
+  const [weekStart, setWeekStart] = useState(() => getMondayWeekStart());
+
+  const { data, isLoading } = useQuery<MyWeekPlansResponse>({
+    queryKey: ["/api/schedule-builder/parent/my-week-plans", weekStart],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/schedule-builder/parent/my-week-plans?weekStart=${encodeURIComponent(weekStart)}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to load weekly schedules");
+      }
+      return res.json();
+    },
   });
 
   const handlePrint = () => {
@@ -287,31 +393,7 @@ export default function WeeklySchedulePage() {
     );
   }
 
-  const plans = publishedPlans || [];
-
-  if (plans.length === 0) {
-    return (
-      <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-          <CalendarDays className="h-7 w-7 text-blue-600" />
-          Weekly Schedule
-        </h1>
-        <Card className="border-dashed border-2 border-slate-200">
-          <CardContent className="flex flex-col items-center justify-center py-16 px-4 text-center">
-            <BookOpen className="h-16 w-16 text-slate-300 mb-4" />
-            <h3 className="text-xl font-semibold text-slate-600 mb-2">
-              No Schedules Available
-            </h3>
-            <p className="text-slate-500 max-w-md">
-              No weekly schedules have been published yet. Check back soon!
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const activeTab = selectedTab || String(plans[0].id);
+  const children = data?.children || [];
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto weekly-schedule-page">
@@ -321,39 +403,72 @@ export default function WeeklySchedulePage() {
           Weekly Schedule
         </h1>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            className="gap-1.5"
+            data-testid="weekly-schedule-print"
+          >
             <Printer className="h-4 w-4" />
-            <span className="hidden sm:inline">Print</span>
-          </Button>
-          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Download PDF</span>
+            <span className="hidden sm:inline">Print / Save as PDF</span>
           </Button>
         </div>
       </div>
 
-      <div className="print-header hidden print:block mb-4">
-        <h1 className="text-2xl font-bold text-slate-900">Weekly Schedule</h1>
+      <div className="flex items-center justify-between gap-3 mb-6 no-print">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setWeekStart((w) => shiftWeekStart(w, -1))}
+          className="gap-1"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Prev
+        </Button>
+        <div className="text-sm font-medium text-slate-700">
+          Week of {formatWeekDate(weekStart)}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setWeekStart((w) => shiftWeekStart(w, 1))}
+          className="gap-1"
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </Button>
       </div>
 
-      {plans.length === 1 ? (
-        <WeekPlanView weekPlan={plans[0]} />
-      ) : (
-        <Tabs value={activeTab} onValueChange={setSelectedTab}>
-          <TabsList className="mb-4 no-print flex-wrap h-auto gap-1">
-            {plans.map((plan: WeekPlan) => (
-              <TabsTrigger key={plan.id} value={String(plan.id)} className="text-sm">
-                Week {plan.weekNumber} — {formatWeekDate(plan.weekStartDate)}
-              </TabsTrigger>
+      <div className="schedule-print-root" data-testid="schedule-print-root">
+        <div className="print-header hidden print:block mb-4">
+          <h1 className="text-2xl font-bold text-slate-900">Weekly Schedule</h1>
+          <p className="text-sm text-slate-600">Week of {formatWeekDate(weekStart)}</p>
+        </div>
+
+        {children.length === 0 ? (
+          <Card className="border-dashed border-2 border-slate-200">
+            <CardContent className="flex flex-col items-center justify-center py-16 px-4 text-center">
+              <BookOpen className="h-16 w-16 text-slate-300 mb-4" />
+              <h3 className="text-xl font-semibold text-slate-600 mb-2">
+                No Schedules Available
+              </h3>
+              <p className="text-slate-500 max-w-md">
+                No children or class enrollments found for this week. Check back soon!
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-10">
+            {children.map((entry) => (
+              <ChildWeekSection
+                key={`${entry.childId}-${entry.classId}`}
+                entry={entry}
+              />
             ))}
-          </TabsList>
-          {plans.map((plan: WeekPlan) => (
-            <TabsContent key={plan.id} value={String(plan.id)}>
-              <WeekPlanView weekPlan={plan} />
-            </TabsContent>
-          ))}
-        </Tabs>
-      )}
+          </div>
+        )}
+      </div>
 
       <style>{`
         @media print {
@@ -366,12 +481,12 @@ export default function WeeklySchedulePage() {
             visibility: hidden;
           }
 
-          .weekly-schedule-page,
-          .weekly-schedule-page * {
+          .schedule-print-root,
+          .schedule-print-root * {
             visibility: visible;
           }
 
-          .weekly-schedule-page {
+          .schedule-print-root {
             position: absolute;
             left: 0;
             top: 0;
