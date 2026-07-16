@@ -1014,17 +1014,24 @@ export default function SchoolSettingsPage() {
                 <CardContent className="space-y-4">
                   <div className="flex flex-col sm:flex-row gap-6">
                     {/* Current Logo Display */}
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 w-full sm:w-auto sm:min-w-[12rem] sm:max-w-xs">
                       <Label className="text-sm font-medium mb-2 block">Current Logo</Label>
-                      <Avatar className="h-24 w-24">
-                        {userProfile?.school?.logo ? (
-                          <AvatarImage src={userProfile.school.logo} alt={userProfile.school.name} />
-                        ) : (
+                      {userProfile?.school?.logo ? (
+                        <div className="rounded-lg border bg-muted/30 p-3 flex items-center justify-center min-h-[6rem]">
+                          <img
+                            src={userProfile.school.logo}
+                            alt={userProfile.school.name}
+                            className="w-full h-auto max-h-28 object-contain"
+                            data-testid="img-school-logo-preview"
+                          />
+                        </div>
+                      ) : (
+                        <Avatar className="h-24 w-24">
                           <AvatarFallback className="text-2xl">
                             {userProfile?.school?.name?.split(' ').map(word => word[0]).join('').toUpperCase() || 'SC'}
                           </AvatarFallback>
-                        )}
-                      </Avatar>
+                        </Avatar>
+                      )}
                     </div>
 
                     {/* Upload Section */}
