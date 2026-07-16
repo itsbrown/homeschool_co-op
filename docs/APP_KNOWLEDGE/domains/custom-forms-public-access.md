@@ -89,6 +89,8 @@ Public by-slug query uses `staleTime: 0` + `refetchOnMount: 'always'`.
 |---------|--------|-----|
 | Field saves / toast while typing | Was: 400ms debounce + invalidate + toast on every PUT | Text inputs commit on blur only (`FormEditorPage` `patchField` / `commitField`) |
 | Label resets mid-word | Form query refetch overwrote local field state | Skip syncing `form.fields` while dirty/pending; field PUT does not invalidate |
+| Public form shows building icon, not school logo | `schools.logo` is a legacy `/uploads/logos/...` path; file missing on Replit ephemeral disk → `<img onError>` fallback in `DynamicFormPage` `SchoolBranding` | School Settings → re-upload logo (stores `/public/logos/...` via object storage). ASA prod school 2 was `/uploads/logos/school-logo-1764349754749.png` (404) |
+| Logo looks tiny on public form | Was fixed `h-16 max-w-[280px]` — wordmarks shrink to ~64px tall | `SchoolBranding`: `w-full max-w-md h-auto max-h-28 sm:max-h-36 object-contain` (same in Preview) |
 | `/api/test/*` returns HTML | Stale process on :5000 without test routes | `node scripts/free-port-5000.mjs`; `CI=true npm run test:e2e` |
 | Public slug 404 | Form not active or not `accessLevel: public` | Settings → Public + Active → Save Form |
 | Upload 401/500 on prod | Old deploy or storage misconfigured | Redeploy; check object storage |

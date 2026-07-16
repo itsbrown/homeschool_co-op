@@ -184,11 +184,11 @@ function SchoolBranding({ school }: { school: SchoolInfo }) {
   return (
     <div className="mb-6 pb-6 border-b" data-testid="school-branding">
       {hasValidLogo ? (
-        <div className="flex justify-center">
-          <img 
-            src={school.logo!} 
+        <div className="flex justify-center px-2">
+          <img
+            src={school.logo!}
             alt={school.name}
-            className="h-16 max-w-[280px] object-contain"
+            className="w-full max-w-md h-auto max-h-28 sm:max-h-36 object-contain"
             onError={() => setLogoError(true)}
             data-testid="img-school-logo"
           />

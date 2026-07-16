@@ -1,5 +1,17 @@
 # App knowledge changelog
 
+## 2026-07-16 (Public form logo sizing)
+
+- Form/preview `SchoolBranding` logo was capped at `h-16` (~64px) so wordmarks looked tiny; now width-first responsive: `w-full max-w-md h-auto max-h-28 sm:max-h-36 object-contain`.
+- School Settings “Current Logo” preview: rectangular `object-contain` instead of circular `Avatar` crop.
+- Domain: [custom-forms-public-access.md](./domains/custom-forms-public-access.md).
+
+## 2026-07-16 (Public form missing school logo)
+
+- Victor preliminary form showed School icon fallback, not ASA logo: `schools.logo` = legacy `/uploads/logos/school-logo-*.png` which 404s on prod (ephemeral disk).
+- Fix is operational: re-upload via School Settings → `/public/logos/...` object storage. Same field used by public store + form branding.
+- Domain: [custom-forms-public-access.md](./domains/custom-forms-public-access.md).
+
 ## 2026-07-15 (Form editor — no mid-typing field saves)
 
 - Form Builder field label/placeholder/text config: local patch on keystroke, persist on blur (type/required still immediate). Silent field PUT (no "Field updated" toast).
