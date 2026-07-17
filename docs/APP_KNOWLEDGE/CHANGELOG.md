@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-07-17 (Week Planner publish E2E)
+
+- Fixed `e2e/schedule-builder-publish.spec.ts`: open Actions before Publish; wait for draft block edit control; assert block PATCH status (not only `r.ok()` waiter).
+- Block update 500: `insertBlockHistory` broke on empty/null `materials` text[] inside drizzle `sql``` — emit explicit `ARRAY[]::text[]`.
+- Week Planner: loading/error pane while `GET /week-plans/:id` pending (was misleading “Select a week…”); `week-planner-actions` testid.
+- Domain: [schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md).
+
 ## 2026-07-16 (Remove unused Firebase packages)
 
 - Dropped unused `firebase` / `firebase-admin` deps (auth is Supabase; no SDK imports). Replit firewall blocked transitive `websocket-driver`, which broke `npm ci` when `node_modules` was wiped.

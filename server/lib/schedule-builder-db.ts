@@ -40,6 +40,16 @@ async function insertBlockHistory(
   changeReason?: string,
 ): Promise<void> {
   const db = await getDb();
+  // postgres.js expands JS arrays into comma lists inside sql``; [] becomes a bare
+  // `)` → "syntax error at or near ')'". Always emit a real text[] literal.
+  const materials = Array.isArray(block.materials) ? block.materials : [];
+  const materialsSql =
+    materials.length > 0
+      ? sql`ARRAY[${sql.join(
+          materials.map((m) => sql`${m}`),
+          sql`, `,
+        )}]::text[]`
+      : sql`ARRAY[]::text[]`;
   await db.execute(sql`
     INSERT INTO week_plan_block_history (
       week_plan_block_id, previous_title, previous_description, previous_content,
@@ -49,7 +59,7 @@ async function insertBlockHistory(
       ${block.title ?? block.customTitle ?? null},
       ${block.description ?? block.customDescription ?? null},
       ${JSON.stringify(block.content ?? {})}::jsonb,
-      ${block.materials ?? null},
+      ${materialsSql},
       ${block.homework ?? null},
       ${changedBy},
       ${changeReason ?? null},
