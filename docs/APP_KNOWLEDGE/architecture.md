@@ -10,6 +10,8 @@ High-level map for agents. See [SYSTEM_DOCUMENTATION.md](../SYSTEM_DOCUMENTATION
 | Client | React, Vite, TanStack Query, Shadcn/Tailwind |
 | DB | PostgreSQL via Drizzle (`shared/schema.ts`) |
 | Auth | Supabase (JWT); legacy Auth0 fields in schema |
+
+Unused Firebase SDKs were removed from `package.json` (Jul 2026): they had no imports and pulled Replit-blocked `websocket-driver`. Do not re-add them.
 | Payments | Stripe (PaymentIntents, webhooks, autopay) |
 | CI | GitHub Actions: Tests, Payments CI, E2E (Playwright) |
 
