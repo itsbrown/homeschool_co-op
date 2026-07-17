@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-07-16 (Remove unused Firebase packages)
+
+- Dropped unused `firebase` / `firebase-admin` deps (auth is Supabase; no SDK imports). Replit firewall blocked transitive `websocket-driver`, which broke `npm ci` when `node_modules` was wiped.
+- Domain: [architecture.md](./architecture.md) (stack remains Supabase auth).
+
 ## 2026-07-16 (Public form logo sizing)
 
 - Form/preview `SchoolBranding` logo was capped at `h-16` (~64px) so wordmarks looked tiny; now width-first responsive: `w-full max-w-md h-auto max-h-28 sm:max-h-36 object-contain`.
