@@ -152,9 +152,9 @@ router.post('/', attachAccessScope, async (req: any, res) => {
     // Prefer user_locations / user_school_permissions (canManageClasses).
     // Legacy users.permissions.canCreateClasses is only an explicit deny when no location grant;
     // see legacyCanCreateClassesAllowed — do not treat JSONB true as authorization.
-    // attachAccessScope loads grants; do not fall back to activeRole-only aggregation.
+    // Bypass roles get canManageClasses via aggregateEffectivePermissions when that role is active.
     const effective = req.accessScope!;
-    if (req.user?.role === 'teacher' && !legacyCanCreateClassesAllowed(effective, req.user?.permissions)) {
+    if (!legacyCanCreateClassesAllowed(effective, req.user?.permissions)) {
       return res.status(403).json({ error: 'permission denied' });
     }
     const classItem = await storage.createClass(req.body as any);

@@ -54,7 +54,7 @@ npx tsx server/scripts/backfill-staff-user-locations.ts --apply
 ## Legacy notes
 
 - `client/.../Sidebar.tsx` is out of scope for permission nav (prefer Unified / Parent / Educator shells).
-- `users.permissions.canCreateClasses` — use `legacyCanCreateClassesAllowed`; JSONB `true` is not authorization.
+- `users.permissions.canCreateClasses` — use `legacyCanCreateClassesAllowed` on `POST /api/classes` for **all** roles; JSONB `true` is not authorization.
 
 ## Tests
 

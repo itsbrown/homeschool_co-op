@@ -248,7 +248,7 @@ Canonical registry: `shared/permissions.ts`. Client: `useEffectivePermissions` /
 | Parent bypass | Only `/school-admin/*` while `activeRole === 'parent'` (ParentAppShell silent switch); `/schools/*` stays gated |
 | Class list OR | `GET /api/school-admin/classes` via `requireAnyPermission(canManageClasses, canSendNotifications)` |
 | Null `locationId` lists | Location-scoped class/student lists keep rows with `locationId == null` (school-wide) |
-| Legacy JSONB | `users.permissions.canCreateClasses` — use `legacyCanCreateClassesAllowed`; explicit false denies only when no location grant; JSONB `true` is **not** authorization |
+| Legacy JSONB | `users.permissions.canCreateClasses` — use `legacyCanCreateClassesAllowed` on `POST /api/classes` for all roles; explicit false denies only when no location grant; JSONB `true` is **not** authorization |
 | Legacy `Sidebar.tsx` | Out of scope — prefer UnifiedSchoolAdminSidebar / Parent* / EducatorAppShell |
 
 Staff Permissions UI writes location + school-wide rows; those unlock matching sidebar groups (see `NAV_GROUP_PERMISSIONS`).
