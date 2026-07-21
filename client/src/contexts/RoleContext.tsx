@@ -95,8 +95,16 @@ export const useRole = () => {
   return context;
 };
 
+/** Fired when localStorage activeRole changes without a full RoleContext switch. */
+export const ACTIVE_ROLE_CHANGED_EVENT = 'asa-active-role-changed';
+
 export const silentRoleContextUpdate = (roleName: string): void => {
   localStorage.setItem('activeRole', roleName);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent(ACTIVE_ROLE_CHANGED_EVENT, { detail: roleName }),
+    );
+  }
 };
 
 interface RoleProviderProps {

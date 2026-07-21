@@ -3866,7 +3866,8 @@ router.get("/metrics/financial", supabaseAuth, attachAccessScope, requirePermiss
       );
       schoolPayments = schoolPayments.filter((p: any) => {
         const ids = Array.isArray(p.enrollmentIds) ? p.enrollmentIds : [];
-        if (ids.length === 0) return false;
+        // Empty enrollmentIds = unattributed / school-wide; keep (same as null location).
+        if (ids.length === 0) return true;
         return ids.some((id: number) => scopedEnrollmentIds.has(id));
       });
     }

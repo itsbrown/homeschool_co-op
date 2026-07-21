@@ -1,9 +1,12 @@
 /**
  * Client hook: effective permissions from server (fail closed while loading/error).
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useRole } from '@/contexts/RoleContext';
+import {
+  ACTIVE_ROLE_CHANGED_EVENT,
+  useRole,
+} from '@/contexts/RoleContext';
 import { apiRequest } from '@/lib/queryClient';
 import {
   aggregateEffectivePermissions,
@@ -68,37 +71,57 @@ const FAIL_CLOSED: EffectivePermissions = {
 export function useEffectivePermissions() {
   const { activeRole, allRoles, isLoadingRoles } = useRole();
 
+  // apiRequest sends X-Active-Role from localStorage; ParentAppShell may update
+  // that via silentRoleContextUpdate without changing RoleContext.activeRole.
+  const [storageRole, setStorageRole] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('activeRole') || '' : '',
+  );
+  useEffect(() => {
+    const sync = () => setStorageRole(localStorage.getItem('activeRole') || '');
+    window.addEventListener(ACTIVE_ROLE_CHANGED_EVENT, sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener(ACTIVE_ROLE_CHANGED_EVENT, sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  const permissionRole = storageRole || activeRole;
+
   const {
     data: apiData,
     isLoading,
     isError,
     error,
   } = useQuery<EffectivePermissionsApiResponse>({
-    // Include activeRole for cache separation only. Default getQueryFn joins
+    // Include permissionRole for cache separation only. Default getQueryFn joins
     // key segments into the URL, so use an explicit queryFn for the real path.
-    queryKey: ['/api/me/effective-permissions', activeRole],
+    queryKey: ['/api/me/effective-permissions', permissionRole],
     queryFn: async () => {
       const res = await apiRequest('GET', '/api/me/effective-permissions');
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
-    enabled: !!activeRole,
+    enabled: !!permissionRole,
   });
 
-  // Ignore cache rows that do not match the current role (belt-and-suspenders).
+  // Match against the role the API actually used (header / storage), not only RoleContext.
   const roleMatchedApiData =
-    apiData && apiData.activeRole === activeRole ? apiData : undefined;
+    apiData &&
+    apiData.activeRole?.toLowerCase() === permissionRole.toLowerCase()
+      ? apiData
+      : undefined;
 
   const legacyEnabled =
-    !!activeRole && (isError || (!isLoading && !roleMatchedApiData));
+    !!permissionRole && (isError || (!isLoading && !roleMatchedApiData));
 
   // Fallback: my-permissions if effective endpoint not yet available
   const {
     data: legacyData,
     isLoading: legacyLoading,
   } = useQuery<MyPermissionsResponse>({
-    queryKey: ['/api/school-admin/user-locations/my-permissions', activeRole],
+    queryKey: ['/api/school-admin/user-locations/my-permissions', permissionRole],
     queryFn: async () => {
       const res = await apiRequest(
         'GET',
@@ -123,7 +146,7 @@ export function useEffectivePermissions() {
 
     if (legacyData) {
       return aggregateEffectivePermissions({
-        activeRole,
+        activeRole: permissionRole,
         allRoles,
         locationGrants: (legacyData.userLocations ?? []).map((ul) => ({
           locationId: ul.locationId,
@@ -142,11 +165,11 @@ export function useEffectivePermissions() {
     }
 
     // Loading or error: fail closed (do not flash full admin tree)
-    if (isSchoolAdminBypassFromRole(activeRole)) {
-      return aggregateEffectivePermissions({ activeRole });
+    if (isSchoolAdminBypassFromRole(permissionRole)) {
+      return aggregateEffectivePermissions({ activeRole: permissionRole });
     }
     return FAIL_CLOSED;
-  }, [roleMatchedApiData, legacyData, activeRole, allRoles]);
+  }, [roleMatchedApiData, legacyData, permissionRole, allRoles]);
 
   const visibleNav: NavRegistryItem[] = useMemo(
     () => filterNavRegistry(effective),
@@ -154,12 +177,12 @@ export function useEffectivePermissions() {
   );
 
   const awaitingPrimary =
-    !!activeRole && !roleMatchedApiData && isLoading && !isError;
+    !!permissionRole && !roleMatchedApiData && isLoading && !isError;
   const awaitingLegacy =
     legacyEnabled && !legacyData && legacyLoading && !roleMatchedApiData;
   // Roles bootstrap often leaves activeRole empty briefly; stay loading so
   // SchoolRouteGuard does not flash Forbidden before grants can load.
-  const awaitingRole = !activeRole && isLoadingRoles;
+  const awaitingRole = !permissionRole && isLoadingRoles;
 
   return {
     effective,
