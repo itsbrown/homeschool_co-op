@@ -1,5 +1,13 @@
 # App knowledge changelog
 
+## 2026-07-21 (Permissions nav scoping — PR #50 babysit)
+
+- `SchoolRouteGuard` mounts around the app `Switch` (covers `/schools/*` + `/school-admin/*`); parents skip staff gates.
+- `useEffectivePermissions` keys/invalidates by `activeRole`; stays loading while legacy `my-permissions` fallback fetches.
+- Unlisted staff deep links fail closed unless school-wide/bypass; registry adds Educators / Refunds / Public Store.
+- Location-scoped `GET` classes/students keep `locationId == null` rows (school-wide).
+- Skill: `asa-auth-patterns` effective-permissions table.
+
 ## 2026-07-21 (Class grade selector through 12th)
 
 - School class create/edit multi-select (`SchoolClassCreationPage`) previously stopped at 10th grade; added `11th-grade` / `12th-grade`. Display map on `SchoolClassDetailsPage` updated to match.

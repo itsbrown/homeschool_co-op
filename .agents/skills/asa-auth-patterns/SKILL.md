@@ -241,6 +241,10 @@ Canonical registry: `shared/permissions.ts`. Client: `useEffectivePermissions` /
 | API | `attachAccessScope` + `requirePermission` / `requireLocationInScope`; list handlers filter with `locationFilterIds` |
 | Enforcement | Env `PERMISSIONS_ENFORCEMENT`: `off` \| `observe` (default) \| `enforce` |
 | Fail closed | Missing grants → hide nav / 403 in enforce; never invent access from legacy JSONB alone |
+| Unlisted deep links | Paths not in `NAV_REGISTRY` require school-wide / bypass — one unrelated location flag must not open them |
+| Client cache | `useEffectivePermissions` query key includes `activeRole`; role switch invalidates `/api/me/effective-permissions` |
+| Guard mount | `SchoolRouteGuard` wraps the app `Switch` so both `/schools/*` and `/school-admin/*` are gated |
+| Null `locationId` lists | Location-scoped class/student lists keep rows with `locationId == null` (school-wide) |
 | Legacy JSONB | `users.permissions.canCreateClasses` — use `legacyCanCreateClassesAllowed`; explicit false denies only when no location grant; JSONB `true` is **not** authorization |
 | Legacy `Sidebar.tsx` | Out of scope — prefer UnifiedSchoolAdminSidebar / Parent* / EducatorAppShell |
 
