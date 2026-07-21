@@ -243,6 +243,7 @@ Canonical registry: `shared/permissions.ts`. Client: `useEffectivePermissions` /
 | Fail closed | Missing grants → hide nav / 403 in enforce; never invent access from legacy JSONB alone |
 | Unlisted deep links | Paths not in `NAV_REGISTRY` require school-wide / bypass — one unrelated location flag must not open them |
 | Client cache | `useEffectivePermissions` query key includes `activeRole`; role switch invalidates `/api/me/effective-permissions` |
+| X-Active-Role | Honor only when held in `user_roles` / legacy roles (`resolveTrustedActiveRole`); never trust spoofed bypass roles |
 | Guard mount | `SchoolRouteGuard` wraps the app `Switch` so both `/schools/*` and `/school-admin/*` are gated |
 | Parent bypass | Only `/school-admin/*` while `activeRole === 'parent'` (ParentAppShell silent switch); `/schools/*` stays gated |
 | Class list OR | `GET /api/school-admin/classes` via `requireAnyPermission(canManageClasses, canSendNotifications)` |

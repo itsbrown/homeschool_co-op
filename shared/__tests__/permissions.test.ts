@@ -171,6 +171,22 @@ describe('canAccessPath / isLocationInScope', () => {
     expect(canAccessPath(regional, '/schools/contact-import')).toBe(true);
   });
 
+  it('maps bare school landings to My School permission', () => {
+    const classesOnly = aggregateEffectivePermissions({
+      activeRole: 'educator',
+      locationGrants: [{ locationId: 1, isActive: true, canManageClasses: true }],
+    });
+    expect(canAccessPath(classesOnly, '/schools')).toBe(true);
+    expect(canAccessPath(classesOnly, '/school-admin')).toBe(true);
+    expect(canAccessPath(classesOnly, '/schools/dashboard')).toBe(true);
+
+    const reportsOnly = aggregateEffectivePermissions({
+      activeRole: 'educator',
+      locationGrants: [{ locationId: 1, isActive: true, canViewReports: true }],
+    });
+    expect(canAccessPath(reportsOnly, '/schools')).toBe(false);
+  });
+
   it('gates refunds and educators by matching registry permission', () => {
     const reportsOnly = aggregateEffectivePermissions({
       activeRole: 'educator',

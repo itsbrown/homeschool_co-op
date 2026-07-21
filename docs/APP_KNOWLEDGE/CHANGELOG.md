@@ -8,6 +8,8 @@
 - Location-scoped `GET` classes/students keep `locationId == null` rows (school-wide).
 - `GET /api/school-admin/classes` allows `canManageClasses` **or** `canSendNotifications` (notification targeting).
 - `POST /api/classes` uses `attachAccessScope` so teacher `canManageClasses` grants are honored.
+- `X-Active-Role` trusted only when held (`resolveTrustedActiveRole`); spoofed bypass roles ignored.
+- Bare `/schools` + `/school-admin` landings map to My School (`canManageClasses`) for route access.
 - Skill: `asa-auth-patterns` effective-permissions table.
 
 ## 2026-07-21 (Class grade selector through 12th)

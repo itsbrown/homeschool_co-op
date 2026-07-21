@@ -5,6 +5,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { storage } from '../storage';
 import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
+import { resolveTrustedActiveRole } from '../lib/resolve-trusted-active-role';
 import {
   aggregateEffectivePermissions,
   getPermissionsEnforcementMode,
@@ -53,15 +54,31 @@ export async function attachAccessScope(
     }
 
     const dbUser = await storage.getUser(userId);
-    const activeRole =
-      (req.headers['x-active-role'] as string) ||
-      req.user?.role ||
-      dbUser?.activeRole ||
-      dbUser?.role ||
-      '';
-    const allRoles: string[] =
-      (req.user as { allRoles?: string[] })?.allRoles ||
-      (dbUser?.role ? [dbUser.role] : []);
+
+    // Prefer roles already attached by supabaseAuth; fall back to user_roles + legacy.
+    let allRoles: string[] =
+      (req.user as { allRoles?: string[] })?.allRoles?.filter(Boolean) ?? [];
+    if (allRoles.length === 0) {
+      try {
+        const roleRows = await storage.getUserRolesByUserId(userId);
+        const roleSet = new Set<string>();
+        for (const row of roleRows) {
+          if (row.role?.trim()) roleSet.add(row.role.trim());
+        }
+        if (dbUser?.role?.trim()) roleSet.add(dbUser.role.trim());
+        if (dbUser?.activeRole?.trim()) roleSet.add(dbUser.activeRole.trim());
+        allRoles = Array.from(roleSet);
+      } catch {
+        allRoles = dbUser?.role ? [dbUser.role] : [];
+      }
+    }
+
+    const headerRole = req.headers['x-active-role'];
+    const activeRole = resolveTrustedActiveRole(
+      typeof headerRole === 'string' ? headerRole : undefined,
+      allRoles,
+      req.user?.role || dbUser?.activeRole || dbUser?.role || '',
+    );
 
     let schoolId: number | null = null;
     if (dbUser) {

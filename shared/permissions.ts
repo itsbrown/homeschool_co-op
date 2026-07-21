@@ -431,6 +431,13 @@ export function filterNavRegistry(
   return NAV_REGISTRY.filter((item) => canShowNavItem(effective, item));
 }
 
+/** App landings that mount My School but are not separate registry hrefs. */
+const MY_SCHOOL_LANDING_PATHS = new Set([
+  '/schools',
+  '/school-admin',
+  '/schools/dashboard',
+]);
+
 export function canAccessPath(
   effective: EffectivePermissions,
   path: string,
@@ -439,9 +446,12 @@ export function canAccessPath(
     return true;
   }
   const normalized = path.split('?')[0];
+  const pathForMatch = MY_SCHOOL_LANDING_PATHS.has(normalized)
+    ? '/schools/my-school'
+    : normalized;
   const matches = NAV_REGISTRY.filter(
     (item) =>
-      normalized === item.href || normalized.startsWith(`${item.href}/`),
+      pathForMatch === item.href || pathForMatch.startsWith(`${item.href}/`),
   );
   if (matches.length === 0) {
     // Unlisted staff deep links: school-wide / bypass only (do not over-permit on one unrelated flag)
