@@ -12,7 +12,8 @@
 - Bare `/schools` + `/school-admin` landings map to My School (`canManageClasses`) for route access.
 - Permissions hook stays loading while roles bootstrap (`!activeRole && isLoadingRoles`).
 - Financial metrics honor `locationFilterIds` for location-scoped finance staff; orphan payments (empty `enrollmentIds`) kept as school-wide.
-- Effective-permissions cache keys off localStorage/`silentRoleContextUpdate` role (same as `X-Active-Role` header).
+- Effective-permissions cache keys off localStorage/`silentRoleContextUpdate` role only when held in `allRoles` (no client bypass spoof).
+- `POST /api/school-admin/classes` gated with `requirePermission('canManageClasses')`.
 - Skill: `asa-auth-patterns` effective-permissions table.
 
 ## 2026-07-21 (Class grade selector through 12th)

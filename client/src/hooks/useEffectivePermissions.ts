@@ -73,6 +73,7 @@ export function useEffectivePermissions() {
 
   // apiRequest sends X-Active-Role from localStorage; ParentAppShell may update
   // that via silentRoleContextUpdate without changing RoleContext.activeRole.
+  // Only trust storage when the user actually holds that role (mirror server).
   const [storageRole, setStorageRole] = useState(() =>
     typeof window !== 'undefined' ? localStorage.getItem('activeRole') || '' : '',
   );
@@ -86,7 +87,13 @@ export function useEffectivePermissions() {
     };
   }, []);
 
-  const permissionRole = storageRole || activeRole;
+  const heldRoleSet = useMemo(
+    () => new Set((allRoles ?? []).map((r) => r.toLowerCase())),
+    [allRoles],
+  );
+  const trustedStorageRole =
+    storageRole && heldRoleSet.has(storageRole.toLowerCase()) ? storageRole : '';
+  const permissionRole = trustedStorageRole || activeRole;
 
   const {
     data: apiData,

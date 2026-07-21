@@ -45,16 +45,16 @@ export function SchoolRouteGuard({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  if (showAdminNavGroups) {
-    return <>{children}</>;
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-[40vh] flex items-center justify-center" data-testid="permissions-loading">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
+  }
+
+  if (showAdminNavGroups) {
+    return <>{children}</>;
   }
 
   // Registry + unlisted staff paths: canAccessPath fail-closes unlisted deep links

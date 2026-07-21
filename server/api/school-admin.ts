@@ -2639,7 +2639,13 @@ router.post("/students/sync", supabaseAuth, async (req: any, res) => {
 });
 
 // Create a new class for a school
-router.post("/classes", supabaseAuth, requireSchoolContext, async (req: any, res: any) => {
+router.post(
+  "/classes",
+  supabaseAuth,
+  requireSchoolContext,
+  attachAccessScope,
+  requirePermission('canManageClasses'),
+  async (req: any, res: any) => {
   try {
     const schoolId = req.schoolId;
     console.log('📝 Creating new class:', JSON.stringify(req.body, null, 2));
