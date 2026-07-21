@@ -3,7 +3,7 @@
 ## 2026-07-21 (Permissions nav scoping — PR #50 babysit)
 
 - `SchoolRouteGuard` mounts around the app `Switch` (covers `/schools/*` + `/school-admin/*`); parent bypass only for `/school-admin/*` (ParentAppShell role switch).
-- `useEffectivePermissions` keys/invalidates by `activeRole`; stays loading while legacy `my-permissions` fallback fetches.
+- `useEffectivePermissions` cache key includes `activeRole` with explicit `queryFn` (default fetcher joins key segments into the URL); stays loading while legacy fallback fetches.
 - Unlisted staff deep links fail closed unless school-wide/bypass; registry adds Educators / Refunds / Public Store.
 - Location-scoped `GET` classes/students keep `locationId == null` rows (school-wide).
 - `GET /api/school-admin/classes` allows `canManageClasses` **or** `canSendNotifications` (notification targeting).

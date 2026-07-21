@@ -4,6 +4,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRole } from '@/contexts/RoleContext';
+import { apiRequest } from '@/lib/queryClient';
 import {
   aggregateEffectivePermissions,
   canAccessPath,
@@ -73,8 +74,13 @@ export function useEffectivePermissions() {
     isError,
     error,
   } = useQuery<EffectivePermissionsApiResponse>({
-    // Include activeRole so role switches do not reuse another role's grants.
+    // Include activeRole for cache separation only. Default getQueryFn joins
+    // key segments into the URL, so use an explicit queryFn for the real path.
     queryKey: ['/api/me/effective-permissions', activeRole],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/me/effective-permissions');
+      return res.json();
+    },
     staleTime: 5 * 60 * 1000,
     retry: 1,
     enabled: !!activeRole,
@@ -93,6 +99,13 @@ export function useEffectivePermissions() {
     isLoading: legacyLoading,
   } = useQuery<MyPermissionsResponse>({
     queryKey: ['/api/school-admin/user-locations/my-permissions', activeRole],
+    queryFn: async () => {
+      const res = await apiRequest(
+        'GET',
+        '/api/school-admin/user-locations/my-permissions',
+      );
+      return res.json();
+    },
     staleTime: 5 * 60 * 1000,
     enabled: legacyEnabled,
   });
