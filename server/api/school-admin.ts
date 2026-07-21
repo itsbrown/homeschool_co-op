@@ -3555,11 +3555,21 @@ router.get('/students/:id', supabaseAuth, async (req: any, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
+    const parent = student.parentId ? await storage.getUser(student.parentId) : null;
+    const { resolveChildRegisteredLocation } = await import('../lib/parent-registered-location');
+    const campus = await resolveChildRegisteredLocation(storage, parent, student);
+    const school = student.schoolId
+      ? await storage.getSchool(student.schoolId)
+      : schoolId
+        ? await storage.getSchool(schoolId)
+        : null;
+
     // Format the student data for the detail view
     const formattedStudent = {
       id: student.id,
       firstName: student.firstName,
       lastName: student.lastName,
+      name: `${student.firstName} ${student.lastName}`.trim(),
       birthdate: student.birthdate,
       gradeLevel: student.gradeLevel,
       specialNeeds: student.specialNeeds || '',
@@ -3571,6 +3581,9 @@ router.get('/students/:id', supabaseAuth, async (req: any, res) => {
       address: '',
       enrollmentDate: student.createdAt,
       status: 'Active',
+      school: school?.name || student.school || null,
+      locationId: campus.locationId,
+      locationName: campus.locationName,
       emergencyContact: {
         name: student.emergencyContact || '',
         relationship: 'Emergency Contact',

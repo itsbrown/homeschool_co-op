@@ -30,8 +30,8 @@ export type ParentChildRegistrationStorage = Pick<
 >;
 
 /**
- * Validates parent school + picks child campus: parent's selected location when it
- * belongs to the school; otherwise first school location (legacy fallback).
+ * Validates parent school + picks child campus when preferredLocationId belongs
+ * to that school. Does not silently default to the first campus.
  */
 export async function resolveSchoolAndChildLocation(
   storage: ParentChildRegistrationStorage,
@@ -57,8 +57,7 @@ export async function resolveSchoolAndChildLocation(
       locations.some((l) => l.id === preferredLocationId)
         ? preferredLocationId
         : null;
-    const locationId = preferred ?? locations[0].id;
-    return { validSchoolId, locationId };
+    return { validSchoolId, locationId: preferred };
   } catch {
     return { validSchoolId: null, locationId: null };
   }

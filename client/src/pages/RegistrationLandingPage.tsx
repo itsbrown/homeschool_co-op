@@ -191,14 +191,6 @@ export default function RegistrationLandingPage() {
     }
   }, [code, toast, setLocation, form]);
 
-  // Pre-select the first campus once locations finish loading.
-  useEffect(() => {
-    if (locationsLoading || locations.length === 0) return;
-    if (!form.getValues("location")) {
-      form.setValue("location", locations[0].id.toString(), { shouldValidate: true });
-    }
-  }, [locations, locationsLoading, form]);
-
   const onSubmit = async (data: ParentRegistrationForm) => {
     try {
       const childrenPayload: RegistrationSignupChildInput[] = data.children.map(
@@ -541,7 +533,7 @@ export default function RegistrationLandingPage() {
                             ) : locations.length > 0 ? (
                               <>
                                 <option value="" disabled>
-                                  Select location
+                                  Select a campus
                                 </option>
                                 {locations.map((location) => (
                                   <option key={location.id} value={location.id.toString()}>

@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Bell, User, Shield, Save } from "lucide-react";
+import { Bell, User, Shield, Save, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -172,6 +172,30 @@ export default function SettingsPage() {
                   {phoneError && (
                     <p className="text-sm text-destructive">{phoneError}</p>
                   )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>School</Label>
+                  <Input
+                    value={profileData?.school?.name || "—"}
+                    disabled
+                    data-testid="settings-school-name"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5" />
+                    Campus
+                  </Label>
+                  <Input
+                    value={profileData?.locationName || "Not set"}
+                    disabled
+                    data-testid="settings-campus-name"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Contact your school administrator to change campus.
+                  </p>
                 </div>
               </div>
             </CardContent>

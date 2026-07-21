@@ -99,21 +99,36 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         }
       }
 
+      const { resolveRegisteredLocation, resolveChildRegisteredLocation } = await import(
+        '../lib/parent-registered-location'
+      );
+      const parentCampus = await resolveRegisteredLocation(storage, parent.locationId);
+      const testChildren = await Promise.all(
+        children.map(async (c: any) => {
+          const campus = await resolveChildRegisteredLocation(storage, parent, c);
+          return {
+            id: c.id,
+            firstName: c.firstName,
+            lastName: c.lastName,
+            gradeLevel: c.gradeLevel,
+            birthdate: c.birthdate,
+            emergencyContact: c.emergencyContact || null,
+            locationId: campus.locationId,
+            locationName: campus.locationName,
+          };
+        }),
+      );
+
       return res.status(200).json({
         parent: {
           id: parent.id,
           email: parent.email,
           role: parent.role,
           name: parent.name,
+          locationId: parentCampus.locationId,
+          locationName: parentCampus.locationName,
         },
-        children: children.map((c: any) => ({
-          id: c.id,
-          firstName: c.firstName,
-          lastName: c.lastName,
-          gradeLevel: c.gradeLevel,
-          birthdate: c.birthdate,
-          emergencyContact: c.emergencyContact || null,
-        })),
+        children: testChildren,
         enrollments: allEnrollments.map((e: any) => {
           const classRef = e.classId ?? e.marketplaceClassId;
           const cls = classRef ? classCache.get(classRef) : null;
@@ -752,6 +767,17 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // Total amount due includes both class and membership fees
     const totalAmountDue = classAmountDue + membershipAmountDue;
 
+    const { resolveRegisteredLocation, resolveChildRegisteredLocation } = await import(
+      '../lib/parent-registered-location'
+    );
+    const parentCampus = await resolveRegisteredLocation(storage, parent.locationId);
+    const childrenWithCampus = await Promise.all(
+      children.map(async (child) => {
+        const campus = await resolveChildRegisteredLocation(storage, parent, child);
+        return { child, campus };
+      }),
+    );
+
     const profile = {
       parent: {
         id: parent.id,
@@ -763,9 +789,11 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         isActive: parent.isActive,
         createdAt: parent.createdAt,
         updatedAt: parent.updatedAt,
-        memberId: parent.memberId || null
+        memberId: parent.memberId || null,
+        locationId: parentCampus.locationId,
+        locationName: parentCampus.locationName,
       },
-      children: children.map(child => ({
+      children: childrenWithCampus.map(({ child, campus }) => ({
         id: child.id,
         schoolStudentId: childToSchoolStudentMap.get(child.id) || null,
         firstName: child.firstName,
@@ -779,7 +807,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         emergencyContact: child.emergencyContact,
         additionalLanguages: child.additionalLanguages,
         notes: child.notes,
-        createdAt: child.createdAt
+        createdAt: child.createdAt,
+        locationId: campus.locationId,
+        locationName: campus.locationName,
       })),
       // Use processed enrollments (remove internal _remainingBalanceCents field from response)
       enrollments: processedEnrollments.map(({ _remainingBalanceCents, ...rest }) => rest),

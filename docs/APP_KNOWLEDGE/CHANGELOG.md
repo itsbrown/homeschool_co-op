@@ -1,5 +1,14 @@
 # App knowledge changelog
 
+## 2026-07-21 (Family campus: signup gate, visibility, admin transfer)
+
+- School-code signup: no first-campus auto-select; fail closed when school has zero campuses; `resolveSchoolAndChildLocation` no longer defaults to `locations[0]`.
+- Add-child after login inherits parent `users.location_id` / active `user_locations`.
+- Admin soft family transfer: `updateParentLocation` also syncs `user_locations`; Parent Profile campus select + confirm; enrollments/payments unchanged.
+- Visibility: `locationName` on `GET /api/users/profile`, school-admin student detail, parent-profile; Settings + ChildProfilePage header show campus.
+- Prod repair: Pastorella (parent 135 / Luca 169) set to Greece (`location_id` 4) via `set-pastorella-campus-greece-production.ts`.
+- Domain: [registration-and-locations.md](./domains/registration-and-locations.md).
+
 ## 2026-07-16 (Remove unused Firebase packages)
 
 - Dropped unused `firebase` / `firebase-admin` deps (auth is Supabase; no SDK imports). Replit firewall blocked transitive `websocket-driver`, which broke `npm ci` when `node_modules` was wiped.
