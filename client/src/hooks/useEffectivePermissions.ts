@@ -73,26 +73,38 @@ export function useEffectivePermissions() {
     isError,
     error,
   } = useQuery<EffectivePermissionsApiResponse>({
-    queryKey: ['/api/me/effective-permissions'],
+    // Include activeRole so role switches do not reuse another role's grants.
+    queryKey: ['/api/me/effective-permissions', activeRole],
     staleTime: 5 * 60 * 1000,
     retry: 1,
+    enabled: !!activeRole,
   });
 
+  // Ignore cache rows that do not match the current role (belt-and-suspenders).
+  const roleMatchedApiData =
+    apiData && apiData.activeRole === activeRole ? apiData : undefined;
+
+  const legacyEnabled =
+    !!activeRole && (isError || (!isLoading && !roleMatchedApiData));
+
   // Fallback: my-permissions if effective endpoint not yet available
-  const { data: legacyData } = useQuery<MyPermissionsResponse>({
-    queryKey: ['/api/school-admin/user-locations/my-permissions'],
+  const {
+    data: legacyData,
+    isLoading: legacyLoading,
+  } = useQuery<MyPermissionsResponse>({
+    queryKey: ['/api/school-admin/user-locations/my-permissions', activeRole],
     staleTime: 5 * 60 * 1000,
-    enabled: isError || (!isLoading && !apiData),
+    enabled: legacyEnabled,
   });
 
   const effective: EffectivePermissions = useMemo(() => {
-    if (apiData) {
+    if (roleMatchedApiData) {
       return {
-        flags: apiData.flags,
-        accessibleLocationIds: apiData.accessibleLocationIds,
-        canAccessEntireSchool: apiData.canAccessEntireSchool,
-        isSchoolAdminBypass: apiData.isSchoolAdminBypass,
-        showAdminNavGroups: apiData.showAdminNavGroups,
+        flags: roleMatchedApiData.flags,
+        accessibleLocationIds: roleMatchedApiData.accessibleLocationIds,
+        canAccessEntireSchool: roleMatchedApiData.canAccessEntireSchool,
+        isSchoolAdminBypass: roleMatchedApiData.isSchoolAdminBypass,
+        showAdminNavGroups: roleMatchedApiData.showAdminNavGroups,
       };
     }
 
@@ -121,16 +133,21 @@ export function useEffectivePermissions() {
       return aggregateEffectivePermissions({ activeRole });
     }
     return FAIL_CLOSED;
-  }, [apiData, legacyData, activeRole, allRoles]);
+  }, [roleMatchedApiData, legacyData, activeRole, allRoles]);
 
   const visibleNav: NavRegistryItem[] = useMemo(
     () => filterNavRegistry(effective),
     [effective],
   );
 
+  const awaitingPrimary =
+    !!activeRole && !roleMatchedApiData && isLoading && !isError;
+  const awaitingLegacy =
+    legacyEnabled && !legacyData && legacyLoading && !roleMatchedApiData;
+
   return {
     effective,
-    isLoading: isLoading && !apiData && !legacyData,
+    isLoading: (awaitingPrimary || awaitingLegacy) && !roleMatchedApiData && !legacyData,
     isError,
     error,
     can: (key: PermissionKey) => hasPermission(effective, key),

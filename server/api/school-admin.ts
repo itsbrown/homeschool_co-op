@@ -763,12 +763,12 @@ router.get("/classes", supabaseAuth, requireSchoolContext, attachAccessScope, re
     // Apply additional filters if needed
     let filteredClasses = classesWithEnrollment;
 
-    // Location-scoped staff: only classes at accessible locations (null = school-wide)
+    // Location-scoped staff: classes at accessible locations; null locationId = school-wide (keep)
     const classLocationIds = locationFilterIds(req.accessScope);
     if (classLocationIds !== null) {
       const allowed = new Set(classLocationIds);
       filteredClasses = filteredClasses.filter(
-        (cls) => cls.locationId != null && allowed.has(cls.locationId),
+        (cls) => cls.locationId == null || allowed.has(cls.locationId),
       );
     }
 
@@ -2535,12 +2535,12 @@ router.get("/students", supabaseAuth, attachAccessScope, requirePermission('canM
     ];
     let validStudents = allStudentsWithDetails.filter(student => student !== null);
 
-    // Location-scoped staff: only students at accessible locations
+    // Location-scoped staff: students at accessible locations; null locationId = school-wide (keep)
     const studentLocationIds = locationFilterIds(req.accessScope);
     if (studentLocationIds !== null) {
       const allowed = new Set(studentLocationIds);
       validStudents = validStudents.filter(
-        (student: any) => student.locationId != null && allowed.has(student.locationId),
+        (student: any) => student.locationId == null || allowed.has(student.locationId),
       );
     }
     

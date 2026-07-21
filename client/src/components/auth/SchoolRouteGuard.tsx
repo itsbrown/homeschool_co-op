@@ -1,8 +1,8 @@
 import { ReactNode } from 'react';
 import { useLocation } from 'wouter';
+import { useRole } from '@/contexts/RoleContext';
 import { useEffectivePermissions } from '@/hooks/useEffectivePermissions';
 import ForbiddenPage from '@/pages/ForbiddenPage';
-import { NAV_REGISTRY } from '@shared/permissions';
 
 /**
  * Blocks deep links to school-admin / schools paths when the user lacks the
@@ -10,7 +10,8 @@ import { NAV_REGISTRY } from '@shared/permissions';
  */
 export function SchoolRouteGuard({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const { canAccessPath, isLoading, showAdminNavGroups, effective } =
+  const { activeRole } = useRole();
+  const { canAccessPath, isLoading, showAdminNavGroups } =
     useEffectivePermissions();
 
   const path = location.split('?')[0];
@@ -30,6 +31,11 @@ export function SchoolRouteGuard({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
+  // Parent shell routes may render school URLs inside ParentAppShell; skip staff gates.
+  if (activeRole === 'parent') {
+    return <>{children}</>;
+  }
+
   // Settings + dashboard always allowed for authenticated school users
   if (path === '/schools/settings' || path === '/dashboard') {
     return <>{children}</>;
@@ -39,11 +45,7 @@ export function SchoolRouteGuard({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  const inRegistry = NAV_REGISTRY.some(
-    (item) => path === item.href || path.startsWith(`${item.href}/`),
-  );
-
-  if (isLoading && inRegistry) {
+  if (isLoading) {
     return (
       <div className="min-h-[40vh] flex items-center justify-center" data-testid="permissions-loading">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -51,18 +53,9 @@ export function SchoolRouteGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  if (inRegistry && !canAccessPath(path)) {
-    return <ForbiddenPage />;
-  }
-
-  // Paths not in registry: allow if any staff grant or school-wide, else forbid if clearly admin-only
-  if (
-    !inRegistry &&
-    path.startsWith('/school-admin/') &&
-    !effective.isSchoolAdminBypass &&
-    !effective.canAccessEntireSchool &&
-    !Object.values(effective.flags).some(Boolean)
-  ) {
+  // Registry + unlisted staff paths: canAccessPath fail-closes unlisted deep links
+  // unless the user has school-wide / bypass access.
+  if (!canAccessPath(path)) {
     return <ForbiddenPage />;
   }
 

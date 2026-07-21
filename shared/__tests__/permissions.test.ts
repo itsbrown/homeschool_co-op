@@ -156,6 +156,37 @@ describe('canAccessPath / isLocationInScope', () => {
     expect(canAccessPath(effective, '/schools/schedule-builder')).toBe(true);
   });
 
+  it('fail-closes unlisted staff deep links unless school-wide', () => {
+    const locOnly = aggregateEffectivePermissions({
+      activeRole: 'educator',
+      locationGrants: [{ locationId: 1, isActive: true, canManageClasses: true }],
+    });
+    expect(canAccessPath(locOnly, '/schools/contact-import')).toBe(false);
+    expect(canAccessPath(locOnly, '/school-admin/refunds')).toBe(false);
+
+    const regional = aggregateEffectivePermissions({
+      activeRole: 'educator',
+      schoolWideGrant: { isActive: true, canManageClasses: true },
+    });
+    expect(canAccessPath(regional, '/schools/contact-import')).toBe(true);
+  });
+
+  it('gates refunds and educators by matching registry permission', () => {
+    const reportsOnly = aggregateEffectivePermissions({
+      activeRole: 'educator',
+      locationGrants: [{ locationId: 1, isActive: true, canViewReports: true }],
+    });
+    expect(canAccessPath(reportsOnly, '/school-admin/refunds')).toBe(true);
+    expect(canAccessPath(reportsOnly, '/schools/educators')).toBe(false);
+
+    const staffOnly = aggregateEffectivePermissions({
+      activeRole: 'educator',
+      locationGrants: [{ locationId: 1, isActive: true, canManageStaff: true }],
+    });
+    expect(canAccessPath(staffOnly, '/schools/educators')).toBe(true);
+    expect(canAccessPath(staffOnly, '/school-admin/refunds')).toBe(false);
+  });
+
   it('location scope respects school-wide', () => {
     const locOnly = aggregateEffectivePermissions({
       activeRole: 'educator',

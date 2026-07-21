@@ -225,6 +225,7 @@ export const NAV_REGISTRY: NavRegistryItem[] = [
     group: 'People',
     required: 'canManageStaff',
   },
+  { title: 'Educators', href: '/schools/educators', group: 'People', required: 'canManageStaff' },
   { title: 'Students', href: '/schools/students', group: 'People', required: 'canManageStudents' },
   { title: 'Users', href: '/schools/users', group: 'People', required: 'canManageStaff' },
 
@@ -281,6 +282,18 @@ export const NAV_REGISTRY: NavRegistryItem[] = [
   {
     title: 'Retention Report',
     href: '/school-admin/retention-report',
+    group: 'Finance',
+    required: 'canViewReports',
+  },
+  {
+    title: 'Refunds',
+    href: '/school-admin/refunds',
+    group: 'Finance',
+    required: 'canViewReports',
+  },
+  {
+    title: 'Public Store',
+    href: '/school-admin/public-store',
     group: 'Finance',
     required: 'canViewReports',
   },
@@ -431,8 +444,8 @@ export function canAccessPath(
       normalized === item.href || normalized.startsWith(`${item.href}/`),
   );
   if (matches.length === 0) {
-    // Paths not in registry: allow only if user has any staff grant (fail closed otherwise)
-    return LOCATION_PERMISSION_KEYS.some((k) => effective.flags[k]);
+    // Unlisted staff deep links: school-wide / bypass only (do not over-permit on one unrelated flag)
+    return effective.canAccessEntireSchool || effective.isSchoolAdminBypass;
   }
   return matches.some((item) => canShowNavItem(effective, item));
 }
