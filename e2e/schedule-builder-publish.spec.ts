@@ -41,20 +41,32 @@ test.describe("schedule builder publish", () => {
     await page.getByTestId("week-planner-template-select").click();
     await page.getByRole("option", { name: new RegExp(seed.classes.seekers.title.split(" ")[0]) }).click();
 
-    await page.getByTestId(`week-plan-chip-${seed.weekPlans.seekersDraftId}`).click();
-    await expect(page.getByText("Draft: Pending Publish")).toBeVisible({ timeout: 30_000 });
+    const draftChip = page.getByTestId(`week-plan-chip-${seed.weekPlans.seekersDraftId}`);
+    const editBlock = page.getByTestId(`week-block-edit-${seed.blocks.seekersDraftBlockId}`);
+    await expect(draftChip).toBeVisible({ timeout: 30_000 });
 
-    await page.getByTestId(`week-block-edit-${seed.blocks.seekersDraftBlockId}`).click();
+    // Auto-select may already fetch this plan; prefer the block control as the ready signal.
+    await draftChip.click();
+    await expect(editBlock).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("Draft: Pending Publish")).toBeVisible({ timeout: 15_000 });
+
+    await editBlock.click();
     await page.getByPlaceholder("Block title").fill("E2E Published Lesson");
+    // Wait for the response (not only ok) so a 4xx/5xx surfaces instead of a 30s hang.
     const patchApi = page.waitForResponse(
       (r) =>
         r.request().method() === "PATCH" &&
-        r.url().includes("/api/schedule-builder/week-plan-blocks/") &&
-        r.ok(),
+        r.url().includes("/api/schedule-builder/week-plan-blocks/"),
       { timeout: 30_000 },
     );
     await page.getByTestId("week-block-save").click();
-    await patchApi;
+    const patchRes = await patchApi;
+    expect(patchRes.ok(), `block PATCH failed: ${patchRes.status()} ${await patchRes.text()}`).toBeTruthy();
+    await expect(page.getByRole("dialog", { name: "Edit Block" })).toBeHidden({ timeout: 15_000 });
+
+    // Publish lives in the Actions dropdown (not a top-level button).
+    await page.getByTestId("week-planner-actions").click();
+    await expect(page.getByTestId("week-planner-publish")).toBeVisible({ timeout: 10_000 });
 
     const publishApi = page.waitForResponse(
       (r) =>

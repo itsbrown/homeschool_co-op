@@ -82,6 +82,9 @@ Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: 
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| E2E `schedule-builder-publish` times out on `week-planner-publish` click | Publish is a **DropdownMenuItem** under Actions (`week-planner-actions` → `week-planner-publish`), not a top-level button | Open Actions first, then click Publish |
+| Block edit PATCH 500 / E2E `waitForResponse` + `r.ok()` hangs | `insertBlockHistory` interpolated empty/null `materials` text[] into drizzle `sql``` → Postgres `syntax error at or near ")"` | Emit `ARRAY[]::text[]` / `ARRAY[...]::text[]` in `schedule-builder-db.ts`; assert PATCH status in E2E |
+| Week chip selected but pane says “Select a week…” | Detail pane required `selectedWeekData`; while `GET /week-plans/:id` is pending the UI showed empty-state copy | Show loading/error states; E2E waits for draft block edit control |
 | Week Planner **Confirm Import** 500 / failed | Import built `{ dayOfWeek, startTime, data }` but `bulkUpdateWeekPlanBlocks` needs `skeletonBlockId` + flat fields | Resolve skeleton slot by day+start_time; pass correct shape (fixed 2026-07-14) |
 | Template CSV (`default_title`) on Week Planner looks wrong / empty titles | Week-plan columns use `title`; no mapper | Shared dialog maps `default_title` → title; server also falls back to `default_title` |
 

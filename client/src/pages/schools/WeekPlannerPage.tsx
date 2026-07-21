@@ -131,7 +131,11 @@ export default function WeekPlannerPage() {
     refetchOnMount: "always",
   });
 
-  const { data: selectedWeekData } = useQuery<WeekPlan & { blocks?: WeekPlanBlock[] }>({
+  const {
+    data: selectedWeekData,
+    isLoading: selectedWeekLoading,
+    isError: selectedWeekError,
+  } = useQuery<WeekPlan & { blocks?: WeekPlanBlock[] }>({
     queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId],
     enabled: !!selectedWeekPlanId,
     refetchOnMount: "always",
@@ -604,7 +608,31 @@ export default function WeekPlannerPage() {
               </Button>
             </div>
 
-            {selectedWeekPlanId && selectedWeekData ? (
+            {selectedWeekPlanId && selectedWeekLoading ? (
+              <Card data-testid="week-planner-week-loading">
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin opacity-50" />
+                  <p>Loading week plan…</p>
+                </CardContent>
+              </Card>
+            ) : selectedWeekPlanId && selectedWeekError ? (
+              <Card data-testid="week-planner-week-error">
+                <CardContent className="py-12 text-center text-muted-foreground space-y-2">
+                  <p>Could not load this week plan.</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      queryClient.invalidateQueries({
+                        queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId],
+                      })
+                    }
+                  >
+                    Retry
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : selectedWeekPlanId && selectedWeekData ? (
               <div className="space-y-6">
                 <Card>
                   <CardHeader className="pb-3">
@@ -640,6 +668,7 @@ export default function WeekPlannerPage() {
                             <Button
                               size="sm"
                               variant="outline"
+                              data-testid="week-planner-actions"
                               disabled={
                                 isBuilding ||
                                 updateWeekMutation.isPending ||
