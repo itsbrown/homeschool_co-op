@@ -815,7 +815,12 @@ router.get(
 });
 
 // Get individual class by ID for editing
-router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
+router.get(
+  "/classes/:id",
+  supabaseAuth,
+  attachAccessScope,
+  requireAnyPermission('canManageClasses', 'canSendNotifications'),
+  async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
@@ -833,6 +838,19 @@ router.get("/classes/:id", supabaseAuth, async (req: any, res) => {
 
     if (classData.schoolId !== schoolId) {
       return res.status(403).json({ message: 'Access denied to this class' });
+    }
+
+    // Location-scoped staff: deny out-of-campus class detail (null location = school-wide keep)
+    const classDetailLocationIds = locationFilterIds(req.accessScope);
+    if (
+      classDetailLocationIds !== null &&
+      classData.locationId != null &&
+      !classDetailLocationIds.includes(classData.locationId)
+    ) {
+      return res.status(403).json({
+        message: 'Class is outside your assigned access scope',
+        code: 'LOCATION_SCOPE_DENIED',
+      });
     }
 
     // Parse variants from schedule field if they exist
@@ -1686,7 +1704,12 @@ router.get("/staff", supabaseAuth, attachAccessScope, requirePermission('canMana
 });
 
 // Get single staff member — :id is canonical users.id (fallback: school_staff.id, user_roles.id)
-router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
+router.get(
+  "/staff/:id",
+  supabaseAuth,
+  attachAccessScope,
+  requirePermission('canManageStaff'),
+  async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
@@ -1704,6 +1727,18 @@ router.get("/staff/:id", supabaseAuth, async (req: any, res) => {
     const staffMember = await buildStaffMemberResponseForUser(resolved.userId, schoolId);
     if (!staffMember) {
       return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    // Match GET /staff list scoping for location-assigned staff
+    const staffDetailLocationIds = locationFilterIds(req.accessScope);
+    if (staffDetailLocationIds !== null) {
+      const locId = (staffMember as any).locationId;
+      if (locId == null || !staffDetailLocationIds.includes(locId)) {
+        return res.status(403).json({
+          message: 'Staff member is outside your assigned access scope',
+          code: 'LOCATION_SCOPE_DENIED',
+        });
+      }
     }
 
     console.log(
