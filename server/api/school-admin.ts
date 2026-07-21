@@ -14,7 +14,12 @@ import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmai
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { clearPermissionCache } from '../middleware/locationPermissions';
-import { attachAccessScope, requirePermission, locationFilterIds } from '../middleware/access-scope';
+import {
+  attachAccessScope,
+  requirePermission,
+  requireAnyPermission,
+  locationFilterIds,
+} from '../middleware/access-scope';
 import rateLimit from 'express-rate-limit';
 import { getDb } from '../db';
 import { ensureSchoolRegistrationCode } from '../lib/school-registration-code';
@@ -659,7 +664,14 @@ async function setupSchool(req: any, res: any) {
 router.post("/setup-school", setupSchool);
 
 // Get classes for the school
-router.get("/classes", supabaseAuth, requireSchoolContext, attachAccessScope, requirePermission('canManageClasses'), async (req: any, res: any) => {
+// Class list is used by class admin UI and notification targeting (class_specific audience).
+router.get(
+  "/classes",
+  supabaseAuth,
+  requireSchoolContext,
+  attachAccessScope,
+  requireAnyPermission('canManageClasses', 'canSendNotifications'),
+  async (req: any, res: any) => {
   try {
     // [FIX:v3.0] School ID injected by middleware from database
     const schoolId = req.schoolId;

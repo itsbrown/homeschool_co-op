@@ -149,6 +149,14 @@ function logWouldDeny(
  * Must run after attachAccessScope (or will attach lazily).
  */
 export function requirePermission(permission: PermissionKey) {
+  return requireAnyPermission(permission);
+}
+
+/**
+ * Require at least one of the listed capabilities (OR). Honors PERMISSIONS_ENFORCEMENT.
+ * Must run after attachAccessScope (or will attach lazily).
+ */
+export function requireAnyPermission(...permissions: PermissionKey[]) {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.accessScope) {
       await attachAccessScope(req, res, () => undefined);
@@ -156,26 +164,31 @@ export function requirePermission(permission: PermissionKey) {
 
     const scope = req.accessScope!;
     const mode = scope.mode;
+    const primary = permissions[0];
 
     if (mode === 'off') {
       return next();
     }
 
-    const allowed = hasPermission(scope, permission);
+    const allowed = permissions.some((permission) => hasPermission(scope, permission));
     if (allowed) {
       return next();
     }
 
     if (mode === 'observe') {
-      logWouldDeny(req, permission, 'missing_permission');
+      logWouldDeny(req, primary, 'missing_permission');
       return next();
     }
 
     return res.status(403).json({
       error: 'Access denied',
-      message: `Insufficient permission: ${permission}`,
+      message:
+        permissions.length === 1
+          ? `Insufficient permission: ${primary}`
+          : `Insufficient permission: one of ${permissions.join(', ')}`,
       code: 'PERMISSION_DENIED',
-      permission,
+      permission: primary,
+      permissions,
     });
   };
 }

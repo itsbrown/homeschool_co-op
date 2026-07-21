@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import type { Request, Response, NextFunction } from 'express';
 import {
   requirePermission,
+  requireAnyPermission,
   locationFilterIds,
   type AccessScope,
 } from '../../middleware/access-scope';
@@ -89,6 +90,26 @@ describe('requirePermission enforcement', () => {
     await requirePermission('canManageStaff')(req, res, next);
 
     expect(next).toHaveBeenCalled();
+  });
+
+  it('requireAnyPermission allows when any listed grant matches', async () => {
+    process.env.PERMISSIONS_ENFORCEMENT = 'enforce';
+    const effective = aggregateEffectivePermissions({
+      activeRole: 'teacher',
+      locationGrants: [{ locationId: 1, isActive: true, canSendNotifications: true }],
+    });
+    const req = {
+      accessScope: { ...effective, schoolId: 1, mode: 'enforce' } as AccessScope,
+      user: { id: 9 },
+      path: '/api/school-admin/classes',
+    } as unknown as Request;
+    const res = mockRes();
+    const next = jest.fn() as NextFunction;
+
+    await requireAnyPermission('canManageClasses', 'canSendNotifications')(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
   });
 });
 

@@ -31,8 +31,12 @@ export function SchoolRouteGuard({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  // Parent shell routes may render school URLs inside ParentAppShell; skip staff gates.
-  if (activeRole === 'parent') {
+  // ParentAppShell silently switches role for /school-admin/* only. Keep that path
+  // unblocked so the shell can mount; still gate /schools/* staff deep links.
+  if (
+    activeRole === 'parent' &&
+    (path === '/school-admin' || path.startsWith('/school-admin/'))
+  ) {
     return <>{children}</>;
   }
 

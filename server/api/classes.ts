@@ -2,10 +2,8 @@ import express from "express";
 import { storage } from "../storage";
 import { sendWaitlistJoinedEmail, sendWaitlistPromotedEmail } from "../lib/email-service";
 import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
-import {
-  aggregateEffectivePermissions,
-  legacyCanCreateClassesAllowed,
-} from "@shared/permissions";
+import { legacyCanCreateClassesAllowed } from "@shared/permissions";
+import { attachAccessScope } from "../middleware/access-scope";
 
 const router = express.Router();
 
@@ -149,17 +147,13 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req: any, res) => {
+router.post('/', attachAccessScope, async (req: any, res) => {
   try {
     // Prefer user_locations / user_school_permissions (canManageClasses).
     // Legacy users.permissions.canCreateClasses is only an explicit deny when no location grant;
     // see legacyCanCreateClassesAllowed — do not treat JSONB true as authorization.
-    const effective =
-      req.accessScope ??
-      aggregateEffectivePermissions({
-        activeRole: req.user?.role || '',
-        allRoles: (req.user as { allRoles?: string[] })?.allRoles,
-      });
+    // attachAccessScope loads grants; do not fall back to activeRole-only aggregation.
+    const effective = req.accessScope!;
     if (req.user?.role === 'teacher' && !legacyCanCreateClassesAllowed(effective, req.user?.permissions)) {
       return res.status(403).json({ error: 'permission denied' });
     }
