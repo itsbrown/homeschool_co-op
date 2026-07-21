@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-07-21 (Class grade selector through 12th)
+
+- School class create/edit multi-select (`SchoolClassCreationPage`) previously stopped at 10th grade; added `11th-grade` / `12th-grade`. Display map on `SchoolClassDetailsPage` updated to match.
+- Child registration / parent profile selectors already included through 12th Grade.
+
 ## 2026-07-21 (Family campus: signup gate, visibility, admin transfer)
 
 - School-code signup: no first-campus auto-select; fail closed when school has zero campuses; `resolveSchoolAndChildLocation` no longer defaults to `locations[0]`.

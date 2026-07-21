@@ -119,6 +119,8 @@ export default function SchoolClassDetailsPage() {
           '8th-grade': '8th Grade',
           '9th-grade': '9th Grade',
           '10th-grade': '10th Grade',
+          '11th-grade': '11th Grade',
+          '12th-grade': '12th Grade',
         };
         return displayMap[level] || level;
       }).join(', ');
