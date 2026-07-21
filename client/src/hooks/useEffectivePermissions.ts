@@ -175,10 +175,8 @@ export function useEffectivePermissions() {
       });
     }
 
-    // Loading or error: fail closed (do not flash full admin tree)
-    if (isSchoolAdminBypassFromRole(permissionRole)) {
-      return aggregateEffectivePermissions({ activeRole: permissionRole });
-    }
+    // Loading or error with no grant payload: fail closed.
+    // Do not invent bypass from a role string alone — wait for server data.
     return FAIL_CLOSED;
   }, [roleMatchedApiData, legacyData, permissionRole, allRoles]);
 
@@ -212,14 +210,10 @@ export function useEffectivePermissions() {
   };
 }
 
-function isSchoolAdminBypassFromRole(role: string): boolean {
-  return ['schoolAdmin', 'director', 'admin', 'superAdmin'].includes(role);
-}
-
 /** Alias used by CTAs */
 export function useCan(permission: PermissionKey): boolean {
   const { can, isLoading, showAdminNavGroups } = useEffectivePermissions();
-  if (showAdminNavGroups) return true;
   if (isLoading) return false;
+  if (showAdminNavGroups) return true;
   return can(permission);
 }
