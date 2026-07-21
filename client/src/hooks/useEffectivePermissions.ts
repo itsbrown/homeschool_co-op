@@ -69,7 +69,8 @@ const FAIL_CLOSED: EffectivePermissions = {
 };
 
 export function useEffectivePermissions() {
-  const { activeRole, allRoles, isLoadingRoles } = useRole();
+  const { activeRole, allRoles, isLoadingRoles, rolesBootstrapRole, isAccountReady } =
+    useRole();
 
   // apiRequest sends X-Active-Role from localStorage; ParentAppShell may update
   // that via silentRoleContextUpdate without changing RoleContext.activeRole.
@@ -93,7 +94,10 @@ export function useEffectivePermissions() {
   );
   const trustedStorageRole =
     storageRole && heldRoleSet.has(storageRole.toLowerCase()) ? storageRole : '';
-  const permissionRole = trustedStorageRole || activeRole;
+  // Prefer storage (silent switch) → RoleContext → bootstrap role from /api/user/roles
+  // so we do not flash Forbidden in the gap before setActiveRole runs.
+  const permissionRole =
+    trustedStorageRole || activeRole || rolesBootstrapRole || '';
 
   const {
     data: apiData,
@@ -187,9 +191,9 @@ export function useEffectivePermissions() {
     !!permissionRole && !roleMatchedApiData && isLoading && !isError;
   const awaitingLegacy =
     legacyEnabled && !legacyData && legacyLoading && !roleMatchedApiData;
-  // Roles bootstrap often leaves activeRole empty briefly; stay loading so
-  // SchoolRouteGuard does not flash Forbidden before grants can load.
-  const awaitingRole = !permissionRole && isLoadingRoles;
+  // Stay loading until a permission role is available (covers roles-query done
+  // but RoleContext setActiveRole effect not yet applied).
+  const awaitingRole = !permissionRole && (isLoadingRoles || !isAccountReady);
 
   return {
     effective,

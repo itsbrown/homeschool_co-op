@@ -291,7 +291,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
         }
       }
     }
-  }, [location, showPermissionNav]);
+  }, [location, showPermissionNav, navGroups]);
 
   // Save expanded state to localStorage (guarded for SSR safety)
   useEffect(() => {
