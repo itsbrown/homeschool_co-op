@@ -38,6 +38,14 @@ export type BuildReportOptions = {
   current: Awaited<ReturnType<typeof import('./assessment-progress-db').getStudentProgressCurrent>>;
   logs: Awaited<ReturnType<typeof import('./assessment-progress-db').getStudentProgressLog>>;
   assessments: Array<{ score: string; assessmentDate: Date | string; lesson?: number | null }>;
+  /** Optional published schedule lessons for the child (coverage + completion marks). */
+  scheduledLessons?: Array<{
+    title: string;
+    classTitle?: string | null;
+    weekNumber?: number;
+    weekStartDate?: string | null;
+    isCompleted: boolean;
+  }>;
 };
 
 export type StudentProgressReportDto = {
@@ -71,6 +79,7 @@ export type StudentProgressReportDto = {
     current: BuildReportOptions['current'];
     sessionLogs: BuildReportOptions['logs'];
     readingAssessments: BuildReportOptions['assessments'];
+    scheduledLessons?: BuildReportOptions['scheduledLessons'];
   };
 };
 
@@ -207,6 +216,7 @@ export function buildStudentProgressReport(
       current: options.current,
       sessionLogs: options.logs,
       readingAssessments: options.assessments.slice(0, 20),
+      scheduledLessons: options.scheduledLessons ?? [],
     },
   };
 

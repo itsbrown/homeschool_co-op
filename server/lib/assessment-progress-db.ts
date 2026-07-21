@@ -1024,6 +1024,46 @@ export async function buildStudentProgressReport(
   const logs = await getStudentProgressLog(childId, schoolId, options.sessionId);
   const assessments = await getStudentAssessmentsByChildId(childId);
 
+  let scheduledLessons: Array<{
+    title: string;
+    classTitle?: string | null;
+    weekNumber?: number;
+    weekStartDate?: string | null;
+    isCompleted: boolean;
+  }> = [];
+  try {
+    const { getPublishedWeekPlansForClassIds, getWeekPlanBlocksByWeekPlanId } = await import(
+      './schedule-builder-db'
+    );
+    const { storage } = await import('../storage');
+    const enrollments = await storage.getEnrollmentsByChildId(childId);
+    const classIds = [
+      ...new Set(
+        enrollments
+          .map((e: any) => e.marketplaceClassId ?? e.classId)
+          .filter((id: number | null | undefined): id is number => typeof id === 'number' && id > 0),
+      ),
+    ];
+    if (classIds.length > 0) {
+      const plans = await getPublishedWeekPlansForClassIds(schoolId, classIds);
+      for (const plan of plans.slice(0, 12)) {
+        const blocks = await getWeekPlanBlocksByWeekPlanId(plan.id);
+        for (const b of blocks) {
+          scheduledLessons.push({
+            title: b.title || b.customTitle || 'Untitled',
+            classTitle: plan.classTitle,
+            weekNumber: plan.weekNumber,
+            weekStartDate: plan.weekStartDate,
+            isCompleted: !!b.isCompleted,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[buildStudentProgressReport] scheduled lessons skipped:', err);
+    scheduledLessons = [];
+  }
+
   const { buildStudentProgressReport: build } = await import('./build-student-progress-report');
 
   return build(child, {
@@ -1054,6 +1094,7 @@ export async function buildStudentProgressReport(
       assessmentDate: a.assessmentDate,
       lesson: a.lesson,
     })),
+    scheduledLessons,
   });
 }
 

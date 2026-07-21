@@ -56,9 +56,10 @@ School-admin **Form Builder** forms that applicants can open **without logging i
 
 | Action | Persists | Notes |
 |--------|----------|-------|
-| Edit field label/type/required | Debounced `PUT /api/custom-forms/fields/:id` (~400ms) | Functional `setState`; invalidates form + by-slug queries; toast on settled save |
-| Add / delete / reorder field | Immediate POST / DELETE / reorder | Invalidates form queries |
-| **Save Form** | Title, description, `isActive`, `accessLevel`, locations, fees, `settings` | Does not batch-save fields |
+| Edit field label / placeholder / text config | Local UI on keystroke; `PUT /api/custom-forms/fields/:id` **on blur** | No success toast (silent autosave). Do not invalidate form query on field PUT (avoids mid-edit clobber). |
+| Edit field type / required | Immediate `PUT` | Discrete controls; silent autosave |
+| Add / delete / reorder field | Immediate POST / DELETE / reorder | Invalidates form queries; toast on add/delete |
+| **Save Form** | Title, description, `isActive`, `accessLevel`, locations, fees, `settings` | Flushes any pending field edits first; does not batch field PUTs into the form body |
 | **Preview** | Admin preview | Navigates to `/school-admin/forms/:id/preview` (not public slug) |
 
 Public by-slug query uses `staleTime: 0` + `refetchOnMount: 'always'`.
@@ -86,11 +87,16 @@ Public by-slug query uses `staleTime: 0` + `refetchOnMount: 'always'`.
 
 | Symptom | Cause | Fix |
 |---------|--------|-----|
+| Field saves / toast while typing | Was: 400ms debounce + invalidate + toast on every PUT | Text inputs commit on blur only (`FormEditorPage` `patchField` / `commitField`) |
+| Label resets mid-word | Form query refetch overwrote local field state | Skip syncing `form.fields` while dirty/pending; field PUT does not invalidate |
+| Public form shows building icon, not school logo | `schools.logo` is a legacy `/uploads/logos/...` path; file missing on Replit ephemeral disk → `<img onError>` fallback in `DynamicFormPage` `SchoolBranding` | School Settings → re-upload logo (stores `/public/logos/...` via object storage). ASA prod school 2 was `/uploads/logos/school-logo-1764349754749.png` (404) |
+| Logo looks tiny on public form | Was fixed `h-16 max-w-[280px]` — wordmarks shrink to ~64px tall | `SchoolBranding`: `w-full max-w-md h-auto max-h-28 sm:max-h-36 object-contain` (same in Preview) |
 | `/api/test/*` returns HTML | Stale process on :5000 without test routes | `node scripts/free-port-5000.mjs`; `CI=true npm run test:e2e` |
 | Public slug 404 | Form not active or not `accessLevel: public` | Settings → Public + Active → Save Form |
 | Upload 401/500 on prod | Old deploy or storage misconfigured | Redeploy; check object storage |
 | Smart Builder 503 | No `ANTHROPIC_API_KEY` and mock off | Set key or `FORM_BUILDER_AI_MOCK=1` for local E2E |
 | Template seed FK error | `school_id = 1` missing on prod | Templates use first school in DB (`isTemplate` only) |
+| E2E field label PUT never fires | Playwright `fill()` does not blur | Blur (or Tab) after fill — see `e2e/form-editor-fields.spec.ts` |
 
 ## Related
 

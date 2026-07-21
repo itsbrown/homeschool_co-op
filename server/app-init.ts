@@ -138,6 +138,13 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
     createParentPath: true,
   }));
 
+  // Schedule builder CSV import (multipart FormData → req.files)
+  app.use('/api/schedule-builder', fileUpload({
+    useTempFiles: false,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    abortOnLimit: true,
+  }));
+
   // Serve static files from uploads directory (legacy paths + E2E stub objects)
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 

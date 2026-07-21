@@ -7925,6 +7925,113 @@ export class MemStorage implements IStorage {
         return this.dbStorage;
       }
 
+      private requireSbDb(): DatabaseStorage {
+        if (!(this.dbStorage instanceof DatabaseStorage)) {
+          throw new Error('Schedule builder features require PostgreSQL');
+        }
+        return this.dbStorage;
+      }
+
+      getWeeklySkeletonsBySchool(schoolId: number) {
+        return this.requireSbDb().getWeeklySkeletonsBySchool(schoolId);
+      }
+      getWeeklySkeletonById(id: number) {
+        return this.requireSbDb().getWeeklySkeletonById(id);
+      }
+      createWeeklySkeleton(data: Parameters<DatabaseStorage['createWeeklySkeleton']>[0]) {
+        return this.requireSbDb().createWeeklySkeleton(data);
+      }
+      updateWeeklySkeleton(id: number, data: Parameters<DatabaseStorage['updateWeeklySkeleton']>[1]) {
+        return this.requireSbDb().updateWeeklySkeleton(id, data);
+      }
+      deleteWeeklySkeleton(id: number) {
+        return this.requireSbDb().deleteWeeklySkeleton(id);
+      }
+      getSkeletonBlocksBySkeletonId(skeletonId: number) {
+        return this.requireSbDb().getSkeletonBlocksBySkeletonId(skeletonId);
+      }
+      getSkeletonBlockById(id: number) {
+        return this.requireSbDb().getSkeletonBlockById(id);
+      }
+      createSkeletonBlock(data: Parameters<DatabaseStorage['createSkeletonBlock']>[0]) {
+        return this.requireSbDb().createSkeletonBlock(data);
+      }
+      updateSkeletonBlock(id: number, data: Parameters<DatabaseStorage['updateSkeletonBlock']>[1]) {
+        return this.requireSbDb().updateSkeletonBlock(id, data);
+      }
+      deleteSkeletonBlock(id: number) {
+        return this.requireSbDb().deleteSkeletonBlock(id);
+      }
+      reorderSkeletonBlocks(skeletonId: number, blockIds: number[]) {
+        return this.requireSbDb().reorderSkeletonBlocks(skeletonId, blockIds);
+      }
+      bulkReplaceSkeletonBlocks(
+        skeletonId: number,
+        blocks: Parameters<DatabaseStorage['bulkReplaceSkeletonBlocks']>[1],
+        userId: number,
+      ) {
+        return this.requireSbDb().bulkReplaceSkeletonBlocks(skeletonId, blocks, userId);
+      }
+      getWeekPlansBySkeletonId(skeletonId: number) {
+        return this.requireSbDb().getWeekPlansBySkeletonId(skeletonId);
+      }
+      getPublishedWeekPlansBySchool(schoolId: number) {
+        return this.requireSbDb().getPublishedWeekPlansBySchool(schoolId);
+      }
+      getWeekPlanById(id: number) {
+        return this.requireSbDb().getWeekPlanById(id);
+      }
+      createWeekPlan(data: Parameters<DatabaseStorage['createWeekPlan']>[0]) {
+        return this.requireSbDb().createWeekPlan(data);
+      }
+      updateWeekPlan(id: number, data: Parameters<DatabaseStorage['updateWeekPlan']>[1]) {
+        return this.requireSbDb().updateWeekPlan(id, data);
+      }
+      deleteWeekPlan(id: number) {
+        return this.requireSbDb().deleteWeekPlan(id);
+      }
+      cloneWeekPlan(sourceId: number, weekNumber: number, weekStartDate: string, userId: number) {
+        return this.requireSbDb().cloneWeekPlan(sourceId, weekNumber, weekStartDate, userId);
+      }
+      getWeekPlanBlocksByWeekPlanId(weekPlanId: number) {
+        return this.requireSbDb().getWeekPlanBlocksByWeekPlanId(weekPlanId);
+      }
+      getWeekPlanBlockById(id: number) {
+        return this.requireSbDb().getWeekPlanBlockById(id);
+      }
+      createWeekPlanBlock(data: Parameters<DatabaseStorage['createWeekPlanBlock']>[0]) {
+        return this.requireSbDb().createWeekPlanBlock(data);
+      }
+      updateWeekPlanBlock(
+        id: number,
+        data: Parameters<DatabaseStorage['updateWeekPlanBlock']>[1],
+        userId?: number,
+      ) {
+        return this.requireSbDb().updateWeekPlanBlock(id, data, userId);
+      }
+      deleteWeekPlanBlock(id: number) {
+        return this.requireSbDb().deleteWeekPlanBlock(id);
+      }
+      markBlockCompleted(id: number, userId: number) {
+        return this.requireSbDb().markBlockCompleted(id, userId);
+      }
+      getBlockHistory(blockId: number) {
+        return this.requireSbDb().getBlockHistory(blockId);
+      }
+      bulkUpdateWeekPlanBlocks(
+        weekPlanId: number,
+        updates: Parameters<DatabaseStorage['bulkUpdateWeekPlanBlocks']>[1],
+        userId: number,
+      ) {
+        return this.requireSbDb().bulkUpdateWeekPlanBlocks(weekPlanId, updates, userId);
+      }
+      getPublishedWeekPlansForClassIds(schoolId: number, classIds: number[], weekStartDate?: string) {
+        return this.requireSbDb().getPublishedWeekPlansForClassIds(schoolId, classIds, weekStartDate);
+      }
+      getAcademicsLessonKpi(params: Parameters<DatabaseStorage['getAcademicsLessonKpi']>[0]) {
+        return this.requireSbDb().getAcademicsLessonKpi(params);
+      }
+
       getChildByIdForSchool(childId: number, schoolId: number) {
         return this.requireApDb().getChildByIdForSchool(childId, schoolId);
       }

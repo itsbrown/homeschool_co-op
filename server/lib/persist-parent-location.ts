@@ -92,6 +92,14 @@ export async function ensureParentRegistrationLocation(
   const locations = await storage.getLocationsBySchoolId(validSchoolId);
   const schoolHasCampuses = locations.length > 0;
 
+  if (isSchoolCodeParentSignup && !schoolHasCampuses) {
+    return {
+      ok: false,
+      message: 'No campuses are configured for this school. Please contact the school administrator.',
+      status: 400,
+    };
+  }
+
   if (isSchoolCodeParentSignup && schoolHasCampuses) {
     if (preferredLocationId == null) {
       return {

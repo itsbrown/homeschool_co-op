@@ -278,6 +278,23 @@ function PublicStoreManagerRoute() {
 }
 
 
+
+function ScheduleBuilderRoute() {
+  return (
+    <SchoolAdminShellWrapper>
+      <ScheduleBuilderPage />
+    </SchoolAdminShellWrapper>
+  );
+}
+
+function WeekPlannerRoute() {
+  return (
+    <SchoolAdminShellWrapper>
+      <WeekPlannerPage />
+    </SchoolAdminShellWrapper>
+  );
+}
+
 function DashboardRouter() {
   const { user } = useAuth();
   const { activeRole, showRoleSelection, setActiveRole, isLoadingRoles, rolesError } = useRole();
@@ -734,8 +751,8 @@ function Router() {
       <Route path="/schools/classes/:id/roster" component={ClassRosterPage} />
       <Route path="/schools/classes/:id/enrollments" component={SchoolClassEnrollmentsPage} />
       <Route path="/schools/sessions" component={SessionsManagementPage} />
-      <Route path="/schools/schedule-builder" component={ScheduleBuilderPage} />
-      <Route path="/schools/week-planner" component={WeekPlannerPage} />
+      <Route path="/schools/schedule-builder" component={ScheduleBuilderRoute} />
+      <Route path="/schools/week-planner" component={WeekPlannerRoute} />
       <Route path="/schools/staff" component={StaffPage} />
       <Route path="/schools/staff/invite" component={StaffInvitePage} />
       <Route path="/schools/staff-hours" component={StaffHoursPage} />

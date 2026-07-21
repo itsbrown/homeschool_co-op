@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,8 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, Calendar, Clock, ChevronDown, ChevronUp, LayoutGrid, BookOpen, Download, Upload, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Plus, Edit, Trash2, Calendar, Clock, ChevronDown, ChevronUp, LayoutGrid, BookOpen, Download, Upload, Loader2, HelpCircle } from "lucide-react";
 import type { WeeklySkeleton, SkeletonBlock, Session } from "@shared/schema";
+import { ScheduleBlocksCsvImportDialog } from "@/components/schedule/ScheduleBlocksCsvImportDialog";
+import { useScheduleBuilderTour } from "@/components/tutorials/useScheduleBuilderTour";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -34,6 +36,7 @@ const BLOCK_TYPE_COLORS: Record<string, string> = {
 interface TemplateFormData {
   name: string;
   description: string;
+  classId: string;
   gradeLevel: string;
   operatingDays: string[];
   sessionId: string;
@@ -43,6 +46,7 @@ interface TemplateFormData {
 const emptyTemplateForm: TemplateFormData = {
   name: "",
   description: "",
+  classId: "",
   gradeLevel: "",
   operatingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
   sessionId: "",
@@ -73,6 +77,9 @@ const emptyBlockForm: BlockFormData = {
 
 export default function ScheduleBuilderPage() {
   const { toast } = useToast();
+  const { showTourPrompt, launchTour, dismissTourPrompt } = useScheduleBuilderTour({
+    offerFirstVisitPrompt: true,
+  });
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [templateForm, setTemplateForm] = useState<TemplateFormData>(emptyTemplateForm);
@@ -83,6 +90,43 @@ export default function ScheduleBuilderPage() {
   const [blockForm, setBlockForm] = useState<BlockFormData>(emptyBlockForm);
   const [deleteBlockInfo, setDeleteBlockInfo] = useState<{ skeletonId: number; blockId: number } | null>(null);
   const [activeTemplateForBlock, setActiveTemplateForBlock] = useState<WeeklySkeleton | null>(null);
+  const [csvImport, setCsvImport] = useState<{
+    templateId: number;
+    templateName: string;
+    file: File;
+    csvText: string;
+  } | null>(null);
+
+  const closeCsvImport = () => setCsvImport(null);
+
+  // File pick finishes after async read; listen on window so a remount-safe
+  // handler opens the dialog on the currently mounted page.
+  useEffect(() => {
+    const onCsvEvent = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        templateId: number;
+        templateName: string;
+        file: File;
+        csvText: string;
+      }>).detail;
+      if (!detail?.file || !detail.csvText) return;
+      setExpandedTemplateId(detail.templateId);
+      setCsvImport({
+        templateId: detail.templateId,
+        templateName: detail.templateName,
+        file: detail.file,
+        csvText: detail.csvText,
+      });
+      toast({
+        title: "CSV loaded",
+        description: "Map your columns, then preview and confirm import.",
+      });
+    };
+    window.addEventListener("asa-schedule-csv-import", onCsvEvent);
+    return () => window.removeEventListener("asa-schedule-csv-import", onCsvEvent);
+    // toast identity must not remount this listener
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: templates = [], isLoading } = useQuery<WeeklySkeleton[]>({
     queryKey: ["/api/schedule-builder/skeletons"],
@@ -98,9 +142,17 @@ export default function ScheduleBuilderPage() {
   const classesList = classesData?.items ?? classesData?.classes ?? [];
 
   const createTemplateMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/schedule-builder/skeletons", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons"] });
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/schedule-builder/skeletons", data);
+      return res.json() as Promise<WeeklySkeleton>;
+    },
+    onSuccess: async (created) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons"] });
+      queryClient.setQueryData<WeeklySkeleton[]>(["/api/schedule-builder/skeletons"], (prev) => {
+        const list = prev ?? [];
+        if (list.some((t) => t.id === created.id)) return list;
+        return [...list, created];
+      });
       toast({ title: "Weekly template created" });
       setTemplateDialogOpen(false);
     },
@@ -110,9 +162,12 @@ export default function ScheduleBuilderPage() {
   });
 
   const updateTemplateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/schedule-builder/skeletons/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons"] });
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/schedule-builder/skeletons/${id}`, data);
+      return res.json() as Promise<WeeklySkeleton>;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons"] });
       toast({ title: "Weekly template updated" });
       setTemplateDialogOpen(false);
     },
@@ -184,7 +239,8 @@ export default function ScheduleBuilderPage() {
     setTemplateForm({
       name: s.name,
       description: s.description || "",
-      gradeLevel: s.gradeLevel,
+      classId: s.classId ? String(s.classId) : "",
+      gradeLevel: s.gradeLevel || "",
       operatingDays: s.operatingDays || [],
       sessionId: s.sessionId ? String(s.sessionId) : "",
       isActive: s.isActive,
@@ -193,13 +249,14 @@ export default function ScheduleBuilderPage() {
   };
 
   const handleTemplateSubmit = () => {
-    if (!templateForm.name || !templateForm.gradeLevel || templateForm.operatingDays.length === 0) {
+    if (!templateForm.name || !templateForm.classId || templateForm.operatingDays.length === 0) {
       toast({ title: "Please fill in all required fields (name, class, and at least one operating day)", variant: "destructive" });
       return;
     }
     const payload: any = {
       name: templateForm.name,
       description: templateForm.description || null,
+      classId: parseInt(templateForm.classId),
       gradeLevel: templateForm.gradeLevel,
       operatingDays: templateForm.operatingDays,
       isActive: templateForm.isActive,
@@ -287,15 +344,30 @@ export default function ScheduleBuilderPage() {
   return (
     <SchoolAdminLayout pageTitle="Weekly Templates">
       <div className="flex flex-col space-y-6 p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Weekly Templates</h1>
             <p className="text-muted-foreground mt-1">Create and manage weekly schedule templates with time blocks</p>
           </div>
-          <Button onClick={openCreateTemplate}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Template
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={launchTour}
+              data-tutorial="schedule-tour-btn"
+              data-testid="schedule-tour-btn"
+            >
+              <HelpCircle className="h-4 w-4 mr-2" />
+              How to use
+            </Button>
+            <Button
+              onClick={openCreateTemplate}
+              data-tutorial="schedule-new-template"
+              data-testid="schedule-new-template"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Template
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -303,19 +375,19 @@ export default function ScheduleBuilderPage() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
         ) : templates.length === 0 ? (
-          <Card>
+          <Card data-tutorial="schedule-templates-list" data-testid="schedule-templates-list">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <LayoutGrid className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">No Templates Yet</h3>
               <p className="text-muted-foreground mb-4">Create a weekly schedule template to define your time block structure.</p>
-              <Button onClick={openCreateTemplate}>
+              <Button onClick={openCreateTemplate} data-testid="schedule-create-first-template">
                 <Plus className="h-4 w-4 mr-2" />
                 Create First Template
               </Button>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-4" data-tutorial="schedule-templates-list" data-testid="schedule-templates-list">
             {templates.map((template) => (
               <TemplateCard
                 key={template.id}
@@ -334,7 +406,38 @@ export default function ScheduleBuilderPage() {
             ))}
           </div>
         )}
+
+        <ScheduleBlocksCsvImportDialog
+          open={!!csvImport}
+          templateId={csvImport?.templateId ?? 0}
+          templateName={csvImport?.templateName ?? ""}
+          file={csvImport?.file ?? null}
+          csvText={csvImport?.csvText ?? null}
+          onClose={closeCsvImport}
+        />
       </div>
+
+      <Dialog open={showTourPrompt} onOpenChange={(open) => { if (!open) dismissTourPrompt(false); }}>
+        <DialogContent className="max-w-md" data-testid="schedule-tour-prompt">
+          <DialogHeader>
+            <DialogTitle>New to Weekly Templates?</DialogTitle>
+            <DialogDescription>
+              Take a short tour: create a template, add time blocks, plan a week, then publish so parents can see it.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => dismissTourPrompt(true)} data-testid="schedule-tour-dismiss-forever">
+              Don&apos;t show again
+            </Button>
+            <Button variant="outline" onClick={() => dismissTourPrompt(false)} data-testid="schedule-tour-dismiss">
+              Not now
+            </Button>
+            <Button onClick={launchTour} data-testid="schedule-tour-start">
+              Start tour
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -355,13 +458,23 @@ export default function ScheduleBuilderPage() {
             </div>
             <div className="space-y-2">
               <Label>Class *</Label>
-              <Select value={templateForm.gradeLevel} onValueChange={(v) => setTemplateForm({ ...templateForm, gradeLevel: v })}>
-                <SelectTrigger>
+              <Select
+                value={templateForm.classId}
+                onValueChange={(v) => {
+                  const selected = classesList.find((cls: any) => String(cls.id) === v);
+                  setTemplateForm({
+                    ...templateForm,
+                    classId: v,
+                    gradeLevel: selected?.title || selected?.name || "",
+                  });
+                }}
+              >
+                <SelectTrigger data-tutorial="schedule-class-select" data-testid="schedule-class-select">
                   <SelectValue placeholder="Select a class..." />
                 </SelectTrigger>
                 <SelectContent>
                   {classesList.map((cls: any) => (
-                    <SelectItem key={cls.id} value={cls.title || cls.name || `Class ${cls.id}`}>
+                    <SelectItem key={cls.id} value={String(cls.id)}>
                       {cls.title || cls.name || `Class ${cls.id}`}
                     </SelectItem>
                   ))}
@@ -537,13 +650,59 @@ function TemplateCard({
   onEditBlock: (block: SkeletonBlock) => void;
   onDeleteBlock: (blockId: number) => void;
 }) {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const linkedSession = sessions.find((s) => s.id === template.sessionId);
+  const [isReadingCsv, setIsReadingCsv] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    setIsReadingCsv(true);
+    try {
+      const text = await file.text();
+      input.value = "";
+      if (!text.trim()) {
+        toast({
+          title: "CSV is empty",
+          description: "Choose a file with a header and at least one data row.",
+          variant: "destructive",
+        });
+        return;
+      }
+      window.dispatchEvent(
+        new CustomEvent("asa-schedule-csv-import", {
+          detail: {
+            templateId: template.id,
+            templateName: template.name,
+            file,
+            csvText: text,
+          },
+        }),
+      );
+    } catch (err: any) {
+      input.value = "";
+      toast({
+        title: "Could not read CSV",
+        description: err?.message || "Try another file.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReadingCsv(false);
+    }
+  };
 
   return (
-    <Card>
+    <Card data-testid={`schedule-template-card-${template.id}`}>
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 cursor-pointer" onClick={onToggleExpand}>
+        <div className="flex items-start justify-between gap-2">
+          <div
+            className="flex-1 cursor-pointer"
+            onClick={onToggleExpand}
+            data-testid={`schedule-template-expand-${template.id}`}
+          >
             <CardTitle className="text-xl flex items-center gap-2">
               {template.name}
               <Badge className={template.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>
@@ -569,8 +728,34 @@ function TemplateCard({
               ))}
             </div>
           </div>
-          <div className="flex gap-2 items-start">
-            <Button variant="ghost" size="sm" onClick={onToggleExpand}>
+          <div className="flex gap-2 items-start flex-wrap justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isReadingCsv}
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+              data-testid={`schedule-csv-upload-${template.id}`}
+            >
+              {isReadingCsv ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
+              {isReadingCsv ? "Reading…" : "Upload CSV"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              data-testid={`schedule-csv-file-input-${template.id}`}
+              onChange={handleFileChange}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleExpand}
+              data-testid={`schedule-template-toggle-${template.id}`}
+            >
               {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
             <Button variant="outline" size="sm" onClick={onEdit}>
@@ -591,6 +776,7 @@ function TemplateCard({
             onAddBlockForDay={onAddBlockForDay}
             onEditBlock={onEditBlock}
             onDeleteBlock={onDeleteBlock}
+            onRequestCsvUpload={() => fileInputRef.current?.click()}
           />
         </CardContent>
       )}
@@ -604,20 +790,16 @@ function BlockEditor({
   onAddBlockForDay,
   onEditBlock,
   onDeleteBlock,
+  onRequestCsvUpload,
 }: {
   template: WeeklySkeleton;
   onAddBlock: () => void;
   onAddBlockForDay: (dayNum: number) => void;
   onEditBlock: (block: SkeletonBlock) => void;
   onDeleteBlock: (blockId: number) => void;
+  onRequestCsvUpload: () => void;
 }) {
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [csvImportDialog, setCsvImportDialog] = useState(false);
-  const [csvPreviewRows, setCsvPreviewRows] = useState<any[] | null>(null);
-  const [csvErrors, setCsvErrors] = useState<string[]>([]);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
 
   const { data: blocks = [], isLoading } = useQuery<SkeletonBlock[]>({
     queryKey: ["/api/schedule-builder/skeletons", template.id, "blocks"],
@@ -633,73 +815,9 @@ function BlockEditor({
       a.download = `skeleton-${template.id}-blocks.csv`;
       a.click();
       URL.revokeObjectURL(url);
+      toast({ title: "CSV template downloaded" });
     } catch (err: any) {
       toast({ title: "Download failed", description: err.message, variant: "destructive" });
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPendingFile(file);
-    setCsvErrors([]);
-    setCsvPreviewRows(null);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const lines = text.split("\n").filter((l) => l.trim());
-      if (lines.length < 2) {
-        setCsvErrors(["CSV file is empty or has no data rows."]);
-        setCsvImportDialog(true);
-        return;
-      }
-      const headers = lines[0].split(",").map((h) => h.replace(/^"|"$/g, "").trim());
-      const previewData = lines.slice(1, 6).map((line) => {
-        const vals = line.split(",").map((v) => v.replace(/^"|"$/g, "").trim());
-        const row: Record<string, string> = {};
-        headers.forEach((h, i) => { row[h] = vals[i] || ""; });
-        return row;
-      });
-      setCsvPreviewRows(previewData);
-      setCsvImportDialog(true);
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  };
-
-  const handleConfirmUpload = async () => {
-    if (!pendingFile) return;
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", pendingFile);
-      const res = await apiRequest("POST", `/api/schedule-builder/skeletons/${template.id}/blocks/import-csv`, formData);
-      const data = await res.json();
-      toast({ title: `Successfully imported ${data.imported} blocks` });
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-builder/skeletons", template.id, "blocks"] });
-      setCsvImportDialog(false);
-      setPendingFile(null);
-      setCsvPreviewRows(null);
-      setCsvErrors([]);
-    } catch (err: any) {
-      const msg: string = err.message || "";
-      const jsonStart = msg.indexOf("{");
-      if (jsonStart !== -1) {
-        try {
-          const parsed = JSON.parse(msg.slice(jsonStart));
-          if (parsed.errors && parsed.errors.length > 0) {
-            setCsvErrors(parsed.errors);
-            return;
-          }
-          if (parsed.message) {
-            toast({ title: "Upload failed", description: parsed.message, variant: "destructive" });
-            return;
-          }
-        } catch {}
-      }
-      toast({ title: "Upload failed", description: msg, variant: "destructive" });
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -732,22 +850,29 @@ function BlockEditor({
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Time Blocks</h4>
         <div className="flex gap-2 flex-wrap">
-          <Button size="sm" variant="outline" onClick={handleDownloadTemplate}>
+          <Button size="sm" variant="outline" onClick={handleDownloadTemplate} data-testid={`schedule-csv-download-${template.id}`}>
             <Download className="h-3.5 w-3.5 mr-1" />
             Download Template
           </Button>
-          <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestCsvUpload();
+            }}
+            data-testid={`schedule-csv-upload-inline-${template.id}`}
+          >
             <Upload className="h-3.5 w-3.5 mr-1" />
             Upload CSV
           </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-          <Button size="sm" variant="outline" onClick={onAddBlock}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onAddBlock}
+            data-tutorial="schedule-add-block"
+            data-testid="schedule-add-block"
+          >
             <Plus className="h-3.5 w-3.5 mr-1" />
             Add Block
           </Button>
@@ -758,7 +883,7 @@ function BlockEditor({
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {operatingDayNumbers.map((dayNum) => (
-            <div key={dayNum} className="border rounded-lg p-3 space-y-2">
+            <div key={dayNum} className="border rounded-lg p-3 space-y-2" data-testid={`schedule-day-column-${template.id}-${dayNum}`}>
               <div className="flex items-center justify-between">
                 <h5 className="font-medium text-sm">{DAY_NUMBER_TO_NAME[dayNum]}</h5>
                 <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onAddBlockForDay(dayNum)}>
@@ -770,7 +895,11 @@ function BlockEditor({
               ) : (
                 <div className="space-y-1.5">
                   {blocksByDay[dayNum].map((block) => (
-                    <div key={block.id} className="flex items-start gap-2 p-2 rounded-md bg-muted/50 group">
+                    <div
+                      key={block.id}
+                      className="flex items-start gap-2 p-2 rounded-md bg-muted/50 group"
+                      data-testid={`schedule-block-${block.id}`}
+                    >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <Badge className={`text-xs ${BLOCK_TYPE_COLORS[block.blockType] || ""}`}>{block.blockType}</Badge>
@@ -779,7 +908,12 @@ function BlockEditor({
                             {block.startTime} – {block.endTime}
                           </span>
                         </div>
-                        <p className="text-sm font-medium mt-0.5 truncate">{block.defaultTitle}</p>
+                        <p
+                          className="text-sm font-medium mt-0.5 truncate"
+                          data-testid={`schedule-block-title-${block.defaultTitle}`}
+                        >
+                          {block.defaultTitle}
+                        </p>
                         {block.subjectArea && <p className="text-xs text-muted-foreground truncate">{block.subjectArea}</p>}
                       </div>
                       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -798,67 +932,6 @@ function BlockEditor({
           ))}
         </div>
       )}
-
-      <Dialog open={csvImportDialog} onOpenChange={(open) => { setCsvImportDialog(open); if (!open) { setPendingFile(null); setCsvPreviewRows(null); setCsvErrors([]); } }}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Import Blocks from CSV</DialogTitle>
-            <DialogDescription>
-              Review the rows below. This will <strong>replace all existing blocks</strong> for this template. Any current blocks will be deleted.
-            </DialogDescription>
-          </DialogHeader>
-          {csvErrors.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded p-3 space-y-1">
-              <p className="text-sm font-semibold text-red-700 flex items-center gap-1">
-                <AlertTriangle className="h-4 w-4" />
-                Validation errors — please fix the CSV and try again:
-              </p>
-              {csvErrors.map((err, i) => (
-                <p key={i} className="text-sm text-red-700">{err}</p>
-              ))}
-            </div>
-          )}
-          {csvPreviewRows && csvPreviewRows.length > 0 && csvErrors.length === 0 && (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Preview (first 5 data rows, hint row excluded):</p>
-              <div className="overflow-x-auto">
-                <table className="text-xs w-full border-collapse">
-                  <thead>
-                    <tr className="bg-muted">
-                      {Object.keys(csvPreviewRows[0]).map((h) => (
-                        <th key={h} className="border px-2 py-1 text-left font-medium">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {csvPreviewRows.map((row, i) => (
-                      <tr key={i} className="even:bg-muted/30">
-                        {Object.values(row).map((v: any, j) => (
-                          <td key={j} className="border px-2 py-1 truncate max-w-[120px]">{v}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          {csvPreviewRows && csvErrors.length === 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800 flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              All existing blocks for <strong>{template.name}</strong> will be permanently deleted and replaced with the CSV contents.
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCsvImportDialog(false)}>Cancel</Button>
-            {csvPreviewRows && csvErrors.length === 0 && (
-              <Button onClick={handleConfirmUpload} disabled={isUploading}>
-                {isUploading ? "Importing..." : "Confirm Import"}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -44,6 +44,8 @@ import locationEnrollmentsRouter from "./api/location-enrollments";
 import publicStoreRouter from './api/public-store';
 import storeAdminRouter from './api/store-admin';
 import unifiedUploadsRouter from './api/unified-uploads';
+import scheduleBuilderRouter from "./api/schedule-builder";
+import scheduleAiRouter from "./api/schedule-ai";
 import { registerObjectStorageRoutes } from './replit_integrations/object_storage';
 import {
   isE2eObjectStorageStubEnabled,
@@ -134,6 +136,13 @@ app.use('/api/school-admin/import-users', fileUpload({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
   abortOnLimit: true,
   createParentPath: true,
+}));
+
+// Schedule builder CSV import (multipart FormData → req.files) — not object-storage/presigned
+app.use('/api/schedule-builder', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB CSV
+  abortOnLimit: true,
 }));
 
 // Serve static files from uploads directory (legacy local uploads only)
@@ -228,6 +237,8 @@ app.use("/api/location-enrollments", locationEnrollmentsRouter);
 app.use("/api/public/store", publicStoreRouter);
 app.use("/api/unified-uploads", unifiedUploadsRouter);
 app.use("/api/school-admin/public-store", storeAdminRouter);
+app.use("/api/schedule-builder", scheduleBuilderRouter);
+app.use("/api/schedule-ai", scheduleAiRouter);
 
 // Test endpoints for development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
@@ -384,8 +395,13 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     port,
     host: "0.0.0.0",
   };
-  // SO_REUSEPORT is unsupported on some platforms/sandboxes; Playwright sets DISABLE_LISTEN_REUSE_PORT.
-  if (process.env.DISABLE_LISTEN_REUSE_PORT !== "true") {
+  // SO_REUSEPORT: fine on Replit/Linux; on macOS Node raises ENOTSUP and the
+  // process dies before "serving on port 5000". Playwright sets
+  // DISABLE_LISTEN_REUSE_PORT=true for the same reason in sandboxes.
+  if (
+    process.env.DISABLE_LISTEN_REUSE_PORT !== "true" &&
+    process.platform !== "darwin"
+  ) {
     listenOpts.reusePort = true;
   }
   server.listen(listenOpts, async () => {

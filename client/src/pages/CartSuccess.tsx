@@ -25,8 +25,31 @@ export default function CartSuccess() {
   useEffect(() => {
     const processStripeRedirect = async () => {
       try {
-        // Check if this is a Stripe redirect by looking for URL parameters
         const urlParams = new URLSearchParams(window.location.search);
+        const creditOnly = urlParams.get('creditOnly') === 'true';
+        const creditsAppliedParam = urlParams.get('creditsApplied');
+
+        // Credits-only cart checkout — no Stripe redirect params
+        if (creditOnly) {
+          const creditsAppliedCents = Math.max(0, Math.floor(Number(creditsAppliedParam) || 0));
+          console.log('✅ CartSuccess: credit-only checkout', { creditsAppliedCents });
+          clearCart(true);
+          await queryClient.invalidateQueries({ queryKey: ['/api/parent/enrollments'] });
+          await queryClient.invalidateQueries({ queryKey: ['/api/credits/me'] });
+          await queryClient.invalidateQueries({ queryKey: ['/api/billing/summary'] });
+          setProcessedEnrollments(1);
+          toast({
+            title: 'Enrollment complete',
+            description:
+              creditsAppliedCents > 0
+                ? `${(creditsAppliedCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })} in credits applied. No card charge.`
+                : 'Your enrollment was completed with credits. No card charge.',
+          });
+          setProcessing(false);
+          return;
+        }
+
+        // Check if this is a Stripe redirect by looking for URL parameters
         const paymentIntent = urlParams.get('payment_intent');
         const paymentIntentClientSecret = urlParams.get('payment_intent_client_secret');
         const redirectStatus = urlParams.get('redirect_status');

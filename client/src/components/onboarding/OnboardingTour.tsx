@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, ChevronLeft, ChevronRight, CheckCircle, AlertCircle } from "lucide-react";
+import HighlightElement from "@/components/tutorials/HighlightElement";
 
 const TOUR_OVERLAY_Z = 10050;
 const TOUR_TOOLTIP_Z = 10051;
@@ -208,7 +209,7 @@ export default function OnboardingTour({
 
   const tourTooltip = (
     <Card
-      className={`w-[400px] max-w-[90vw] shadow-2xl animate-in fade-in-0 zoom-in-95 ${
+      className={`w-[400px] max-w-[90vw] border border-border/80 bg-card shadow-lg animate-in fade-in-0 zoom-in-95 ${
         isCentered ? "relative" : "fixed"
       }`}
       style={
@@ -316,7 +317,7 @@ export default function OnboardingTour({
 
   const tourContent = isCentered ? (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 bg-black/70"
+      className="tutorial-scrim fixed inset-0 flex items-center justify-center p-4"
       style={{ zIndex: TOUR_OVERLAY_Z }}
       onClick={handleSkip}
       data-testid="tour-overlay"
@@ -348,7 +349,7 @@ export default function OnboardingTour({
         </>
       ) : (
         <div
-          className="fixed inset-0 bg-black/60"
+          className="tutorial-scrim fixed inset-0"
           style={{ zIndex: TOUR_OVERLAY_Z }}
           onClick={handleSkip}
           data-testid="tour-overlay"
@@ -360,67 +361,6 @@ export default function OnboardingTour({
   );
 
   return createPortal(tourContent, document.body);
-}
-
-function HighlightElement({
-  target,
-  onElementClick,
-  overlayZIndex,
-  clickZIndex,
-}: {
-  target: string;
-  onElementClick?: () => void;
-  overlayZIndex: number;
-  clickZIndex: number;
-}) {
-  const [rect, setRect] = useState<DOMRect | null>(null);
-
-  useEffect(() => {
-    const element = document.querySelector(target);
-    if (element) {
-      const updateRect = () => setRect(element.getBoundingClientRect());
-      updateRect();
-      window.addEventListener("resize", updateRect);
-      window.addEventListener("scroll", updateRect);
-      return () => {
-        window.removeEventListener("resize", updateRect);
-        window.removeEventListener("scroll", updateRect);
-      };
-    }
-  }, [target]);
-
-  if (!rect) return null;
-
-  return (
-    <>
-      <div
-        className="fixed pointer-events-none"
-        style={{
-          zIndex: overlayZIndex,
-          top: rect.top - 8,
-          left: rect.left - 8,
-          width: rect.width + 16,
-          height: rect.height + 16,
-          boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.6)",
-          borderRadius: "8px",
-          border: "2px solid hsl(var(--primary))",
-        }}
-      />
-      <div
-        className="fixed cursor-pointer"
-        style={{
-          zIndex: clickZIndex,
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          height: rect.height,
-          background: "transparent",
-        }}
-        onClick={onElementClick}
-        title="Click to continue tour"
-      />
-    </>
-  );
 }
 
 export { defaultTourSteps };

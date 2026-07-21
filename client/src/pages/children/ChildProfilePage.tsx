@@ -232,7 +232,9 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
                   </div>
                   <div className="flex items-center justify-center sm:justify-start gap-2">
                     <MapPin className="h-4 w-4" />
-                    <span className="truncate">{child.school}</span>
+                    <span className="truncate" data-testid="child-header-campus">
+                      {child.locationName || child.school}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -272,15 +274,13 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
                     <label className="text-sm font-medium text-muted-foreground">Grade Level</label>
                     <p className="font-medium">Grade {child.gradeLevel}</p>
                   </div>
-                  {child.locationName ? (
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Registered Location</label>
-                      <p className="font-medium flex items-center gap-1.5">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        {child.locationName}
-                      </p>
-                    </div>
-                  ) : null}
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Campus</label>
+                    <p className="font-medium flex items-center gap-1.5" data-testid="child-overview-campus">
+                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      {child.locationName || "Not set"}
+                    </p>
+                  </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Enrollment Date</label>
                     <p className="font-medium">{child.enrollmentDate}</p>

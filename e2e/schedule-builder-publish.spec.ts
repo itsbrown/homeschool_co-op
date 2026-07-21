@@ -1,0 +1,82 @@
+import { test, expect } from "@playwright/test";
+import {
+  dismissStaffGuideIfVisible,
+  loginParent,
+  preventStaffGuideModal,
+} from "./helpers/parentCheckoutHelpers";
+import { postSetupScheduleScenario } from "./helpers/testSeed";
+
+test.describe.configure({ mode: "serial", timeout: 120_000 });
+
+test.describe("schedule builder publish", () => {
+  test("admin edits draft block and publishes week plan", async ({ page, request }) => {
+    const { response, json } = await postSetupScheduleScenario(request, { linkSupabaseAuth: true });
+    test.skip(
+      !response.ok(),
+      `seed failed (${response.status()}): ${json?.error ?? json?.details ?? "see server logs"}`,
+    );
+    test.skip(!json?.success || !json.data?.admin?.email, "seed returned no admin credentials");
+    test.skip(
+      json.data?.supabaseLinked !== true,
+      "Supabase auth was not linked (configure SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)",
+    );
+
+    const seed = json!.data!;
+    await preventStaffGuideModal(page);
+    await loginParent(page, seed.admin.email, seed.admin.password);
+    await dismissStaffGuideIfVisible(page);
+
+    const skeletonsApi = page.waitForResponse(
+      (r) =>
+        r.request().method() === "GET" &&
+        r.url().includes("/api/schedule-builder/skeletons") &&
+        !r.url().includes("/blocks") &&
+        r.ok(),
+      { timeout: 60_000 },
+    );
+    await page.goto("/schools/week-planner", { waitUntil: "domcontentloaded" });
+    const skeletonsRes = await skeletonsApi;
+    expect(skeletonsRes.headers()["content-type"] || "").toMatch(/json/i);
+
+    await page.getByTestId("week-planner-template-select").click();
+    await page.getByRole("option", { name: new RegExp(seed.classes.seekers.title.split(" ")[0]) }).click();
+
+    const draftChip = page.getByTestId(`week-plan-chip-${seed.weekPlans.seekersDraftId}`);
+    const editBlock = page.getByTestId(`week-block-edit-${seed.blocks.seekersDraftBlockId}`);
+    await expect(draftChip).toBeVisible({ timeout: 30_000 });
+
+    // Auto-select may already fetch this plan; prefer the block control as the ready signal.
+    await draftChip.click();
+    await expect(editBlock).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("Draft: Pending Publish")).toBeVisible({ timeout: 15_000 });
+
+    await editBlock.click();
+    await page.getByPlaceholder("Block title").fill("E2E Published Lesson");
+    // Wait for the response (not only ok) so a 4xx/5xx surfaces instead of a 30s hang.
+    const patchApi = page.waitForResponse(
+      (r) =>
+        r.request().method() === "PATCH" &&
+        r.url().includes("/api/schedule-builder/week-plan-blocks/"),
+      { timeout: 30_000 },
+    );
+    await page.getByTestId("week-block-save").click();
+    const patchRes = await patchApi;
+    expect(patchRes.ok(), `block PATCH failed: ${patchRes.status()} ${await patchRes.text()}`).toBeTruthy();
+    await expect(page.getByRole("dialog", { name: "Edit Block" })).toBeHidden({ timeout: 15_000 });
+
+    // Publish lives in the Actions dropdown (not a top-level button).
+    await page.getByTestId("week-planner-actions").click();
+    await expect(page.getByTestId("week-planner-publish")).toBeVisible({ timeout: 10_000 });
+
+    const publishApi = page.waitForResponse(
+      (r) =>
+        r.request().method() === "PATCH" &&
+        r.url().includes(`/api/schedule-builder/week-plans/${seed.weekPlans.seekersDraftId}`) &&
+        r.ok(),
+      { timeout: 30_000 },
+    );
+    await page.getByTestId("week-planner-publish").click();
+    await publishApi;
+    await expect(page.getByText("published").first()).toBeVisible({ timeout: 15_000 });
+  });
+});

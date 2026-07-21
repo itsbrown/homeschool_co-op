@@ -53,6 +53,9 @@ router.get("/profile", async (req: any, res) => {
 
     const profileNames = resolveProfileNamesFromUser(user);
 
+    const { resolveRegisteredLocation } = await import('../lib/parent-registered-location');
+    const campus = await resolveRegisteredLocation(storage, user.locationId);
+
     // Build profile response from database user
     const userProfile = {
       id: user.id,
@@ -66,6 +69,8 @@ router.get("/profile", async (req: any, res) => {
       role: user.role,
       school: school,
       schoolId: resolvedSchoolId ?? user.schoolId ?? null,
+      locationId: campus.locationId,
+      locationName: campus.locationName,
     };
     
     console.log("📋 Profile returned:", userProfile);

@@ -10,14 +10,20 @@ describe('cart-credits-only-checkout waterfall', () => {
   it('applies credits to membership before enrollments', async () => {
     const enrollmentUpdates: { id: number; totalPaid: number }[] = [];
     let membershipPaid = 0;
+    let finalizedPaymentHistoryId: number | undefined;
 
     jest.spyOn(storage, 'getPaymentByStripeId').mockResolvedValue(undefined);
+    jest.spyOn(storage, 'getStripePaymentByIntentId').mockResolvedValue(undefined);
+    jest.spyOn(storage, 'saveStripePayment').mockResolvedValue({ id: 55 } as any);
     jest.spyOn(storage, 'createCreditHolds').mockResolvedValue({ holds: [], totalHeld: 15_000 } as any);
-    jest.spyOn(storage, 'finalizeCreditHolds').mockResolvedValue({
-      finalizedCount: 1,
-      totalFinalized: 15_000,
-      usageLogs: [],
-    } as any);
+    jest.spyOn(storage, 'finalizeCreditHolds').mockImplementation(async (_session, paymentHistoryId) => {
+      finalizedPaymentHistoryId = paymentHistoryId;
+      return {
+        finalizedCount: 1,
+        totalFinalized: 15_000,
+        usageLogs: [],
+      } as any;
+    });
     jest.spyOn(storage, 'createPayment').mockResolvedValue({ id: 99 } as any);
     jest.spyOn(storage, 'getMembershipEnrollmentByParentAndSchoolAndYear').mockResolvedValue(undefined);
     jest.spyOn(storage, 'getProgramEnrollmentById').mockImplementation(async (id: number) =>
@@ -33,7 +39,7 @@ describe('cart-credits-only-checkout waterfall', () => {
       return {} as any;
     });
     jest.spyOn(storage, 'getScheduledPaymentsByEnrollmentId').mockResolvedValue([]);
-    jest.spyOn(storage, 'getUser').mockResolvedValue({ id: 1, memberId: 'M1' } as any);
+    jest.spyOn(storage, 'getUser').mockResolvedValue({ id: 1, memberId: 'M1', stripeCustomerId: 'cus_x' } as any);
     jest.spyOn(storage, 'createMembershipEnrollment').mockImplementation(async (row) => {
       membershipPaid = row.amountPaid ?? 0;
       return { id: 50 } as any;
@@ -63,5 +69,6 @@ describe('cart-credits-only-checkout waterfall', () => {
 
     expect(membershipPaid).toBe(5_000);
     expect(enrollmentUpdates).toEqual([{ id: 100, totalPaid: 10_000 }]);
+    expect(finalizedPaymentHistoryId).toBe(55);
   });
 });

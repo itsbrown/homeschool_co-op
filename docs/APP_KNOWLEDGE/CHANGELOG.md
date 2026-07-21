@@ -1,5 +1,109 @@
 # App knowledge changelog
 
+## 2026-07-21 (Class grade selector through 12th)
+
+- School class create/edit multi-select (`SchoolClassCreationPage`) previously stopped at 10th grade; added `11th-grade` / `12th-grade`. Display map on `SchoolClassDetailsPage` updated to match.
+- Child registration / parent profile selectors already included through 12th Grade.
+
+## 2026-07-21 (Family campus: signup gate, visibility, admin transfer)
+
+- School-code signup: no first-campus auto-select; fail closed when school has zero campuses; `resolveSchoolAndChildLocation` no longer defaults to `locations[0]`.
+- Add-child after login inherits parent `users.location_id` / active `user_locations`.
+- Admin soft family transfer: `updateParentLocation` also syncs `user_locations`; Parent Profile campus select + confirm; enrollments/payments unchanged.
+- Visibility: `locationName` on `GET /api/users/profile`, school-admin student detail, parent-profile; Settings + ChildProfilePage header show campus.
+- Prod repair: Pastorella (parent 135 / Luca 169) set to Greece (`location_id` 4) via `set-pastorella-campus-greece-production.ts`.
+- Domain: [registration-and-locations.md](./domains/registration-and-locations.md).
+
+## 2026-07-17 (Week Planner publish E2E)
+
+- Fixed `e2e/schedule-builder-publish.spec.ts`: open Actions before Publish; wait for draft block edit control; assert block PATCH status (not only `r.ok()` waiter).
+- Block update 500: `insertBlockHistory` broke on empty/null `materials` text[] inside drizzle `sql``` — emit explicit `ARRAY[]::text[]`.
+- Week Planner: loading/error pane while `GET /week-plans/:id` pending (was misleading “Select a week…”); `week-planner-actions` testid.
+- Domain: [schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md).
+
+## 2026-07-16 (Remove unused Firebase packages)
+
+- Dropped unused `firebase` / `firebase-admin` deps (auth is Supabase; no SDK imports). Replit firewall blocked transitive `websocket-driver`, which broke `npm ci` when `node_modules` was wiped.
+- Domain: [architecture.md](./architecture.md) (stack remains Supabase auth).
+
+## 2026-07-16 (Public form logo sizing)
+
+- Form/preview `SchoolBranding` logo was capped at `h-16` (~64px) so wordmarks looked tiny; now width-first responsive: `w-full max-w-md h-auto max-h-28 sm:max-h-36 object-contain`.
+- School Settings “Current Logo” preview: rectangular `object-contain` instead of circular `Avatar` crop.
+- Domain: [custom-forms-public-access.md](./domains/custom-forms-public-access.md).
+
+## 2026-07-16 (Public form missing school logo)
+
+- Victor preliminary form showed School icon fallback, not ASA logo: `schools.logo` = legacy `/uploads/logos/school-logo-*.png` which 404s on prod (ephemeral disk).
+- Fix is operational: re-upload via School Settings → `/public/logos/...` object storage. Same field used by public store + form branding.
+- Domain: [custom-forms-public-access.md](./domains/custom-forms-public-access.md).
+
+## 2026-07-15 (Form editor — no mid-typing field saves)
+
+- Form Builder field label/placeholder/text config: local patch on keystroke, persist on blur (type/required still immediate). Silent field PUT (no "Field updated" toast).
+- Skip overwriting local `fields` from form query while dirty; field update no longer invalidates form queries (prevents mid-edit clobber).
+- E2E: blur after label `fill()` in `e2e/form-editor-fields.spec.ts`.
+- Domain: [custom-forms-public-access.md](./domains/custom-forms-public-access.md).
+
+## 2026-07-15
+
+- Soft interactive-tutorial spotlight/scrim (no dark aggressive pulse); stable `interactiveTutorialContext` so Vite HMR cannot crash Week Planner / Schedule Builder tours; Help Tutorials lists schedule builder walkthrough for school-admin roles.
+
+## 2026-07-14 (Week Planner CSV mapping + import fix)
+
+- Week Planner CSV now uses shared `ScheduleBlocksCsvImportDialog` (`mode="week-plan"`): map → preview → confirm; surfaces server validation errors.
+- **Confirm Import root cause:** API passed `{ dayOfWeek, startTime, data }` but `bulkUpdateWeekPlanBlocks` expects `{ skeletonBlockId, title, … }` → DB/create failures. Import now matches template slots by day+start_time and accepts `default_title` (template CSV shape).
+- Domain: [schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md).
+
+## 2026-07-14 (Week Planner Actions menu + Build)
+
+- Week Planner week-card header: cluttered button row → single **Actions** dropdown; added **Build** (fill empty slots from skeleton `defaultTitle` / `defaultDescription`).
+- Domain: [schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md).
+
+
+## 2026-07-14 (Collections Overview Auto-pay on = 0 — fixed)
+
+- **UI bug, not empty data:** ASA prod has **5** owing parents with `users.auto_pay_enabled` (plus 2 more with flag but no collections balance). Charge history Jul 2026 is correctly $0 (no `charged_by=auto_pay` / autopay `completion_source` rows; next autopay-on dues start ~Jul 19).
+- **Root cause:** `loadParentInfo` in `server/lib/financial-collections.ts` iterated `db.execute(...).rows`; drizzle/postgres-js returns an array → catch forced every family `autoPayEnabled: false`.
+- **Fix:** select `users.autoPayEnabled` in the existing drizzle parent query; unit guard against `execute().rows` / raw `COALESCE(auto_pay_enabled`.
+- **Doc:** [payments-and-billing.md](./domains/payments-and-billing.md) — Collections Overview criteria + pitfall (marked fixed).
+
+## 2026-07-14 (Checkout payment options E2E audit)
+
+- **Runbook:** [checkout-payment-e2e-audit.md](../runbooks/checkout-payment-e2e-audit.md) — matrix of pay-in-full, biweekly, Pay Now, partial/credits-only, membership.
+- **Spec:** `e2e/checkout-payment-options-audit.spec.ts` (incl. no auto-spend when credits unchecked + confirm for credits-only).
+- **Catalog:** [E2E_COMMANDS.md](../../E2E_COMMANDS.md).
+- **Helpers:** `goCheckoutAndWaitForPaymentCard` waits for enrollments + Pay button (not Loading); `registerAnotherChild` uses Grade/Gender labels + `exact: true` for Male.
+- **Blocker observed:** local `VITE_TESTING_STRIPE_PUBLIC_KEY` rejected by Stripe (`elements/sessions` 401 Invalid API Key) while `TESTING_STRIPE_SECRET_KEY` still works — rotate publishable key from Dashboard for same account, then re-run audit.
+
+## 2026-07-14 (Credits auto-spent on checkout load)
+
+- **Cause:** `POST /create-payment-intent` (called on page load / plan toggle) immediately ran `completeCartCreditsOnlyCheckout` whenever credits covered the cart — no Pay click required.
+- **Fix:** Require `confirmCreditsOnlyCheckout: true` to spend; otherwise return `creditOnlyEligible`. Checkout shows **Apply credits & complete enrollment**. CartSuccess handles `?creditOnly=true`.
+
+## 2026-07-14 (Cart total dropping on reload)
+
+- **Cause:** Checkout cart line price = enrollment `remainingBalance`. Broken credits-only attempts (and a later $60 credits-only) wrote `totalPaid` down ($780→$60→$0) while UI still looked mid-checkout.
+- **Ledger bug:** `finalizeCreditHolds` updated `credits.used_amount` then failed inserting usage logs (bad `payment_history_id`) **without a transaction** — credits burned with no log.
+- **Fixes:** transactional `finalizeCreditHolds`; PI only sends credits when Apply is checked; credit-toggle effect skips initial mount; repaired credit #22 `used_amount` to match usage logs for jocimarie test parent.
+
+## 2026-07-14 (Checkout credits checkbox vs displayed total)
+
+- **Bug:** After applying then unchecking credits (or after a failed credits-only attempt), Pay-in-Full / plan amounts could keep a **stale snapshot** that still subtracted credits while “Apply to order” was off.
+- **Fix:** Track `snapshotCreditsApplied`; only trust snapshot `payableAmount`/`paymentPlans` when it matches `creditsToApply`; always refresh snapshot/PI on credit toggle even if `clientSecret` is missing.
+
+## 2026-07-14 (Credits-only cart checkout FK)
+
+- **Error:** “Failed to complete credits-only checkout” — `finalizeCreditHolds` was given `payments.id`; FK requires `stripe_payment_history.id`.
+- **Fix:** `cart-credits-only-checkout.ts` writes/links synthetic `stripe_payment_history`, finalizes against that id; cleans orphan `payments` on failure; skips re-apply only when usage logs already exist.
+
+## 2026-07-14 (Schedule builder publish-ready)
+
+- **Domain:** [schedule-and-lesson-planning.md](domains/schedule-and-lesson-planning.md) — mounts on `index` + `app-init`, CSV `fileUpload` + `csv-stringify`, family jsonb parse, progress scheduled-lessons, academics KPI `classId` on attendance half.
+- **Lessons / AI:** `Lessons.tsx` → live `GET /api/lessons`; `AILessonGenerator` → `POST /api/lessons/generate` (Anthropic) + real save; no silent mocks.
+- **Tests:** Jest schedule-builder / family-schedule / progress / KPI / attendance; Playwright catalog rows for publish, parent week, progress pills, KPI, CSV import. Seed: `setup-schedule-builder-scenario`.
+- **Deferred:** completion → `student_progress_log`; schedule-ai `recommend-resources` UI; family `/schedule` Playwright (unit coverage only).
+
 ## 2026-07-13 (Railway cloud-dev Postgres)
 
 - **SSL:** `database-url.mjs` treats Railway (`.rlwy.net`, `.railway.app`, `.railway.internal`) as managed TLS hosts in development.

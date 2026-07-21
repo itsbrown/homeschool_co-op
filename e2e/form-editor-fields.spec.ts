@@ -52,8 +52,6 @@ test.describe("form editor fields", () => {
 
     await expect(page.getByTestId(`field-card-${newField.id}`)).toBeVisible();
     const labelInput = page.getByTestId(`input-field-label-${newField.id}`);
-    await labelInput.fill("Parent Full Name");
-
     const putResponse = page.waitForResponse(
       (r) =>
         r.url().includes(`/api/custom-forms/fields/${newField.id}`) &&
@@ -61,6 +59,9 @@ test.describe("form editor fields", () => {
         r.ok(),
       { timeout: 15_000 },
     );
+    // Text fields persist on blur (not while typing).
+    await labelInput.fill("Parent Full Name");
+    await labelInput.blur();
     await putResponse;
 
     await page.reload({ waitUntil: "domcontentloaded" });

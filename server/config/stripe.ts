@@ -38,7 +38,11 @@ async function fetchStripeCredentials(): Promise<{ publishableKey: string; secre
     }
     
     return {
-      publishableKey: process.env.VITE_STRIPE_PUBLIC_KEY || '',
+      publishableKey:
+        process.env.VITE_TESTING_STRIPE_PUBLIC_KEY ||
+        process.env.VITE_STRIPE_PUBLIC_KEY ||
+        process.env.STRIPE_PUBLISHABLE_KEY ||
+        '',
       secretKey,
     };
   }
@@ -79,7 +83,11 @@ async function fetchStripeCredentials(): Promise<{ publishableKey: string; secre
     ? process.env.STRIPE_SECRET_KEY
     : (process.env.TESTING_STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY);
   
-  const publishableKey = process.env.VITE_STRIPE_PUBLIC_KEY || '';
+  const publishableKey =
+    process.env.VITE_TESTING_STRIPE_PUBLIC_KEY ||
+    process.env.VITE_STRIPE_PUBLIC_KEY ||
+    process.env.STRIPE_PUBLISHABLE_KEY ||
+    '';
 
   if (!secretKey) {
     throw new Error(`Stripe secret key not found. Please set STRIPE_SECRET_KEY in your secrets.`);

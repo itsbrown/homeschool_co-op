@@ -185,7 +185,7 @@ describe('ensureParentRegistrationLocation', () => {
     expect(result.message).toMatch(/campus location/i);
   });
 
-  it('allows non-school-code signup without preferred campus when school has locations', async () => {
+  it('does not auto-assign first campus for non-school-code signup without preferred campus', async () => {
     const storage = makeStorage();
     const result = await ensureParentRegistrationLocation(storage, {
       userId: 1,
@@ -193,9 +193,8 @@ describe('ensureParentRegistrationLocation', () => {
       preferredLocationId: null,
       isSchoolCodeParentSignup: false,
     });
-    expect(result).toEqual({ ok: true, locationId: 10 });
-    expect(storage.createUserLocation).toHaveBeenCalled();
-    expect(storage.updateUser).toHaveBeenCalledWith(1, { locationId: 10 });
+    expect(result).toEqual({ ok: true, locationId: null });
+    expect(storage.createUserLocation).not.toHaveBeenCalled();
   });
 
   it('rollbackRegistrationAfterLocationFailure deletes user_locations, roles, and user', async () => {
@@ -209,7 +208,7 @@ describe('ensureParentRegistrationLocation', () => {
     expect(deleteUser).toHaveBeenCalledWith(77);
   });
 
-  it('returns ok with null locationId when school has no campuses', async () => {
+  it('rejects school-code signup when school has no campuses', async () => {
     const storage = makeStorage({
       getLocationsBySchoolId: jest.fn(async () => []) as ParentLocationStorage['getLocationsBySchoolId'],
     });
@@ -219,7 +218,11 @@ describe('ensureParentRegistrationLocation', () => {
       preferredLocationId: null,
       isSchoolCodeParentSignup: true,
     });
-    expect(result).toEqual({ ok: true, locationId: null });
+    expect(result).toEqual({
+      ok: false,
+      message: 'No campuses are configured for this school. Please contact the school administrator.',
+      status: 400,
+    });
     expect(storage.createUserLocation).not.toHaveBeenCalled();
   });
 });

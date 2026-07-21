@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, TrendingUp, BookOpen, FileDown } from 'lucide-react';
+import { Loader2, TrendingUp, BookOpen, FileDown, CheckCircle2, Circle } from 'lucide-react';
 import { ProgressHeadlineCard } from '@/components/progress-charts/ProgressHeadlineCard';
 import { ChildReadingProgressChart } from '@/components/progress-charts/ChildReadingProgressChart';
 import { ChildMathProgressChart } from '@/components/progress-charts/ChildMathProgressChart';
@@ -102,6 +102,27 @@ export default function ParentProgressPage() {
     enabled: !!activeChildId,
   });
 
+  const { data: scheduledLessonsData, isLoading: scheduledLoading } = useQuery<{
+    lessons: Array<{
+      blockId: number;
+      title: string;
+      classTitle: string | null;
+      weekNumber: number;
+      weekStartDate: string | null;
+      dayOfWeek: number | null;
+      startTime: string | null;
+      endTime: string | null;
+      isCompleted: boolean;
+      completedAt: string | null;
+    }>;
+  }>({
+    queryKey: activeChildId
+      ? [`/api/progress/parent/${activeChildId}/scheduled-lessons`]
+      : ['skip-scheduled'],
+    enabled: !!activeChildId,
+  });
+  const scheduledLessons = scheduledLessonsData?.lessons ?? [];
+
   return (
     <ParentAppShell>
       <div className="space-y-6 max-w-5xl mx-auto p-4">
@@ -191,7 +212,7 @@ export default function ParentProgressPage() {
               <TabsList>
                 <TabsTrigger value="charts">Charts</TabsTrigger>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="session">This session</TabsTrigger>
+                <TabsTrigger value="session" data-testid="parent-progress-tab-session">This session</TabsTrigger>
               </TabsList>
               <TabsContent value="charts" className="mt-4 space-y-4" data-testid="parent-progress-charts-tab">
                 {analyticsLoading ? (
@@ -224,7 +245,61 @@ export default function ParentProgressPage() {
                   <p className="text-muted-foreground">No subject progress recorded yet.</p>
                 )}
               </TabsContent>
-              <TabsContent value="session" className="mt-4">
+              <TabsContent value="session" className="mt-4 space-y-6">
+                <Card data-testid="parent-scheduled-lessons-card">
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <BookOpen className="h-4 w-4" />
+                      Scheduled lessons
+                    </CardTitle>
+                    <CardDescription>
+                      Lessons from published weekly schedules for your child&apos;s classes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {scheduledLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    ) : scheduledLessons.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No published schedule lessons yet for this child&apos;s enrolled classes.
+                      </p>
+                    ) : (
+                      scheduledLessons.map((lesson) => (
+                        <div
+                          key={lesson.blockId}
+                          className="flex items-start justify-between gap-3 border-l-2 border-blue-400 pl-3 py-2"
+                          data-testid={`scheduled-lesson-${lesson.blockId}`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">{lesson.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {lesson.classTitle || 'Class'}
+                              {lesson.weekNumber != null ? ` · Week ${lesson.weekNumber}` : ''}
+                              {lesson.weekStartDate
+                                ? ` · ${safeFormatDate(lesson.weekStartDate, 'MMM d, yyyy')}`
+                                : ''}
+                            </p>
+                          </div>
+                          {lesson.isCompleted ? (
+                            <Badge
+                              variant="secondary"
+                              className="bg-green-100 text-green-800 shrink-0 gap-1"
+                            >
+                              <CheckCircle2 className="h-3 w-3" />
+                              Completed
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="shrink-0 gap-1 text-muted-foreground">
+                              <Circle className="h-3 w-3" />
+                              Not completed
+                            </Badge>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
                 {activeChild?.sessions?.map((sess: any) => (
                   <Card key={sess.sessionId} className="mb-4">
                     <CardHeader>

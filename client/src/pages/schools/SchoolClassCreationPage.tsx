@@ -529,6 +529,8 @@ export default function SchoolClassCreationPage() {
                         { label: "8th Grade", value: "8th-grade" },
                         { label: "9th Grade", value: "9th-grade" },
                         { label: "10th Grade", value: "10th-grade" },
+                        { label: "11th Grade", value: "11th-grade" },
+                        { label: "12th Grade", value: "12th-grade" },
                       ];
                       
                       return (

@@ -132,6 +132,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/parent-weekly-schedule.spec.ts`](../e2e/parent-weekly-schedule.spec.ts) | `npm run test:e2e -- e2e/parent-weekly-schedule.spec.ts` | Parent `/parent/weekly-schedule` enrolled-class sections + print root | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/parent-progress-scheduled-lessons.spec.ts`](../e2e/parent-progress-scheduled-lessons.spec.ts) | `npm run test:e2e -- e2e/parent-progress-scheduled-lessons.spec.ts` | Parent progress “Scheduled lessons” + completion pills | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/school-admin-academics-kpi.spec.ts`](../e2e/school-admin-academics-kpi.spec.ts) | `npm run test:e2e -- e2e/school-admin-academics-kpi.spec.ts` | Attendance → Lesson plans tab: completion % + attendance KPI | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/schedule-template-csv-import.spec.ts`](../e2e/schedule-template-csv-import.spec.ts) | `npm run test:e2e -- e2e/schedule-template-csv-import.spec.ts` | Weekly Templates: CSV map → preview → confirm import + block titles | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 
 **Supabase:** Real project required (`isRealSupabaseConfigured()` or `supabaseLinked === true`).
 
@@ -141,6 +142,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 |------|---------|----------------|---------------|
 | [`e2e/parent-payment-flow.spec.ts`](../e2e/parent-payment-flow.spec.ts) | `npm run test:e2e -- e2e/parent-payment-flow.spec.ts` | Pay in full, biweekly checkout, upcoming payment | `setup-cart-scenario`, `seed-upcoming-scheduled-payment` |
 | [`e2e/checkout-volunteer-credits.spec.ts`](../e2e/checkout-volunteer-credits.spec.ts) | `npm run test:e2e -- e2e/checkout-volunteer-credits.spec.ts` | Credits reduce Stripe charge at checkout | `setup-cart-scenario` (`withCredits`) |
+| [`e2e/checkout-payment-options-audit.spec.ts`](../e2e/checkout-payment-options-audit.spec.ts) | `npm run test:e2e -- e2e/checkout-payment-options-audit.spec.ts` | **Payment options audit:** pay-in-full, biweekly, Upcoming Pay Now, partial credits, credits unchecked (no auto-spend), credits-only confirm, class+membership | `setup-cart-scenario` (+ `withCredits` / `unpaidMembershipFeeCents` / `seed-upcoming-scheduled-payment`); Stripe + Supabase; runbook [checkout-payment-e2e-audit.md](./APP_KNOWLEDGE/runbooks/checkout-payment-e2e-audit.md) |
 | [`e2e/checkout-membership-order-summary.spec.ts`](../e2e/checkout-membership-order-summary.spec.ts) | `npm run test:e2e:checkout-membership` | Membership lines + `__E2E_CART__` refresh | `setup-cart-scenario` (`membershipRequired`) |
 | [`e2e/parent-full-journey.spec.ts`](../e2e/parent-full-journey.spec.ts) | `npm run test:e2e -- e2e/parent-full-journey.spec.ts` | Register → 2 sessions → biweekly → autopay #2 | `setup-registration-scenario` (`openSessionCount: 2`) + Stripe + test autopay APIs |
 
@@ -176,7 +178,7 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `GET /api/test/technical-support-issue/:id` | `help-issue-submission.spec.ts` (persistence verify) |
 | `POST /api/test/setup-credit-lookup-scenario` | `credit-management-parent-lookup` |
 | `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard` |
-| `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi` |
+| `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import` |
 | `POST /api/test/ensure-public-store-schema` | `public-store.spec.ts` |
 | `POST /api/test/setup-public-store-scenario` | `public-store.spec.ts`, `public-store-share.spec.ts` |
 | `POST /api/test/fulfill-store-checkout` | `public-store.spec.ts`, `public-store-share.spec.ts` (simulates Stripe webhook after guest checkout) |

@@ -92,6 +92,10 @@ export async function updateParentLocation(
         updatedAt: new Date()
       })
       .where(eq(users.id, parentId));
+
+    // Keep user_locations (permissions / grants) aligned with profile campus
+    const { syncUserLocationForSchool } = await import('../lib/sync-user-location-for-school');
+    await syncUserLocationForSchool(parentId, context.schoolId, newLocationId);
     
     const childIds = await getParentChildIds(parentId, context.schoolId);
     let childrenUpdated = 0;

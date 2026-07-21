@@ -17,19 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { PlusCircle, Search, Filter, MoreVertical, Clock, Tag, GraduationCap, Wand2 } from "lucide-react";
 import { AIStatusBadge } from "@/components/ui/AIStatusBadge";
 import { useAIStatus } from "@/hooks/useAIStatus";
-
-// Types
-interface Lesson {
-  id: number;
-  title: string;
-  subject: string;
-  gradeLevel: string;
-  authorId: number;
-  duration: number;
-  status: "draft" | "published" | "archived";
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { fetchLessons } from "@/lib/api";
+import type { Lesson } from "@/lib/types";
 
 export default function Lessons() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,55 +27,7 @@ export default function Lessons() {
   
   const { data: lessons, isLoading } = useQuery({
     queryKey: ["/api/lessons"],
-    queryFn: async () => {
-      // This would be replaced with actual API call
-      return [
-        {
-          id: 1,
-          title: "Introduction to Algebra",
-          subject: "Mathematics",
-          gradeLevel: "Grade 7",
-          authorId: 1,
-          duration: 45,
-          status: "published",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 2,
-          title: "Photosynthesis Exploration",
-          subject: "Science",
-          gradeLevel: "Grade 5",
-          authorId: 1,
-          duration: 60,
-          status: "draft",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 3,
-          title: "World History Overview",
-          subject: "History",
-          gradeLevel: "Grade 9",
-          authorId: 1,
-          duration: 90,
-          status: "published",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 4,
-          title: "Essay Writing Workshop",
-          subject: "Language Arts",
-          gradeLevel: "Grade 8",
-          authorId: 1,
-          duration: 75,
-          status: "draft",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ] as Lesson[];
-    }
+    queryFn: fetchLessons,
   });
 
   const { isAIAvailable } = useAIStatus();
@@ -213,8 +154,8 @@ export default function Lessons() {
               </CardFooter>
             </Card>
           ))
-        ) : (
-          filteredLessons?.map((lesson) => (
+        ) : filteredLessons && filteredLessons.length > 0 ? (
+          filteredLessons.map((lesson) => (
             <Card key={lesson.id} className="overflow-hidden">
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
@@ -258,6 +199,20 @@ export default function Lessons() {
               </CardFooter>
             </Card>
           ))
+        ) : (
+          <Card className="col-span-full">
+            <CardContent className="py-10 text-center text-muted-foreground space-y-3">
+              <p>No lessons yet. Create one or generate a plan with AI.</p>
+              <div className="flex justify-center gap-2">
+                <Link href="/ai-lesson-generator">
+                  <Button variant="outline" size="sm">
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    AI Lesson Generator
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </AppShell>

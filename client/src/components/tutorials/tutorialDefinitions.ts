@@ -217,11 +217,95 @@ export const getHelpTutorial: InteractiveTutorialDefinition = {
   ],
 };
 
+/** School-admin walkthrough: Weekly Templates → Week Planner → Publish. */
+export const scheduleBuilderTutorial: InteractiveTutorialDefinition = {
+  id: "schedule-builder",
+  title: "Schedule Builder & Week Planner",
+  description: "Create weekly templates, plan lessons, and publish for parents",
+  steps: [
+    {
+      target: "body",
+      title: "Weekly schedules in three steps",
+      content:
+        "Build a reusable weekly skeleton, flesh out each week in the Week Planner, then publish so parents see it on their Weekly Schedule.",
+      placement: "center",
+      route: "/schools/schedule-builder",
+    },
+    {
+      target: "[data-tutorial='schedule-new-template'], [data-testid='schedule-new-template']",
+      title: "Create a weekly template",
+      content:
+        "Click New Template. Name it, bind it to a marketplace class (Class field), and pick operating days. That class link is what parents match via enrollment.",
+      placement: "bottom",
+      route: "/schools/schedule-builder",
+      actionText: "Open New Template when you're ready",
+    },
+    {
+      target: "[data-tutorial='schedule-templates-list'], [data-testid='schedule-templates-list']",
+      title: "Select and expand a template",
+      content:
+        "Open an existing template card to manage its recurring time blocks. You can edit the template anytime to change class binding or days.",
+      placement: "top",
+      route: "/schools/schedule-builder",
+    },
+    {
+      target:
+        "[data-tutorial='schedule-add-block'], [data-testid='schedule-add-block'], [data-testid^='schedule-csv-upload-']",
+      title: "Add recurring time blocks",
+      content:
+        "Use Add Block for individual slots, or Upload CSV to import many blocks at once. Blocks become the skeleton for every week you plan.",
+      placement: "left",
+      route: "/schools/schedule-builder",
+    },
+    {
+      target: "[data-tutorial='week-planner-heading'], [data-testid='week-planner-heading']",
+      title: "Open Week Planner",
+      content:
+        "Next, flesh out a specific week — titles, descriptions, and lesson details live here (not on the template).",
+      placement: "bottom",
+      route: "/schools/week-planner",
+    },
+    {
+      target: "[data-tutorial='week-planner-template-select'], [data-testid='week-planner-template-select']",
+      title: "Choose the template",
+      content: "Select the weekly template you just built, then create or pick a week to edit.",
+      placement: "bottom",
+      route: "/schools/week-planner",
+    },
+    {
+      target: "[data-tutorial='week-planner-new-week'], [data-testid='week-planner-new-week']",
+      title: "Create a week plan",
+      content: "Add a new week (week number + start date), then edit each day's blocks with lesson content.",
+      placement: "bottom",
+      route: "/schools/week-planner",
+    },
+    {
+      target:
+        "[data-tutorial='week-planner-publish-area'], [data-testid='week-planner-publish'], [data-testid='week-planner-publish-area']",
+      title: "Publish for parents",
+      content:
+        "When the week is ready, click Publish. Parents then see it on /parent/weekly-schedule for enrolled classes.",
+      placement: "left",
+      route: "/schools/week-planner",
+      actionText: "Publish when a draft week is selected",
+    },
+    {
+      target: "body",
+      title: "Optional next step: lesson plans KPI",
+      content:
+        "After publishing, Attendance → Lesson plans shows completion and attendance KPIs for your school. You're done with the core schedule loop!",
+      placement: "center",
+      route: "/schools/week-planner",
+    },
+  ],
+};
+
 export const allTutorials: InteractiveTutorialDefinition[] = [
   registerChildTutorial,
   enrollChildTutorial,
   paymentCheckoutTutorial,
   getHelpTutorial,
+  scheduleBuilderTutorial,
 ];
 
 export const getTutorialById = (id: string): InteractiveTutorialDefinition | undefined => {

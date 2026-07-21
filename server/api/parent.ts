@@ -238,10 +238,17 @@ router.post('/children', jwtCheck, async (req: any, res) => {
 
     console.log('👶 Creating child in storage via shared helper:', { firstName, lastName });
 
+    let preferredLocationId: number | null = parent.locationId ?? null;
+    if (preferredLocationId == null) {
+      const parentLocs = await storage.getUserLocationsByUserId(parent.id);
+      const active = parentLocs.find((ul) => ul.isActive !== false);
+      preferredLocationId = active?.locationId ?? null;
+    }
+
     const savedChild = await createChildLinkedToParent(storage, {
       parent,
       parentEmail: userEmail,
-      preferredLocationId: null,
+      preferredLocationId,
       fields: {
         firstName,
         lastName,

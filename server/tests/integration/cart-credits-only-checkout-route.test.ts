@@ -174,6 +174,7 @@ describeWithDb('Integration: cart credits-only checkout (create-payment-intent)'
       paymentPlan: 'full',
       paymentFrequency: 'one_time',
       creditsToApply: 10000,
+      confirmCreditsOnlyCheckout: true,
     });
 
     expect(response.status).toBe(200);
@@ -190,5 +191,71 @@ describeWithDb('Integration: cart credits-only checkout (create-payment-intent)'
     expect(enrollment).toBeTruthy();
     expect((enrollment as any).totalPaid).toBe(10000);
     expect((enrollment as any).remainingBalance).toBe(0);
+  }, 30000);
+
+  it('does not spend credits without confirmCreditsOnlyCheckout', async () => {
+    pendingEnrollment = await storage.createProgramEnrollment({
+      schoolId: testSchool.id,
+      classType: 'school_class',
+      classId: testClass.id,
+      programId: testClass.id,
+      childId: testChild.id,
+      childName: `${testChild.firstName} ${testChild.lastName}`,
+      className: testClass.title,
+      parentId: testUser.id,
+      parentEmail: testUser.email,
+      totalCost: 10000,
+      totalPaid: 0,
+      remainingBalance: 10000,
+      depositRequired: 0,
+      paymentStatus: 'pending',
+      status: 'pending_payment',
+      paymentPlan: 'full_payment',
+      paymentSystemVersion: 'v2_stripe',
+      paymentFrequency: 'one_time',
+      enrollmentDate: new Date(),
+    });
+
+    jest.spyOn(storage, 'getTotalAvailableCredits').mockResolvedValue(10000);
+
+    api.clearAuth();
+    api.setTestUserEmail(testUser.email);
+
+    const response = await api.post('/api/stripe/create-payment-intent', {
+      items: [
+        {
+          enrollmentId: pendingEnrollment.id,
+          childId: testChild.id,
+          childName: `${testChild.firstName} ${testChild.lastName}`,
+          classId: testClass.id,
+          className: testClass.title,
+          classType: 'school_class',
+          price: 10000,
+          totalCost: 10000,
+          depositRequired: 0,
+          amountPaid: 0,
+          remainingBalance: 10000,
+        },
+      ],
+      subtotal: 10000,
+      total: 10000,
+      discounts: {
+        siblingDiscount: 0,
+        freeAfterThree: 0,
+        appliedDiscounts: [],
+        totalDiscountAmount: 0,
+      },
+      parentEmail: testUser.email,
+      paymentPlan: 'full',
+      paymentFrequency: 'one_time',
+      creditsToApply: 10000,
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.creditOnlyEligible).toBe(true);
+    expect(response.body.creditOnlyCheckout).toBeFalsy();
+
+    const enrollment = await storage.getProgramEnrollmentById(pendingEnrollment.id);
+    expect((enrollment as any).totalPaid).toBe(0);
   }, 30000);
 });

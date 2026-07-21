@@ -13,6 +13,7 @@ import {
 } from './lib/location-db';
 import { getAllSchoolsCore, getSchoolCoreById, insertSchoolCore } from './lib/school-db';
 import * as apDb from './lib/assessment-progress-db';
+import * as sbDb from './lib/schedule-builder-db';
 import {
   User, InsertUser, users,
   UserRole, userRoles,
@@ -3973,38 +3974,40 @@ export class DatabaseStorage implements IStorage {
     description?: string
   ): Promise<{ finalizedCount: number; totalFinalized: number; usageLogs: UnifiedCreditUsageLog[] }> {
     const db = await getDb();
-    const usageLogs: UnifiedCreditUsageLog[] = [];
-    let totalFinalized = 0;
-    const pendingHolds = await db
-      .select()
-      .from(creditHolds)
-      .where(and(eq(creditHolds.checkoutSessionId, checkoutSessionId), eq(creditHolds.status, 'pending')));
-    for (const hold of pendingHolds) {
-      const [credit] = await db.select().from(credits).where(eq(credits.id, hold.creditId));
-      if (!credit) continue;
-      const newUsedAmount = credit.usedAmountCents + hold.amountCents;
-      const newStatus: CreditStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
-      await db
-        .update(credits)
-        .set({ usedAmountCents: newUsedAmount, status: newStatus, updatedAt: new Date() })
-        .where(eq(credits.id, credit.id));
-      const [usageLog] = await db
-        .insert(unifiedCreditUsageLogs)
-        .values({
-          creditId: hold.creditId,
-          paymentHistoryId,
-          amountCents: hold.amountCents,
-          description: description || hold.description || `Credit applied from hold #${hold.id}`,
-        })
-        .returning();
-      usageLogs.push(usageLog);
-      await db
-        .update(creditHolds)
-        .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
-        .where(eq(creditHolds.id, hold.id));
-      totalFinalized += hold.amountCents;
-    }
-    return { finalizedCount: pendingHolds.length, totalFinalized, usageLogs };
+    return db.transaction(async (tx) => {
+      const usageLogs: UnifiedCreditUsageLog[] = [];
+      let totalFinalized = 0;
+      const pendingHolds = await tx
+        .select()
+        .from(creditHolds)
+        .where(and(eq(creditHolds.checkoutSessionId, checkoutSessionId), eq(creditHolds.status, 'pending')));
+      for (const hold of pendingHolds) {
+        const [credit] = await tx.select().from(credits).where(eq(credits.id, hold.creditId));
+        if (!credit) continue;
+        const newUsedAmount = credit.usedAmountCents + hold.amountCents;
+        const newStatus: CreditStatus = newUsedAmount >= credit.creditAmountCents ? 'used' : 'partially_used';
+        await tx
+          .update(credits)
+          .set({ usedAmountCents: newUsedAmount, status: newStatus, updatedAt: new Date() })
+          .where(eq(credits.id, credit.id));
+        const [usageLog] = await tx
+          .insert(unifiedCreditUsageLogs)
+          .values({
+            creditId: hold.creditId,
+            paymentHistoryId,
+            amountCents: hold.amountCents,
+            description: description || hold.description || `Credit applied from hold #${hold.id}`,
+          })
+          .returning();
+        usageLogs.push(usageLog);
+        await tx
+          .update(creditHolds)
+          .set({ status: 'finalized' as CreditHoldStatus, finalizedAt: new Date() })
+          .where(eq(creditHolds.id, hold.id));
+        totalFinalized += hold.amountCents;
+      }
+      return { finalizedCount: pendingHolds.length, totalFinalized, usageLogs };
+    });
   }
 
   async releaseCreditHolds(checkoutSessionId: string): Promise<{ releasedCount: number; totalReleased: number }> {
@@ -4455,6 +4458,37 @@ export class DatabaseStorage implements IStorage {
   getAssessmentSessionById = apDb.getAssessmentSessionById;
   createAssessmentSession = apDb.createAssessmentSession;
   updateAssessmentSession = apDb.updateAssessmentSession;
+
+  // Schedule builder
+  getWeeklySkeletonsBySchool = sbDb.getWeeklySkeletonsBySchool;
+  getWeeklySkeletonById = sbDb.getWeeklySkeletonById;
+  createWeeklySkeleton = sbDb.createWeeklySkeleton;
+  updateWeeklySkeleton = sbDb.updateWeeklySkeleton;
+  deleteWeeklySkeleton = sbDb.deleteWeeklySkeleton;
+  getSkeletonBlocksBySkeletonId = sbDb.getSkeletonBlocksBySkeletonId;
+  getSkeletonBlockById = sbDb.getSkeletonBlockById;
+  createSkeletonBlock = sbDb.createSkeletonBlock;
+  updateSkeletonBlock = sbDb.updateSkeletonBlock;
+  deleteSkeletonBlock = sbDb.deleteSkeletonBlock;
+  reorderSkeletonBlocks = sbDb.reorderSkeletonBlocks;
+  bulkReplaceSkeletonBlocks = sbDb.bulkReplaceSkeletonBlocks;
+  getWeekPlansBySkeletonId = sbDb.getWeekPlansBySkeletonId;
+  getPublishedWeekPlansBySchool = sbDb.getPublishedWeekPlansBySchool;
+  getWeekPlanById = sbDb.getWeekPlanById;
+  createWeekPlan = sbDb.createWeekPlan;
+  updateWeekPlan = sbDb.updateWeekPlan;
+  deleteWeekPlan = sbDb.deleteWeekPlan;
+  cloneWeekPlan = sbDb.cloneWeekPlan;
+  getWeekPlanBlocksByWeekPlanId = sbDb.getWeekPlanBlocksByWeekPlanId;
+  getWeekPlanBlockById = sbDb.getWeekPlanBlockById;
+  createWeekPlanBlock = sbDb.createWeekPlanBlock;
+  updateWeekPlanBlock = sbDb.updateWeekPlanBlock;
+  deleteWeekPlanBlock = sbDb.deleteWeekPlanBlock;
+  markBlockCompleted = sbDb.markBlockCompleted;
+  getBlockHistory = sbDb.getBlockHistory;
+  bulkUpdateWeekPlanBlocks = sbDb.bulkUpdateWeekPlanBlocks;
+  getPublishedWeekPlansForClassIds = sbDb.getPublishedWeekPlansForClassIds;
+  getAcademicsLessonKpi = sbDb.getAcademicsLessonKpi;
   getQuarterlyProgressMeta = apDb.getQuarterlyProgressMeta;
   upsertQuarterlyProgressMeta = apDb.upsertQuarterlyProgressMeta;
   getQuarterlySkillChecks = apDb.getQuarterlySkillChecks;
