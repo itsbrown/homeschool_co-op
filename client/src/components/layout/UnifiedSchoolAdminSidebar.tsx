@@ -94,6 +94,7 @@ const adminNavGroups: NavGroup[] = [
       { title: 'Staff', href: '/schools/staff', icon: Users },
       { title: 'Staff Hours', href: '/schools/staff-hours', icon: Clock },
       { title: 'Staff Permissions', href: '/school-admin/staff-permissions', icon: Shield },
+      { title: 'Educators', href: '/schools/educators', icon: GraduationCap },
       { title: 'Students', href: '/schools/students', icon: GraduationCap },
       { title: 'Users', href: '/schools/users', icon: UserPlus },
     ],
