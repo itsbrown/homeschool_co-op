@@ -10,6 +10,8 @@
 - `POST /api/classes` uses `attachAccessScope` so teacher `canManageClasses` grants are honored.
 - `X-Active-Role` trusted only when held (`resolveTrustedActiveRole`); spoofed bypass roles ignored.
 - Bare `/schools` + `/school-admin` landings map to My School (`canManageClasses`) for route access.
+- Permissions hook stays loading while roles bootstrap (`!activeRole && isLoadingRoles`).
+- Financial metrics honor `locationFilterIds` for location-scoped finance staff.
 - Skill: `asa-auth-patterns` effective-permissions table.
 
 ## 2026-07-21 (Class grade selector through 12th)

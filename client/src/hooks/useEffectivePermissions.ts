@@ -66,7 +66,7 @@ const FAIL_CLOSED: EffectivePermissions = {
 };
 
 export function useEffectivePermissions() {
-  const { activeRole, allRoles } = useRole();
+  const { activeRole, allRoles, isLoadingRoles } = useRole();
 
   const {
     data: apiData,
@@ -157,10 +157,15 @@ export function useEffectivePermissions() {
     !!activeRole && !roleMatchedApiData && isLoading && !isError;
   const awaitingLegacy =
     legacyEnabled && !legacyData && legacyLoading && !roleMatchedApiData;
+  // Roles bootstrap often leaves activeRole empty briefly; stay loading so
+  // SchoolRouteGuard does not flash Forbidden before grants can load.
+  const awaitingRole = !activeRole && isLoadingRoles;
 
   return {
     effective,
-    isLoading: (awaitingPrimary || awaitingLegacy) && !roleMatchedApiData && !legacyData,
+    isLoading:
+      awaitingRole ||
+      ((awaitingPrimary || awaitingLegacy) && !roleMatchedApiData && !legacyData),
     isError,
     error,
     can: (key: PermissionKey) => hasPermission(effective, key),

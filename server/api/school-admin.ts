@@ -3841,8 +3841,35 @@ router.get("/metrics/financial", supabaseAuth, attachAccessScope, requirePermiss
     const allPayments = await storage.getAllPayments();
 
     // Filter data by school
-    const schoolEnrollments = allEnrollments.filter((e: any) => e.schoolId === schoolId);
-    const schoolPayments = allPayments.filter((p: any) => p.schoolId === schoolId);
+    let schoolEnrollments = allEnrollments.filter((e: any) => e.schoolId === schoolId);
+    let schoolPayments = allPayments.filter((p: any) => p.schoolId === schoolId);
+
+    // Location-scoped finance staff: limit to accessible campuses (null location = school-wide keep)
+    const financeLocationIds = locationFilterIds(req.accessScope);
+    if (financeLocationIds !== null) {
+      const allowed = new Set(financeLocationIds);
+      const schoolClasses = await storage.getClassesBySchoolId(String(schoolId));
+      const classLocationById = new Map<number, number | null | undefined>(
+        schoolClasses.map((cls: any) => [cls.id, cls.locationId]),
+      );
+      schoolEnrollments = schoolEnrollments.filter((e: any) => {
+        const loc =
+          e.locationId != null
+            ? e.locationId
+            : e.classId != null
+              ? classLocationById.get(e.classId) ?? null
+              : null;
+        return loc == null || allowed.has(loc);
+      });
+      const scopedEnrollmentIds = new Set(
+        schoolEnrollments.map((e: any) => e.id).filter((id: any) => id != null),
+      );
+      schoolPayments = schoolPayments.filter((p: any) => {
+        const ids = Array.isArray(p.enrollmentIds) ? p.enrollmentIds : [];
+        if (ids.length === 0) return false;
+        return ids.some((id: number) => scopedEnrollmentIds.has(id));
+      });
+    }
 
     // Filter for completed payments (positive amounts)
     // Note: Stripe 'succeeded' status gets converted to 'completed' in our database

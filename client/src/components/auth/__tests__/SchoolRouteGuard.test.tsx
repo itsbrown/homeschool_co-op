@@ -129,4 +129,40 @@ describe('SchoolRouteGuard', () => {
     expect(screen.getByTestId('permissions-loading')).toBeInTheDocument();
     expect(screen.queryByText('Secret finance')).not.toBeInTheDocument();
   });
+
+  it('does not flash forbidden while permissions still loading', () => {
+    mocked.mockReturnValue({
+      canAccessPath: () => false,
+      isLoading: true,
+      showAdminNavGroups: false,
+      effective: {
+        flags: {
+          canViewReports: false,
+          canManageStaff: false,
+          canManageClasses: false,
+          canManageStudents: false,
+          canSendNotifications: false,
+          canViewParentContacts: false,
+        },
+        accessibleLocationIds: [],
+        canAccessEntireSchool: false,
+        isSchoolAdminBypass: false,
+        showAdminNavGroups: false,
+      },
+      can: () => false,
+      canShowGroup: () => false,
+      canShowItem: () => false,
+      visibleNav: [],
+      isError: false,
+      error: null,
+    } as any);
+
+    render(
+      <SchoolRouteGuard>
+        <div>My School</div>
+      </SchoolRouteGuard>,
+    );
+    expect(screen.queryByTestId('forbidden-page')).not.toBeInTheDocument();
+    expect(screen.getByTestId('permissions-loading')).toBeInTheDocument();
+  });
 });
