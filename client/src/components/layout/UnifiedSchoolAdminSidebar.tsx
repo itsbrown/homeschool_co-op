@@ -123,6 +123,7 @@ const adminNavGroups: NavGroup[] = [
       { title: 'Financial Reports', href: '/school-admin/financial-reports', icon: BarChart3 },
       { title: 'School Analytics', href: '/school-admin/analytics', icon: BarChart3 },
       { title: 'Retention Report', href: '/school-admin/retention-report', icon: TrendingUp },
+      { title: 'Refunds', href: '/school-admin/refunds', icon: CreditCard },
       { title: 'Manual Payments', href: '/schools/manual-payments', icon: CreditCard },
       { title: 'Memberships', href: '/schools/memberships', icon: BadgeCheck },
       { title: 'Discounts', href: '/schools/discounts', icon: Target },
