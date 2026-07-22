@@ -29,15 +29,6 @@ const normalizeRole = (role: string): string => role.toLowerCase();
 export default function RoleSwitcher() {
   const { activeRole, activeRoleId, availableRoles, canSwitchRoles, setActiveRole, isLoadingRoles } = useRole();
 
-  console.warn('🎯 ROLE_SWITCHER_DEBUG:', JSON.stringify({
-    canSwitchRoles,
-    roleCount: availableRoles.length,
-    isLoadingRoles,
-    activeRole,
-    activeRoleId,
-    roles: availableRoles.map(r => ({ id: r.id, role: r.role, schoolId: r.schoolId }))
-  }));
-
   // Determine how many distinct schools this user has roles at
   const schoolIds = new Set(availableRoles.map(r => r.schoolId));
   const hasMultipleSchools = schoolIds.size > 1;
@@ -45,7 +36,6 @@ export default function RoleSwitcher() {
   // Task #52: For single-school multi-role users, all permissions are additive — no switcher needed.
   // The RoleSwitcher is preserved only for multi-school users to change their school context.
   if (!canSwitchRoles || availableRoles.length <= 1 || isLoadingRoles || !hasMultipleSchools) {
-    console.warn('🎯 ROLE_SWITCHER_EARLY_EXIT:', JSON.stringify({ canSwitchRoles, count: availableRoles.length, isLoadingRoles, hasMultipleSchools }));
     return null;
   }
 

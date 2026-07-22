@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-07-21 (School admin students list hang)
+
+- `/schools/students` spinner was waiting on `GET /api/school-admin/students`, not RoleSwitcher (debug `console.warn` only).
+- Root cause: handler loaded all users then fired `getUserRolesByUserId` per email; sync used `getAllChildren` / `getAllSchoolStudents`.
+- Fixed with set-based joins + batch children/locations; sync scoped by school. Removed RoleSwitcher debug warns.
+- Domain: [registration-and-locations.md](./domains/registration-and-locations.md).
+
 ## 2026-07-21 (Permissions nav scoping — PR #50 babysit)
 
 - `SchoolRouteGuard` mounts around the app `Switch` (covers `/schools/*` + `/school-admin/*`); parent bypass only for `/school-admin/*` (ParentAppShell role switch).

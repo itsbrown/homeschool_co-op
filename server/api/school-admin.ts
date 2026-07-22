@@ -53,7 +53,22 @@ const permissionUpdateLimiter = rateLimit({
   skip: (req: any) => !req.user?.id, // Skip rate limiting if no user (will be rejected by auth anyway)
 });
 import { sql, eq, and, or, inArray } from 'drizzle-orm';
-import { users, schools, userRoles, userLocations, locations, classSessions, sessionAttendance, children, classes, type InsertSchool, type UserRole, systemRoles } from '@shared/schema';
+import {
+  users,
+  schools,
+  userRoles,
+  userLocations,
+  locations,
+  classSessions,
+  sessionAttendance,
+  children,
+  classes,
+  membershipEnrollments,
+  type InsertSchool,
+  type UserRole,
+  systemRoles,
+} from '@shared/schema';
+import { normalizeEmailForLookup } from '@shared/parent-identity';
 
 const router = Router();
 
@@ -2412,175 +2427,198 @@ router.get("/students", supabaseAuth, attachAccessScope, requirePermission('canM
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    console.log(`📚 [FIX:v3.0] Fetching students for school admin (school_id from DB: ${schoolId})...`);
-    
+    console.log(`📚 [FIX:v5.0] Fetching students for school admin (school_id from DB: ${schoolId})...`);
+
+    const db = await getDb();
+
     // Get school students from database (not in-memory storage)
-    // Note: Location-based filtering for staff with canManageStudents is handled in /api/educator/my-students
     const schoolStudents = await storage.getSchoolStudentsBySchoolId(schoolId);
-    
-    const schoolStudentChildIds = new Set(schoolStudents.map(ss => ss.childId));
+    const schoolStudentChildIds = new Set(schoolStudents.map((ss) => ss.childId));
     console.log(`📊 Found ${schoolStudents.length} students in school_students table for school ${schoolId}`);
-    
-    // [FIX:v4.0] Also include children whose parent has a relationship with this school
-    // This covers parents who registered at the school but whose children aren't in school_students yet
-    const additionalChildren: any[] = [];
-    
-    // Collect parent emails from multiple sources - OPTIMIZED to reduce N+1 queries
+
+    // Collect parent emails from memberships, legacy users.school_id, and user_roles —
+    // all via set-based queries (never getAllUsers + per-user role lookups).
     const parentEmailsToCheck = new Set<string>();
-    
-    // Pre-load all users for efficient lookups (avoids N+1 pattern)
-    const allUsers = await storage.getAllUsers();
-    const userIdToEmailMap = new Map<number, string>();
-    for (const user of allUsers) {
-      if (user.email) {
-        userIdToEmailMap.set(user.id, user.email);
-      }
-    }
-    
-    // Get membership enrollments for this school - use cached user data
-    const allMemberships = await storage.getMembershipEnrollmentsBySchoolId(schoolId);
-    for (const membership of allMemberships) {
-      const parentEmail = userIdToEmailMap.get(membership.parentUserId);
-      if (parentEmail) {
-        parentEmailsToCheck.add(parentEmail);
-      }
-    }
-    
-    // Add parents with legacy schoolId matching this school
-    const parentsWithLegacySchoolId = allUsers.filter(u => 
-      u.role === 'parent' && u.schoolId === schoolId
-    );
-    for (const parent of parentsWithLegacySchoolId) {
-      if (parent.email) {
-        parentEmailsToCheck.add(parent.email);
-      }
-    }
-    
-    // Also check user_roles table for parents with role at this school
-    // Batch-load roles for parents only (not all users) to reduce queries
-    const parentUsers = allUsers.filter(u => u.role === 'parent' || u.email);
-    const roleChecks = await Promise.all(
-      parentUsers.map(async (user) => {
-        if (!user.email || parentEmailsToCheck.has(user.email)) {
-          return null; // Already have this email or no email
-        }
-        const userRoles = await storage.getUserRolesByUserId(user.id);
-        const hasParentRoleAtSchool = userRoles.some(
-          (r: any) => r.role === 'parent' && r.schoolId === schoolId
-        );
-        return hasParentRoleAtSchool ? user.email : null;
+    const parentUserIds = new Set<number>();
+
+    const membershipParentRows = await db
+      .select({
+        parentUserId: membershipEnrollments.parentUserId,
+        email: users.email,
       })
+      .from(membershipEnrollments)
+      .innerJoin(users, eq(membershipEnrollments.parentUserId, users.id))
+      .where(eq(membershipEnrollments.schoolId, schoolId));
+
+    for (const row of membershipParentRows) {
+      parentUserIds.add(row.parentUserId);
+      const email = normalizeEmailForLookup(row.email);
+      if (email) parentEmailsToCheck.add(email);
+    }
+
+    const legacyParents = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(and(eq(users.role, 'parent'), eq(users.schoolId, schoolId)));
+
+    for (const parent of legacyParents) {
+      parentUserIds.add(parent.id);
+      const email = normalizeEmailForLookup(parent.email);
+      if (email) parentEmailsToCheck.add(email);
+    }
+
+    const roleParents = await db
+      .select({ id: users.id, email: users.email })
+      .from(userRoles)
+      .innerJoin(users, eq(userRoles.userId, users.id))
+      .where(and(eq(userRoles.schoolId, schoolId), eq(userRoles.role, 'parent')));
+
+    for (const parent of roleParents) {
+      parentUserIds.add(parent.id);
+      const email = normalizeEmailForLookup(parent.email);
+      if (email) parentEmailsToCheck.add(email);
+    }
+
+    console.log(
+      `🔍 Found ${parentEmailsToCheck.size} parent emails / ${parentUserIds.size} parent user ids with school relationship`,
     );
-    
-    // Add valid emails from role checks
-    for (const email of roleChecks) {
-      if (email) {
-        parentEmailsToCheck.add(email);
+
+    // Batch-load children linked by parentId or denormalized parent_email
+    const relatedChildrenById = new Map<number, typeof children.$inferSelect>();
+    const parentIdList = [...parentUserIds];
+    const emailList = [...parentEmailsToCheck];
+
+    if (parentIdList.length > 0) {
+      const byParentId = await db
+        .select()
+        .from(children)
+        .where(inArray(children.parentId, parentIdList));
+      for (const child of byParentId) {
+        relatedChildrenById.set(child.id, child);
       }
     }
-    
-    console.log(`🔍 Found ${parentEmailsToCheck.size} parent emails with school relationship`);
-    
-    // Get children for each parent email and add if not already in school_students
-    for (const parentEmail of parentEmailsToCheck) {
-      const children = await storage.getChildrenByParentEmail(parentEmail);
-      for (const child of children) {
-        if (!schoolStudentChildIds.has(child.id)) {
-          additionalChildren.push(child);
-          schoolStudentChildIds.add(child.id); // Prevent duplicates
-        }
+
+    if (emailList.length > 0) {
+      const byEmail = await db
+        .select()
+        .from(children)
+        .where(
+          sql`lower(trim(${children.parentEmail})) IN (${sql.join(
+            emailList.map((email) => sql`${email}`),
+            sql`, `,
+          )})`,
+        );
+      for (const child of byEmail) {
+        relatedChildrenById.set(child.id, child);
       }
     }
-    
+
+    const additionalChildren = [...relatedChildrenById.values()].filter(
+      (child) => !schoolStudentChildIds.has(child.id),
+    );
     console.log(`📊 Found ${additionalChildren.length} additional children from parent school relationships`);
-    
-    // Helper function to format child details
-    const formatChildDetails = async (child: any, schoolStudent: any | null) => {
-      try {
-        // Calculate age from birthdate
-        let age = null;
-        if (child.birthdate) {
-          const today = new Date();
-          const birthDate = new Date(child.birthdate);
-          age = today.getFullYear() - birthDate.getFullYear();
-          const monthDiff = today.getMonth() - birthDate.getMonth();
-          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-          }
-        }
 
-        // Get location details
-        let locationName = 'Unknown Location';
-        let locationCode = 'N/A';
-        const locationId = schoolStudent?.locationId || child.locationId;
-        if (locationId) {
-          const location = await storage.getLocationById(locationId);
-          if (location) {
-            locationName = location.name;
-            locationCode = location.code;
-          }
-        }
+    // Batch-load child rows for school_students
+    const schoolStudentChildIdList = schoolStudents
+      .map((ss) => ss.childId)
+      .filter((id): id is number => Number.isFinite(id));
+    const schoolChildrenById = new Map<number, typeof children.$inferSelect>();
+    if (schoolStudentChildIdList.length > 0) {
+      const schoolChildren = await db
+        .select()
+        .from(children)
+        .where(inArray(children.id, schoolStudentChildIdList));
+      for (const child of schoolChildren) {
+        schoolChildrenById.set(child.id, child);
+      }
+    }
 
-        return {
-          id: child.id,
-          schoolStudentId: schoolStudent?.id || null,
-          name: `${child.firstName} ${child.lastName}`,
-          firstName: child.firstName,
-          lastName: child.lastName,
-          gradeLevel: child.gradeLevel || 'Not specified',
-          age: age || 'Unknown',
-          parentName: child.parentEmail || 'Unknown Parent',
-          parentEmail: child.parentEmail,
-          email: child.parentEmail,
-          enrollmentDate: schoolStudent?.enrollmentDate || child.createdAt,
-          status: schoolStudent?.status || 'Active',
-          locationId: locationId,
-          locationName: locationName,
-          locationCode: locationCode,
-          schoolId: schoolStudent?.schoolId || schoolId,
-          classes: [],
-          avatar: child.profileImage || "",
-          allergies: child.allergies,
-          medicalInfo: child.medicalInfo,
-          interests: child.interests || [],
-          learningStyle: child.learningStyle
-        };
-      } catch (error) {
-        console.error(`❌ Error formatting child ${child.id}:`, error);
+    // Batch-load locations referenced by school_students or children
+    const locationIds = new Set<number>();
+    for (const ss of schoolStudents) {
+      if (ss.locationId != null) locationIds.add(ss.locationId);
+    }
+    for (const child of schoolChildrenById.values()) {
+      if (child.locationId != null) locationIds.add(child.locationId);
+    }
+    for (const child of additionalChildren) {
+      if (child.locationId != null) locationIds.add(child.locationId);
+    }
+
+    const locationById = new Map<number, { name: string; code: string }>();
+    const locationIdList = [...locationIds];
+    if (locationIdList.length > 0) {
+      const locationRows = await db
+        .select({
+          id: locations.id,
+          name: locations.name,
+          code: locations.code,
+        })
+        .from(locations)
+        .where(inArray(locations.id, locationIdList));
+      for (const loc of locationRows) {
+        locationById.set(loc.id, { name: loc.name, code: loc.code });
+      }
+    }
+
+    const formatChildDetails = (child: typeof children.$inferSelect, schoolStudent: any | null) => {
+      let age: number | null = null;
+      if (child.birthdate) {
+        const today = new Date();
+        const birthDate = new Date(child.birthdate);
+        age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+      }
+
+      const locationId = schoolStudent?.locationId || child.locationId;
+      const location = locationId != null ? locationById.get(locationId) : undefined;
+
+      return {
+        id: child.id,
+        schoolStudentId: schoolStudent?.id || null,
+        name: `${child.firstName} ${child.lastName}`,
+        firstName: child.firstName,
+        lastName: child.lastName,
+        gradeLevel: child.gradeLevel || 'Not specified',
+        age: age ?? 'Unknown',
+        parentName: child.parentEmail || 'Unknown Parent',
+        parentEmail: child.parentEmail,
+        email: child.parentEmail,
+        enrollmentDate: schoolStudent?.enrollmentDate || child.createdAt,
+        status: schoolStudent?.status || 'Active',
+        locationId: locationId,
+        locationName: location?.name || 'Unknown Location',
+        locationCode: location?.code || 'N/A',
+        schoolId: schoolStudent?.schoolId || schoolId,
+        classes: [],
+        avatar: child.profileImage || '',
+        allergies: child.allergies,
+        medicalInfo: child.medicalInfo,
+        interests: child.interests || [],
+        learningStyle: child.learningStyle,
+      };
+    };
+
+    const studentsFromSchoolStudents = schoolStudents.map((schoolStudent) => {
+      const child = schoolChildrenById.get(schoolStudent.childId);
+      if (!child) {
+        console.warn(`⚠️ Child not found for school student: ${schoolStudent.childId}`);
         return null;
       }
-    };
-    
-    // Get children details for school students from school_students table
-    const studentsFromSchoolStudents = await Promise.all(
-      schoolStudents.map(async (schoolStudent) => {
-        try {
-          const child = await storage.getChildById(schoolStudent.childId);
-          if (!child) {
-            console.warn(`⚠️ Child not found for school student: ${schoolStudent.childId}`);
-            return null;
-          }
-          return formatChildDetails(child, schoolStudent);
-        } catch (childError) {
-          console.error(`❌ Error processing school student ${schoolStudent.id}:`, childError);
-          return null;
-        }
-      })
-    );
-    
-    // Get children details for additional children from parent relationships
-    const studentsFromParentRelationships = await Promise.all(
-      additionalChildren.map(async (child) => {
-        return formatChildDetails(child, null);
-      })
+      return formatChildDetails(child, schoolStudent);
+    });
+
+    const studentsFromParentRelationships = additionalChildren.map((child) =>
+      formatChildDetails(child, null),
     );
 
-    // Combine and filter out any null results
-    const allStudentsWithDetails = [
+    let validStudents = [
       ...studentsFromSchoolStudents,
-      ...studentsFromParentRelationships
-    ];
-    let validStudents = allStudentsWithDetails.filter(student => student !== null);
+      ...studentsFromParentRelationships,
+    ].filter((student) => student !== null);
 
     // Location-scoped staff: students at accessible locations; null locationId = school-wide (keep)
     const studentLocationIds = locationFilterIds(req.accessScope);
@@ -2590,17 +2628,18 @@ router.get("/students", supabaseAuth, attachAccessScope, requirePermission('canM
         (student: any) => student.locationId == null || allowed.has(student.locationId),
       );
     }
-    
-    console.log(`✅ Successfully processed ${validStudents.length} students with details (${schoolStudents.length} from school_students + ${additionalChildren.length} from parent relationships)`);
+
+    console.log(
+      `✅ Successfully processed ${validStudents.length} students with details (${schoolStudents.length} from school_students + ${additionalChildren.length} from parent relationships)`,
+    );
     res.json(validStudents);
-    
   } catch (error) {
-    console.error("❌ Detailed error fetching school students:", {
+    console.error('❌ Detailed error fetching school students:', {
       error: error instanceof Error ? error.message : error,
       stack: error instanceof Error ? error.stack : 'No stack trace',
-      type: typeof error
+      type: typeof error,
     });
-    res.status(500).json({ message: "Error fetching school students" });
+    res.status(500).json({ message: 'Error fetching school students' });
   }
 });
 
@@ -2611,32 +2650,34 @@ router.post("/students/sync", supabaseAuth, async (req: any, res) => {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    console.log(`🔄 [FIX:v3.0] Starting student sync for school ${schoolId} (from DB)...`);
-    
-    // Get all children for this school
-    const allChildren = await storage.getAllChildren();
-    const schoolChildren = allChildren.filter(child => Number(child.schoolId) === schoolId);
+    console.log(`🔄 [FIX:v5.0] Starting student sync for school ${schoolId} (from DB)...`);
+
+    const db = await getDb();
+
+    // School-scoped children only — never load the full children table
+    const schoolChildren = await db
+      .select()
+      .from(children)
+      .where(eq(children.schoolId, schoolId));
     console.log(`📊 Found ${schoolChildren.length} children for school ${schoolId}`);
-    
-    // Get existing school_student records
-    const existingSchoolStudents = await storage.getAllSchoolStudents();
-    const existingChildIds = new Set(existingSchoolStudents.map(ss => ss.childId));
-    
+
+    // Existing school_student rows for this school only
+    const existingSchoolStudents = await storage.getSchoolStudentsBySchoolId(schoolId);
+    const existingChildIds = new Set(existingSchoolStudents.map((ss) => ss.childId));
+
     // Track sync results
     let created = 0;
     let skipped = 0;
     let errors = 0;
-    
+
     // Create school_student records for children that don't have them
     for (const child of schoolChildren) {
       if (existingChildIds.has(child.id)) {
-        console.log(`⏭️ Child ${child.id} already has school_student record, skipping`);
         skipped++;
         continue;
       }
-      
+
       try {
-        console.log(`📚 Creating school_student record for child: ${child.id} (${child.firstName} ${child.lastName})`);
         await storage.createSchoolStudent({
           schoolId: schoolId,
           childId: child.id,
@@ -2644,9 +2685,8 @@ router.post("/students/sync", supabaseAuth, async (req: any, res) => {
           status: 'active',
           locationId: child.locationId || null,
           studentId: null,
-          notes: null
+          notes: null,
         });
-        console.log(`✅ School student record created for child ${child.id}`);
         created++;
       } catch (error) {
         console.error(`❌ Failed to create school_student record for child ${child.id}:`, error);
