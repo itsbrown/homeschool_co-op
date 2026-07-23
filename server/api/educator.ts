@@ -3,16 +3,82 @@ import { storage } from "../storage";
 import { supabaseAuth, requireEducatorRole } from "../middleware/supabase-auth";
 import { z } from "zod";
 import type { InsertClassSession, ClassSession, EducatorClassAssignment, InsertAuditLog, InsertSessionAttendance, SessionAttendance } from "@shared/schema";
-import { classSessions } from "@shared/schema";
+import { classSessions, classes, locations } from "@shared/schema";
 import { formatScheduleString } from "../utils/schedule";
+import { extractFamilyScheduleTiming } from "../utils/family-schedule";
 import { fileUploadService } from "../services/fileUploadService";
 import { getDb } from "../db";
 import { eq, isNull, and } from "drizzle-orm";
+import {
+  skeletonDayToEducatorDay,
+  skeletonSlotMatchesClassMeeting,
+} from "@shared/schedule-day-index";
 
 const router = express.Router();
 
 router.use(supabaseAuth);
 router.use(requireEducatorRole);
+
+/** Class row + campus name for educator My Classes cards. */
+async function loadClassDisplayFields(classId: number): Promise<{
+  title: string;
+  description: string | null;
+  schedule: unknown;
+  capacity: number | null;
+  status: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  locationLabel: string | null;
+  schoolId: number | null;
+} | null> {
+  const db = await getDb();
+  const [row] = await db
+    .select({
+      title: classes.title,
+      description: classes.description,
+      schedule: classes.schedule,
+      capacity: classes.capacity,
+      status: classes.status,
+      startDate: classes.startDate,
+      endDate: classes.endDate,
+      locationText: classes.location,
+      locationId: classes.locationId,
+      locationName: locations.name,
+      schoolId: classes.schoolId,
+    })
+    .from(classes)
+    .leftJoin(locations, eq(classes.locationId, locations.id))
+    .where(eq(classes.id, classId))
+    .limit(1);
+
+  if (!row) return null;
+
+  const toDateStr = (v: unknown): string | null => {
+    if (v == null) return null;
+    if (typeof v === "string") return v.slice(0, 10);
+    if (v instanceof Date && !Number.isNaN(v.getTime())) {
+      return v.toISOString().slice(0, 10);
+    }
+    return String(v).slice(0, 10);
+  };
+
+  const locationLabel =
+    (typeof row.locationText === "string" && row.locationText.trim()) ||
+    (row.locationName && String(row.locationName).trim()) ||
+    null;
+
+  return {
+    title: row.title,
+    description: row.description ?? null,
+    schedule: row.schedule,
+    capacity: row.capacity ?? null,
+    status: row.status ?? null,
+    startDate: toDateStr(row.startDate),
+    endDate: toDateStr(row.endDate),
+    locationLabel,
+    schoolId: row.schoolId ?? null,
+  };
+}
 
 // GET /api/educator/dashboard - Get educator dashboard data
 router.get('/dashboard', async (req, res) => {
@@ -96,25 +162,29 @@ router.get('/my-classes', async (req, res) => {
       console.log('[EducatorDashboard] Found', assignments.length, 'class assignments');
       const classesWithDetails = await Promise.all(
         assignments.map(async (assignment: EducatorClassAssignment) => {
-          const classInfo = await storage.getClassById(assignment.classId);
+          const display = await loadClassDisplayFields(assignment.classId);
           const enrollmentCount = await storage.getEnrollmentCountForClass(assignment.classId);
-          
+
           return {
             assignmentId: assignment.id,
             classId: assignment.classId,
             id: assignment.classId,
-            title: classInfo?.title || 'Unknown Class',
+            title: display?.title || 'Unknown Class',
+            description: display?.description,
             isPrimary: assignment.isPrimary,
             canStartSession: assignment.canStartSession,
             validFrom: assignment.validFrom,
             validTo: assignment.validTo,
-            className: classInfo?.title || 'Unknown Class',
-            classDescription: classInfo?.description,
-            classSchedule: formatScheduleString(classInfo?.schedule),
-            schedule: formatScheduleString(classInfo?.schedule),
-            classLocation: classInfo?.location,
-            location: classInfo?.location,
-            capacity: classInfo?.capacity,
+            startDate: display?.startDate ?? null,
+            endDate: display?.endDate ?? null,
+            status: display?.status ?? 'active',
+            className: display?.title || 'Unknown Class',
+            classDescription: display?.description,
+            classSchedule: formatScheduleString(display?.schedule),
+            schedule: formatScheduleString(display?.schedule),
+            classLocation: display?.locationLabel ?? null,
+            location: display?.locationLabel ?? null,
+            capacity: display?.capacity,
             enrollmentCount,
             schoolId: assignment.schoolId
           };
@@ -141,25 +211,30 @@ router.get('/my-classes', async (req, res) => {
 
     const classesWithEnrollmentCounts = await Promise.all(
       assignedClasses.map(async (cls) => {
+        const display = await loadClassDisplayFields(cls.id);
         const enrollmentCount = await storage.getEnrollmentCountForClass(cls.id);
         return {
           assignmentId: cls.id,
           classId: cls.id,
           id: cls.id,
-          title: cls.title,
+          title: display?.title || cls.title,
+          description: display?.description ?? cls.description,
           isPrimary: true,
           canStartSession: true,
           validFrom: null,
           validTo: null,
-          className: cls.title,
-          classDescription: cls.description,
-          classSchedule: formatScheduleString(cls.schedule),
-          schedule: formatScheduleString(cls.schedule),
-          classLocation: cls.location,
-          location: cls.location,
-          capacity: cls.capacity,
+          startDate: display?.startDate ?? null,
+          endDate: display?.endDate ?? null,
+          status: display?.status ?? cls.status ?? 'active',
+          className: display?.title || cls.title,
+          classDescription: display?.description ?? cls.description,
+          classSchedule: formatScheduleString(display?.schedule ?? cls.schedule),
+          schedule: formatScheduleString(display?.schedule ?? cls.schedule),
+          classLocation: display?.locationLabel ?? null,
+          location: display?.locationLabel ?? null,
+          capacity: display?.capacity ?? cls.capacity,
           enrollmentCount,
-          schoolId: cls.schoolId
+          schoolId: display?.schoolId ?? cls.schoolId
         };
       })
     );
@@ -1615,72 +1690,57 @@ router.get('/schedules/week', async (req, res) => {
       if (classStartDate && classStartDate > weekEndDate) continue;
       if (classEndDate && classEndDate < weekStartDate) continue;
       
-      // Parse the class schedule JSON
+      // Parse class.schedule — prefer family-schedule helper (jsonb variants + AM/PM → HH:MM).
+      // Uses default-variant only so Half Day + Full Day do not double-book the day.
       const scheduleData = classInfo.schedule as any;
       if (!scheduleData) continue;
-      
-      // Handle different schedule formats
-      // Format 1: { variants: [{ days: ["Monday", "Wednesday"], startTime: "09:00", endTime: "12:00" }] }
-      // Format 2: [{ day: "Monday", time: "09:00" }]
-      // Format 3: string like "Monday, Wednesday, Friday 9:00 AM-12:00 PM"
-      // Format 4: { days: ["Monday", "Wednesday"], startTime, endTime }
-      
+
+      const DAY_INDEX_TO_NAME = [
+        'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+      ];
       let scheduleEntries: Array<{ day: string; startTime: string; endTime: string }> = [];
-      
-      if (typeof scheduleData === 'string') {
-        // Format 3: String format like "Monday, Wednesday, Friday 9:00 AM-12:00 PM"
+
+      const timing = extractFamilyScheduleTiming(scheduleData);
+      if (timing.scheduleDays.length > 0) {
+        // family-schedule days are Sun=0; educator calendar is Mon=0
+        for (const sunIdx of timing.scheduleDays) {
+          const educatorDay = skeletonDayToEducatorDay(sunIdx);
+          scheduleEntries.push({
+            day: DAY_INDEX_TO_NAME[educatorDay],
+            startTime: timing.startTime,
+            endTime: timing.endTime,
+          });
+        }
+      } else if (typeof scheduleData === 'string') {
         scheduleEntries = parseScheduleString(scheduleData);
       } else if (Array.isArray(scheduleData)) {
-        // Format 2: Array of { day, time }
         scheduleEntries = scheduleData.map((s: any) => ({
           day: s.day,
           startTime: s.time || s.startTime || '09:00',
-          endTime: s.endTime || '10:00'
+          endTime: s.endTime || '10:00',
         }));
-      } else if (scheduleData.variants && Array.isArray(scheduleData.variants)) {
-        // Format 1: { variants: [...] }
-        for (const variant of scheduleData.variants) {
-          if (variant.days && Array.isArray(variant.days)) {
-            for (const day of variant.days) {
-              scheduleEntries.push({
-                day: day,
-                startTime: variant.startTime || '09:00',
-                endTime: variant.endTime || '10:00'
-              });
-            }
-          }
-        }
-      } else if (scheduleData.days && Array.isArray(scheduleData.days)) {
-        // Format 4: { days: ["Monday", "Wednesday"], startTime, endTime }
-        for (const day of scheduleData.days) {
-          scheduleEntries.push({
-            day: day,
-            startTime: scheduleData.startTime || '09:00',
-            endTime: scheduleData.endTime || '10:00'
-          });
-        }
       } else if (typeof scheduleData === 'object' && scheduleData.day) {
-        // Single day object: { day: "Monday", startTime, endTime }
         scheduleEntries.push({
           day: scheduleData.day,
           startTime: scheduleData.startTime || scheduleData.time || '09:00',
-          endTime: scheduleData.endTime || '10:00'
+          endTime: scheduleData.endTime || '10:00',
         });
       }
-      
-      // Expand each schedule entry to the specific dates in this week
+
+      // Deduplicate by day (one meeting card per class per day)
+      const seenDays = new Set<number>();
       for (const entry of scheduleEntries) {
-        const dayIndex = DAY_NAME_TO_INDEX[entry.day.toLowerCase()];
-        if (dayIndex === undefined) continue;
-        
+        const dayIndex = DAY_NAME_TO_INDEX[String(entry.day).toLowerCase()];
+        if (dayIndex === undefined || seenDays.has(dayIndex)) continue;
+        seenDays.add(dayIndex);
+
         const entryDate = new Date(weekStartObj);
         entryDate.setDate(entryDate.getDate() + dayIndex);
         const calculatedDate = entryDate.toISOString().split('T')[0];
-        
-        // Skip if outside class date range
+
         if (classStartDate && calculatedDate < classStartDate) continue;
         if (classEndDate && calculatedDate > classEndDate) continue;
-        
+
         classSchedules.push({
           id: assignmentId,
           type: 'class',
@@ -1696,75 +1756,180 @@ router.get('/schedules/week', async (req, res) => {
           startTime: entry.startTime,
           endTime: entry.endTime,
           calculatedDate: calculatedDate,
-          isActive: true
+          isActive: true,
         });
       }
     }
 
     // 3. Get educator schedules from the educator_schedules table (if any explicit overrides)
-    const explicitSchedules = await storage.getEducatorSchedulesForWeek(userId, weekStartDate);
-    for (const schedule of explicitSchedules) {
-      const classInfo = await storage.getClassById(schedule.classId);
-      const baseSchedule = {
-        ...schedule,
-        type: 'class',
-        className: classInfo?.title || 'Unknown Class',
-        classLocation: classInfo?.location,
-        classStartDate: classInfo?.startDate ? new Date(classInfo.startDate).toISOString().split('T')[0] : null,
-        classEndDate: classInfo?.endDate ? new Date(classInfo.endDate).toISOString().split('T')[0] : null
-      };
+    try {
+      const explicitSchedules = await storage.getEducatorSchedulesForWeek(userId, weekStartDate);
+      for (const schedule of explicitSchedules) {
+        const classInfo = await storage.getClassById(schedule.classId);
+        const baseSchedule = {
+          ...schedule,
+          type: 'class',
+          className: classInfo?.title || 'Unknown Class',
+          classLocation: classInfo?.location,
+          classStartDate: classInfo?.startDate ? new Date(classInfo.startDate).toISOString().split('T')[0] : null,
+          classEndDate: classInfo?.endDate ? new Date(classInfo.endDate).toISOString().split('T')[0] : null
+        };
 
-      if (schedule.scheduleType === 'recurring' && schedule.dayOfWeek !== null) {
-        const scheduleDate = new Date(weekStartObj);
-        scheduleDate.setDate(scheduleDate.getDate() + schedule.dayOfWeek);
-        classSchedules.push({
-          ...baseSchedule,
-          calculatedDate: scheduleDate.toISOString().split('T')[0]
-        });
-      } else if (schedule.scheduleType === 'one_time' && schedule.scheduledDate) {
-        classSchedules.push({
-          ...baseSchedule,
-          calculatedDate: schedule.scheduledDate
-        });
+        if (schedule.scheduleType === 'recurring' && schedule.dayOfWeek !== null) {
+          const scheduleDate = new Date(weekStartObj);
+          scheduleDate.setDate(scheduleDate.getDate() + schedule.dayOfWeek);
+          classSchedules.push({
+            ...baseSchedule,
+            calculatedDate: scheduleDate.toISOString().split('T')[0]
+          });
+        } else if (schedule.scheduleType === 'one_time' && schedule.scheduledDate) {
+          classSchedules.push({
+            ...baseSchedule,
+            calculatedDate: schedule.scheduledDate
+          });
+        }
+      }
+    } catch (explicitErr) {
+      console.warn('[EducatorDashboard] Explicit schedules unavailable, continuing:', explicitErr);
+    }
+
+    // 4. Overlay published lesson-plan blocks onto matching class meeting slots
+    const classIdsForPlans = Array.from(
+      new Set(classSchedules.map((s) => s.classId).filter((id): id is number => typeof id === 'number')),
+    );
+    type PlanBlockOverlay = {
+      id: number;
+      title: string;
+      blockType?: string;
+      isCompleted: boolean;
+      objectives?: string[];
+      description?: string | null;
+      lessonLink?: string | null;
+      notes?: string | null;
+      groups?: string[];
+      startTime?: string;
+      endTime?: string;
+      dayOfWeek?: number;
+    };
+    const publishedPlanClassIds = new Set<number>();
+    /** classId → list of { skeleton slot + plan block fields } */
+    const planBlocksByClass = new Map<number, PlanBlockOverlay[]>();
+
+    if (classIdsForPlans.length > 0 && schoolIds.size > 0) {
+      try {
+        for (const schoolId of schoolIds) {
+          const publishedPlans = await storage.getPublishedWeekPlansForClassIds(
+            schoolId,
+            classIdsForPlans,
+            weekStartDate,
+          );
+          for (const plan of publishedPlans) {
+            if (plan.classId == null) continue;
+            publishedPlanClassIds.add(plan.classId);
+            const skeletonBlocks = plan.skeletonId
+              ? await storage.getSkeletonBlocksBySkeletonId(plan.skeletonId)
+              : [];
+            const weekBlocks = await storage.getWeekPlanBlocksByWeekPlanId(plan.id);
+            const weekBySkeletonId = new Map(weekBlocks.map((b) => [b.skeletonBlockId, b]));
+            const overlays: PlanBlockOverlay[] = [];
+            for (const skel of skeletonBlocks) {
+              const wp = weekBySkeletonId.get(skel.id);
+              const title =
+                (wp?.title && String(wp.title).trim()) ||
+                skel.defaultTitle ||
+                'Untitled block';
+              const objectives = Array.isArray(wp?.objectives)
+                ? (wp!.objectives as string[])
+                : [];
+              const groups = Array.isArray(wp?.groups) ? (wp!.groups as string[]) : [];
+              overlays.push({
+                id: wp?.id ?? skel.id,
+                title,
+                blockType: skel.blockType || undefined,
+                isCompleted: wp?.isCompleted === true,
+                objectives,
+                description: wp?.description ?? skel.defaultDescription ?? null,
+                lessonLink: wp?.lessonLink ?? null,
+                notes: wp?.notes ?? null,
+                groups,
+                startTime: skel.startTime,
+                endTime: skel.endTime,
+                dayOfWeek: skel.dayOfWeek,
+              });
+            }
+            const existing = planBlocksByClass.get(plan.classId) || [];
+            planBlocksByClass.set(plan.classId, existing.concat(overlays));
+          }
+        }
+      } catch (planErr) {
+        console.warn('[EducatorDashboard] Published plan overlay failed, continuing:', planErr);
       }
     }
 
-    // 4. Get events and holidays for all schools the educator is assigned to
+    for (const slot of classSchedules) {
+      const allForClass = planBlocksByClass.get(slot.classId) || [];
+      const matched = allForClass.filter((block) =>
+        skeletonSlotMatchesClassMeeting(
+          {
+            dayOfWeek: block.dayOfWeek ?? 0,
+            startTime: block.startTime || '',
+            endTime: block.endTime || '',
+          },
+          {
+            dayOfWeek: slot.dayOfWeek ?? 0,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            calculatedDate: slot.calculatedDate,
+          },
+        ),
+      );
+      // Keep block times for mentor UI (finer than class meeting window)
+      slot.planBlocks = matched
+        .slice()
+        .sort((a, b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
+      slot.planStatus = publishedPlanClassIds.has(slot.classId) ? 'published' : 'none';
+    }
+
+    // 5. Get events and holidays for all schools the educator is assigned to (soft-fail)
     const events: any[] = [];
     const holidays: any[] = [];
     
     for (const schoolId of schoolIds) {
-      const weekStartAsDate = new Date(weekStartDate + 'T00:00:00');
-      const weekEndAsDate = new Date(weekEndDate + 'T23:59:59');
-      
-      const schoolEvents = await storage.getEventsBySchoolAndDateRange(schoolId, weekStartAsDate, weekEndAsDate);
-      
-      for (const event of schoolEvents) {
-        const eventDate = new Date(event.startDate).toISOString().split('T')[0];
-        const eventEntry = {
-          id: event.id,
-          type: event.eventType === 'holiday' ? 'holiday' : 'event',
-          title: event.title,
-          description: event.description,
-          location: event.location,
-          startDate: event.startDate,
-          endDate: event.endDate,
-          isAllDay: event.isAllDay,
-          eventType: event.eventType,
-          color: event.color,
-          calculatedDate: eventDate,
-          schoolId: schoolId
-        };
+      try {
+        const weekStartAsDate = new Date(weekStartDate + 'T00:00:00');
+        const weekEndAsDate = new Date(weekEndDate + 'T23:59:59');
         
-        if (event.eventType === 'holiday') {
-          holidays.push(eventEntry);
-        } else {
-          events.push(eventEntry);
+        const schoolEvents = await storage.getEventsBySchoolAndDateRange(schoolId, weekStartAsDate, weekEndAsDate);
+        
+        for (const event of schoolEvents) {
+          const eventDate = new Date(event.startDate).toISOString().split('T')[0];
+          const eventEntry = {
+            id: event.id,
+            type: event.eventType === 'holiday' ? 'holiday' : 'event',
+            title: event.title,
+            description: event.description,
+            location: event.location,
+            startDate: event.startDate,
+            endDate: event.endDate,
+            isAllDay: event.isAllDay,
+            eventType: event.eventType,
+            color: event.color,
+            calculatedDate: eventDate,
+            schoolId: schoolId
+          };
+          
+          if (event.eventType === 'holiday') {
+            holidays.push(eventEntry);
+          } else {
+            events.push(eventEntry);
+          }
         }
+      } catch (eventErr) {
+        console.warn('[EducatorDashboard] Events unavailable for school', schoolId, eventErr);
       }
     }
 
-    // 5. Combine and return all data
+    // 6. Combine and return all data
     res.json({
       weekStart: weekStartDate,
       weekEnd: weekEndDate,

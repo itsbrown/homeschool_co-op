@@ -4013,17 +4013,37 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
       { userId: parent.id, role: 'parent', schoolId: school.id, isPrimary: true },
     ]);
 
+    const seekersSchedule = {
+      days: ['Monday', 'Wednesday'],
+      startTime: '09:00',
+      endTime: '10:00',
+    };
     const seekers = await testDb.createTestClass(school.id, {
       title: `Seekers ${uniqueId}`,
       description: 'E2E Seekers class',
       price: 10000,
       status: 'upcoming',
+      schedule: seekersSchedule,
     });
     const yankee = await testDb.createTestClass(school.id, {
       title: `Yankee Doodle ${uniqueId}`,
       description: 'E2E Yankee Doodle class',
       price: 10000,
       status: 'upcoming',
+      schedule: {
+        days: ['Tuesday', 'Thursday'],
+        startTime: '09:00',
+        endTime: '10:00',
+      },
+    });
+
+    // Ensure educator sees Seekers on /educator/weekly-calendar
+    await storage.createEducatorClassAssignment({
+      educatorId: educator.id,
+      classId: seekers.id,
+      schoolId: school.id,
+      isPrimary: true,
+      canStartSession: true,
     });
 
     const childSeekers = await storage.createChild({
@@ -4151,6 +4171,7 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
       skeletonBlockId: blockSeekers.id,
       title: 'Seekers: Intro to Nature',
       description: 'Outdoor observation',
+      objectives: ['Observe local plants', 'Record weather notes'],
       isCompleted: true,
       completedBy: admin.id,
       completedAt: new Date(),

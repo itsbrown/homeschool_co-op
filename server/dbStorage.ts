@@ -14,6 +14,10 @@ import {
 import { getAllSchoolsCore, getSchoolCoreById, insertSchoolCore } from './lib/school-db';
 import * as apDb from './lib/assessment-progress-db';
 import * as sbDb from './lib/schedule-builder-db';
+import * as attendanceDb from './lib/attendance-session-db';
+import * as educatorAssignmentDb from './lib/educator-class-assignments-db';
+import * as educatorSchedulesDb from './lib/educator-schedules-db';
+import * as eventsRangeDb from './lib/events-range-db';
 import {
   User, InsertUser, users,
   UserRole, userRoles,
@@ -4460,6 +4464,55 @@ export class DatabaseStorage implements IStorage {
   updateAssessmentSession = apDb.updateAssessmentSession;
 
   // Schedule builder
+  // Class sessions + attendance (teacher QR / roster mark)
+  getClassSessionById = attendanceDb.getClassSessionById;
+  getSessionByQrToken = attendanceDb.getSessionByQrToken;
+  getTeacherClockInRecords = attendanceDb.getTeacherClockInRecords;
+  getClassSessionsByClassId = attendanceDb.getClassSessionsByClassId;
+  getClassSessionsByEducatorId = attendanceDb.getClassSessionsByEducatorId;
+  getClassSessionsBySchoolId = attendanceDb.getClassSessionsBySchoolId;
+  getClassSessionsByDate = attendanceDb.getClassSessionsByDate;
+  getClassSessionsByDateRange = attendanceDb.getClassSessionsByDateRange;
+  getActiveClassSession = attendanceDb.getActiveClassSession;
+  createClassSession = attendanceDb.createClassSession;
+  updateClassSession = attendanceDb.updateClassSession;
+  deleteClassSession = attendanceDb.deleteClassSession;
+  getAttendanceBySessionId = attendanceDb.getAttendanceBySessionId;
+  getAttendanceByChildId = attendanceDb.getAttendanceByChildId;
+  getAttendanceBySchoolId = attendanceDb.getAttendanceBySchoolId;
+  getAttendanceRecord = attendanceDb.getAttendanceRecord;
+  createAttendance = attendanceDb.createAttendance;
+  updateAttendance = attendanceDb.updateAttendance;
+  deleteAttendance = attendanceDb.deleteAttendance;
+  upsertAttendance = attendanceDb.upsertAttendance;
+
+  // Educator ↔ class assignments (My Classes / session start)
+  getEducatorClassAssignmentById = educatorAssignmentDb.getEducatorClassAssignmentById;
+  getEducatorClassAssignmentsByEducatorId =
+    educatorAssignmentDb.getEducatorClassAssignmentsByEducatorId;
+  getEducatorClassAssignmentsByClassId =
+    educatorAssignmentDb.getEducatorClassAssignmentsByClassId;
+  getEducatorClassAssignmentsBySchoolId =
+    educatorAssignmentDb.getEducatorClassAssignmentsBySchoolId;
+  getActiveEducatorAssignmentForClass =
+    educatorAssignmentDb.getActiveEducatorAssignmentForClass;
+  createEducatorClassAssignment = educatorAssignmentDb.createEducatorClassAssignment;
+  updateEducatorClassAssignment = educatorAssignmentDb.updateEducatorClassAssignment;
+  deleteEducatorClassAssignment = educatorAssignmentDb.deleteEducatorClassAssignment;
+
+  getEducatorScheduleById = educatorSchedulesDb.getEducatorScheduleById;
+  getEducatorSchedulesByEducatorId = educatorSchedulesDb.getEducatorSchedulesByEducatorId;
+  getEducatorSchedulesByClassId = educatorSchedulesDb.getEducatorSchedulesByClassId;
+  getEducatorSchedulesBySchoolId = educatorSchedulesDb.getEducatorSchedulesBySchoolId;
+  getEducatorSchedulesByAssignmentId = educatorSchedulesDb.getEducatorSchedulesByAssignmentId;
+  getEducatorSchedulesForWeek = educatorSchedulesDb.getEducatorSchedulesForWeek;
+  createEducatorSchedule = educatorSchedulesDb.createEducatorSchedule;
+  updateEducatorSchedule = educatorSchedulesDb.updateEducatorSchedule;
+  deleteEducatorSchedule = educatorSchedulesDb.deleteEducatorSchedule;
+
+  getEventsBySchoolAndDateRange = eventsRangeDb.getEventsBySchoolAndDateRange;
+  getEventsBySchool = eventsRangeDb.getEventsBySchool;
+
   getWeeklySkeletonsBySchool = sbDb.getWeeklySkeletonsBySchool;
   getWeeklySkeletonById = sbDb.getWeeklySkeletonById;
   createWeeklySkeleton = sbDb.createWeeklySkeleton;
