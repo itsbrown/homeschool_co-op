@@ -6,9 +6,9 @@ Operational truth for **class weekly templates / week plans**, educator calendar
 
 1. **Weekly Templates** — `/schools/schedule-builder` → skeletons + recurring time blocks (`weekly_skeletons`, `skeleton_blocks`). Bind **`classId`** to marketplace `classes.id` (not title-as-value). CSV import uses `ScheduleBlocksCsvImportDialog` (map → preview → confirm); `POST .../skeletons/:id/blocks/import-csv` accepts optional FormData `mapping` JSON. Requires `express-fileupload` on `/api/schedule-builder`.
 2. **Week Planner** — `/schools/week-planner` → per-week plans + block content (`week_plans`, `week_plan_blocks`); optional `/api/schedule-ai/*`. Week-card **Actions** menu includes **Build** (create `week_plan_blocks` for empty skeleton slots from template defaults), Publish/Complete, CSV, Clone, AI, Delete. CSV import reuses the same dialog in `mode="week-plan"` (map → preview → confirm); `POST .../week-plans/:id/blocks/import-csv` accepts optional `mapping`, resolves slots by day+start_time → `skeletonBlockId`, and accepts template-shaped CSVs (`default_title` → title).
-3. **Publish** — parents see `/parent/weekly-schedule` via enrollment-scoped my-week; educators see `/educator/week-plans`.
+3. **Publish** — parents see `/parent/weekly-schedule` via enrollment-scoped my-week; educators see published blocks on **Schedule** (`/educator/weekly-calendar` via `/api/educator/schedules/week` `planBlocks`) and can still browse/print on `/educator/week-plans`. `/educator/schedule` redirects to `/educator/weekly-calendar`.
 
-Adjacent: `/educator/schedule` (class calendar via `/api/educator/schedules/week`), `/schedule` (enrollment family schedule via `GET /api/schedule`), `/schools/calendar` (school events), `/lessons` + AI generators.
+Adjacent: `/schedule` (enrollment family schedule via `GET /api/schedule`), `/schools/calendar` (school events), `/lessons` + AI generators.
 
 **Family `/api/schedule`:** `classes.schedule` is **jsonb** (usually `{ variants: [{ days, startTime, endTime }] }`). Never `.match()` it as a string — use `server/utils/family-schedule.ts` `extractFamilyScheduleTiming`. A thrown parse used to 500 the whole calendar (“0 scheduled activities”).
 
@@ -68,13 +68,20 @@ Interactive walkthrough id `schedule-builder` (`client/src/components/tutorials/
 
 Steps: templates → class bind → blocks/CSV → Week Planner → New Week → Publish → optional Attendance Lesson plans KPI.
 
+## Day index convention
+
+- Skeleton / week-plan blocks: **Sunday = 0**.
+- Educator `/api/educator/schedules/week` class slots: **Monday = 0**.
+- Shared helper: `shared/schedule-day-index.ts` (`skeletonDayToEducatorDay`, `skeletonSlotMatchesClassMeeting`).
+- Mentor overlay matches published blocks by **day** (class.schedule windows are coarse; skeleton blocks are fine-grained). Class times normalized via `extractFamilyScheduleTiming` (default-variant only).
+
 ## Tests & seed
 
 | ID | Coverage |
 |----|----------|
-| `POST /api/test/setup-schedule-builder-scenario` | Admin/educator/parent, Seekers+Yankee classes, skeletons/`classId`, published+draft weeks, completion, attendance, optional Supabase link |
-| Jest | `schedule-builder-mount`, `schedule-builder-seed`, `schedule-builder-api` (incl. week-plan CSV import), `progress-scheduled-lessons`, `school-admin-academics-kpi`, `school-admin-attendance` |
-| Playwright | `schedule-builder-publish`, `schedule-template-csv-import`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi` |
+| `POST /api/test/setup-schedule-builder-scenario` | Admin/educator/parent, Seekers+Yankee classes (+ `schedule` jsonb + educator assignment), skeletons/`classId`, published+draft weeks, completion, attendance, optional Supabase link |
+| Jest | `schedule-builder-mount`, `schedule-builder-seed`, `schedule-builder-api` (incl. week-plan CSV import), `progress-scheduled-lessons`, `school-admin-academics-kpi`, `school-admin-attendance`, `schedule-day-index` |
+| Playwright | `schedule-builder-publish`, `schedule-template-csv-import`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `educator-weekly-schedule-plans` |
 
 Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: [student-progress-assessments.md](./student-progress-assessments.md).
 
@@ -87,14 +94,18 @@ Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: 
 | Week chip selected but pane says “Select a week…” | Detail pane required `selectedWeekData`; while `GET /week-plans/:id` is pending the UI showed empty-state copy | Show loading/error states; E2E waits for draft block edit control |
 | Week Planner **Confirm Import** 500 / failed | Import built `{ dayOfWeek, startTime, data }` but `bulkUpdateWeekPlanBlocks` needs `skeletonBlockId` + flat fields | Resolve skeleton slot by day+start_time; pass correct shape (fixed 2026-07-14) |
 | Template CSV (`default_title`) on Week Planner looks wrong / empty titles | Week-plan columns use `title`; no mapper | Shared dialog maps `default_title` → title; server also falls back to `default_title` |
+| Educator Schedule “Unable to load” / `/schedules/week` 500 | Missing `getEducatorSchedulesForWeek` / events storage | Restored in `educator-schedules-db` + soft-fail `events-range-db`; overlay published plans via `schedule-day-index` |
 
 ## Key files
 
 | Area | Path |
 |------|------|
-| Storage | `server/lib/schedule-builder-db.ts` |
+| Storage | `server/lib/schedule-builder-db.ts`, `educator-schedules-db.ts` |
 | Admin UI | `ScheduleBuilderPage.tsx`, `WeekPlannerPage.tsx` |
-| Consumers | `WeeklySchedulePage.tsx`, `ParentProgressPage.tsx` |
+| Consumers | `WeeklySchedulePage.tsx`, `ParentProgressPage.tsx`, `WeeklyCalendar.tsx` (mentor Schedule) |
+| Mentor week API | `server/api/educator.ts` `GET /schedules/week` |
+| Day index | `shared/schedule-day-index.ts` |
+| Block detail | `client/src/components/schedule/WeekPlanBlockDetailSheet.tsx` |
 | KPI UI | `AttendanceManagementPage.tsx` (Lesson plans tab) |
 | Tutorial | `tutorialDefinitions.ts` (`schedule-builder`), `useScheduleBuilderTour.ts`, HelpTutorials school-admin list |
 | API | `server/api/schedule-builder.ts`, `progress.ts`, `school-admin.ts` (academics/kpi) |

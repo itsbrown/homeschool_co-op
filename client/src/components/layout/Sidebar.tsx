@@ -261,7 +261,7 @@ const educatorNavItems: {
   },
   {
     title: 'Schedule',
-    href: '/educator/schedule',
+    href: '/educator/weekly-calendar',
     icon: Calendar,
   },
   {

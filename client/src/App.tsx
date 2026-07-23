@@ -156,7 +156,6 @@ const EducatorStudentsPage = lazy(() => import('./pages/educator/EducatorStudent
 const EducatorStudentDetailPage = lazy(() => import('./pages/educator/EducatorStudentDetailPage'));
 const EducatorNotificationsPage = lazy(() => import('./pages/educator/EducatorNotificationsPage'));
 const EducatorDashboardPage = lazy(() => import('./pages/educator/EducatorDashboard'));
-const EducatorSchedulePage = lazy(() => import('./pages/educator/EducatorSchedulePage'));
 const EducatorSettingsPage = lazy(() => import('./pages/educator/EducatorSettingsPage'));
 const MyClassesPage = lazy(() => import('./pages/educator/MyClasses'));
 const WeeklyCalendarPage = lazy(() => import('./pages/educator/WeeklyCalendar'));
@@ -690,7 +689,7 @@ function Router() {
       <Route path="/educator/classes/:id/start-session" component={() => <EducatorShellWrapper><StartSessionPage /></EducatorShellWrapper>} />
       <Route path="/educator/students" component={() => <EducatorShellWrapper><EducatorStudentsPage /></EducatorShellWrapper>} />
       <Route path="/educator/students/:id" component={() => <EducatorShellWrapper><EducatorStudentDetailPage /></EducatorShellWrapper>} />
-      <Route path="/educator/schedule" component={() => <EducatorShellWrapper><EducatorSchedulePage /></EducatorShellWrapper>} />
+      <Route path="/educator/schedule" component={() => <Redirect to="/educator/weekly-calendar" />} />
       <Route path="/educator/settings" component={() => <EducatorShellWrapper><EducatorSettingsPage /></EducatorShellWrapper>} />
       <Route path="/educator/notifications" component={() => <EducatorShellWrapper><EducatorNotificationsPage /></EducatorShellWrapper>} />
       <Route path="/educator/assessments" component={() => <EducatorShellWrapper><EducatorAssessmentsPage /></EducatorShellWrapper>} />
