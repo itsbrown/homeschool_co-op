@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
+import { useEffectivePermissions } from "@/hooks/useEffectivePermissions";
 import RoleSwitcher from "@/components/RoleSwitcher.tsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -80,10 +81,12 @@ function EducatorSidebar() {
   const [location] = useLocation();
   const { user, signOut } = useAuth();
   const { activeRole, hasRole } = useRole();
+  const { showAdminNavGroups, can } = useEffectivePermissions();
   const [userSchool, setUserSchool] = useState<any>(null);
   const [academicsOpen, setAcademicsOpen] = useState(true);
   
-  const isDirector = hasRole('director');
+  const isDirector = activeRole === 'director' || showAdminNavGroups;
+  const showAcademics = isDirector || can('canManageClasses');
   const hasSuperAdminRole = hasRole('superadmin');
 
   const { data: notifications = [] } = useQuery({
@@ -183,7 +186,7 @@ function EducatorSidebar() {
           })}
 
           {/* Director-only: collapsible Academics section */}
-          {isDirector && (
+          {showAcademics && (
             <Collapsible open={academicsOpen} onOpenChange={setAcademicsOpen}>
               <CollapsibleTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
                 <BookOpen className="h-5 w-5" />

@@ -95,8 +95,16 @@ export const useRole = () => {
   return context;
 };
 
+/** Fired when localStorage activeRole changes without a full RoleContext switch. */
+export const ACTIVE_ROLE_CHANGED_EVENT = 'asa-active-role-changed';
+
 export const silentRoleContextUpdate = (roleName: string): void => {
   localStorage.setItem('activeRole', roleName);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent(ACTIVE_ROLE_CHANGED_EVENT, { detail: roleName }),
+    );
+  }
 };
 
 interface RoleProviderProps {
@@ -498,6 +506,10 @@ export const RoleProvider: React.FC<RoleProviderProps> = ({ children }) => {
       // This includes school-admin, parent, educator, and user-specific queries
       console.log('🔄 Invalidating cached queries after role switch...');
       await queryClient.invalidateQueries({ queryKey: ['/api/user/roles'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/me/effective-permissions'] });
+      await queryClient.invalidateQueries({
+        queryKey: ['/api/school-admin/user-locations/my-permissions'],
+      });
       await queryClient.invalidateQueries({ queryKey: ['/api/school-admin'] });
       await queryClient.invalidateQueries({ queryKey: ['/api/parent'] });
       await queryClient.invalidateQueries({ queryKey: ['/api/educator'] });

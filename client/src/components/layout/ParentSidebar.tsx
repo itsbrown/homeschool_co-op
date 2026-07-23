@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
+import { useEffectivePermissions } from "@/hooks/useEffectivePermissions";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -205,11 +206,8 @@ export default function ParentSidebar() {
     }
   }, [isEducatorRoute, isSchoolAdminRoute, isAcademicsRoute, isPaymentsRoute]);
 
-  const { data: permissionsData } = useQuery<{ userLocations: Array<{ permissions: { canManageClasses?: boolean } }> }>({
-    queryKey: ['/api/school-admin/user-locations/my-permissions'],
-    enabled: !!user,
-  });
-  const canManageClasses = permissionsData?.userLocations?.[0]?.permissions?.canManageClasses ?? false;
+  const { can } = useEffectivePermissions();
+  const canManageClasses = can('canManageClasses');
 
   const { data: schoolData } = useQuery({
     queryKey: [`/api/school-parents/school/${user?.email}`],

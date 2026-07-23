@@ -230,6 +230,29 @@ function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
 
 Apply the same rule to every shell wrapper (`EducatorShellWrapper`, etc.): always compare against `activeRole`, not `hasRole(...)`.
 
+### Effective permissions (nav + API)
+
+Canonical registry: `shared/permissions.ts`. Client: `useEffectivePermissions` / `useCan` → `GET /api/me/effective-permissions`.
+
+| Concept | Rule |
+|---------|------|
+| Nav + route guards | Driven by **activeRole** + OR of active `user_locations` flags; school-wide via `user_school_permissions` (`canAccessEntireSchool`) |
+| Bypass roles | `schoolAdmin`, `director`, `admin`, `superAdmin` when that role is **active** |
+| API | `attachAccessScope` + `requirePermission` / `requireLocationInScope`; list handlers filter with `locationFilterIds` |
+| Enforcement | Env `PERMISSIONS_ENFORCEMENT`: `off` \| `observe` (default) \| `enforce` |
+| Fail closed | Missing grants → hide nav / 403 in enforce; never invent access from legacy JSONB alone |
+| Unlisted deep links | Paths not in `NAV_REGISTRY` require school-wide / bypass — one unrelated location flag must not open them |
+| Client cache | `useEffectivePermissions` query key includes permission role **with explicit `queryFn`** (default fetcher joins key segments into the URL); localStorage role trusted only if held in `allRoles` |
+| X-Active-Role | Honor only when held in `user_roles` / legacy roles (`resolveTrustedActiveRole`); never trust spoofed bypass roles |
+| Guard mount | `SchoolRouteGuard` wraps the app `Switch` so both `/schools/*` and `/school-admin/*` are gated |
+| Parent bypass | Only `/school-admin/*` while `activeRole === 'parent'` (ParentAppShell silent switch); `/schools/*` stays gated |
+| Class list OR | `GET /api/school-admin/classes` via `requireAnyPermission(canManageClasses, canSendNotifications)` |
+| Null `locationId` lists | Location-scoped class/student lists keep rows with `locationId == null` (school-wide) |
+| Legacy JSONB | `users.permissions.canCreateClasses` — use `legacyCanCreateClassesAllowed` on `POST /api/classes` for all roles; explicit false denies only when no location grant; JSONB `true` is **not** authorization |
+| Legacy `Sidebar.tsx` | Out of scope — prefer UnifiedSchoolAdminSidebar / Parent* / EducatorAppShell |
+
+Staff Permissions UI writes location + school-wide rows; those unlock matching sidebar groups (see `NAV_GROUP_PERMISSIONS`).
+
 ### Don't
 - Don't use `req.userId` in route handlers — it is never set by any middleware. Use `req.user?.id` (the integer DB ID set by `supabaseAuth`) instead
 - Don't use `requireAdmin` from `auth0-auth.ts` for school admin routes — it allows `'school-admin'` (hyphen) which does NOT match the DB role `'schoolAdmin'` (camelCase). Use `requireRole(['schoolAdmin', 'admin', 'superAdmin'])` directly
@@ -242,6 +265,8 @@ Apply the same rule to every shell wrapper (`EducatorShellWrapper`, etc.): alway
 - Don't use bare `fetch()` for file uploads to authenticated endpoints — use `apiRequest('POST', url, formData)` which handles `FormData`, auth token, and role header automatically
 - Don't redirect to login on every 401 — allow one token refresh retry first
 - Don't treat a thrown DB exception (`dbLookupFailed`) the same as a `null` return (user not found) — use separate flags and return `503` for DB errors, `403` only for a confirmed not-found user
+- Don't gate school-admin nav with `hasRole` while the user is acting as parent — use `activeRole` + effective permissions
+- Don't use `db:push` for permissions schema — apply `server/migrations/permissions-scoping.sql` only
 
 ### Multi-Tenant Security Checklist
 - Backend routes validate `schoolId` from auth context before returning data
@@ -249,11 +274,18 @@ Apply the same rule to every shell wrapper (`EducatorShellWrapper`, etc.): alway
 - Educator endpoints verify class assignment before exposing student data
 - School admin endpoints restrict to their own school's data
 - Super admin endpoints have explicit role checks (not just "any authenticated user")
+- Location-scoped staff lists (students/classes/staff) honor `accessibleLocationIds` unless school-wide grant
 
 ## Key Files
 - `server/middleware/supabase-auth.ts` — auth middleware, ID mapping, metadata sync
+- `shared/permissions.ts` — permission registry, aggregation, nav map
+- `server/middleware/access-scope.ts` — `attachAccessScope`, `requirePermission`, `locationFilterIds`
+- `server/api/me.ts` — `GET /api/me/effective-permissions`
+- `client/src/hooks/useEffectivePermissions.ts` — client nav/guards
+- `client/src/components/auth/SchoolRouteGuard.tsx` — path permission guard
 - `client/src/lib/queryClient.ts` — `apiRequest`, default fetcher, token refresh
 - `client/src/components/SupabaseProvider.tsx` — `useAuth()` hook
 - `client/src/contexts/RoleContext.tsx` — `useRole()` hook, role switching
 - `client/src/components/RoleSwitcher.tsx` — role switching UI component
 - `server/storage.ts` — `getUserRolesByUserId()`, `getUserByEmail()`
+- `docs/PERMISSIONS_ROLLOUT.md` — rollout / Replit apply steps

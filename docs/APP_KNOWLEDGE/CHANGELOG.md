@@ -21,6 +21,29 @@
 - Seed: class `schedule` jsonb + educator assignment; Playwright `educator-weekly-schedule-plans`.
 - Domain: [schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md).
 
+## 2026-07-21 (School admin students list hang)
+
+- `/schools/students` spinner was waiting on `GET /api/school-admin/students`, not RoleSwitcher (debug `console.warn` only).
+- Root cause: handler loaded all users then fired `getUserRolesByUserId` per email; sync used `getAllChildren` / `getAllSchoolStudents`.
+- Fixed with set-based joins + batch children/locations; sync scoped by school. Removed RoleSwitcher debug warns.
+- Domain: [registration-and-locations.md](./domains/registration-and-locations.md).
+
+## 2026-07-21 (Permissions nav scoping — PR #50 babysit)
+
+- `SchoolRouteGuard` mounts around the app `Switch` (covers `/schools/*` + `/school-admin/*`); parent bypass only for `/school-admin/*` (ParentAppShell role switch).
+- `useEffectivePermissions` cache key includes `activeRole` with explicit `queryFn` (default fetcher joins key segments into the URL); stays loading while legacy fallback fetches.
+- Unlisted staff deep links fail closed unless school-wide/bypass; registry adds Educators / Refunds / Public Store.
+- Location-scoped `GET` classes/students keep `locationId == null` rows (school-wide).
+- `GET /api/school-admin/classes` allows `canManageClasses` **or** `canSendNotifications` (notification targeting).
+- `POST /api/classes` requires `legacyCanCreateClassesAllowed` for **all** roles (not only `teacher`); bypass roles still pass via aggregated `canManageClasses`.
+- `X-Active-Role` trusted only when held (`resolveTrustedActiveRole`); spoofed bypass roles ignored.
+- Bare `/schools` + `/school-admin` landings map to My School (`canManageClasses`) for route access.
+- Permissions hook stays loading while roles bootstrap (`!activeRole && isLoadingRoles`).
+- Financial metrics honor `locationFilterIds` for location-scoped finance staff; orphan payments (empty `enrollmentIds`) kept as school-wide.
+- Effective-permissions cache keys off localStorage/`silentRoleContextUpdate` role only when held in `allRoles` (no client bypass spoof).
+- `POST /api/school-admin/classes` gated with `requirePermission('canManageClasses')`.
+- Skill: `asa-auth-patterns` effective-permissions table.
+
 ## 2026-07-21 (Class grade selector through 12th)
 
 - School class create/edit multi-select (`SchoolClassCreationPage`) previously stopped at 10th grade; added `11th-grade` / `12th-grade`. Display map on `SchoolClassDetailsPage` updated to match.
@@ -125,6 +148,49 @@
 - **Tests:** Jest schedule-builder / family-schedule / progress / KPI / attendance; Playwright catalog rows for publish, parent week, progress pills, KPI, CSV import. Seed: `setup-schedule-builder-scenario`.
 - **Deferred:** completion → `student_progress_log`; schedule-ai `recommend-resources` UI; family `/schedule` Playwright (unit coverage only).
 
+## 2026-07-13 (Railway cloud-dev Postgres)
+
+- **SSL:** `database-url.mjs` treats Railway (`.rlwy.net`, `.railway.app`, `.railway.internal`) as managed TLS hosts in development.
+- **Bootstrap:** `ci-db-push.mjs` uses the same SSL helper (empty Railway DB → schema via `db:push --force`).
+- **Clone:** `migrate-dev-db-from-neon.ts` accepts `SOURCE_DATABASE_URL` / `PROD_DATABASE_URL` / `NEON_DATABASE_URL`; Railway public proxy allowed as dest (Neon/Supabase/RDS still blocked).
+- **Faithful prod clone:** prefer `pg_dump`/`pg_restore` over table-copy when prod schema drifts (`role` enum `Mentor`, money columns as `numeric`, etc.). Verified Railway public DB matches prod counts (users/schools/enrollments/payments).
+- **Architecture:** [architecture.md](architecture.md) — database environments table.
+
+## 2026-07-13 (Parent weekly schedule + progress + admin KPIs)
+
+- **Seed:** `POST /api/test/setup-schedule-builder-scenario` (Seekers/Yankee, published+draft plans, attendance, Supabase link flags).
+- **APIs:** parent `my-week-plans`; progress `scheduled-lessons`; school-admin `academics/kpi` (+ CSV).
+- **UI:** parent weekly schedule (print root); Parent Progress Scheduled lessons; Attendance **Lesson plans** tab.
+- **Tests:** Jest schedule-builder / progress / KPI / attendance suites; Playwright `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`; parent-profile-routes uses `my-week-plans` + JSON content-type.
+- **Docs:** [schedule-and-lesson-planning.md](domains/schedule-and-lesson-planning.md), [E2E_COMMANDS.md](../E2E_COMMANDS.md); progress domain cross-link.
+
+## 2026-07-13 (Parent weekly schedule + classId templates)
+
+- **Schedule builder auth:** `CONSUMER_READ_ROLES` on published plan / skeleton read GETs; new `GET /parent/my-week-plans` for enrolled-class published plans.
+- **Admin UI:** Weekly Templates bind `classId` (not title-as-value) on skeleton create/edit.
+- **Parent UI:** `/parent/weekly-schedule` in sidebar + shell; page loads per-child week plans with week nav + print root.
+
+## 2026-07-13 (Schedule & lesson planning E2E audit)
+
+- **Domain doc:** [schedule-and-lesson-planning.md](domains/schedule-and-lesson-planning.md) — product loop, mount gaps (`schedule-builder` / `schedule-ai` only in `app-init.ts`), SPA HTML-200 false-pass risk, parent role mismatch on published week plans, E2E coverage matrix (effectively none).
+- **Hub:** linked new domain doc from README index.
+
+## 2026-07-13 (Permissions — list scoping + remaining plan gaps)
+
+- **Data scoping:** `locationFilterIds` on school-admin `GET /staff`, `/students`, `/classes`.
+- **Invite defaults:** `POST /staff/invite` creates closed `user_locations` when `locationId` set.
+- **Legacy:** `legacyCanCreateClassesAllowed` on classes POST; Roles page docs-only banner; `Sidebar.tsx` marked out of scope.
+- **Tests:** enforce/audit/active-role integration; access-scope unit; four-shell contract.
+- **Skill:** `asa-auth-patterns` — effective permissions section.
+
+## 2026-07-13 (Permission-driven nav + scoping)
+
+- **Registry:** [`shared/permissions.ts`](../../shared/permissions.ts) — typed keys, nav map, API samples, aggregation (fail closed).
+- **School-wide:** `user_school_permissions` = regional manager (`canAccessEntireSchool`); location staff via `user_locations`.
+- **API:** `GET /api/me/effective-permissions`; `requirePermission` on sample school-admin routes; `PERMISSIONS_ENFORCEMENT` off|observe|enforce.
+- **UI:** Sidebars + `SchoolRouteGuard` + Forbidden page; Staff Permissions toggle help maps to nav groups.
+- **SQL:** [`server/migrations/permissions-scoping.sql`](../../server/migrations/permissions-scoping.sql) (no db:push); verify `scripts/verify-permissions-schema.mjs`.
+- **Docs:** [PERMISSIONS_ROLLOUT.md](../PERMISSIONS_ROLLOUT.md); E2E `e2e/permissions-nav.spec.ts`.
 
 ## 2026-07-13 (E2E CI harden — PR #49)
 
@@ -146,6 +212,7 @@
 - **AI:** `POST /api/form-builder-ai/chat` + `FormSmartBuilderPanel` + `apply-draft` (draft only, no auto-publish); `FORM_BUILDER_AI_MOCK` for E2E.
 - **E2E:** `form-editor-fields`, `form-submission-notify-spam`, `form-smart-builder` — catalogued in E2E_COMMANDS.
 - **Docs:** [custom-forms-public-access.md](domains/custom-forms-public-access.md).
+
 
 ## 2026-07-02 (School analytics v1 gaps)
 

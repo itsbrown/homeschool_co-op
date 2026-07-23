@@ -2,6 +2,13 @@ import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
+/**
+ * LEGACY sidebar — out of scope for permission-driven nav.
+ * School admin / educator / parent surfaces use UnifiedSchoolAdminSidebar,
+ * ParentSidebar, ParentAppShell, and EducatorAppShell with the shared
+ * effective-permissions hook. Do not extend this file for location grants;
+ * prefer those shells.
+ */
 import { cn } from '@/lib/utils';
 import { 
   School, 

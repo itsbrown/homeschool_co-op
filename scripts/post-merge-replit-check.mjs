@@ -52,12 +52,14 @@ function runScript(name) {
 const coreOk = runScript('verify-core-schema.mjs');
 const f001Ok = runScript('verify-f001-schema.mjs');
 const quarterlyOk = runScript('verify-quarterly-schema.mjs');
+const permissionsOk = runScript('verify-permissions-schema.mjs');
 
 console.log('\n--- Summary ---');
-if (coreOk && f001Ok && quarterlyOk) {
+if (coreOk && f001Ok && quarterlyOk && permissionsOk) {
   console.log('Schema OK — no additive SQL required unless smoke tests still fail.');
   console.log('If locations/API errors: server/migrations/locations-schema-align.sql');
   console.log('If F001/session features missing: server/migrations/f001-phase1-schema.sql');
+  console.log('If permissions columns missing: server/migrations/permissions-scoping.sql');
 } else {
   if (!coreOk) {
     console.log('Core schema missing → run server/migrations/locations-schema-align.sql if locations broken');
@@ -69,6 +71,9 @@ if (coreOk && f001Ok && quarterlyOk) {
   if (!quarterlyOk) {
     console.log('Quarterly report schema missing → run: npx tsx scripts/init-db.ts');
   }
+  if (!permissionsOk) {
+    console.log('Permissions schema missing → run server/migrations/permissions-scoping.sql (never db:push on shared/prod)');
+  }
 }
 
-process.exit(coreOk && f001Ok && quarterlyOk ? 0 : 1);
+process.exit(coreOk && f001Ok && quarterlyOk && permissionsOk ? 0 : 1);

@@ -78,32 +78,32 @@ const permissionLabels: Record<string, { label: string; icon: typeof FileText; d
   canViewReports: {
     label: 'View Reports',
     icon: FileText,
-    description: 'Access location reports and analytics',
+    description: 'Finance nav: reports, analytics, payments, memberships, discounts, credits',
   },
   canManageStaff: {
     label: 'Manage Staff',
     icon: Users,
-    description: 'Add, edit, and remove staff members',
+    description: 'People nav: staff, hours, permissions, users',
   },
   canManageClasses: {
     label: 'Manage Classes',
     icon: GraduationCap,
-    description: 'Create and modify class schedules',
+    description: 'School + Academics + Content nav: classes, sessions, templates, forms, documents',
   },
   canManageStudents: {
     label: 'Manage Students',
     icon: Users,
-    description: 'Manage student enrollments',
+    description: 'People + Enrollments nav: students and enrollments',
   },
   canSendNotifications: {
     label: 'Send Notifications',
     icon: Bell,
-    description: 'Send announcements to parents',
+    description: 'Communication nav: notifications, announcements, tracking',
   },
   canViewParentContacts: {
     label: 'View Parent Contacts',
     icon: Phone,
-    description: 'Access parent phone and email information',
+    description: 'Location Enrollments and parent PII at assigned locations (or school-wide)',
   },
 };
 
@@ -246,6 +246,8 @@ export default function StaffPermissionsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/user-locations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/me/effective-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/user-locations/my-permissions'] });
       setUserPickerOpen(false);
       toast({
         title: 'Access granted',
@@ -271,6 +273,8 @@ export default function StaffPermissionsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/user-school-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/me/effective-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/user-locations/my-permissions'] });
       setSchoolUserPickerOpen(false);
       toast({
         title: 'School-wide access granted',
@@ -308,6 +312,7 @@ export default function StaffPermissionsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/user-school-permissions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/user-locations/my-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/me/effective-permissions'] });
       toast({
         title: 'Permission updated',
         description: 'School-wide permissions have been updated.',
@@ -343,6 +348,8 @@ export default function StaffPermissionsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/user-locations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/me/effective-permissions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/user-locations/my-permissions'] });
       toast({
         title: 'Permission updated',
         description: 'Location permissions have been updated successfully.',
@@ -420,9 +427,10 @@ export default function StaffPermissionsPage() {
               <Building2 className="h-5 w-5" />
               School-wide access
             </CardTitle>
-            <CardDescription>
-              These permissions apply to all locations. Use this for directors or staff who work across the school.
-            </CardDescription>
+              <CardDescription>
+                Entire school access (regional manager): permissions apply to all locations for view and write.
+                Location assignments still define which sites they are associated with.
+              </CardDescription>
           </CardHeader>
           <CardContent className="space-y-8">
             {schoolPermissionsLoading ? (

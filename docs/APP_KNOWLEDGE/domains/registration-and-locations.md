@@ -17,6 +17,7 @@ Parents register with a **school registration code**, pick a location when offer
 - **Location `code`** may be omitted in UI; API derives from name before Zod validation (`server/api/locations.ts`).
 - **No auto-seed** “Main Campus” on wrong school (removed as source of cross-school pollution).
 - **Campus visibility** — parent Settings and student profile show `locationName`; `GET /api/users/profile`, `GET /api/school-admin/students/:id`, and `GET /api/parent-profile/:parentId` include campus fields.
+- **School admin students list** — `GET /api/school-admin/students` must stay set-based (memberships + `user_roles` + legacy `users.school_id`, batch children/locations). Never `getAllUsers()` + per-user `getUserRolesByUserId` (hangs `/schools/students` on real DBs). Sync (`POST …/students/sync`) must scope by `children.school_id` / `getSchoolStudentsBySchoolId`, not `getAllChildren` / `getAllSchoolStudents`.
 
 ## Flow (happy path)
 
@@ -66,6 +67,7 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 | POST /api/locations 400 | `code` validated before derive | Derive code before `insertLocationSchema.parse` |
 | associate-school 500 on Replit | Self-HTTP or wrong storage | `associate-parent-school.ts` direct storage |
 | Enrollment Sessions page shows no data and create fails | `sessions.location_id` missing in older DBs while API/schema expect it | Ensure startup migration runs `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location_id ...` (`server/init-db.ts`) |
+| `/schools/students` stuck on “Loading students…” | `GET /api/school-admin/students` N+1 (all users × `getUserRolesByUserId`) or sync loading full tables | Use v5 set-based query in `school-admin.ts`; RoleSwitcher console warns are unrelated |
 
 ## Key files
 
@@ -80,6 +82,8 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 - `server/scripts/set-pastorella-campus-greece-production.ts` — one-off Pastorella → Greece repair
 - `server/api/locations.ts` — CRUD + `PATCH /parent/:parentId/location`
 - `server/api/schools.ts` — validate registration code
+- `server/api/school-admin.ts` — `GET /students` + `POST /students/sync` (set-based roster)
+- `client/src/pages/schools/StudentsPage.tsx` — school admin roster UI
 - `client/src/pages/RegistrationLandingPage.tsx` — conscious campus select (no auto-first)
 - `client/src/pages/schools/ParentProfilePage.tsx` — admin campus change UI
 - `server/migrations/locations-schema-align.sql` — prod-safe location columns
