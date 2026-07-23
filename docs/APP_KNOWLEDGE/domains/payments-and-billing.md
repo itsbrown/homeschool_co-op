@@ -291,6 +291,10 @@ School-admin **Financial Reports → Collections Overview** counts `summary.auto
 | Payment patterns skill | `.agents/skills/asa-payment-patterns/SKILL.md` |
 | Credit skill | `.agents/skills/asa-credit-system/SKILL.md` |
 
+### Credits-only cart checkout (no card)
+
+When volunteer credits cover the full cart, `POST /api/stripe/create-payment-intent` returns `{ creditOnlyEligible: true, creditOnlyCheckout: false }` **without** a `clientSecret` until the parent sends `confirmCreditsOnlyCheckout: true`. `CartCheckout` must not treat missing `clientSecret` as a load failure in that case — gate the “Checkout did not finish loading” recovery on **credit-aware** payable (`displayPayableAmount`) and `!creditOnlyEligible`, not raw `actualPayableAmount`.
+
 ## Common pitfalls
 
 | Symptom | Cause | Fix |
@@ -305,3 +309,4 @@ School-admin **Financial Reports → Collections Overview** counts `summary.auto
 | Membership `amount_paid` jumps by 2x on first checkout installment | Membership fulfillment called twice for same PI in webhook path (`webhook-handler` + `processBalancePayment`) | Ensure one fulfillment call per PI; audit `membership_enrollments` rows where checkout-note `updated_at > created_at` |
 | Admin shows $441 “paid” per session; Payments tab empty; PI `requires_payment_method` | Phantom `total_paid` — ledger updated without succeeded payment | Reset via `fix-kendra-crofoot-session-phantom-paid-production.ts` pattern; implement [ledger parity plan](../../plans/enrollment-ledger-stripe-parity.md) |
 | Collections Overview **Auto-pay on (0)** but parents have plans / `auto_pay_enabled` | Was: `loadParentInfo` used `db.execute().rows` (undefined under postgres-js); catch → all false | Fixed: select `users.autoPayEnabled` via drizzle in `loadParentInfo` |
+| Apply credits → “Checkout did not finish loading” | Credits cover cart → no `clientSecret`; recovery gate used pre-credit `actualPayableAmount` | Gate on `displayPayableAmount` + `!creditOnlyEligible` |

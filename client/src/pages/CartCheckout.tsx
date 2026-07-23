@@ -1718,8 +1718,16 @@ export default function CartCheckout() {
     );
   }
 
-  // Payment form not ready — show recovery UI instead of a silent spinner
-  if (!clientSecret && actualPayableAmount > 0 && !error) {
+  // Payment form not ready — show recovery UI instead of a silent spinner.
+  // Skip when credits cover the cart: create-payment-intent intentionally
+  // returns no clientSecret (creditOnlyEligible) until the parent confirms.
+  // Use displayPayableAmount (credit-aware), not actualPayableAmount.
+  if (
+    !clientSecret &&
+    displayPayableAmount > 0 &&
+    !error &&
+    !creditOnlyEligible
+  ) {
     return (
       <ParentAppShell>
         <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
