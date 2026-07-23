@@ -33,6 +33,54 @@ import { Link } from "wouter";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
+type StudentClassSummary = {
+  id: number;
+  title: string;
+  placementSource?: string | null;
+  status?: string | null;
+};
+
+function StudentClassesCell({
+  classes,
+  maxVisible = 2,
+}: {
+  classes?: StudentClassSummary[];
+  maxVisible?: number;
+}) {
+  if (!classes || classes.length === 0) {
+    return <span className="text-sm text-muted-foreground">None</span>;
+  }
+
+  const visible = classes.slice(0, maxVisible);
+  const remaining = classes.length - visible.length;
+
+  return (
+    <div className="flex flex-col gap-1 min-w-0 max-w-[220px]">
+      {visible.map((cls) => (
+        <div key={cls.id} className="flex items-center gap-1 min-w-0">
+          <span className="text-sm truncate" title={cls.title}>
+            {cls.title}
+          </span>
+          {cls.status && cls.status !== "enrolled" && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0 shrink-0">
+              {cls.status === "waitlist"
+                ? "Waitlist"
+                : cls.status === "pending_admin_approval"
+                  ? "Pending"
+                  : cls.status === "pending_payment"
+                    ? "Unpaid"
+                    : cls.status}
+            </Badge>
+          )}
+        </div>
+      ))}
+      {remaining > 0 && (
+        <span className="text-xs text-muted-foreground">+{remaining} more</span>
+      )}
+    </div>
+  );
+}
+
 export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [gradeLevelFilter, setGradeLevelFilter] = useState("all");
@@ -135,10 +183,15 @@ export default function StudentsPage() {
 
   // Filter and sort students based on search query and filters
   const filteredStudents = studentsArray.length > 0 ? studentsArray.filter((student: any) => {
+    const classTitles = Array.isArray(student.classes)
+      ? student.classes.map((c: StudentClassSummary) => c.title).join(" ").toLowerCase()
+      : "";
+    const q = searchQuery.toLowerCase();
     const matchesSearch = searchQuery === "" || 
-      student.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.parentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.email?.toLowerCase().includes(searchQuery.toLowerCase());
+      student.name?.toLowerCase().includes(q) ||
+      student.parentName?.toLowerCase().includes(q) ||
+      student.email?.toLowerCase().includes(q) ||
+      classTitles.includes(q);
     
     const matchesGradeLevel = gradeLevelFilter === "all" || student.gradeLevel === gradeLevelFilter;
     const matchesStatus = statusFilter === "all" || student.status === statusFilter;
@@ -169,6 +222,10 @@ export default function StudentsPage() {
       case "parent":
         aValue = a.parentName?.toLowerCase() || "";
         bValue = b.parentName?.toLowerCase() || "";
+        break;
+      case "classes":
+        aValue = (a.classes?.[0]?.title || "").toLowerCase();
+        bValue = (b.classes?.[0]?.title || "").toLowerCase();
         break;
       case "enrollment":
         aValue = new Date(a.enrollmentDate || 0).getTime();
@@ -207,7 +264,7 @@ export default function StudentsPage() {
 
   return (
     <SchoolAdminLayout pageTitle="Students">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
           <p className="text-muted-foreground">Manage your school's student enrollment and information</p>
           <div className="flex gap-2">
@@ -248,7 +305,7 @@ export default function StudentsPage() {
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search by name, parent, or email..."
+                    placeholder="Search by name, parent, email, or class..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-8"
@@ -306,6 +363,7 @@ export default function StudentsPage() {
                         <SelectItem value="age">Age</SelectItem>
                         <SelectItem value="location">Location</SelectItem>
                         <SelectItem value="parent">Parent/Guardian</SelectItem>
+                        <SelectItem value="classes">Classes</SelectItem>
                         <SelectItem value="enrollment">Enrollment Date</SelectItem>
                         <SelectItem value="status">Status</SelectItem>
                       </SelectContent>
@@ -338,6 +396,7 @@ export default function StudentsPage() {
                           <TableHead>Age</TableHead>
                           <TableHead>Location</TableHead>
                           <TableHead>Parent/Guardian</TableHead>
+                          <TableHead>Classes</TableHead>
                           <TableHead>Enrollment</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Actions</TableHead>
@@ -379,6 +438,9 @@ export default function StudentsPage() {
                                 </div>
                               </TableCell>
                               <TableCell>
+                                <StudentClassesCell classes={student.classes} />
+                              </TableCell>
+                              <TableCell>
                                 <div className="text-sm">
                                   {student.enrollmentDate ? new Date(student.enrollmentDate).toLocaleDateString() : 'N/A'}
                                 </div>
@@ -415,7 +477,7 @@ export default function StudentsPage() {
                           ))
                         ) : (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center py-8">
+                            <TableCell colSpan={9} className="text-center py-8">
                               <div className="text-muted-foreground">No students found matching your criteria.</div>
                             </TableCell>
                           </TableRow>
@@ -461,6 +523,12 @@ export default function StudentsPage() {
                               <div>
                                 <span className="font-medium">Location:</span>
                                 <p className="text-muted-foreground">{student.locationName || 'Unknown'}</p>
+                              </div>
+                            </div>
+                            <div className="text-sm">
+                              <span className="font-medium">Classes:</span>
+                              <div className="mt-1">
+                                <StudentClassesCell classes={student.classes} maxVisible={3} />
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground">
@@ -527,6 +595,12 @@ export default function StudentsPage() {
                             </div>
                             <div className="text-sm text-muted-foreground">
                               {student.email || 'No email provided'}
+                            </div>
+                            <div className="text-sm text-left">
+                              <strong>Classes:</strong>
+                              <div className="mt-1">
+                                <StudentClassesCell classes={student.classes} maxVisible={3} />
+                              </div>
                             </div>
                             <div className="flex justify-center">
                               <Badge 

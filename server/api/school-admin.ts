@@ -2593,7 +2593,14 @@ router.get("/students", supabaseAuth, attachAccessScope, requirePermission('canM
         locationName: location?.name || 'Unknown Location',
         locationCode: location?.code || 'N/A',
         schoolId: schoolStudent?.schoolId || schoolId,
-        classes: [],
+        classes: [] as Array<{
+          id: number;
+          title: string;
+          placementSource: string | null;
+          sessionId: number | null;
+          locationId: number | null;
+          status?: string | null;
+        }>,
         avatar: child.profileImage || '',
         allergies: child.allergies,
         medicalInfo: child.medicalInfo,
@@ -2628,6 +2635,42 @@ router.get("/students", supabaseAuth, attachAccessScope, requirePermission('canM
         (student: any) => student.locationId == null || allowed.has(student.locationId),
       );
     }
+
+    // Attach current class seats (active + linked to a class + end date not past).
+    // Use direct SQL loader — CombinedStorage.getEnrollmentsByChildIds can silently
+    // fall back to empty mem data when schema drifts (e.g. missing placement_source).
+    const studentChildIds = validStudents.map((s: any) => s.id as number);
+    let currentClassesByChild = new Map<
+      number,
+      Array<{
+        id: number;
+        title: string;
+        placementSource: string | null;
+        sessionId: number | null;
+        locationId: number | null;
+        status?: string | null;
+      }>
+    >();
+    if (studentChildIds.length > 0) {
+      try {
+        const {
+          loadClassEnrollmentRowsForChildren,
+          buildCurrentClassesByChildId,
+        } = await import('../lib/build-placed-classes');
+        const enrollments = await loadClassEnrollmentRowsForChildren(studentChildIds);
+        currentClassesByChild = await buildCurrentClassesByChildId(enrollments);
+        const withClasses = [...currentClassesByChild.values()].filter((c) => c.length > 0).length;
+        console.log(
+          `📚 Attached current classes for ${withClasses}/${studentChildIds.length} students (${enrollments.length} class-linked enrollment rows)`,
+        );
+      } catch (classErr) {
+        console.error('⚠️ Failed to load current classes for students list:', classErr);
+      }
+    }
+    validStudents = validStudents.map((student: any) => ({
+      ...student,
+      classes: currentClassesByChild.get(student.id) ?? [],
+    }));
 
     console.log(
       `✅ Successfully processed ${validStudents.length} students with details (${schoolStudents.length} from school_students + ${additionalChildren.length} from parent relationships)`,
