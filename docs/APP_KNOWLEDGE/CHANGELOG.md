@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-07-23 (School admin Students: current classes)
+
+- `GET /api/school-admin/students` fills `classes[]` with current class seats via `loadClassEnrollmentRowsForChildren` + `buildCurrentClassesByChildId` (not `getEnrollmentsByChildIds` — avoids empty mem fallback on schema drift).
+- Students list/grid/mobile show a Classes column; search includes class titles. Enrollment date column unchanged (school join date).
+- End-date lookup uses `marketplace_class_id` → `classes` only (never `school_classes` ids against `classes`).
+
 ## 2026-07-23 (Credits-only checkout recovery UI)
 
 - Applying credits that fully cover the cart cleared `clientSecret` on purpose (`creditOnlyEligible`), but `CartCheckout` showed “Checkout did not finish loading” because the gate used `actualPayableAmount` (pre-credit) and ignored `creditOnlyEligible`.
