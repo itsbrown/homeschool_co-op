@@ -75,12 +75,15 @@ export default function ChildEnrollmentsPage() {
   const [rosterClassId, setRosterClassId] = useState<number | null>(null);
   const [rosterClassName, setRosterClassName] = useState<string>('');
 
-  // Fetch child data
-  const { data: childResponse, isLoading: childLoading } = useQuery<{ child: Child }>({
+  // Fetch child data — API returns the child object; some mounts wrap as { child }
+  const { data: childResponse, isLoading: childLoading } = useQuery<Child | { child: Child }>({
     queryKey: [`/api/children/${childId}`],
     enabled: !!childId,
   });
-  const child = childResponse?.child;
+  const child =
+    childResponse && "child" in childResponse && childResponse.child
+      ? childResponse.child
+      : (childResponse as Child | undefined);
 
   const childEnrollmentsQuery = useQuery<Enrollment[]>({
     queryKey: [`/api/children/${childId}/enrollments`],
