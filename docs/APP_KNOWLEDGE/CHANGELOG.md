@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-07-23 (Credits-only checkout recovery UI)
+
+- Applying credits that fully cover the cart cleared `clientSecret` on purpose (`creditOnlyEligible`), but `CartCheckout` showed “Checkout did not finish loading” because the gate used `actualPayableAmount` (pre-credit) and ignored `creditOnlyEligible`.
+- Gate now uses `displayPayableAmount` + `!creditOnlyEligible`. Domain: [payments-and-billing.md](./domains/payments-and-billing.md).
+
 ## 2026-07-22 (Mentor Schedule ASA print sheet)
 
 - Educator Schedule print uses an ASA-style portrait table: **Time | teaching days** (colored Mon/Wed/Fri headers), full published blocks aligned by start time; empty days omitted.

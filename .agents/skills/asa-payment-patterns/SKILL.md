@@ -138,6 +138,9 @@ payment_allocations:
 4. Client confirms payment with Stripe
 5. Client calls confirm endpoint → server verifies with Stripe → creates scheduled payments
 
+### Credits-only cart (no PaymentIntent)
+When applied credits bring `payableTotalCents` to 0, `create-payment-intent` returns `creditOnlyEligible: true` **without** a `clientSecret` until `confirmCreditsOnlyCheckout: true`. `CartCheckout` must not show the “did not finish loading” recovery for that state — use credit-aware payable + `creditOnlyEligible`, not pre-credit `actualPayableAmount`.
+
 ### Immediate Payment Confirmation
 After successful Stripe payment, client immediately calls the server-side confirm endpoint. Server verifies the payment with Stripe before updating enrollment status and creating scheduled payments.
 
