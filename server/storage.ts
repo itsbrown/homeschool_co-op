@@ -8252,6 +8252,156 @@ export class MemStorage implements IStorage {
         return this.requireApDb().buildStudentProgressReport(childId, schoolId, options);
       }
 
+      private requireAttendanceDb(): DatabaseStorage {
+        if (!(this.dbStorage instanceof DatabaseStorage)) {
+          throw new Error('Attendance and class session features require PostgreSQL');
+        }
+        return this.dbStorage;
+      }
+
+      getClassSessionById(id: number) {
+        return this.requireAttendanceDb().getClassSessionById(id);
+      }
+      getSessionByQrToken(token: string) {
+        return this.requireAttendanceDb().getSessionByQrToken(token);
+      }
+      getTeacherClockInRecords(
+        params: Parameters<DatabaseStorage['getTeacherClockInRecords']>[0],
+      ) {
+        return this.requireAttendanceDb().getTeacherClockInRecords(params);
+      }
+      getClassSessionsByClassId(classId: number) {
+        return this.requireAttendanceDb().getClassSessionsByClassId(classId);
+      }
+      getClassSessionsByEducatorId(educatorId: number) {
+        return this.requireAttendanceDb().getClassSessionsByEducatorId(educatorId);
+      }
+      getClassSessionsBySchoolId(schoolId: number) {
+        return this.requireAttendanceDb().getClassSessionsBySchoolId(schoolId);
+      }
+      getClassSessionsByDate(schoolId: number, date: string) {
+        return this.requireAttendanceDb().getClassSessionsByDate(schoolId, date);
+      }
+      getClassSessionsByDateRange(schoolId: number, startDate: string, endDate: string) {
+        return this.requireAttendanceDb().getClassSessionsByDateRange(schoolId, startDate, endDate);
+      }
+      getActiveClassSession(educatorId: number) {
+        return this.requireAttendanceDb().getActiveClassSession(educatorId);
+      }
+      createClassSession(data: Parameters<DatabaseStorage['createClassSession']>[0]) {
+        return this.requireAttendanceDb().createClassSession(data);
+      }
+      updateClassSession(id: number, data: Parameters<DatabaseStorage['updateClassSession']>[1]) {
+        return this.requireAttendanceDb().updateClassSession(id, data);
+      }
+      deleteClassSession(id: number) {
+        return this.requireAttendanceDb().deleteClassSession(id);
+      }
+      getAttendanceBySessionId(sessionId: number) {
+        return this.requireAttendanceDb().getAttendanceBySessionId(sessionId);
+      }
+      getAttendanceByChildId(childId: number) {
+        return this.requireAttendanceDb().getAttendanceByChildId(childId);
+      }
+      getAttendanceBySchoolId(schoolId: number) {
+        return this.requireAttendanceDb().getAttendanceBySchoolId(schoolId);
+      }
+      getAttendanceRecord(sessionId: number, childId: number) {
+        return this.requireAttendanceDb().getAttendanceRecord(sessionId, childId);
+      }
+      createAttendance(data: Parameters<DatabaseStorage['createAttendance']>[0]) {
+        return this.requireAttendanceDb().createAttendance(data);
+      }
+      updateAttendance(id: number, data: Parameters<DatabaseStorage['updateAttendance']>[1]) {
+        return this.requireAttendanceDb().updateAttendance(id, data);
+      }
+      deleteAttendance(id: number) {
+        return this.requireAttendanceDb().deleteAttendance(id);
+      }
+      upsertAttendance(data: Parameters<DatabaseStorage['upsertAttendance']>[0]) {
+        return this.requireAttendanceDb().upsertAttendance(data);
+      }
+
+      getEducatorClassAssignmentById(id: number) {
+        return this.requireAttendanceDb().getEducatorClassAssignmentById(id);
+      }
+      getEducatorClassAssignmentsByEducatorId(educatorId: number) {
+        return this.requireAttendanceDb().getEducatorClassAssignmentsByEducatorId(educatorId);
+      }
+      getEducatorClassAssignmentsByClassId(classId: number) {
+        return this.requireAttendanceDb().getEducatorClassAssignmentsByClassId(classId);
+      }
+      getEducatorClassAssignmentsBySchoolId(schoolId: number) {
+        return this.requireAttendanceDb().getEducatorClassAssignmentsBySchoolId(schoolId);
+      }
+      getActiveEducatorAssignmentForClass(educatorId: number, classId: number) {
+        return this.requireAttendanceDb().getActiveEducatorAssignmentForClass(
+          educatorId,
+          classId,
+        );
+      }
+      createEducatorClassAssignment(
+        data: Parameters<DatabaseStorage['createEducatorClassAssignment']>[0],
+      ) {
+        return this.requireAttendanceDb().createEducatorClassAssignment(data);
+      }
+      updateEducatorClassAssignment(
+        id: number,
+        data: Parameters<DatabaseStorage['updateEducatorClassAssignment']>[1],
+      ) {
+        return this.requireAttendanceDb().updateEducatorClassAssignment(id, data);
+      }
+      deleteEducatorClassAssignment(id: number) {
+        return this.requireAttendanceDb().deleteEducatorClassAssignment(id);
+      }
+
+      getEducatorScheduleById(id: number) {
+        return this.requireAttendanceDb().getEducatorScheduleById(id);
+      }
+      getEducatorSchedulesByEducatorId(educatorId: number) {
+        return this.requireAttendanceDb().getEducatorSchedulesByEducatorId(educatorId);
+      }
+      getEducatorSchedulesByClassId(classId: number) {
+        return this.requireAttendanceDb().getEducatorSchedulesByClassId(classId);
+      }
+      getEducatorSchedulesBySchoolId(schoolId: number) {
+        return this.requireAttendanceDb().getEducatorSchedulesBySchoolId(schoolId);
+      }
+      getEducatorSchedulesByAssignmentId(assignmentId: number) {
+        return this.requireAttendanceDb().getEducatorSchedulesByAssignmentId(assignmentId);
+      }
+      getEducatorSchedulesForWeek(educatorId: number, weekStartDate: string) {
+        return this.requireAttendanceDb().getEducatorSchedulesForWeek(
+          educatorId,
+          weekStartDate,
+        );
+      }
+      createEducatorSchedule(
+        data: Parameters<DatabaseStorage['createEducatorSchedule']>[0],
+      ) {
+        return this.requireAttendanceDb().createEducatorSchedule(data);
+      }
+      updateEducatorSchedule(
+        id: number,
+        data: Parameters<DatabaseStorage['updateEducatorSchedule']>[1],
+      ) {
+        return this.requireAttendanceDb().updateEducatorSchedule(id, data);
+      }
+      deleteEducatorSchedule(id: number) {
+        return this.requireAttendanceDb().deleteEducatorSchedule(id);
+      }
+
+      getEventsBySchoolAndDateRange(schoolId: number, startDate: Date, endDate: Date) {
+        return this.requireAttendanceDb().getEventsBySchoolAndDateRange(
+          schoolId,
+          startDate,
+          endDate,
+        );
+      }
+      getEventsBySchool(schoolId: number) {
+        return this.requireAttendanceDb().getEventsBySchool(schoolId);
+      }
+
       // Clear all data from storage (for testing)
       clearAll() {
         this.memStorage.clearAll();

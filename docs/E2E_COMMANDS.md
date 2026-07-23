@@ -132,6 +132,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/parent-progress-scheduled-lessons.spec.ts`](../e2e/parent-progress-scheduled-lessons.spec.ts) | `npm run test:e2e -- e2e/parent-progress-scheduled-lessons.spec.ts` | Parent progress “Scheduled lessons” + completion pills | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/school-admin-academics-kpi.spec.ts`](../e2e/school-admin-academics-kpi.spec.ts) | `npm run test:e2e -- e2e/school-admin-academics-kpi.spec.ts` | Attendance → Lesson plans tab: completion % + attendance KPI | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/schedule-template-csv-import.spec.ts`](../e2e/schedule-template-csv-import.spec.ts) | `npm run test:e2e -- e2e/schedule-template-csv-import.spec.ts` | Weekly Templates: CSV map → preview → confirm import + block titles | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/educator-weekly-schedule-plans.spec.ts`](../e2e/educator-weekly-schedule-plans.spec.ts) | `npm run test:e2e -- e2e/educator-weekly-schedule-plans.spec.ts` | Educator Schedule: published plan overlay + detail sheet + print | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 
 **Supabase:** Real project required (`isRealSupabaseConfigured()` or `supabaseLinked === true`).
 
@@ -177,7 +178,7 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `GET /api/test/technical-support-issue/:id` | `help-issue-submission.spec.ts` (persistence verify) |
 | `POST /api/test/setup-credit-lookup-scenario` | `credit-management-parent-lookup` |
 | `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard` |
-| `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import` |
+| `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-weekly-schedule-plans` |
 | `POST /api/test/ensure-public-store-schema` | `public-store.spec.ts` |
 | `POST /api/test/setup-public-store-scenario` | `public-store.spec.ts`, `public-store-share.spec.ts` |
 | `POST /api/test/fulfill-store-checkout` | `public-store.spec.ts`, `public-store-share.spec.ts` (simulates Stripe webhook after guest checkout) |

@@ -199,7 +199,7 @@ const educatorNavItems: NavItem[] = [
   },
   {
     title: 'Schedule',
-    href: '/educator/schedule',
+    href: '/educator/weekly-calendar',
     icon: Calendar,
   },
   {

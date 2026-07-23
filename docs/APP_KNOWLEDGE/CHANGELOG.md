@@ -1,5 +1,21 @@
 # App knowledge changelog
 
+## 2026-07-22 (Mentor Schedule ASA print sheet)
+
+- Educator Schedule print uses an ASA-style portrait table: **Time | teaching days** (colored Mon/Wed/Fri headers), full published blocks aligned by start time; empty days omitted.
+
+## 2026-07-22 (Mentor Schedule overlay UX)
+
+- Class `schedule` variants used AM/PM strings → calendar showed **Time TBD**; both Half/Full Day variants doubled cards. Now uses `extractFamilyScheduleTiming` (default-variant, HH:MM) and one card per day.
+- Plan overlay matches by **calendar day** (not exact class-window times) so full published day plans appear; blocks keep own times + Week Planner color accents.
+
+## 2026-07-22 (Mentor Schedule + published plans)
+
+- `/api/educator/schedules/week` restored (`getEducatorSchedulesForWeek` + soft-fail events) and enriched with **published** `planBlocks` matched via `shared/schedule-day-index` (Sun=0 skeleton ↔ Mon=0 calendar).
+- Educator Schedule UI: plan titles / empty badge, shared `WeekPlanBlockDetailSheet`, print root; `/educator/schedule` → `/educator/weekly-calendar`.
+- Seed: class `schedule` jsonb + educator assignment; Playwright `educator-weekly-schedule-plans`.
+- Domain: [schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md).
+
 ## 2026-07-21 (Class grade selector through 12th)
 
 - School class create/edit multi-select (`SchoolClassCreationPage`) previously stopped at 10th grade; added `11th-grade` / `12th-grade`. Display map on `SchoolClassDetailsPage` updated to match.

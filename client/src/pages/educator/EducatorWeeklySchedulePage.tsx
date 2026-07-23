@@ -5,13 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import {
   Printer,
   CalendarDays,
   BookOpen,
@@ -19,12 +12,9 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
-  Users,
-  Target,
-  Clock,
 } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
+import { WeekPlanBlockDetailSheet } from "@/components/schedule/WeekPlanBlockDetailSheet";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -74,28 +64,6 @@ function blockTypeBadge(blockType: string) {
   );
 }
 
-function blockTypeBadgeLg(blockType: string) {
-  if (blockType === "anchor") {
-    return (
-      <Badge className="px-2.5 py-0.5 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
-        Core
-      </Badge>
-    );
-  }
-  if (blockType === "curriculum") {
-    return (
-      <Badge className="px-2.5 py-0.5 bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-100">
-        Curriculum
-      </Badge>
-    );
-  }
-  return (
-    <Badge className="px-2.5 py-0.5 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-100">
-      Flexible
-    </Badge>
-  );
-}
-
 interface WeekPlanWithDetails extends WeekPlan {
   blocks: WeekPlanBlock[];
 }
@@ -110,141 +78,6 @@ interface ScheduleGridProps {
   weekPlan: WeekPlanWithDetails;
   skeleton: WeeklySkeleton;
   skeletonBlocks: SkeletonBlock[];
-}
-
-function BlockDetailSheet({
-  selected,
-  onClose,
-}: {
-  selected: SelectedBlock | null;
-  onClose: () => void;
-}) {
-  if (!selected) return null;
-
-  const { skelBlock, planBlock, dayIdx } = selected;
-  const title = planBlock?.title || skelBlock.defaultTitle || "";
-  const description = planBlock?.description || skelBlock.defaultDescription || "";
-  const blockType = skelBlock.blockType || "flexible";
-  const isCompleted = planBlock?.isCompleted || false;
-  const objectives: string[] = Array.isArray(planBlock?.objectives) ? (planBlock.objectives as string[]) : [];
-  const groups: string[] = Array.isArray(planBlock?.groups) ? (planBlock.groups as string[]) : [];
-  const lessonLink = planBlock?.lessonLink || "";
-  const notes = planBlock?.notes || "";
-
-  return (
-    <Sheet open={!!selected} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-md overflow-y-auto no-print"
-        aria-label={`Block details for ${title || "this block"}`}
-      >
-        <SheetHeader className="mb-6">
-          <div className="flex items-center gap-2 mb-1">
-            <Clock className="h-3.5 w-3.5 text-slate-400" />
-            <SheetDescription className="text-slate-500 text-sm">
-              {DAY_NAMES[dayIdx]} · {formatTime(skelBlock.startTime)} – {formatTime(skelBlock.endTime)}
-            </SheetDescription>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {blockTypeBadgeLg(blockType)}
-            {isCompleted && (
-              <Badge className="px-2.5 py-0.5 bg-green-100 text-green-700 border-green-200 hover:bg-green-100 flex items-center gap-1">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Completed
-              </Badge>
-            )}
-          </div>
-          <SheetTitle className="text-xl font-bold text-slate-900 leading-snug mt-2">
-            {title || <span className="text-slate-400 italic">No title set</span>}
-          </SheetTitle>
-        </SheetHeader>
-
-        <div className="space-y-6">
-          {description && (
-            <section>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Description
-              </p>
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                {description}
-              </p>
-            </section>
-          )}
-
-          {objectives.length > 0 && (
-            <section>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Target className="h-3.5 w-3.5 text-purple-500" />
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Learning Objectives
-                </p>
-              </div>
-              <ul className="space-y-2">
-                {objectives.map((obj: string, i: number) => (
-                  <li key={i} className="flex gap-2 text-sm text-slate-700">
-                    <span className="text-purple-400 font-bold flex-shrink-0 mt-0.5">•</span>
-                    <span>{obj}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {groups.length > 0 && (
-            <section>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Users className="h-3.5 w-3.5 text-amber-500" />
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Groups
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {groups.map((g: string, i: number) => (
-                  <Badge
-                    key={i}
-                    className="px-2.5 py-1 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50 text-sm"
-                  >
-                    {g}
-                  </Badge>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {notes && (
-            <section>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Notes
-              </p>
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-amber-50 border border-amber-100 rounded-md p-3">
-                {notes}
-              </p>
-            </section>
-          )}
-
-          {lessonLink && (
-            <section>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Resource
-              </p>
-              <Button asChild variant="outline" className="w-full justify-between">
-                <a href={lessonLink} target="_blank" rel="noopener noreferrer">
-                  <span>Open Lesson</span>
-                  <ExternalLink className="h-4 w-4 text-slate-400" />
-                </a>
-              </Button>
-            </section>
-          )}
-
-          {!description && !objectives.length && !groups.length && !notes && !lessonLink && (
-            <p className="text-sm text-slate-400 italic text-center py-4">
-              No additional details for this block.
-            </p>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
 }
 
 function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps) {
@@ -459,9 +292,34 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
         </div>
       </div>
 
-      <BlockDetailSheet
-        selected={selectedBlock}
+      <WeekPlanBlockDetailSheet
+        open={!!selectedBlock}
         onClose={() => setSelectedBlock(null)}
+        block={
+          selectedBlock
+            ? {
+                title:
+                  selectedBlock.planBlock?.title ||
+                  selectedBlock.skelBlock.defaultTitle ||
+                  "",
+                description:
+                  selectedBlock.planBlock?.description ||
+                  selectedBlock.skelBlock.defaultDescription ||
+                  null,
+                blockType: selectedBlock.skelBlock.blockType || "flexible",
+                isCompleted: selectedBlock.planBlock?.isCompleted || false,
+                objectives: Array.isArray(selectedBlock.planBlock?.objectives)
+                  ? (selectedBlock.planBlock!.objectives as string[])
+                  : [],
+                groups: Array.isArray(selectedBlock.planBlock?.groups)
+                  ? (selectedBlock.planBlock!.groups as string[])
+                  : [],
+                notes: selectedBlock.planBlock?.notes || null,
+                lessonLink: selectedBlock.planBlock?.lessonLink || null,
+                timeLabel: `${DAY_NAMES[selectedBlock.dayIdx]} · ${formatTime(selectedBlock.skelBlock.startTime)} – ${formatTime(selectedBlock.skelBlock.endTime)}`,
+              }
+            : null
+        }
       />
     </>
   );
