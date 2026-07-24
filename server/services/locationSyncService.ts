@@ -125,6 +125,16 @@ export async function updateParentLocation(
         );
       
       childrenUpdated = childIds.length;
+
+      // Grade Placement: campus change may move kids on/off auto-place rosters
+      try {
+        const { syncGradePlacementsForChild } = await import('./grade-placement-sync');
+        for (const childId of childIds) {
+          await syncGradePlacementsForChild(childId);
+        }
+      } catch (err) {
+        console.warn('[grade-placement] location transfer sync failed:', err);
+      }
     }
     
     await createAuditLogDirect(db, {

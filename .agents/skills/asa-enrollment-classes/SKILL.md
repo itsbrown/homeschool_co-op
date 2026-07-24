@@ -205,6 +205,17 @@ const allEnrollments = allProgramEnrollments.filter((enrollment: any) =>
 );
 ```
 
+## Grade Placement (auto-place by grade)
+
+- Class fields: `sessionId`, `autoPlaceByGrade`, `gradeLevels`, `locationId` (all required to enable Auto-place)
+- Sync creates free `program_enrollments` with `placementSource: 'grade'` — never cancel paid/manual rows
+- Eligibility: campus match (`school_students` → `children` → **parent** `location_id`) + `hasPaidTowardSession` (session tuition ledger) + normalized grade (`shared/grade-levels.ts`)
+- Preview/sync: `GET/POST .../classes/:id/grade-placement-preview|sync-grade-placements`
+- Exclude placement seats from cart; block parent unenroll for `placementSource === 'grade'`
+- Parent **Class:** / enrollments UI: current class seats only (`shared/current-class-enrollment.ts`)
+- School-admin Students list (`GET /api/school-admin/students`): `classes[]` via `loadClassEnrollmentRowsForChildren` + `buildCurrentClassesByChildId` (not `getEnrollmentsByChildIds` — mem fallback on schema drift)
+- Domain doc: `docs/APP_KNOWLEDGE/domains/grade-placement.md`
+
 ## Common Pitfalls
 
 - **Wrong enrollment table** → used `school_class_enrollments` for a payment-tracked enrollment → use `program_enrollments` (it has financial fields)
@@ -214,7 +225,6 @@ const allEnrollments = allProgramEnrollments.filter((enrollment: any) =>
 - **Orphaned scheduled payments** → enrollment deleted but `scheduled_payments` remain → filter orphaned records from admin views (see `asa-database-patterns`)
 - **Using `classData?.price` instead of `enrollment.totalCost` for balance updates** → `enrollment.programId` is not a reliable class ID (legacy field, not always populated), so `storage.getClassById(enrollment.programId)` often returns `null`, making `totalCost = 0` → `remainingBalance = 0` (wrong, understates balance). Always use `enrollment.totalCost` directly — it is the authoritative financial field set at enrollment creation.
 - **Educator student list shows graduated/cancelled students** → enrollment query missing status filter → always restrict to `status IN ('enrolled', 'pending_admin_approval')`; never include `completed`, `cancelled`, or `withdrawn`
-- **School-admin Students Classes column empty** → do not load via `storage.getEnrollmentsByChildIds` (`select *` + CombinedStorage mem fallback on schema drift). Use `loadClassEnrollmentRowsForChildren` + `buildCurrentClassesByChildId` (`shared/current-class-enrollment.ts`)
 
 ## Best Practices
 
@@ -240,9 +250,8 @@ const allEnrollments = allProgramEnrollments.filter((enrollment: any) =>
 - `server/api/admin-enrollment-payment.ts` — admin payment management for enrollments
 - `server/api/classes.ts` — class creation and management
 - `server/api/admin-classes.ts` — admin class management endpoints
-- `server/api/school-admin.ts` — `GET /students` attaches `classes[]` (current seats)
-- `server/lib/build-placed-classes.ts` / `shared/current-class-enrollment.ts` — current class seat helpers
-- `client/src/pages/schools/StudentsPage.tsx` — Classes column UI
+- `server/services/grade-placement-sync.ts` — Grade Placement preview/sync
+- `shared/grade-levels.ts` / `shared/session-payment-eligibility.ts` — placement helpers
 - `server/lib/prorate-calculator.ts` — proration date math
 - `server/utils/cart-pricing.ts` — pricing calculations for enrollments
 - `shared/schema.ts` — `programEnrollments`, `schoolClassEnrollments`, `schoolClasses`, `classes` tables

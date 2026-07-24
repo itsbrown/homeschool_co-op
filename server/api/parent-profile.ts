@@ -684,6 +684,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         // Keep raw cents value for summary calculation
         _remainingBalanceCents: actualRemainingBalanceCents,
         paymentPlan: enrollment.paymentPlan,
+        placementSource: enrollment.placementSource ?? null,
+        sessionId: enrollment.sessionId ?? null,
+        locationId: enrollment.locationId ?? null,
         // Comp fields
         compPercentage: enrollment.compPercentage,
         compAmountCents: enrollment.compAmountCents,
@@ -694,8 +697,10 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     // Calculate class amount due from RECALCULATED balances (not cached DB values)
     // Exclude statuses with no legitimate outstanding balance (denylist per asa-payment-patterns gold-standard).
     // 'pending_admin_approval' is intentionally included — payment was made but admin approval is pending.
+    // Grade Placement seats are $0 roster rows — never count toward amount due.
     const classAmountDue = CurrencyUtils.sum(
       processedEnrollments
+        .filter(e => e.placementSource !== 'grade')
         .filter(e => isEnrollmentIncludedInProfileClassAmountDue(e.status))
         .map(enrollment => (enrollment as any)._remainingBalanceCents || 0)
     );
@@ -770,12 +775,20 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     const { resolveRegisteredLocation, resolveChildRegisteredLocation } = await import(
       '../lib/parent-registered-location'
     );
+    const { loadClassEnrollmentRowsForChildren, buildPlacedClassesForChild } = await import(
+      '../lib/build-placed-classes'
+    );
     const parentCampus = await resolveRegisteredLocation(storage, parent.locationId);
     const childrenWithCampus = await Promise.all(
       children.map(async (child) => {
         const campus = await resolveChildRegisteredLocation(storage, parent, child);
         return { child, campus };
       }),
+    );
+    // Prefer SQL class-linked rows (includes placement_source) over display-shaped
+    // processedEnrollments, which omit marketplaceClassId / programEndDate.
+    const classEnrollmentRows = await loadClassEnrollmentRowsForChildren(
+      children.map((c) => c.id),
     );
 
     const profile = {
@@ -793,24 +806,35 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         locationId: parentCampus.locationId,
         locationName: parentCampus.locationName,
       },
-      children: childrenWithCampus.map(({ child, campus }) => ({
-        id: child.id,
-        schoolStudentId: childToSchoolStudentMap.get(child.id) || null,
-        firstName: child.firstName,
-        lastName: child.lastName,
-        birthDate: child.birthdate,
-        grade: child.gradeLevel,
-        schoolId: child.school || null,
-        parentEmail: child.parentEmail,
-        allergies: child.allergies,
-        medicalConditions: child.medicalInfo,
-        emergencyContact: child.emergencyContact,
-        additionalLanguages: child.additionalLanguages,
-        notes: child.notes,
-        createdAt: child.createdAt,
-        locationId: campus.locationId,
-        locationName: campus.locationName,
-      })),
+      children: await Promise.all(
+        childrenWithCampus.map(async ({ child, campus }) => {
+          const placedClasses = await buildPlacedClassesForChild(
+            child.id,
+            classEnrollmentRows,
+          );
+          return {
+            id: child.id,
+            schoolStudentId: childToSchoolStudentMap.get(child.id) || null,
+            firstName: child.firstName,
+            lastName: child.lastName,
+            birthDate: child.birthdate,
+            birthdate: child.birthdate,
+            grade: child.gradeLevel,
+            gradeLevel: child.gradeLevel,
+            schoolId: child.school || null,
+            parentEmail: child.parentEmail,
+            allergies: child.allergies,
+            medicalConditions: child.medicalInfo,
+            emergencyContact: child.emergencyContact,
+            additionalLanguages: child.additionalLanguages,
+            notes: child.notes,
+            createdAt: child.createdAt,
+            locationId: campus.locationId,
+            locationName: campus.locationName,
+            placedClasses,
+          };
+        }),
+      ),
       // Use processed enrollments (remove internal _remainingBalanceCents field from response)
       enrollments: processedEnrollments.map(({ _remainingBalanceCents, ...rest }) => rest),
       membershipEnrollments: processedMembershipEnrollments.map(({ _remainingBalanceCents, ...rest }) => rest),

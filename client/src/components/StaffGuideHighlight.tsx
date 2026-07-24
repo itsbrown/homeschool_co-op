@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useStaffGuide } from "@/contexts/StaffGuideContext";
+import { useStaffGuideOptional } from "@/contexts/StaffGuideContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
@@ -11,10 +11,12 @@ interface StaffGuideHighlightProps {
 }
 
 export default function StaffGuideHighlight({ stepNumber, targetTestId, position = "bottom" }: StaffGuideHighlightProps) {
-  const { activeStep, clearStep } = useStaffGuide();
+  const guide = useStaffGuideOptional();
   const [rect, setRect] = useState<DOMRect | null>(null);
 
-  const isActive = activeStep?.number === stepNumber;
+  const activeStep = guide?.activeStep ?? null;
+  const clearStep = guide?.clearStep;
+  const isActive = !!guide && activeStep?.number === stepNumber;
 
   const updatePosition = useCallback(() => {
     const el = document.querySelector(`[data-testid="${targetTestId}"]`) as HTMLElement;
@@ -55,7 +57,7 @@ export default function StaffGuideHighlight({ stepNumber, targetTestId, position
     };
   }, [isActive, targetTestId, updatePosition, rect]);
 
-  if (!isActive || !rect) return null;
+  if (!guide || !clearStep || !activeStep || !isActive || !rect) return null;
 
   const tooltipStyle: React.CSSProperties = {
     position: "fixed",

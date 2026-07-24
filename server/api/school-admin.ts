@@ -968,6 +968,16 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
       schedule: schedule,
       capacity: req.body.capacity !== undefined ? req.body.capacity : existingClass.capacity,
       locationId: req.body.locationId !== undefined ? req.body.locationId : existingClass.locationId,
+      sessionId:
+        req.body.sessionId !== undefined
+          ? req.body.sessionId == null
+            ? null
+            : Number(req.body.sessionId)
+          : existingClass.sessionId,
+      autoPlaceByGrade:
+        req.body.autoPlaceByGrade !== undefined
+          ? req.body.autoPlaceByGrade === true
+          : existingClass.autoPlaceByGrade,
       instructorName: instructorName,
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
@@ -981,6 +991,18 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
     if (!updatedClass) {
       console.log('❌ Failed to update class with ID:', classId);
       return res.status(500).json({ message: 'Failed to update class' });
+    }
+
+    let gradePlacementSync = null;
+    if (
+      req.body.autoPlaceByGrade !== undefined ||
+      req.body.gradeLevels !== undefined ||
+      req.body.locationId !== undefined ||
+      req.body.sessionId !== undefined ||
+      updatedClass.autoPlaceByGrade
+    ) {
+      const { syncGradePlacementsForClass } = await import('../services/grade-placement-sync');
+      gradePlacementSync = await syncGradePlacementsForClass(classId);
     }
 
     // If this class has variants, update the corresponding child classes
@@ -1022,7 +1044,7 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
     }
 
     console.log('✅ Class updated successfully:', updatedClass.title);
-    res.json(updatedClass);
+    res.json({ ...updatedClass, gradePlacementSync });
   } catch (error) {
     console.error('❌ Error updating class:', error);
     res.status(500).json({ message: 'Error updating class' });
@@ -1091,6 +1113,16 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
       schedule: schedule,
       capacity: req.body.capacity !== undefined ? req.body.capacity : existingClass.capacity,
       locationId: req.body.locationId !== undefined ? req.body.locationId : existingClass.locationId,
+      sessionId:
+        req.body.sessionId !== undefined
+          ? req.body.sessionId == null
+            ? null
+            : Number(req.body.sessionId)
+          : existingClass.sessionId,
+      autoPlaceByGrade:
+        req.body.autoPlaceByGrade !== undefined
+          ? req.body.autoPlaceByGrade === true
+          : existingClass.autoPlaceByGrade,
       instructorName: instructorName,
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
@@ -1104,6 +1136,17 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
     if (!updatedClass) {
       console.log('❌ Failed to update class with ID:', classId);
       return res.status(500).json({ message: 'Failed to update class' });
+    }
+
+    let gradePlacementSync = null;
+    const placementFieldsChanged =
+      req.body.autoPlaceByGrade !== undefined ||
+      req.body.gradeLevels !== undefined ||
+      req.body.locationId !== undefined ||
+      req.body.sessionId !== undefined;
+    if (placementFieldsChanged || updatedClass.autoPlaceByGrade) {
+      const { syncGradePlacementsForClass } = await import('../services/grade-placement-sync');
+      gradePlacementSync = await syncGradePlacementsForClass(classId);
     }
 
     if (req.body.variants && Array.isArray(req.body.variants)) {
@@ -1157,7 +1200,7 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
     }
 
     console.log('✅ [PATCH] Class updated successfully:', updatedClass.title);
-    res.json(updatedClass);
+    res.json({ ...updatedClass, gradePlacementSync });
   } catch (error) {
     console.error('❌ [PATCH] Error updating class:', error);
     res.status(500).json({ message: 'Error updating class' });
@@ -1380,7 +1423,8 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
         enrollmentDate: enrollment.enrollmentDate?.toISOString() || enrollment.createdAt?.toISOString() || new Date().toISOString(),
         status: enrollment.status === 'pending_payment' ? 'Pending' : 
                 enrollment.status === 'waitlist' ? 'Waitlist' : 'Active',
-        variantName: enrollment.variantName || null
+        variantName: enrollment.variantName || null,
+        placementSource: enrollment.placementSource ?? null,
       };
     }));
 
@@ -1395,6 +1439,68 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
   } catch (error) {
     console.error("❌ Error fetching class roster:", error);
     res.status(500).json({ message: "Failed to fetch class roster" });
+  }
+});
+
+// Grade Placement: dry-run eligibility preview
+router.get("/classes/:id/grade-placement-preview", supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const classId = parseInt(req.params.id, 10);
+    if (isNaN(classId)) {
+      return res.status(400).json({ message: "Invalid class ID" });
+    }
+
+    const classData = await storage.getClassById(classId);
+    if (!classData) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+    if (classData.schoolId !== schoolId) {
+      return res.status(403).json({ message: "Access denied to this class" });
+    }
+
+    const { previewGradePlacementsForClass } = await import("../services/grade-placement-sync");
+    const preview = await previewGradePlacementsForClass(classId);
+    return res.json(preview);
+  } catch (error) {
+    console.error("❌ grade-placement-preview:", error);
+    return res.status(500).json({
+      message: "Failed to preview grade placements",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Grade Placement: apply sync
+router.post("/classes/:id/sync-grade-placements", supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const classId = parseInt(req.params.id, 10);
+    if (isNaN(classId)) {
+      return res.status(400).json({ message: "Invalid class ID" });
+    }
+
+    const classData = await storage.getClassById(classId);
+    if (!classData) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+    if (classData.schoolId !== schoolId) {
+      return res.status(403).json({ message: "Access denied to this class" });
+    }
+
+    const { syncGradePlacementsForClass } = await import("../services/grade-placement-sync");
+    const result = await syncGradePlacementsForClass(classId);
+    return res.json(result);
+  } catch (error) {
+    console.error("❌ sync-grade-placements:", error);
+    return res.status(500).json({
+      message: "Failed to sync grade placements",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 
@@ -2820,6 +2926,8 @@ router.post(
       schedule: schedule,
       capacity: req.body.capacity || 10,
       locationId: req.body.locationId,
+      sessionId: req.body.sessionId != null ? Number(req.body.sessionId) : null,
+      autoPlaceByGrade: req.body.autoPlaceByGrade === true,
       price: price,
       instructorName: req.body.instructorName,
       instructorId,
@@ -2834,6 +2942,12 @@ router.post(
     // Create class in database
     const newClass = await storage.createClass(newClassData);
     console.log('✅ Class created successfully in database');
+
+    let gradePlacementSync = null;
+    if (newClass.autoPlaceByGrade) {
+      const { syncGradePlacementsForClass } = await import('../services/grade-placement-sync');
+      gradePlacementSync = await syncGradePlacementsForClass(newClass.id);
+    }
 
     if (req.body.storeListing) {
       const { syncStoreListingFromProgram } = await import('../lib/store-listing-sync');
@@ -2858,7 +2972,8 @@ router.post(
     console.log('✅ Class created successfully:', newClass.title);
     return res.status(201).json({
       message: "Class created successfully",
-      class: newClass
+      class: newClass,
+      gradePlacementSync,
     });
   } catch (error) {
     console.error("❌ Error creating class:", error);
@@ -8767,9 +8882,17 @@ router.post('/sessions/:sessionId/generate-qr', supabaseAuth, async (req: any, r
 
     const qrToken = crypto.randomBytes(32).toString('hex');
 
-    const endDateTime = new Date(`${session.scheduledDate}T${session.scheduledEndTime}:00`);
-    endDateTime.setMinutes(endDateTime.getMinutes() + 15);
-    const expiresAt = endDateTime;
+    // Prefer session end + 15m, but never mint an already-expired token
+    // (E2E / KPI seeds often use past scheduledDate with status completed).
+    const sessionEnd = new Date(`${session.scheduledDate}T${session.scheduledEndTime}:00`);
+    const sessionBasedExpiry = Number.isNaN(sessionEnd.getTime())
+      ? null
+      : new Date(sessionEnd.getTime() + 15 * 60 * 1000);
+    const minExpiry = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    const expiresAt =
+      sessionBasedExpiry && sessionBasedExpiry > minExpiry
+        ? sessionBasedExpiry
+        : minExpiry;
 
     await db
       .update(classSessions)

@@ -166,11 +166,19 @@ export function enrollmentShouldExcludeFromCart(
     totalPaid?: number | null;
     checkoutExcluded?: boolean;
     managedByPaymentPlan?: boolean;
+    placementSource?: string | null;
+    placement_source?: string | null;
   },
   scheduledPayments?: ScheduledPaymentRow[] | null,
 ): boolean {
   const paid = Number(enrollment.totalPaid ?? 0);
   const status = String(enrollment.status ?? "").toLowerCase();
+
+  const placementSource =
+    enrollment.placementSource ?? enrollment.placement_source ?? null;
+  if (placementSource === "grade") {
+    return true;
+  }
 
   if (status === "location_wishlist") {
     return true;

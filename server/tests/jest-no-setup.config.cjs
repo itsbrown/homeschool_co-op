@@ -18,6 +18,9 @@ module.exports = {
     '<rootDir>/server/tests/enrollment-cart-eligibility.test.ts',
     '<rootDir>/server/tests/checkout-payment-plan-normalize.test.ts',
     '<rootDir>/server/tests/stuck-parent-manual-installments.test.ts',
+    '<rootDir>/server/tests/unit/grade-levels.test.ts',
+    '<rootDir>/server/tests/unit/session-payment-eligibility.test.ts',
+    '<rootDir>/server/tests/unit/current-class-enrollment.test.ts',
   ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {

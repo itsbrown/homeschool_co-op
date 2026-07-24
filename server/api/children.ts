@@ -59,7 +59,19 @@ router.get("/", jwtCheck, isParent, async (req: any, res: Response) => {
     );
     
     console.log(`✅ Found ${children.length} children for ${userEmail}`);
-    res.json({ children });
+
+    const childIds = children.map((c: any) => c.id);
+    const enrollments =
+      childIds.length > 0 ? await storage.getEnrollmentsByChildIds(childIds) : [];
+    const { buildPlacedClassesForChild } = await import("../lib/build-placed-classes");
+    const childrenWithPlacement = await Promise.all(
+      children.map(async (child: any) => {
+        const placedClasses = await buildPlacedClassesForChild(child.id, enrollments);
+        return { ...child, placedClasses };
+      }),
+    );
+
+    res.json({ children: childrenWithPlacement });
   } catch (error) {
     console.error("Error fetching children:", error);
     res.status(500).json({ message: "Error fetching children" });

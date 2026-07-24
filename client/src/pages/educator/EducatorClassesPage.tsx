@@ -28,39 +28,47 @@ export default function EducatorClassesPage() {
   // Get educator's assigned classes using authenticated endpoint
   const { data: classesData, isLoading } = useQuery<any[]>({
     queryKey: ["/api/educator/my-classes"],
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   // Transform data to match the expected format
   const transformedClasses = (classesData ?? []).map((classItem: any) => {
-    // Schedule is now pre-formatted by the API
+    // Schedule / location are pre-formatted by the API
     const scheduleStr = classItem.schedule || 'Schedule TBD';
-    
-    // Determine status based on dates
+    // Prefer class term dates (API sends YYYY-MM-DD strings)
+    const startDate = classItem.startDate ?? classItem.start_date ?? null;
+    const endDate = classItem.endDate ?? classItem.end_date ?? null;
+    const locationLabel =
+      (typeof classItem.location === 'string' && classItem.location.trim()) ||
+      (typeof classItem.classLocation === 'string' && classItem.classLocation.trim()) ||
+      null;
+
     const now = new Date();
-    const validFrom = classItem.validFrom ? new Date(classItem.validFrom) : null;
-    const validTo = classItem.validTo ? new Date(classItem.validTo) : null;
-    
-    let status = 'active';
-    if (validTo && now > validTo) {
+    const start = startDate ? new Date(startDate) : null;
+    const end = endDate ? new Date(endDate) : null;
+
+    let status = classItem.status || 'active';
+    if (end && now > end) {
       status = 'completed';
-    } else if (validFrom && now < validFrom) {
+    } else if (start && now < start) {
       status = 'upcoming';
     }
-    
+
     return {
       id: classItem.id,
       title: classItem.title,
-      description: classItem.description,
+      description: classItem.description || classItem.classDescription,
       schedule: scheduleStr,
-      location: classItem.location,
+      location: locationLabel,
       capacity: classItem.capacity,
       enrollmentCount: classItem.enrollmentCount || 0,
       status,
-      startDate: classItem.validFrom,
-      endDate: classItem.validTo,
+      startDate,
+      endDate,
       category: classItem.category,
-      isPrimary: true,
-      canStartSession: true
+      isPrimary: classItem.isPrimary ?? true,
+      canStartSession: classItem.canStartSession ?? true,
     };
   });
 

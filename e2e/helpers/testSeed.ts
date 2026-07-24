@@ -436,3 +436,44 @@ export async function postSetupPublicStoreScenario(
   }
   return { response, json };
 }
+
+export type SetupGradePlacementScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    adminSupabaseLinked?: boolean;
+    school: { id: number; name: string };
+    location: { id: number; name: string };
+    session: { id: number; name: string };
+    admin: { id: number; email: string; password: string };
+    parent: { id: number; email: string; password: string };
+    children: {
+      paid: { id: number; firstName: string; lastName: string; gradeLevel: string };
+      unpaid: { id: number; firstName: string; lastName: string };
+    };
+    class: { id: number; title: string };
+    syncResult: { placed: number; blocked: number; summaryLabel: string };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupGradePlacementScenario(
+  request: APIRequestContext,
+  body: { linkSupabaseAuth?: boolean } = {},
+): Promise<{ response: APIResponse; json: SetupGradePlacementScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-grade-placement-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupGradePlacementScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupGradePlacementScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}

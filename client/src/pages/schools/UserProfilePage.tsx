@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRoute, Link, useLocation } from 'wouter';
 import { ArrowLeft, AlertTriangle } from 'lucide-react';
@@ -41,18 +41,22 @@ function getRoleDisplayName(role: string) {
   }
 }
 
+/** wouter useLocation() is pathname-only — read ?tab= from window.search. */
+function readProfileTabFromWindow(): string {
+  if (typeof window === 'undefined') return 'overview';
+  return new URLSearchParams(window.location.search).get('tab') || 'overview';
+}
+
 export default function UserProfilePage() {
   const [, params] = useRoute('/schools/users/:userId');
   const userId = params?.userId;
   const [location] = useLocation();
 
-  const initialTab = useMemo(() => {
-    const q = location.split('?')[1] || '';
-    const tab = new URLSearchParams(q).get('tab');
-    return tab || 'overview';
-  }, [location]);
+  const [activeTab, setActiveTab] = useState(readProfileTabFromWindow);
 
-  const [activeTab, setActiveTab] = useState(initialTab);
+  useEffect(() => {
+    setActiveTab(readProfileTabFromWindow());
+  }, [location, userId]);
 
   const { data: meta, isLoading, error } = useQuery<ProfileMeta>({
     queryKey: [`/api/school-admin/users/${userId}/profile`],

@@ -142,6 +142,7 @@ interface Child {
   interests?: string[];
   age?: number;
   locationName?: string | null;
+  placedClasses?: Array<{ id: number; title: string; placementSource?: string | null }>;
 }
 
 export default function ChildrenPage() {
@@ -219,6 +220,14 @@ export default function ChildrenPage() {
                           <School className="h-4 w-4 mr-2 text-muted-foreground" />
                           <span className="text-sm">School: {child.school || "Not specified"}</span>
                         </div>
+                        {child.placedClasses && child.placedClasses.length > 0 && (
+                          <p
+                            className="text-sm"
+                            data-testid={`text-child-placed-class-${child.id}`}
+                          >
+                            Class: {child.placedClasses.map((c) => c.title).join(", ")}
+                          </p>
+                        )}
                         <div>
                           <p className="text-sm font-medium mb-2">Recent Enrollment:</p>
                           <MostRecentEnrollment childId={child.id} />

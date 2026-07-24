@@ -255,6 +255,13 @@ router.delete('/:enrollmentId/unenroll', async (req: any, res) => {
       return res.status(403).json({ message: 'Unauthorized: enrollment does not belong to your children' });
     }
 
+    if (enrollment.placementSource === 'grade') {
+      return res.status(400).json({
+        message:
+          'This seat was added by Grade Placement. Contact your school admin to change class placement.',
+      });
+    }
+
     // Only allow unenrollment if payment is pending (not yet paid)
     if (enrollment.status !== 'pending_payment') {
       return res.status(400).json({ 

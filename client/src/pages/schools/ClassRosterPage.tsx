@@ -30,6 +30,7 @@ interface Student {
   gradeLevel: string;
   enrollmentDate: string;
   status: string;
+  placementSource?: string | null;
 }
 
 interface ClassDetails {
@@ -71,6 +72,33 @@ export default function ClassRosterPage() {
       return response.json();
     },
     enabled: !!classId,
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest(
+        "POST",
+        `/api/school-admin/classes/${classId}/sync-grade-placements`,
+      );
+      return response.json();
+    },
+    onSuccess: (result: { summaryLabel?: string }) => {
+      toast({
+        title: "Roster re-synced",
+        description: result.summaryLabel || "Grade placement sync complete.",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/school-admin/classes", classId, "roster"],
+      });
+      refetchRoster();
+    },
+    onError: () => {
+      toast({
+        title: "Re-sync failed",
+        description: "Could not sync grade placements for this class.",
+        variant: "destructive",
+      });
+    },
   });
 
   const isLoading = classLoading || rosterLoading;
@@ -230,12 +258,26 @@ export default function ClassRosterPage() {
                     Students currently enrolled in this class
                   </CardDescription>
                 </div>
-                <div className="w-full sm:w-72">
-                  <Input
-                    placeholder="Search students..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => syncMutation.mutate()}
+                    disabled={syncMutation.isPending}
+                    data-testid="button-resync-grade-placement"
+                  >
+                    {syncMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Re-sync roster
+                  </Button>
+                  <div className="w-full sm:w-72">
+                    <Input
+                      placeholder="Search students..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -258,7 +300,19 @@ export default function ClassRosterPage() {
                       filteredStudents.map((student) => (
                         <TableRow key={student.id}>
                           <TableCell className="font-medium">
-                            {student.firstName} {student.lastName}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span>
+                                {student.firstName} {student.lastName}
+                              </span>
+                              {student.placementSource === "grade" && (
+                                <Badge
+                                  variant="secondary"
+                                  data-testid="badge-placed-by-grade"
+                                >
+                                  Placed by grade
+                                </Badge>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>{student.gradeLevel}</TableCell>
                           <TableCell>

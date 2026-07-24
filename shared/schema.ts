@@ -714,6 +714,12 @@ export const programEnrollments = pgTable("program_enrollments", {
   /** Read-only mirror of DB generated column `effective_balance` when present */
   effectiveBalance: integer("effective_balance"),
 
+  /**
+   * Grade Placement sync seat: `grade` = free auto-placed roster membership.
+   * null = normal paid/manual enrollment (never cancelled by placement sync).
+   */
+  placementSource: text("placement_source"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1733,6 +1739,10 @@ export const classes = pgTable("classes", {
   description: text("description").notNull(),
   category: text("category").notNull(), // DEPRECATED: Will be removed after migration - use categoryId instead
   gradeLevels: text("grade_levels").array(),
+  /** Academic period (e.g. Fall 2026) — required for Grade Placement auto-place */
+  sessionId: integer("session_id").references(() => sessions.id),
+  /** When true, sync places session-paid students whose grade matches gradeLevels */
+  autoPlaceByGrade: boolean("auto_place_by_grade").default(false).notNull(),
   startDate: date("start_date"), // Keep as date type for compatibility
   endDate: date("end_date"), // Keep as date type for compatibility
   schedule: jsonb("schedule").default(null), // JSON object with schedule details - supports variants for school_admin
@@ -1800,6 +1810,8 @@ export const insertClassSchema = createInsertSchema(classes)
     // Shared optional fields
     schoolId: z.number().optional(),
     locationId: z.number().optional(),
+    sessionId: z.number().optional().nullable(),
+    autoPlaceByGrade: z.boolean().optional().default(false),
     gradeLevels: z.array(z.string()).optional(),
     capacity: z.number().optional(),
     schedule: z.any().optional(),
@@ -2487,6 +2499,7 @@ export const educatorClassAssignments = pgTable("educator_class_assignments", {
 });
 
 export type EducatorClassAssignment = typeof educatorClassAssignments.$inferSelect;
+export type InsertEducatorClassAssignment = typeof educatorClassAssignments.$inferInsert;
 
 /** Educator availability schedules (init-db `educator_schedules`) */
 export const educatorSchedules = pgTable("educator_schedules", {

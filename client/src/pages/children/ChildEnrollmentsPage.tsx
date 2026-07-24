@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { formatClassSchedule } from "@/lib/utils";
 import { useCart } from "@/contexts/CartContext";
+import { isCurrentClassEnrollment } from "@shared/current-class-enrollment";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,7 +76,7 @@ export default function ChildEnrollmentsPage() {
   const [rosterClassId, setRosterClassId] = useState<number | null>(null);
   const [rosterClassName, setRosterClassName] = useState<string>('');
 
-  // Fetch child data — API returns the child object; some mounts wrap as { child }
+  // Fetch child data — routes return the child object; some mounts wrap as { child }
   const { data: childResponse, isLoading: childLoading } = useQuery<Child | { child: Child }>({
     queryKey: [`/api/children/${childId}`],
     enabled: !!childId,
@@ -249,6 +250,21 @@ export default function ChildEnrollmentsPage() {
     });
   }, [enrollments, marketplaceClasses, schoolClasses, child?.locationName]);
 
+  const currentEnrollments = useMemo(() => {
+    return enrichedEnrollments.filter((enriched) => {
+      const enrollment = enriched as any;
+      return isCurrentClassEnrollment(
+        {
+          status: enrollment.status,
+          marketplaceClassId: enrollment.marketplaceClassId ?? null,
+          classId: enrollment.classId ?? null,
+          programEndDate: enrollment.programEndDate ?? null,
+        },
+        enriched.enrichedData?.endDate ?? null,
+      );
+    });
+  }, [enrichedEnrollments]);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'enrolled':
@@ -351,9 +367,9 @@ export default function ChildEnrollmentsPage() {
                 </Card>
               ))}
             </div>
-          ) : enrichedEnrollments.length > 0 ? (
+          ) : currentEnrollments.length > 0 ? (
             <div className="space-y-4">
-              {enrichedEnrollments.map((enrichedEnrollment, index) => {
+              {currentEnrollments.map((enrichedEnrollment, index) => {
                 const enrollment = enrichedEnrollment as Enrollment;
                 const details = (enrichedEnrollment as any).enrichedData;
                 

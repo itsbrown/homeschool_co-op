@@ -1,15 +1,22 @@
 # App knowledge changelog
 
+## 2026-07-24 (Grade Placement ship + E2E fixes)
+
+- Shipped Grade Placement (migration 254, sync, parent current-class cards, cart exclusion, post-pay/campus re-sync).
+- Parent-card E2E: open Family & Billing (`?tab=family` + click tab). `UserProfilePage` must read `window.location.search` — wouter `useLocation()` is pathname-only so `?tab=` was ignored.
+- `generate-qr` expiry uses max(sessionEnd+15m, now+2h) so past/completed seed sessions still produce scannable tokens.
+
 ## 2026-07-23 (School admin Students: current classes)
 
-- `GET /api/school-admin/students` fills `classes[]` with current class seats via `loadClassEnrollmentRowsForChildren` + `buildCurrentClassesByChildId` (not `getEnrollmentsByChildIds` — avoids empty mem fallback on schema drift).
+- `GET /api/school-admin/students` fills `classes[]` with current class seats (`buildCurrentClassesByChildId` + `shared/current-class-enrollment.ts`).
 - Students list/grid/mobile show a Classes column; search includes class titles. Enrollment date column unchanged (school join date).
-- End-date lookup uses `marketplace_class_id` → `classes` only (never `school_classes` ids against `classes`).
+- **Pitfall:** `storage.getEnrollmentsByChildIds` (`select *`) fails when `placement_source` is missing → CombinedStorage mem fallback → empty `classes[]` (“None” for everyone). Students list now uses `loadClassEnrollmentRowsForChildren` (explicit columns + fallback without `placement_source`). End-date lookup only uses `marketplace_class_id` → `classes` (not `school_classes` ids).
+- Domain: [grade-placement.md](./domains/grade-placement.md), [grades-ages-classes.md](./domains/grades-ages-classes.md).
 
-## 2026-07-23 (Credits-only checkout recovery UI)
+## 2026-07-23 (School admin platform update email)
 
-- Applying credits that fully cover the cart cleared `clientSecret` on purpose (`creditOnlyEligible`), but `CartCheckout` showed “Checkout did not finish loading” because the gate used `actualPayableAmount` (pre-credit) and ignored `creditOnlyEligible`.
-- Gate now uses `displayPayableAmount` + `!creditOnlyEligible`. Domain: [payments-and-billing.md](./domains/payments-and-billing.md).
+- One-off send script: `server/scripts/send-school-admin-platform-update.ts` (`--dry-run` / `--send`, via `scripts/with-prod-env.mjs`). Recipients = active `schoolAdmin` (`users.role` or `user_roles`).
+- Prod `email_log` insert can fail (`column "created_at" … does not exist`) while SendGrid still delivers — send success ≠ log row. Domain: [observability.md](./domains/observability.md).
 
 ## 2026-07-22 (Mentor Schedule ASA print sheet)
 
@@ -26,6 +33,36 @@
 - Educator Schedule UI: plan titles / empty badge, shared `WeekPlanBlockDetailSheet`, print root; `/educator/schedule` → `/educator/weekly-calendar`.
 - Seed: class `schedule` jsonb + educator assignment; Playwright `educator-weekly-schedule-plans`.
 - Domain: [schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md).
+
+## 2026-07-22 (Educator My Classes 500)
+
+- `/api/educator/my-classes` returned 500: `storage.getEducatorClassAssignmentsByEducatorId is not a function` — assignment CRUD had been dropped from CombinedStorage/DatabaseStorage.
+- Restored Postgres helpers in `server/lib/educator-class-assignments-db.ts` and wired them like attendance-session-db.
+
+## 2026-07-22 (Educator My Classes under parent shell)
+
+- Multi-role users with `activeRole === parent` render `/educator/*` inside `ParentAppShell`, which lacked `StaffGuideProvider` → My Classes crashed (`useStaffGuide must be used within a StaffGuideProvider`).
+- `EducatorShellWrapper` now wraps that parent path with `StaffGuideProvider`; `StaffGuideHighlight` soft-fails without context.
+
+## 2026-07-22 (Current classes + Grade Placement campus fallback)
+
+- Hermione not placed: child/`school_students.location_id` were null while parent was Brighton — sync only checked student/child, blocked as `wrong_location`. Now falls back to parent `users.location_id`.
+- Parent **Class:** line and `/children/:id/enrollments` show **current** class seats only (`shared/current-class-enrollment.ts`); past-ended enrollments stay in DB but are hidden.
+- Fixed enrollments page title when `/api/children/:id` returns an unwrapped child (`undefined undefined`).
+- Domain: [grade-placement.md](./domains/grade-placement.md).
+
+## 2026-07-22 (Credits-only checkout recovery UI)
+
+- Applying credits that fully cover the cart cleared `clientSecret` on purpose (`creditOnlyEligible`), but `CartCheckout` showed “Checkout did not finish loading” because the gate used `actualPayableAmount` (pre-credit) and ignored `creditOnlyEligible`.
+- Gate now uses `displayPayableAmount` + `!creditOnlyEligible`. Domain: [payments-and-billing.md](./domains/payments-and-billing.md).
+
+## 2026-07-22 (Grade Placement + attendance restore)
+
+- **Grade Placement:** `classes.session_id` + `auto_place_by_grade`; `program_enrollments.placement_source = grade` free roster seats; eligibility = campus + `hasPaidTowardSession` + normalized grade.
+- Sync/preview with reason codes; hooks after class-pool apply, credits-only checkout, campus transfer; cart/unenroll hygiene for placement seats.
+- Parent/admin child cards expose `placedClasses` / Class title.
+- Attendance: restored class-session + upsertAttendance storage (`attendance-session-db`) and `GET /api/public/session-by-qr/:token`.
+- Domain: [grade-placement.md](./domains/grade-placement.md). Migration `254-grade-placement.sql`. Seeds/tests: `setup-grade-placement-scenario`, Playwright auto-place + parent-card + attendance QR/mark smoke.
 
 ## 2026-07-21 (School admin students list hang)
 
@@ -49,6 +86,12 @@
 - Effective-permissions cache keys off localStorage/`silentRoleContextUpdate` role only when held in `allRoles` (no client bypass spoof).
 - `POST /api/school-admin/classes` gated with `requirePermission('canManageClasses')`.
 - Skill: `asa-auth-patterns` effective-permissions table.
+
+## 2026-07-21 (Grades/ages vs classes — current behavior)
+
+- Documented invariants: class `gradeLevels` / `ageRange` are metadata + browse filters, not enrollment constraints; no `minGrade`/`maxGrade`/`ageMin`/`ageMax`; roster from `program_enrollments`.
+- Child grade labels (`1st Grade`) vs class slugs (`1st-grade`) do not align for `includes`-style matching.
+- Domain: [grades-ages-classes.md](./domains/grades-ages-classes.md).
 
 ## 2026-07-21 (Class grade selector through 12th)
 

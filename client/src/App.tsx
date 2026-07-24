@@ -14,6 +14,7 @@ import { ActivityTelemetry } from "@/components/ActivityTelemetry";
 import { InteractiveTutorialProvider } from "@/components/tutorials/InteractiveTutorial";
 import PaymentHelpAssistant from "@/components/payments/PaymentHelpAssistant";
 import { SchoolRouteGuard } from "@/components/auth/SchoolRouteGuard";
+import { StaffGuideProvider } from "@/contexts/StaffGuideContext";
 
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -254,8 +255,14 @@ const EnrollmentsAdminPage = lazy(() => import("./pages/schools/EnrollmentsAdmin
 
 function EducatorShellWrapper({ children }: { children: React.ReactNode }) {
   const { activeRole } = useRole();
+  // Multi-role parents keep ParentAppShell on /educator/*; Staff Guide highlights
+  // (My Classes, Start Session, My Hours) still need StaffGuideProvider.
   if (activeRole === 'parent') {
-    return <ParentAppShell>{children}</ParentAppShell>;
+    return (
+      <StaffGuideProvider>
+        <ParentAppShell>{children}</ParentAppShell>
+      </StaffGuideProvider>
+    );
   }
   return <EducatorAppShell>{children}</EducatorAppShell>;
 }
