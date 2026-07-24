@@ -8882,9 +8882,17 @@ router.post('/sessions/:sessionId/generate-qr', supabaseAuth, async (req: any, r
 
     const qrToken = crypto.randomBytes(32).toString('hex');
 
-    const endDateTime = new Date(`${session.scheduledDate}T${session.scheduledEndTime}:00`);
-    endDateTime.setMinutes(endDateTime.getMinutes() + 15);
-    const expiresAt = endDateTime;
+    // Prefer session end + 15m, but never mint an already-expired token
+    // (E2E / KPI seeds often use past scheduledDate with status completed).
+    const sessionEnd = new Date(`${session.scheduledDate}T${session.scheduledEndTime}:00`);
+    const sessionBasedExpiry = Number.isNaN(sessionEnd.getTime())
+      ? null
+      : new Date(sessionEnd.getTime() + 15 * 60 * 1000);
+    const minExpiry = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    const expiresAt =
+      sessionBasedExpiry && sessionBasedExpiry > minExpiry
+        ? sessionBasedExpiry
+        : minExpiry;
 
     await db
       .update(classSessions)

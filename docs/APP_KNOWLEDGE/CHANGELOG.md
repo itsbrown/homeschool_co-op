@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-07-24 (Grade Placement ship + E2E fixes)
+
+- Shipped Grade Placement (migration 254, sync, parent current-class cards, cart exclusion, post-pay/campus re-sync).
+- Parent-card E2E must open `/schools/users/:id?tab=family` (not `tab=children` — that tab does not exist on UserProfilePage).
+- `generate-qr` expiry uses max(sessionEnd+15m, now+2h) so past/completed seed sessions still produce scannable tokens.
+
 ## 2026-07-23 (School admin Students: current classes)
 
 - `GET /api/school-admin/students` fills `classes[]` with current class seats (`buildCurrentClassesByChildId` + `shared/current-class-enrollment.ts`).

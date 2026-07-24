@@ -775,12 +775,20 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
     const { resolveRegisteredLocation, resolveChildRegisteredLocation } = await import(
       '../lib/parent-registered-location'
     );
+    const { loadClassEnrollmentRowsForChildren, buildPlacedClassesForChild } = await import(
+      '../lib/build-placed-classes'
+    );
     const parentCampus = await resolveRegisteredLocation(storage, parent.locationId);
     const childrenWithCampus = await Promise.all(
       children.map(async (child) => {
         const campus = await resolveChildRegisteredLocation(storage, parent, child);
         return { child, campus };
       }),
+    );
+    // Prefer SQL class-linked rows (includes placement_source) over display-shaped
+    // processedEnrollments, which omit marketplaceClassId / programEndDate.
+    const classEnrollmentRows = await loadClassEnrollmentRowsForChildren(
+      children.map((c) => c.id),
     );
 
     const profile = {
@@ -800,14 +808,9 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       },
       children: await Promise.all(
         childrenWithCampus.map(async ({ child, campus }) => {
-          const { buildPlacedClassesForChild } = await import('../lib/build-placed-classes');
           const placedClasses = await buildPlacedClassesForChild(
             child.id,
-            processedEnrollments.map((e) => ({
-              ...e,
-              marketplaceClassId: e.marketplaceClassId ?? e.classId ?? null,
-              classId: e.classId ?? null,
-            })),
+            classEnrollmentRows,
           );
           return {
             id: child.id,
@@ -815,6 +818,7 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
             firstName: child.firstName,
             lastName: child.lastName,
             birthDate: child.birthdate,
+            birthdate: child.birthdate,
             grade: child.gradeLevel,
             gradeLevel: child.gradeLevel,
             schoolId: child.school || null,

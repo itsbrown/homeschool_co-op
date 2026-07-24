@@ -28,7 +28,8 @@ test.describe("grade placement parent card", () => {
     await loginParent(page, seed.admin.email, seed.admin.password);
     await dismissStaffGuideIfVisible(page);
 
-    await page.goto(`/schools/users/${seed.parent.id}?tab=children`, {
+    // Unified user profile: Family & Billing tab embeds ParentProfilePage (Children sub-tab).
+    await page.goto(`/schools/users/${seed.parent.id}?tab=family`, {
       waitUntil: "domcontentloaded",
     });
     await expect(
