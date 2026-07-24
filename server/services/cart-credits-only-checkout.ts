@@ -392,6 +392,23 @@ export async function completeCartCreditsOnlyCheckout(params: {
       /* non-fatal */
     }
 
+    try {
+      const { syncGradePlacementsForSession } = await import('./grade-placement-sync');
+      const sessionKeys = new Set<string>();
+      for (const enrollmentId of enrollmentIds) {
+        const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+        if (!enrollment?.sessionId || !enrollment.schoolId) continue;
+        if (enrollment.placementSource === 'grade') continue;
+        sessionKeys.add(`${enrollment.schoolId}:${enrollment.sessionId}`);
+      }
+      for (const key of sessionKeys) {
+        const [schoolIdStr, sessionIdStr] = key.split(':');
+        await syncGradePlacementsForSession(Number(schoolIdStr), Number(sessionIdStr));
+      }
+    } catch (err) {
+      console.warn('[grade-placement] credits-only sync failed:', err);
+    }
+
     return { creditsApplied: appliedVolunteerCreditsCents, syntheticPaymentIntentId };
   } catch (err) {
     if (holdCreated) {

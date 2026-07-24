@@ -108,6 +108,13 @@ interface ParentProfile {
     createdAt: string;
     locationId?: number | null;
     locationName?: string | null;
+    placedClasses?: Array<{
+      id: number;
+      title: string;
+      placementSource?: string | null;
+      sessionId?: number | null;
+      locationId?: number | null;
+    }>;
   }>;
   enrollments: Array<{
     id: number;
@@ -2038,6 +2045,12 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                               </h3>
                               <div className="text-sm text-muted-foreground space-y-1 mt-2">
                                 <p>Grade: {child.gradeLevel}</p>
+                                {child.placedClasses && child.placedClasses.length > 0 && (
+                                  <p data-testid={`text-child-placed-class-${child.id}`}>
+                                    Class:{' '}
+                                    {child.placedClasses.map((c) => c.title).join(', ')}
+                                  </p>
+                                )}
                                 <p>Birth Date: {child.birthdate ? new Date(child.birthdate + 'T00:00:00').toLocaleDateString() : 'No date set'}</p>
                                 {child.allergies && <p>Allergies: {child.allergies}</p>}
                                 {child.medicalInfo && <p>Medical Info: {child.medicalInfo}</p>}

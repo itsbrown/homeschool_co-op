@@ -12,9 +12,16 @@ export function cn(...inputs: ClassValue[]) {
  * Formats a date string into a human-readable format
  * Handles date strings without timezone conversions
  */
-export function formatDate(dateString: string): string {
+export function formatDate(dateString: string | Date | null | undefined): string {
   if (!dateString) return '';
-  
+  if (dateString instanceof Date) {
+    if (Number.isNaN(dateString.getTime())) return '';
+    const year = dateString.getUTCFullYear();
+    const month = String(dateString.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(dateString.getUTCDate()).padStart(2, '0');
+    return `${month}/${day}/${year}`;
+  }
+
   // For standard ISO dates (YYYY-MM-DD), parse directly without timezone adjustments
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
     const [year, month, day] = dateString.split('-').map(num => parseInt(num, 10));

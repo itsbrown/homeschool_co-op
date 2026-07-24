@@ -68,6 +68,15 @@ router.get('/children', jwtCheck, async (req: any, res) => {
       supabaseId: req.auth?.supabaseId,
     });
 
+    const childIds = children.map((c) => c.id);
+    let enrollments: any[] = [];
+    try {
+      enrollments =
+        childIds.length > 0 ? await storage.getEnrollmentsByChildIds(childIds) : [];
+    } catch {
+      enrollments = [];
+    }
+
     // Transform children data to ensure consistent format
     const transformedChildren = await Promise.all(
       children.map(async (child) => {
@@ -76,6 +85,10 @@ router.get('/children', jwtCheck, async (req: any, res) => {
           dbUser,
           child,
         );
+        const { buildPlacedClassesForChild } = await import(
+          '../lib/build-placed-classes'
+        );
+        const placedClasses = await buildPlacedClassesForChild(child.id, enrollments);
         return {
           id: child.id,
           firstName: child.firstName,
@@ -96,6 +109,7 @@ router.get('/children', jwtCheck, async (req: any, res) => {
           notes: child.notes,
           locationId,
           locationName,
+          placedClasses,
           createdAt: child.createdAt,
           updatedAt: child.updatedAt,
         };

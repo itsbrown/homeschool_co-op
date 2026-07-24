@@ -101,5 +101,30 @@ export async function applyClassPoolToEnrollments(
     updatedIds.push(enrollment.id);
   }
 
+  // Grade Placement: after session tuition receives payment, refresh auto-place rosters
+  try {
+    const sessionKeys = new Set<string>();
+    for (const enrollmentId of updatedIds) {
+      const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+      if (!enrollment?.sessionId || !enrollment.schoolId) continue;
+      if (enrollment.placementSource === 'grade') continue;
+      sessionKeys.add(`${enrollment.schoolId}:${enrollment.sessionId}`);
+    }
+    if (sessionKeys.size > 0) {
+      const { syncGradePlacementsForSession } = await import(
+        '../services/grade-placement-sync'
+      );
+      for (const key of sessionKeys) {
+        const [schoolIdStr, sessionIdStr] = key.split(':');
+        await syncGradePlacementsForSession(
+          Number(schoolIdStr),
+          Number(sessionIdStr),
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('[grade-placement] post-payment sync failed:', err);
+  }
+
   return { enrollmentIds: updatedIds, appliedCents, skippedCents, classPoolCents };
 }

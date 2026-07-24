@@ -40,6 +40,8 @@ const classFormSchema = z.object({
   })).min(1, "At least one time option is required"),
   capacity: z.coerce.number().int().min(1, "Capacity must be at least 1"),
   locationId: z.coerce.number().int().min(1, "Location is required"),
+  sessionId: z.coerce.number().int().optional().nullable(),
+  autoPlaceByGrade: z.boolean().default(false),
   instructorName: z.string().optional(), // Legacy field - educators now managed via ClassEducatorAssignments
   status: z.string().min(1, "Please select a status"),
   isAdminOnly: z.boolean().default(false),
@@ -84,6 +86,8 @@ export default function SchoolClassCreationPage() {
       }],
       capacity: 10,
       locationId: 0,
+      sessionId: null,
+      autoPlaceByGrade: false,
       instructorName: "",
       status: "upcoming",
       isAdminOnly: false,
@@ -124,6 +128,47 @@ export default function SchoolClassCreationPage() {
 
   // Stabilize locations with useMemo to prevent infinite loops
   const locations = React.useMemo(() => locationData || [], [locationData]);
+
+  // Academic sessions (Fall 2026, etc.) for Grade Placement
+  const { data: sessionsData = [] } = useQuery({
+    queryKey: ["/api/admin/sessions"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/sessions");
+      const json = await res.json();
+      return Array.isArray(json) ? json : json.sessions || [];
+    },
+    enabled: !!schoolId,
+  });
+
+  const watchLocationId = form.watch("locationId");
+  const watchSessionId = form.watch("sessionId");
+  const watchAutoPlace = form.watch("autoPlaceByGrade");
+  const watchGradeLevels = form.watch("gradeLevels");
+  const canAutoPlace =
+    !!watchLocationId &&
+    !!watchSessionId &&
+    Array.isArray(watchGradeLevels) &&
+    watchGradeLevels.length > 0;
+
+  const { data: placementPreview } = useQuery({
+    queryKey: [
+      "/api/school-admin/classes",
+      classId,
+      "grade-placement-preview",
+      watchLocationId,
+      watchSessionId,
+      watchGradeLevels,
+      watchAutoPlace,
+    ],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "GET",
+        `/api/school-admin/classes/${classId}/grade-placement-preview`,
+      );
+      return res.json();
+    },
+    enabled: !!classId && !!watchAutoPlace && canAutoPlace,
+  });
 
   // Fetch categories for the school
   const { data: categoriesData = [], isLoading: categoriesLoading } = useQuery({
@@ -268,6 +313,8 @@ export default function SchoolClassCreationPage() {
         }],
         capacity: classData.capacity || 10,
         locationId: targetLocationId,
+        sessionId: classData.sessionId ?? null,
+        autoPlaceByGrade: classData.autoPlaceByGrade === true,
         instructorName: instructorValue,
         status: classData.status || "upcoming",
         isAdminOnly: classData.isAdminOnly || false,
@@ -322,18 +369,26 @@ export default function SchoolClassCreationPage() {
 
   // Create class mutation
   const createClassMutation = useMutation({
-    mutationFn: (data: ClassFormValues) => {
-      return apiRequest("POST", "/school-admin/classes", { ...data, volunteerWaiverId });
+    mutationFn: async (data: ClassFormValues) => {
+      const res = await apiRequest("POST", "/api/school-admin/classes", {
+        ...data,
+        volunteerWaiverId,
+      });
+      return res.json();
     },
     onSuccess: async (response: any) => {
       // Invalidate class caches immediately so the new class appears in lists
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes-list"] });
+
+      const createdClass = response?.class ?? response;
+      const createdId = createdClass?.id;
+      const syncSummary = response?.gradePlacementSync?.summaryLabel;
       
       // Save class inclusions if any were selected
       let inclusionResult = { success: 0, failed: 0 };
-      if (selectedInclusions.length > 0 && response?.id) {
-        inclusionResult = await saveClassInclusions(response.id, selectedInclusions);
+      if (selectedInclusions.length > 0 && createdId) {
+        inclusionResult = await saveClassInclusions(createdId, selectedInclusions);
         queryClient.invalidateQueries({ queryKey: ["/api/class-inclusions"] });
       }
       
@@ -346,17 +401,22 @@ export default function SchoolClassCreationPage() {
           variant: "destructive",
         });
         // Navigate to edit page for the newly created class so user can fix inclusions
-        if (response?.id) {
-          navigate(`/schools/classes/${response.id}/edit`);
+        if (createdId) {
+          navigate(`/schools/classes/${createdId}/edit`);
         } else {
           navigate("/schools/classes");
         }
       } else {
         toast({
           title: "Class created successfully",
-          description: selectedInclusions.length > 0 
-            ? `Your new class has been added with ${inclusionResult.success} included class(es).`
-            : "Your new class has been added to the system.",
+          description: [
+            selectedInclusions.length > 0
+              ? `Added with ${inclusionResult.success} included class(es).`
+              : "Your new class has been added to the system.",
+            syncSummary,
+          ]
+            .filter(Boolean)
+            .join(" "),
         });
         navigate("/schools/classes");
       }
@@ -373,13 +433,20 @@ export default function SchoolClassCreationPage() {
 
   // Update class mutation
   const updateClassMutation = useMutation({
-    mutationFn: (data: ClassFormValues) => {
-      return apiRequest("PUT", `/school-admin/classes/${classId}`, { ...data, volunteerWaiverId });
+    mutationFn: async (data: ClassFormValues) => {
+      const res = await apiRequest("PUT", `/api/school-admin/classes/${classId}`, {
+        ...data,
+        volunteerWaiverId,
+      });
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (response: any) => {
+      const syncSummary = response?.gradePlacementSync?.summaryLabel;
       toast({
         title: "Class updated successfully",
-        description: "Your class has been updated.",
+        description: syncSummary
+          ? `Updated. Grade placement: ${syncSummary}`
+          : "Your class has been updated.",
       });
       // Invalidate all class-related caches to ensure UI updates everywhere
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/classes"] });
@@ -614,6 +681,85 @@ export default function SchoolClassCreationPage() {
                           <Switch
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="sessionId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Academic session</FormLabel>
+                        <Select
+                          onValueChange={(v) =>
+                            field.onChange(v === "none" ? null : Number(v))
+                          }
+                          value={field.value ? String(field.value) : "none"}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-class-session">
+                              <SelectValue placeholder="Select session (e.g. Fall 2026)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">No session</SelectItem>
+                            {(sessionsData as any[]).map((s: any) => (
+                              <SelectItem key={s.id} value={String(s.id)}>
+                                {s.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Required for Auto-place by grade (campus students paid toward this session).
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="autoPlaceByGrade"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">Auto-place by grade</FormLabel>
+                          <FormDescription>
+                            Students at this campus who have paid toward this session (card, credits, or payment plan)
+                            and match the selected grades are added to the roster automatically (no payment).
+                            {!canAutoPlace &&
+                              " Set location, session, and grades before enabling."}
+                          </FormDescription>
+                          {watchAutoPlace && placementPreview?.summaryLabel && (
+                            <p className="text-sm text-muted-foreground pt-2" data-testid="text-placement-preview">
+                              Preview: {placementPreview.summaryLabel}
+                              {placementPreview.overCapacity
+                                ? " — over capacity warning"
+                                : ""}
+                            </p>
+                          )}
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            disabled={!canAutoPlace && !field.value}
+                            onCheckedChange={(checked) => {
+                              if (checked && !canAutoPlace) {
+                                toast({
+                                  title: "Missing placement settings",
+                                  description:
+                                    "Choose a location, academic session, and at least one grade first.",
+                                  variant: "destructive",
+                                });
+                                return;
+                              }
+                              field.onChange(checked);
+                            }}
+                            data-testid="switch-auto-place-by-grade"
                           />
                         </FormControl>
                       </FormItem>

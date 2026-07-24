@@ -1,6 +1,6 @@
 # Observability (Sentry, telemetry, email webhooks)
 
-**Last updated:** 2026-06-01
+**Last updated:** 2026-07-23
 
 ## Error pipeline (dual write)
 
@@ -35,6 +35,11 @@
 
 - `POST /api/webhooks/sendgrid/events` — updates latest `email_log` row on `bounce` / `dropped` / `delivered`.
 - Configure in SendGrid Event Webhook settings; verify signature in production before go-live.
+
+## Email log pitfall (prod)
+
+- Drizzle `emailLog` expects `created_at`; prod `email_log` may lack that column → `logEmailAttempt` errors after a successful SendGrid send. Delivery still works; do not treat log failure as send failure.
+- School-admin platform update blast: `server/scripts/send-school-admin-platform-update.ts`.
 
 ## Recommended Sentry alerts
 

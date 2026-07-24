@@ -22,6 +22,8 @@ import {
   type InsertMembershipEnrollment,
   type MembershipEnrollment,
   sessions,
+  locations,
+  schoolStudents,
   type Child,
   type Class,
   type Payment,
@@ -4311,6 +4313,272 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
     console.error('❌ setup-schedule-builder-scenario:', error);
     res.status(500).json({
       error: 'Failed to setup schedule builder scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/setup-grade-placement-scenario
+ * Campus + Fall session + paid matching child + unpaid control + Auto-place class.
+ */
+router.post('/setup-grade-placement-scenario', async (req: Request, res: Response) => {
+  try {
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    const bcrypt = await import('bcryptjs');
+    const password = 'TestPassword123!';
+    const db = await getDb();
+
+    // Ensure grade-placement columns exist (dev/test DBs)
+    await db.execute(sql`
+      ALTER TABLE classes ADD COLUMN IF NOT EXISTS session_id INTEGER REFERENCES sessions(id);
+      ALTER TABLE classes ADD COLUMN IF NOT EXISTS auto_place_by_grade BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS placement_source TEXT;
+    `);
+
+    const admin = await testDb.createTestUser({
+      email: `gp_admin_${uniqueId}@test.com`,
+      username: `gpadmin_${uniqueId}`,
+      name: 'Grade Placement Admin',
+      role: 'schoolAdmin',
+    });
+    await storage.updateUser(admin.id, { password: await bcrypt.hash(password, 10) });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `GP School ${uniqueId}`,
+      registrationCode: `GP${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    const [campus] = await db
+      .insert(locations)
+      .values({
+        schoolId: school.id,
+        name: `Greece Campus ${uniqueId}`,
+        code: `GP${uniqueId.slice(0, 4).toUpperCase()}`,
+        address: '1 Test Way',
+        city: 'Greece',
+        state: 'NY',
+        zipCode: '14626',
+        isActive: true,
+      })
+      .returning();
+
+    const parentEmail = `gp_parent_${uniqueId}@test.com`;
+    const parent = await testDb.createTestUser({
+      email: parentEmail,
+      username: `gpparent_${uniqueId}`,
+      name: 'GP Test Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    await storage.updateUser(parent.id, {
+      password: await bcrypt.hash(password, 10),
+      locationId: campus.id,
+    });
+
+    await db.insert(userRoles).values([
+      { userId: admin.id, role: 'schoolAdmin', schoolId: school.id, isPrimary: true },
+      { userId: parent.id, role: 'parent', schoolId: school.id, isPrimary: true },
+    ]);
+
+    const today = new Date();
+    const start = today.toISOString().slice(0, 10);
+    const endDate = new Date(today);
+    endDate.setMonth(endDate.getMonth() + 4);
+    const end = endDate.toISOString().slice(0, 10);
+
+    const [sessionRow] = await db
+      .insert(sessions)
+      .values({
+        schoolId: school.id,
+        name: `Fall 2026 ${uniqueId}`,
+        description: 'Grade placement E2E session',
+        startDate: start,
+        endDate: end,
+        status: 'active',
+        enrollmentOpen: true,
+        halfDayPrice: 15000,
+        fullDayPrice: 25000,
+        locationId: campus.id,
+        sortOrder: 0,
+      })
+      .returning();
+
+    const paidChild = await storage.createChild({
+      parentId: parent.id,
+      parentEmail,
+      firstName: 'Paid',
+      lastName: `Match${uniqueId}`,
+      birthdate: '2016-03-01',
+      gradeLevel: '1st Grade',
+      schoolId: school.id,
+      locationId: campus.id,
+    });
+    const unpaidChild = await storage.createChild({
+      parentId: parent.id,
+      parentEmail,
+      firstName: 'Unpaid',
+      lastName: `Control${uniqueId}`,
+      birthdate: '2016-04-01',
+      gradeLevel: '1st Grade',
+      schoolId: school.id,
+      locationId: campus.id,
+    });
+
+    await db.insert(schoolStudents).values([
+      {
+        schoolId: school.id,
+        childId: paidChild.id,
+        locationId: campus.id,
+        grade: '1st Grade',
+        status: 'active',
+      },
+      {
+        schoolId: school.id,
+        childId: unpaidChild.id,
+        locationId: campus.id,
+        grade: '1st Grade',
+        status: 'active',
+      },
+    ]);
+
+    const [paidSessionEnroll] = await db
+      .insert(programEnrollments)
+      .values({
+        schoolId: school.id,
+        classType: 'marketplace',
+        marketplaceClassId: null,
+        classId: null,
+        sessionId: sessionRow.id,
+        locationId: campus.id,
+        childId: paidChild.id,
+        childName: `${paidChild.firstName} ${paidChild.lastName}`,
+        className: `${sessionRow.name} - Full Day`,
+        parentId: parent.id,
+        parentEmail,
+        totalCost: 25000,
+        totalPaid: 5000,
+        remainingBalance: 20000,
+        depositRequired: 0,
+        paymentStatus: 'partial_payment',
+        status: 'enrolled',
+        enrollmentVersion: 'v2',
+        dayType: 'full_day',
+      })
+      .returning();
+
+    const [unpaidSessionEnroll] = await db
+      .insert(programEnrollments)
+      .values({
+        schoolId: school.id,
+        classType: 'marketplace',
+        marketplaceClassId: null,
+        classId: null,
+        sessionId: sessionRow.id,
+        locationId: campus.id,
+        childId: unpaidChild.id,
+        childName: `${unpaidChild.firstName} ${unpaidChild.lastName}`,
+        className: `${sessionRow.name} - Full Day`,
+        parentId: parent.id,
+        parentEmail,
+        totalCost: 25000,
+        totalPaid: 0,
+        remainingBalance: 25000,
+        depositRequired: 0,
+        paymentStatus: 'pending',
+        status: 'pending_payment',
+        enrollmentVersion: 'v2',
+        dayType: 'full_day',
+      })
+      .returning();
+
+    const cls = await testDb.createTestClass(school.id, {
+      title: `Seekers GP ${uniqueId}`,
+      description: 'Grade placement auto-place class',
+      price: 0,
+      status: 'active',
+      gradeLevels: ['1st-grade'],
+      locationId: campus.id,
+    });
+    await storage.updateClass(cls.id, {
+      sessionId: sessionRow.id,
+      autoPlaceByGrade: true,
+      locationId: campus.id,
+      gradeLevels: ['1st-grade'],
+    });
+
+    const { syncGradePlacementsForClass } = await import('../services/grade-placement-sync');
+    const syncResult = await syncGradePlacementsForClass(cls.id);
+
+    let supabaseLinked = false;
+    let adminSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuth === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      adminSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: admin.id,
+        email: admin.email!,
+        password,
+        role: 'schoolAdmin',
+        schoolId: school.id,
+        displayName: 'Grade Placement Admin',
+      });
+      supabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: parent.id,
+        email: parentEmail,
+        password,
+        role: 'parent',
+        schoolId: school.id,
+        displayName: 'GP Test Parent',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        supabaseLinked,
+        adminSupabaseLinked,
+        school: { id: school.id, name: school.name },
+        location: { id: campus.id, name: campus.name },
+        session: { id: sessionRow.id, name: sessionRow.name },
+        admin: { id: admin.id, email: admin.email, password },
+        parent: { id: parent.id, email: parentEmail, password },
+        children: {
+          paid: {
+            id: paidChild.id,
+            firstName: paidChild.firstName,
+            lastName: paidChild.lastName,
+            gradeLevel: paidChild.gradeLevel,
+          },
+          unpaid: {
+            id: unpaidChild.id,
+            firstName: unpaidChild.firstName,
+            lastName: unpaidChild.lastName,
+          },
+        },
+        class: { id: cls.id, title: cls.title },
+        sessionEnrollments: {
+          paidId: paidSessionEnroll.id,
+          unpaidId: unpaidSessionEnroll.id,
+        },
+        syncResult: {
+          placed: syncResult.placed,
+          blocked: syncResult.blocked,
+          summaryLabel: syncResult.summaryLabel,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-grade-placement-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup grade placement scenario',
       details: error instanceof Error ? error.message : String(error),
     });
   }

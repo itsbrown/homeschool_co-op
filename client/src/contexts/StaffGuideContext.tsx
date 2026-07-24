@@ -22,6 +22,11 @@ export function useStaffGuide() {
   return context;
 }
 
+/** Soft read for highlights that may render outside the educator staff-guide shell. */
+export function useStaffGuideOptional() {
+  return useContext(StaffGuideContext);
+}
+
 interface StaffGuideProviderProps {
   children: React.ReactNode;
 }
