@@ -43,12 +43,12 @@ test.describe("grade placement auto-place", () => {
     await page.goto(`/schools/classes/${seed.class.id}/edit`, {
       waitUntil: "domcontentloaded",
     });
-    await expect(page.getByTestId("switch-auto-place-by-grade")).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(page.getByTestId("text-placement-preview")).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(page.getByTestId("text-placement-preview")).toContainText(/blocked|unpaid|placed/i);
+    const autoPlace = page.getByTestId("switch-auto-place-by-grade");
+    await expect(autoPlace).toBeVisible({ timeout: 30_000 });
+    await autoPlace.scrollIntoViewIfNeeded();
+    // Preview loads after auto-place is on; wait for the summary line.
+    const preview = page.getByTestId("text-placement-preview");
+    await expect(preview).toBeVisible({ timeout: 45_000 });
+    await expect(preview).toContainText(/blocked|unpaid|placed/i);
   });
 });

@@ -28,10 +28,12 @@ test.describe("grade placement parent card", () => {
     await loginParent(page, seed.admin.email, seed.admin.password);
     await dismissStaffGuideIfVisible(page);
 
-    // Unified user profile: Family & Billing tab embeds ParentProfilePage (Children sub-tab).
+    // Unified user profile: Family & Billing embeds ParentProfilePage (Children sub-tab).
+    // Click the tab explicitly — wouter pathname ignores ?tab= until UserProfilePage syncs search.
     await page.goto(`/schools/users/${seed.parent.id}?tab=family`, {
       waitUntil: "domcontentloaded",
     });
+    await page.getByRole("tab", { name: /Family/i }).click();
     await expect(
       page.getByTestId(`text-child-placed-class-${seed.children.paid.id}`),
     ).toBeVisible({ timeout: 45_000 });
