@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-07-27 (GA4 form_submission conversion)
+
+- Public Form Builder success fires GA4 `form_submission` via `gtag('event')` with `form_id` / `form_name` / `form_slug` (`DynamicFormPage` onSuccess + `trackFormSubmission`).
+- `FormTracker` no longer treats DOM submit as the conversion (uses `form_submit_attempt`; skips forms with `data-ga-track-on="success"`).
+- Domain: [custom-forms-public-access.md](./domains/custom-forms-public-access.md) § Google Analytics.
+
 ## 2026-07-24 (Grade Placement ship + E2E fixes)
 
 - Shipped Grade Placement (migration 254, sync, parent current-class cards, cart exclusion, post-pay/campus re-sync).

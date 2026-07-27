@@ -102,6 +102,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { apiRequest } from '@/lib/queryClient';
+import { trackFormSubmission } from '@/lib/analytics';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle2, Share2, Facebook, Mail, Linkedin, Link2, School } from 'lucide-react';
 import { SiX } from 'react-icons/si';
@@ -130,6 +131,7 @@ interface SchoolInfo {
 interface CustomForm {
   id: number;
   title: string;
+  slug: string;
   description: string | null;
   fields: FormFieldType[];
   settings: any;
@@ -461,6 +463,15 @@ export default function DynamicFormPage() {
     },
     onSuccess: () => {
       setSubmitted(true);
+      if (form) {
+        trackFormSubmission({
+          form_name: form.title,
+          form_id: String(form.id),
+          form_slug: form.slug || slug,
+          form_destination: `/forms/${form.slug || slug}`,
+          form_submit_text: 'Submit',
+        });
+      }
       toast({ title: 'Success', description: form?.settings?.confirmationMessage || 'Form submitted successfully' });
     },
     onError: (error: any) => {
@@ -800,7 +811,14 @@ export default function DynamicFormPage() {
           </CardHeader>
           <CardContent>
             <Form {...form_hook}>
-              <form onSubmit={form_hook.handleSubmit(onSubmit)} className="space-y-6">
+              <form
+                onSubmit={form_hook.handleSubmit(onSubmit)}
+                className="space-y-6"
+                data-form-name={form.title}
+                data-form-id={String(form.id)}
+                data-form-slug={form.slug || slug}
+                data-ga-track-on="success"
+              >
                 {/* Honeypot — hidden from users; bots that fill it are rejected */}
                 <div
                   aria-hidden="true"

@@ -78,10 +78,11 @@ export function useAnalytics() {
     trackEnrollmentSubmit(classId, className, childId, childName, variant);
   }, []);
 
-  const trackForm = useCallback((formName: string, formId?: string) => {
+  const trackForm = useCallback((formName: string, formId?: string, formSlug?: string) => {
     trackFormSubmission({
       form_name: formName,
       form_id: formId,
+      form_slug: formSlug,
     });
   }, []);
 

@@ -76,6 +76,18 @@ Public by-slug query uses `staleTime: 0` + `refetchOnMount: 'always'`.
 | `allowMultipleSubmissions: false` | **Enforced** by email (or IP if no email) |
 | Required fields | **Server-side** validated against `custom_form_fields` |
 
+## Google Analytics (GA4)
+
+| Item | Detail |
+|------|--------|
+| Measurement ID | `G-C95K2BBZSS` in [`client/index.html`](../../../client/index.html) |
+| Conversion event | `form_submission` fired from [`DynamicFormPage`](../../../client/src/pages/DynamicFormPage.tsx) **on API success only** via [`trackFormSubmission`](../../../client/src/lib/analytics.ts) → `gtag('event', …)` |
+| Event params | `form_id`, `form_name`, `form_slug` (register as **custom dimensions** in GA4 Admin → Custom definitions; mark `form_submission` as a **Key event**) |
+| Attempt events | Global [`FormTracker`](../../../client/src/components/FormTracker.tsx) emits `form_submit_attempt` for other forms; public Form Builder forms set `data-ga-track-on="success"` so attempts are skipped |
+| Thank-you URL | **None** — success is inline on `/forms/:slug`; do not use destination-page goals |
+
+**Pitfall:** Pushing `{ event: '…' }` to `dataLayer` alone does **not** reach GA4 without GTM. Always use `gtag('event', name, params)` (see `client/src/lib/analytics.ts`).
+
 ## AI Smart Builder
 
 - Chat proposes a **draft** only (never sets `isActive` / `accessLevel: public`).
@@ -97,6 +109,7 @@ Public by-slug query uses `staleTime: 0` + `refetchOnMount: 'always'`.
 | Smart Builder 503 | No `ANTHROPIC_API_KEY` and mock off | Set key or `FORM_BUILDER_AI_MOCK=1` for local E2E |
 | Template seed FK error | `school_id = 1` missing on prod | Templates use first school in DB (`isTemplate` only) |
 | E2E field label PUT never fires | Playwright `fill()` does not blur | Blur (or Tab) after fill — see `e2e/form-editor-fields.spec.ts` |
+| Early radio submissions store `true` not option label | Older Form Builder radio submit path wrote boolean; later rows store labels (e.g. `"Batavia"`) | When counting by location, treat `true` as ambiguous; use free-text fields / known family context. Prod form id **2** *Batavia and Canandaigua Preliminary signups* has mixed shapes |
 
 ## Related
 
