@@ -1,6 +1,7 @@
 declare global {
   interface Window {
     dataLayer: any[];
+    gtag?: (...args: any[]) => void;
   }
 }
 
@@ -16,6 +17,7 @@ interface EcommerceItem {
 interface FormSubmissionData {
   form_name: string;
   form_id?: string;
+  form_slug?: string;
   form_destination?: string;
   form_submit_text?: string;
 }
@@ -25,11 +27,18 @@ const centsToDollars = (cents: number): number => {
   return Math.round(cents) / 100;
 };
 
+/**
+ * Prefer the gtag.js global from index.html so events reach GA4 (G-C95K2BBZSS).
+ * Plain `{ event: '...' }` dataLayer pushes require GTM and do not send to GA4 alone.
+ */
 export function gtag(...args: any[]) {
-  if (typeof window !== 'undefined') {
-    window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push(args);
+  if (typeof window === 'undefined') return;
+  if (typeof window.gtag === 'function') {
+    window.gtag(...args);
+    return;
   }
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push(args);
 }
 
 export const pushToDataLayer = (data: Record<string, any>) => {
@@ -39,16 +48,28 @@ export const pushToDataLayer = (data: Record<string, any>) => {
   }
 };
 
+/** Confirmed Form Builder / lead form success — mark as a Key event in GA4. */
 export const trackFormSubmission = (data: FormSubmissionData) => {
-  pushToDataLayer({
-    event: 'form_submission',
+  const params = {
     form_name: data.form_name,
     form_id: data.form_id || '',
+    form_slug: data.form_slug || '',
     form_destination: data.form_destination || '',
     form_submit_text: data.form_submit_text || 'Submit',
-    submission_time: new Date().toISOString(),
+  };
+  gtag('event', 'form_submission', params);
+  console.log('📊 Form submission tracked:', data.form_name, data.form_slug || data.form_id);
+};
+
+/** DOM submit click / attempt (not a conversion). Used by FormTracker. */
+export const trackFormSubmitAttempt = (data: FormSubmissionData) => {
+  gtag('event', 'form_submit_attempt', {
+    form_name: data.form_name,
+    form_id: data.form_id || '',
+    form_slug: data.form_slug || '',
+    form_destination: data.form_destination || '',
+    form_submit_text: data.form_submit_text || 'Submit',
   });
-  console.log('📊 Form submission tracked:', data.form_name);
 };
 
 export const trackAddToCart = (item: EcommerceItem) => {
