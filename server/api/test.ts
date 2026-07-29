@@ -272,6 +272,26 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       }
     }
 
+    // 3b. Optional campuses for parent-profile campus transfer E2E (parent stays null campus)
+    const withCampuses = req.body?.withCampuses === true;
+    let locationsOnSchool: { id: number; name: string; schoolId: number }[] = [];
+    if (withCampuses) {
+      const brighton = await testDb.createTestLocation(school.id, {
+        name: 'Brighton',
+        code: `BR${uniqueId}`.slice(0, 8).toUpperCase(),
+        isActive: true,
+      });
+      const greece = await testDb.createTestLocation(school.id, {
+        name: 'Greece',
+        code: `GR${uniqueId}`.slice(0, 8).toUpperCase(),
+        isActive: true,
+      });
+      locationsOnSchool = [
+        { id: brighton.id, name: brighton.name, schoolId: school.id },
+        { id: greece.id, name: greece.name, schoolId: school.id },
+      ];
+    }
+
     // 4. Create child
     const child = await testDb.createTestChild(parent.id, {
       firstName: 'Test',
@@ -325,6 +345,17 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
     if (!db) {
       return res.status(500).json({ error: 'Postgres required (getDb returned null)' });
     }
+
+    // Parent label so unified User Profile shows Family & Billing (campus Select E2E)
+    if (withCampuses) {
+      await db.insert(userRoles).values({
+        userId: parent.id,
+        role: 'parent',
+        schoolId: school.id,
+        isPrimary: true,
+      });
+    }
+
     const inserted = await db
       .insert(programEnrollments)
       .values(enrollmentInsert)
@@ -481,6 +512,7 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
               totalAmount: membership.totalAmount,
             }
           : null,
+        ...(locationsOnSchool.length > 0 ? { locationsOnSchool } : {}),
       }
     });
 

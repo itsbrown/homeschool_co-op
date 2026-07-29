@@ -19,6 +19,17 @@ export async function openParentCreditsTab(page: Page, parentId: number) {
   await expect(page.getByTestId("button-award-credit")).toBeVisible({ timeout: 30_000 });
 }
 
+/** Open unified user profile Family & Billing (embedded Parent Profile). */
+export async function openParentFamilyTab(page: Page, parentId: number) {
+  const profilePath = `/schools/users/${parentId}?tab=family`;
+  await page.evaluate(() => localStorage.setItem("activeRole", "schoolAdmin"));
+  await page.goto(profilePath, { waitUntil: "domcontentloaded" });
+  const familyTab = page.getByRole("tab", { name: /Family/i });
+  await expect(familyTab).toBeVisible({ timeout: 60_000 });
+  await familyTab.click();
+  await expect(page.getByTestId("parent-campus-select")).toBeVisible({ timeout: 60_000 });
+}
+
 export async function expectCreditsAvailableBalance(page: Page, amountDollars: string) {
   await expect(page.getByTestId("text-credits-available-balance")).toHaveText(amountDollars, {
     timeout: 30_000,

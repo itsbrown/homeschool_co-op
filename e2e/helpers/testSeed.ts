@@ -36,6 +36,7 @@ export type SetupCartScenarioResponse = {
       membershipYear: number;
       totalAmount: number;
     } | null;
+    locationsOnSchool?: { id: number; name: string; schoolId: number }[];
   };
   error?: string;
   details?: string;

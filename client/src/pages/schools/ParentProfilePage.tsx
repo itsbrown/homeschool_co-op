@@ -777,7 +777,6 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
 
   // Campus change state
   const [pendingCampusLocationId, setPendingCampusLocationId] = useState<string | null>(null);
-  const [campusConfirmOpen, setCampusConfirmOpen] = useState(false);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -822,7 +821,6 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
         title: 'Campus updated',
         description: `Moved family to ${campusName}. Existing enrollments were not changed.`,
       });
-      setCampusConfirmOpen(false);
       setPendingCampusLocationId(null);
       await queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
       await queryClient.invalidateQueries({ queryKey: ['/api/school-admin/students'] });
@@ -1678,55 +1676,105 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                       {profile.parent.isActive ? 'Active' : 'Inactive'}
                     </Badge>
                   </CardDescription>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <Label htmlFor="parent-campus-select" className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      Campus
-                    </Label>
-                    <Select
-                      value={
-                        profile.parent.locationId != null
-                          ? String(profile.parent.locationId)
-                          : undefined
-                      }
-                      onValueChange={(value) => {
-                        if (
-                          profile.parent.locationId != null &&
-                          String(profile.parent.locationId) === value
-                        ) {
-                          return;
+                  <div className="mt-3 flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Label htmlFor="parent-campus-select" className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        Campus
+                      </Label>
+                      <Select
+                        value={
+                          pendingCampusLocationId ??
+                          (profile.parent.locationId != null
+                            ? String(profile.parent.locationId)
+                            : undefined)
                         }
-                        setPendingCampusLocationId(value);
-                        setCampusConfirmOpen(true);
-                      }}
-                      disabled={changeCampusMutation.isPending || schoolLocations.length === 0}
-                    >
-                      <SelectTrigger
-                        id="parent-campus-select"
-                        className="w-[200px]"
-                        data-testid="parent-campus-select"
+                        onValueChange={(value) => {
+                          if (
+                            profile.parent.locationId != null &&
+                            String(profile.parent.locationId) === value
+                          ) {
+                            setPendingCampusLocationId(null);
+                            return;
+                          }
+                          // Inline confirm (not a modal) — Select dismiss must not swallow the save.
+                          setPendingCampusLocationId(value);
+                        }}
+                        disabled={changeCampusMutation.isPending || schoolLocations.length === 0}
                       >
-                        <SelectValue placeholder={profile.parent.locationName || 'Select campus'} />
-                      </SelectTrigger>
-                      <SelectContent position="item-aligned">
-                        {schoolLocations
-                          .filter((loc) => loc.isActive !== false)
-                          .map((loc) => (
-                            <SelectItem key={loc.id} value={String(loc.id)}>
-                              {loc.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    {profile.parent.locationName ? (
-                      <span className="text-sm text-muted-foreground" data-testid="parent-campus-label">
-                        {profile.parent.locationName}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-amber-700 dark:text-amber-400">
-                        No campus set
-                      </span>
-                    )}
+                        <SelectTrigger
+                          id="parent-campus-select"
+                          className="w-[200px]"
+                          data-testid="parent-campus-select"
+                        >
+                          <SelectValue placeholder={profile.parent.locationName || 'Select campus'} />
+                        </SelectTrigger>
+                        <SelectContent position="item-aligned">
+                          {schoolLocations
+                            .filter((loc) => loc.isActive !== false)
+                            .map((loc) => (
+                              <SelectItem key={loc.id} value={String(loc.id)}>
+                                {loc.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      {profile.parent.locationName && !pendingCampusLocationId ? (
+                        <span className="text-sm text-muted-foreground" data-testid="parent-campus-label">
+                          {profile.parent.locationName}
+                        </span>
+                      ) : !pendingCampusLocationId ? (
+                        <span
+                          className="text-sm text-amber-700 dark:text-amber-400"
+                          data-testid="parent-campus-label"
+                        >
+                          No campus set
+                        </span>
+                      ) : null}
+                    </div>
+                    {pendingCampusLocationId ? (
+                      <div
+                        className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"
+                        data-testid="campus-change-confirm"
+                      >
+                        <span className="text-muted-foreground">
+                          Move family to{' '}
+                          <span className="font-medium text-foreground">
+                            {schoolLocations.find((l) => String(l.id) === pendingCampusLocationId)?.name ||
+                              'selected campus'}
+                          </span>
+                          ? Enrollments are not moved.
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={changeCampusMutation.isPending}
+                          onClick={() => setPendingCampusLocationId(null)}
+                          data-testid="cancel-campus-change"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          data-testid="confirm-campus-change"
+                          disabled={changeCampusMutation.isPending}
+                          onClick={() => {
+                            changeCampusMutation.mutate(parseInt(pendingCampusLocationId, 10));
+                          }}
+                        >
+                          {changeCampusMutation.isPending ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Updating…
+                            </>
+                          ) : (
+                            'Move family'
+                          )}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -2582,51 +2630,6 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                 </div>
               </DialogContent>
             </Dialog>
-
-            {/* Campus change confirm */}
-            <AlertDialog
-              open={campusConfirmOpen}
-              onOpenChange={(open) => {
-                setCampusConfirmOpen(open);
-                if (!open) setPendingCampusLocationId(null);
-              }}
-            >
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Change family campus?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will move {profile.parent.firstName} {profile.parent.lastName} and{' '}
-                    {profile.children.length} student
-                    {profile.children.length === 1 ? '' : 's'} from{' '}
-                    {profile.parent.locationName || 'no campus'} to{' '}
-                    {schoolLocations.find((l) => String(l.id) === pendingCampusLocationId)?.name ||
-                      'the selected campus'}
-                    . Existing class enrollments and payment plans are not moved.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={changeCampusMutation.isPending}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    data-testid="confirm-campus-change"
-                    disabled={!pendingCampusLocationId || changeCampusMutation.isPending}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (!pendingCampusLocationId) return;
-                      changeCampusMutation.mutate(parseInt(pendingCampusLocationId, 10));
-                    }}
-                  >
-                    {changeCampusMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Updating…
-                      </>
-                    ) : (
-                      'Move family'
-                    )}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
 
             {/* Edit Parent Dialog */}
             <Dialog open={editParentDialogOpen} onOpenChange={setEditParentDialogOpen}>

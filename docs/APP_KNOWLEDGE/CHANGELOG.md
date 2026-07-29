@@ -1,5 +1,17 @@
 # App knowledge changelog
 
+## 2026-07-28 (Parent Profile campus Select / AlertDialog race)
+
+- Staff campus change on Parent Profile opened confirm in the same tick as Select dismiss → dialog closed immediately and PATCH never ran.
+- Fix: **inline** Move family confirm (no modal) after Select change; bind Select to pending; E2E `e2e/parent-profile-campus-change.spec.ts` (`setup-cart-scenario` `withCampuses`).
+- Domain: [registration-and-locations.md](./domains/registration-and-locations.md).
+
+## 2026-07-28 (Prod campus repair — Crofoot + DiSano → Greece)
+
+- Soft transfer via `updateParentLocation` to Greece (`location_id` 4): Kendra Crofoot parent **21** (Amelia/Olivia) and DiSano parent **25** (`mariahktropix02@gmail.com`, Rocco/Maria).
+- Both had null parent campus + children on Brighton; UI campus select did not persist for staff (confirm **Move family** path / null-value Select — investigate if reports continue).
+- Soft transfer only: existing class enrollments/payments unchanged.
+
 ## 2026-07-28 (Form submission admin email — field labels)
 
 - Admin `form_submission_admin` email now shows field **labels/questions** (and resume `fileName`) instead of raw `field_90` keys via `buildFormSubmissionEmailSummary`.
