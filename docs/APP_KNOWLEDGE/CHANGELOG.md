@@ -3,7 +3,7 @@
 ## 2026-07-28 (Parent Profile campus Select / AlertDialog race)
 
 - Staff campus change on Parent Profile opened confirm in the same tick as Select dismiss → dialog closed immediately and PATCH never ran.
-- Fix: defer confirm open, bind Select to pending selection, confirm with plain Button; E2E `e2e/parent-profile-campus-change.spec.ts` (`setup-cart-scenario` `withCampuses`).
+- Fix: stash pending on Select change, open confirm in `SelectContent.onCloseAutoFocus` (avoids dismiss race), bind Select to pending, confirm with plain Button; E2E `e2e/parent-profile-campus-change.spec.ts` (`setup-cart-scenario` `withCampuses`).
 - Domain: [registration-and-locations.md](./domains/registration-and-locations.md).
 
 ## 2026-07-28 (Prod campus repair — Crofoot + DiSano → Greece)

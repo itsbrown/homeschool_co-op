@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useRoute } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -777,6 +777,7 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
 
   // Campus change state
   const [pendingCampusLocationId, setPendingCampusLocationId] = useState<string | null>(null);
+  const pendingCampusLocationIdRef = useRef<string | null>(null);
   const [campusConfirmOpen, setCampusConfirmOpen] = useState(false);
   
   const { toast } = useToast();
@@ -823,6 +824,7 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
         description: `Moved family to ${campusName}. Existing enrollments were not changed.`,
       });
       setCampusConfirmOpen(false);
+      pendingCampusLocationIdRef.current = null;
       setPendingCampusLocationId(null);
       await queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
       await queryClient.invalidateQueries({ queryKey: ['/api/school-admin/students'] });
@@ -1698,10 +1700,10 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                         ) {
                           return;
                         }
-                        // Defer confirm open so Select's dismiss pointer-up does not
-                        // immediately close the AlertDialog (Radix race).
+                        // Stash pending; open confirm in SelectContent onCloseAutoFocus
+                        // so Select dismiss cannot race-close the AlertDialog.
+                        pendingCampusLocationIdRef.current = value;
                         setPendingCampusLocationId(value);
-                        window.setTimeout(() => setCampusConfirmOpen(true), 0);
                       }}
                       disabled={changeCampusMutation.isPending || schoolLocations.length === 0}
                     >
@@ -1712,7 +1714,15 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                       >
                         <SelectValue placeholder={profile.parent.locationName || 'Select campus'} />
                       </SelectTrigger>
-                      <SelectContent position="item-aligned">
+                      <SelectContent
+                        position="item-aligned"
+                        onCloseAutoFocus={(e) => {
+                          e.preventDefault();
+                          if (pendingCampusLocationIdRef.current) {
+                            setCampusConfirmOpen(true);
+                          }
+                        }}
+                      >
                         {schoolLocations
                           .filter((loc) => loc.isActive !== false)
                           .map((loc) => (
@@ -2597,7 +2607,10 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                 // Keep dialog open while saving; clearing pending mid-mutate would abort UI state.
                 if (changeCampusMutation.isPending) return;
                 setCampusConfirmOpen(open);
-                if (!open) setPendingCampusLocationId(null);
+                if (!open) {
+                  pendingCampusLocationIdRef.current = null;
+                  setPendingCampusLocationId(null);
+                }
               }}
             >
               <AlertDialogContent>
