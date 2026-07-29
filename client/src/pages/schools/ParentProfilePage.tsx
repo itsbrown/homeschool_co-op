@@ -1685,19 +1685,23 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                     </Label>
                     <Select
                       value={
-                        profile.parent.locationId != null
+                        pendingCampusLocationId ??
+                        (profile.parent.locationId != null
                           ? String(profile.parent.locationId)
-                          : undefined
+                          : undefined)
                       }
                       onValueChange={(value) => {
                         if (
+                          !pendingCampusLocationId &&
                           profile.parent.locationId != null &&
                           String(profile.parent.locationId) === value
                         ) {
                           return;
                         }
+                        // Defer confirm open so Select's dismiss pointer-up does not
+                        // immediately close the AlertDialog (Radix race).
                         setPendingCampusLocationId(value);
-                        setCampusConfirmOpen(true);
+                        window.setTimeout(() => setCampusConfirmOpen(true), 0);
                       }}
                       disabled={changeCampusMutation.isPending || schoolLocations.length === 0}
                     >
@@ -1723,7 +1727,10 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                         {profile.parent.locationName}
                       </span>
                     ) : (
-                      <span className="text-sm text-amber-700 dark:text-amber-400">
+                      <span
+                        className="text-sm text-amber-700 dark:text-amber-400"
+                        data-testid="parent-campus-label"
+                      >
                         No campus set
                       </span>
                     )}
@@ -2587,6 +2594,8 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
             <AlertDialog
               open={campusConfirmOpen}
               onOpenChange={(open) => {
+                // Keep dialog open while saving; clearing pending mid-mutate would abort UI state.
+                if (changeCampusMutation.isPending) return;
                 setCampusConfirmOpen(open);
                 if (!open) setPendingCampusLocationId(null);
               }}
@@ -2606,11 +2615,11 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel disabled={changeCampusMutation.isPending}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
+                  <Button
+                    type="button"
                     data-testid="confirm-campus-change"
                     disabled={!pendingCampusLocationId || changeCampusMutation.isPending}
-                    onClick={(e) => {
-                      e.preventDefault();
+                    onClick={() => {
                       if (!pendingCampusLocationId) return;
                       changeCampusMutation.mutate(parseInt(pendingCampusLocationId, 10));
                     }}
@@ -2623,7 +2632,7 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                     ) : (
                       'Move family'
                     )}
-                  </AlertDialogAction>
+                  </Button>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
