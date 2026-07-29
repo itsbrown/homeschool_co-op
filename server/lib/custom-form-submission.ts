@@ -114,6 +114,71 @@ async function resolveNotificationEmails(form: CustomForm): Promise<string[]> {
   return admin?.email ? [admin.email] : [];
 }
 
+/** Formats a response value for admin notification emails. */
+export function formatSubmissionValueForEmail(value: unknown): string {
+  if (
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    'fileName' in (value as object)
+  ) {
+    return String((value as { fileName: string }).fileName || 'attachment');
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v)).join(', ');
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+  if (typeof value === 'object' && value !== null) {
+    return JSON.stringify(value);
+  }
+  return String(value ?? '');
+}
+
+type EmailSummaryField = {
+  id: number;
+  label: string;
+  order: number;
+};
+
+/**
+ * Builds HTML list items for the admin notification email using field labels
+ * (questions) instead of raw keys like `field_90`.
+ */
+export function buildFormSubmissionEmailSummary(
+  responseData: Record<string, unknown>,
+  fields: EmailSummaryField[],
+): string {
+  const labelByKey: Record<string, string> = {};
+  for (const field of fields) {
+    labelByKey[`field_${field.id}`] = field.label;
+  }
+
+  const sortedFields = [...fields].sort((a, b) => a.order - b.order);
+  const usedKeys = new Set<string>();
+  const items: string[] = [];
+
+  for (const field of sortedFields) {
+    const key = `field_${field.id}`;
+    if (!(key in responseData)) continue;
+    usedKeys.add(key);
+    items.push(
+      `<li><strong>${field.label}:</strong> ${formatSubmissionValueForEmail(responseData[key])}</li>`,
+    );
+  }
+
+  for (const [key, value] of Object.entries(responseData)) {
+    if (usedKeys.has(key)) continue;
+    const label = labelByKey[key] || key;
+    items.push(
+      `<li><strong>${label}:</strong> ${formatSubmissionValueForEmail(value)}</li>`,
+    );
+  }
+
+  return items.join('');
+}
+
 export async function sendFormSubmissionNotifications(opts: {
   form: CustomForm;
   submissionId: number;
@@ -128,15 +193,16 @@ export async function sendFormSubmissionNotifications(opts: {
 
   if (settings.notifyOnSubmission) {
     const recipients = await resolveNotificationEmails(form);
-    const summary = Object.entries(responseData)
-      .map(([key, value]) => {
-        const display =
-          typeof value === 'object' && value !== null
-            ? JSON.stringify(value)
-            : String(value ?? '');
-        return `<li><strong>${key}:</strong> ${display}</li>`;
+    const db = await getDb();
+    const fields = await db
+      .select({
+        id: customFormFields.id,
+        label: customFormFields.label,
+        order: customFormFields.order,
       })
-      .join('');
+      .from(customFormFields)
+      .where(eq(customFormFields.formId, form.id));
+    const summary = buildFormSubmissionEmailSummary(responseData, fields);
 
     for (const to of recipients) {
       await sendEmail(
