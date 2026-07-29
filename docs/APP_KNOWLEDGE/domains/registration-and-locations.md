@@ -63,7 +63,7 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 | Can't pick campus on phone / dropdown won't scroll | Radix Select `popper` viewport height = trigger height | Registration page uses native `<select>` for campus; other selects use `position="item-aligned"` |
 | “No campuses configured” with valid code | Zero `is_active` rows for that school | Add campuses in Location Management for the school that owns the code; school-code signup now returns 400 until campuses exist |
 | Parent null campus / child has campus | Legacy signup before persist hardening | `audit-registration-locations.ts --fix`, or admin campus select on Parent Profile (`Move family` confirm). Prod repairs: Pastorella 135; Crofoot 21 + DiSano 25 → Greece (2026-07-28) |
-| Campus dropdown selection does not stick | Radix Select dismiss races with AlertDialog open (dialog closes immediately; PATCH never runs) | Open confirm from `SelectContent.onCloseAutoFocus` + pending ref; bind Select to pending; plain Button for **Move family**; E2E `parent-profile-campus-change.spec.ts` |
+| Campus dropdown selection does not stick | Radix Select dismiss raced with modal AlertDialog (confirm never stuck) | Inline **Move family** confirm after Select (no modal); E2E `parent-profile-campus-change.spec.ts` |
 | Profile shows Greece but still enrolled at Brighton | Soft campus transfer does not move enrollments | Expected; warn staff; unenroll/re-enroll if program move is needed |
 | POST /api/locations 400 | `code` validated before derive | Derive code before `insertLocationSchema.parse` |
 | associate-school 500 on Replit | Self-HTTP or wrong storage | `associate-parent-school.ts` direct storage |

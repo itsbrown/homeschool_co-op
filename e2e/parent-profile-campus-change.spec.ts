@@ -52,9 +52,9 @@ test.describe("parent profile campus change", () => {
     await page.getByTestId("parent-campus-select").click();
     await page.getByRole("option", { name: target.name, exact: true }).click();
 
+    await expect(page.getByTestId("campus-change-confirm")).toBeVisible({ timeout: 15_000 });
     const confirmBtn = page.getByTestId("confirm-campus-change");
-    await expect(confirmBtn).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("heading", { name: /Change family campus/i })).toBeVisible();
+    await expect(confirmBtn).toBeVisible();
 
     const patch = page.waitForResponse(
       (r) =>
@@ -66,7 +66,7 @@ test.describe("parent profile campus change", () => {
     await confirmBtn.click();
     await patch;
 
-    await expect(confirmBtn).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByTestId("campus-change-confirm")).toBeHidden({ timeout: 30_000 });
     await expect(page.getByTestId("parent-campus-label")).toHaveText(target.name, {
       timeout: 30_000,
     });
