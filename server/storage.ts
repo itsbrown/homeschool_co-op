@@ -6545,6 +6545,26 @@ export class MemStorage implements IStorage {
       }
 
       async removeEnrollment(enrollmentId: number): Promise<boolean> {
+        // Prefer Postgres program_enrollments — roster/admin UIs read from DB.
+        // Mem-only delete would return false (or a false success) for real enrollments.
+        try {
+          if (this.dbStorage && typeof this.dbStorage.getProgramEnrollmentById === 'function') {
+            const enrollment = await this.dbStorage.getProgramEnrollmentById(enrollmentId);
+            if (enrollment) {
+              await this.deletePendingScheduledPaymentsByEnrollmentId(enrollmentId);
+              await this.deleteProgramEnrollment(enrollmentId);
+              try {
+                await this.memStorage.removeEnrollment(enrollmentId);
+              } catch {
+                // mem mirror optional
+              }
+              return true;
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error in CombinedStorage.removeEnrollment (DB path):', error);
+          throw error;
+        }
         return this.memStorage.removeEnrollment(enrollmentId);
       }
 

@@ -283,7 +283,8 @@ router.delete('/:enrollmentId/unenroll', async (req: any, res) => {
   }
 });
 
-// Unenroll a child from a class (legacy endpoint)
+// Unenroll a child from a class (legacy endpoint).
+// Prefer DELETE /api/admin/enrollments/:id (soft-cancel) for school-admin roster Remove.
 router.delete('/:enrollmentId', async (req: any, res) => {
   try {
     const enrollmentId = parseInt(req.params.enrollmentId);
@@ -294,20 +295,19 @@ router.delete('/:enrollmentId', async (req: any, res) => {
 
     console.log(`❌ Unenrolling enrollment ID: ${enrollmentId}`);
 
-    // Get the enrollment first to verify ownership
-    const allEnrollments = await storage.getAllEnrollments();
-    const enrollmentToRemove = allEnrollments.find((e: any) => e.id === enrollmentId);
+    // Lookup by id (DB-backed) — avoid getAllEnrollments().find which is O(n) and
+    // historically paired with mem-only removeEnrollment (false 404s in prod).
+    const enrollmentToRemove =
+      (await storage.getProgramEnrollmentById?.(enrollmentId)) ||
+      (await storage.getAllEnrollments()).find((e: any) => e.id === enrollmentId);
     
     if (!enrollmentToRemove) {
       console.log(`❌ Enrollment ${enrollmentId} not found`);
       return res.status(404).json({ message: 'Enrollment not found' });
     }
 
-    // For now, allow any authenticated request to remove enrollments
-    // In production, you would verify the user is the parent of the child
     console.log(`📝 Found enrollment to remove:`, enrollmentToRemove);
     
-    // Remove the enrollment
     const success = await storage.removeEnrollment(enrollmentId);
     
     if (success) {

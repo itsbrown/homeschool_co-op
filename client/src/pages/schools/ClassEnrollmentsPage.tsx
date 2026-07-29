@@ -133,7 +133,17 @@ export default function SchoolAdminClassEnrollmentsPage() {
 
   const unenrollMutation = useMutation({
     mutationFn: async (enrollmentId: number) => {
-      return apiRequest("DELETE", `/api/enrollments/${enrollmentId}`);
+      if (!enrollmentId || Number.isNaN(enrollmentId)) {
+        throw new Error("Missing enrollment ID — refresh the page and try again");
+      }
+      // Soft-cancel via admin enrollments API (Postgres program_enrollments).
+      // Do not use DELETE /api/enrollments/:id — that legacy path only removes mem/file rows.
+      const response = await apiRequest("DELETE", `/api/admin/enrollments/${enrollmentId}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to unenroll student");
+      }
+      return response.json();
     },
     onSuccess: () => {
       toast({
