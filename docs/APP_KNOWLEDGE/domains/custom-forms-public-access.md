@@ -69,7 +69,7 @@ Public by-slug query uses `staleTime: 0` + `refetchOnMount: 'always'`.
 | Feature | Status |
 |---------|--------|
 | Submission DB insert | **Working** |
-| Admin email on submit | **Working** when `notifyOnSubmission` — uses `notificationEmails` or school admin email (`form_submission_admin`) |
+| Admin email on submit | **Working** when `notifyOnSubmission` — uses `notificationEmails` or school admin email (`form_submission_admin`). Body lists **field labels** (questions), not raw `field_N` keys; file uploads show `fileName` only (`buildFormSubmissionEmailSummary` in `custom-form-submission.ts`) |
 | Submitter confirmation | **Working** when `sendSubmitterConfirmation` + submitter email (`form_submission_confirmation`) |
 | Honeypot | **Working** (`honeypot` / `website` body field) |
 | Rate limit | **Working** on public submit (`FORM_SUBMIT_RATE_LIMIT`, default 30 / 8 in CI) |
@@ -110,6 +110,7 @@ Public by-slug query uses `staleTime: 0` + `refetchOnMount: 'always'`.
 | Template seed FK error | `school_id = 1` missing on prod | Templates use first school in DB (`isTemplate` only) |
 | E2E field label PUT never fires | Playwright `fill()` does not blur | Blur (or Tab) after fill — see `e2e/form-editor-fields.spec.ts` |
 | Early radio submissions store `true` not option label | Older Form Builder radio submit path wrote boolean; later rows store labels (e.g. `"Batavia"`) | When counting by location, treat `true` as ambiguous; use free-text fields / known family context. Prod form id **2** *Batavia and Canandaigua Preliminary signups* has mixed shapes |
+| Admin notify email shows `field_90` instead of questions | Was: email dumped raw `responseData` keys | Fixed: load `custom_form_fields` and render labels via `buildFormSubmissionEmailSummary`. Submissions UI already mapped labels. Redeploy needed for prod emails. |
 
 ## Related
 

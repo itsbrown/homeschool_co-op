@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-07-28 (Form submission admin email — field labels)
+
+- Admin `form_submission_admin` email now shows field **labels/questions** (and resume `fileName`) instead of raw `field_90` keys via `buildFormSubmissionEmailSummary`.
+- Unit: `server/tests/form-submission-email-summary.test.ts`. Domain: [custom-forms-public-access.md](./domains/custom-forms-public-access.md).
+
 ## 2026-07-27 (GA4 form_submission conversion)
 
 - Public Form Builder success fires GA4 `form_submission` via `gtag('event')` with `form_id` / `form_name` / `form_slug` (`DynamicFormPage` onSuccess + `trackFormSubmission`).
