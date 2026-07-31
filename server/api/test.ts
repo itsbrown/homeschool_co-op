@@ -1107,6 +1107,191 @@ router.post('/setup-multi-enrollment-cart-scenario', async (req: Request, res: R
 });
 
 /**
+ * POST /api/test/setup-free-after-cart-scenario
+ * Seeds parent + N unique children (default 4) with pending enrollments at
+ * unequal prices, and enables school free-after-threshold (default threshold 3)
+ * so the cheapest enrollment is free at checkout.
+ *
+ * Body: { linkSupabaseAuth?: boolean, childCount?: number, freeAfterThreshold?: number }
+ */
+router.post('/setup-free-after-cart-scenario', async (req: Request, res: Response) => {
+  try {
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    const bcrypt = await import('bcryptjs');
+
+    const childCountRaw = Number(req.body?.childCount);
+    const childCount = Number.isFinite(childCountRaw)
+      ? Math.min(Math.max(2, Math.floor(childCountRaw)), 8)
+      : 4;
+    const thresholdRaw = Number(req.body?.freeAfterThreshold);
+    const freeAfterThreshold = Number.isFinite(thresholdRaw)
+      ? Math.max(1, Math.floor(thresholdRaw))
+      : 3;
+
+    const adminPassword = 'TestPassword123!';
+    const admin = await testDb.createTestUser({
+      email: `admin_fat_${uniqueId}@test.com`,
+      username: `testadmin_fat_${uniqueId}`,
+      name: 'Test Admin FAT',
+      role: 'schoolAdmin',
+    });
+    await storage.updateUser(admin.id, { password: await bcrypt.hash(adminPassword, 10) });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Test School FAT ${uniqueId}`,
+      registrationCode: `FAT${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+    await storage.updateSchool(school.id, {
+      freeAfterThresholdEnabled: true,
+      freeAfterThreshold,
+    });
+
+    const parentEmail = `parent_fat_${uniqueId}@test.com`;
+    const parentPassword = 'TestPassword123!';
+    const parent = await testDb.createTestUser({
+      email: parentEmail,
+      username: `testparent_fat_${uniqueId}`,
+      name: 'Test Parent FAT',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    await storage.updateUser(parent.id, { password: await bcrypt.hash(parentPassword, 10) });
+
+    let supabaseLinked = false;
+    if (req.body?.linkSupabaseAuth === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      try {
+        supabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: parent.id,
+          email: parentEmail,
+          password: parentPassword,
+          role: 'parent',
+          schoolId: school.id,
+          displayName: parent.name || 'Test Parent FAT',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuth failed (FAT seed):', e);
+        supabaseLinked = false;
+      }
+    }
+
+    const category = await testDb.createTestCategory(school.id, {
+      name: `FAT Category ${uniqueId}`,
+    });
+
+    // Ascending prices so the cheapest is clearly identifiable ($80, $100, $120, …)
+    const prices = Array.from({ length: childCount }, (_, i) => 8000 + i * 2000);
+    const names = ['Alice', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Hank'];
+
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: 'Postgres required (getDb returned null)' });
+    }
+
+    const enrollmentsOut: Array<{
+      id: number;
+      childId: number;
+      childName: string;
+      classId: number;
+      className: string;
+      totalCost: number;
+      remainingBalance: number;
+    }> = [];
+
+    for (let i = 0; i < childCount; i++) {
+      const child = await testDb.createTestChild(parent.id, {
+        firstName: names[i] || `Child${i + 1}`,
+        lastName: 'FAT',
+        birthdate: `201${i}-01-01`,
+        gradeLevel: '3rd Grade',
+        schoolId: school.id,
+        parentEmail,
+      });
+      const price = prices[i];
+      const cls = await testDb.createTestClass(school.id, {
+        title: `FAT Class ${i + 1} ${uniqueId}`,
+        price,
+        status: 'upcoming',
+        categoryId: category.id,
+        category: `FAT Category ${uniqueId}`,
+      });
+      const insert: InsertProgramEnrollment = {
+        childId: child.id,
+        classType: 'marketplace',
+        marketplaceClassId: cls.id,
+        parentId: parent.id,
+        parentEmail,
+        schoolId: school.id,
+        status: 'pending_payment',
+        paymentPlan: 'full_payment',
+        paymentSystemVersion: 'v2_stripe',
+        paymentStatus: 'pending',
+        childName: `${child.firstName} ${child.lastName}`,
+        className: cls.title,
+        totalCost: price,
+        totalPaid: 0,
+        remainingBalance: price,
+        depositRequired: 0,
+        enrollmentDate: new Date(),
+      };
+      const rows = await db.insert(programEnrollments).values(insert).returning();
+      if (!rows[0]) throw new Error('enrollment insert returned no row');
+      enrollmentsOut.push({
+        id: rows[0].id,
+        childId: child.id,
+        childName: `${child.firstName} ${child.lastName}`,
+        classId: cls.id,
+        className: cls.title,
+        totalCost: price,
+        remainingBalance: price,
+      });
+    }
+
+    const subtotal = prices.reduce((s, p) => s + p, 0);
+    const freeCount = Math.max(0, childCount - freeAfterThreshold);
+    const freeAmount = prices.slice(0, freeCount).reduce((s, p) => s + p, 0);
+    const expectedPayable = subtotal - freeAmount;
+
+    res.json({
+      success: true,
+      data: {
+        supabaseLinked,
+        parent: { email: parentEmail, password: parentPassword, id: parent.id },
+        admin: { email: admin.email, password: adminPassword, id: admin.id },
+        school: {
+          id: school.id,
+          name: school.name,
+          registrationCode: school.registrationCode,
+          freeAfterThresholdEnabled: true,
+          freeAfterThreshold,
+        },
+        enrollments: enrollmentsOut,
+        pricing: {
+          subtotalCents: subtotal,
+          freeAmountCents: freeAmount,
+          expectedPayableCents: expectedPayable,
+          freeCount,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error setting up free-after cart scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup free-after cart scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
  * GET /api/test/payment-by-stripe-id/:stripeId
  * Returns the payments-table row whose stripePaymentIntentId matches.
  */

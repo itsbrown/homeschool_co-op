@@ -168,6 +168,11 @@ interface ParentProfile {
     paymentMethod: string;
     description: string;
     transactionId: string;
+    discountTotalCents?: number | null;
+    discountSnapshot?: {
+      discountTotal?: number;
+      appliedDiscounts?: Array<{ source?: string; name?: string; amount?: number }>;
+    } | null;
   }>;
   scheduledPayments: Array<{
     id: number;
@@ -2900,6 +2905,7 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                             <TableHead>Description</TableHead>
                             <TableHead>Amount</TableHead>
                             <TableHead>Credits</TableHead>
+                            <TableHead>Discount</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Transaction ID</TableHead>
                           </TableRow>
@@ -2928,6 +2934,20 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
                                   <span className="text-emerald-700 dark:text-emerald-400">
                                     ${payment.creditsApplied.toFixed(2)}
                                   </span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {payment.discountTotalCents != null && payment.discountTotalCents > 0 ? (
+                                  <div className="text-sm text-green-700 dark:text-green-400" data-testid={`payment-discount-${payment.id}`}>
+                                    -${(payment.discountTotalCents / 100).toFixed(2)}
+                                    {payment.discountSnapshot?.appliedDiscounts?.[0]?.name ? (
+                                      <div className="text-xs text-muted-foreground">
+                                        {payment.discountSnapshot.appliedDiscounts[0].name}
+                                      </div>
+                                    ) : null}
+                                  </div>
                                 ) : (
                                   <span className="text-muted-foreground">—</span>
                                 )}

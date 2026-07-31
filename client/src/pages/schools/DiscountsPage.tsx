@@ -92,6 +92,88 @@ const roleOptions = [
   { value: 'learner', label: 'Learner' },
 ];
 
+function FreeAfterRecentUses() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['/api/school-admin/my-school/free-after-applications'],
+    queryFn: async () => {
+      const token = localStorage.getItem('supabase_token');
+      const response = await fetch('/api/school-admin/my-school/free-after-applications?limit=25', {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch free-after applications');
+      }
+      return response.json() as Promise<{
+        applications: Array<{
+          paymentId: number;
+          parentEmail: string;
+          amountSavedCents: number;
+          discountName: string;
+          paymentDate: string | null;
+          description: string | null;
+        }>;
+        total: number;
+      }>;
+    },
+  });
+
+  const applications = data?.applications ?? [];
+
+  return (
+    <Card data-testid="card-free-after-recent-uses">
+      <CardHeader>
+        <CardTitle className="text-lg">Recent Free After Uses</CardTitle>
+        <CardDescription>
+          Who received the free-after-threshold discount, when, and how much was saved
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </div>
+        ) : applications.length === 0 ? (
+          <p className="text-sm text-muted-foreground" data-testid="text-free-after-uses-empty">
+            No free-after discounts recorded yet. They appear here after a family checks out with the discount applied.
+          </p>
+        ) : (
+          <div className="border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Parent</TableHead>
+                  <TableHead>Discount</TableHead>
+                  <TableHead>Saved</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {applications.map((row) => (
+                  <TableRow key={row.paymentId} data-testid={`free-after-use-${row.paymentId}`}>
+                    <TableCell>
+                      {row.paymentDate
+                        ? new Date(row.paymentDate).toLocaleDateString()
+                        : '—'}
+                    </TableCell>
+                    <TableCell>{row.parentEmail}</TableCell>
+                    <TableCell>{row.discountName}</TableCell>
+                    <TableCell className="text-green-700 dark:text-green-400">
+                      -${(row.amountSavedCents / 100).toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DiscountsPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -474,7 +556,7 @@ export default function DiscountsPage() {
               <div className="space-y-0.5">
                 <Label className="text-base">Enable Feature</Label>
                 <p className="text-sm text-muted-foreground" data-testid="text-free-after-description">
-                  When enabled, families with {freeAfterThreshold}+ unique children get free enrollments for their cheapest classes
+                  When enabled, families with more than {freeAfterThreshold} unique children get free enrollments for their cheapest classes
                 </p>
               </div>
               <Switch 
@@ -539,6 +621,8 @@ export default function DiscountsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <FreeAfterRecentUses />
 
         {/* Discounts Table */}
         <Card>

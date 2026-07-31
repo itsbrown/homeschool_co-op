@@ -11,12 +11,6 @@ export async function fillStripePaymentElement(page: Page, opts?: { within?: Loc
   const root = opts?.within ?? page.locator("body");
   await root.locator('iframe[src*="js.stripe.com"]').first().waitFor({ state: "attached", timeout: 90_000 });
 
-  // Accordion / tabs: expand Card if Link/other method is selected by default
-  const cardTab = root.getByRole("button", { name: /^card$/i }).or(root.getByText(/^card$/i));
-  if ((await cardTab.count()) > 0) {
-    await cardTab.first().click({ timeout: 5_000 }).catch(() => {});
-  }
-
   const numberSelectors =
     'input[name="number"], input[name="cardnumber"], input[data-elements-stable-field-name="cardNumber"], input[autocomplete="cc-number"]';
   const expSelectors =
@@ -27,6 +21,17 @@ export async function fillStripePaymentElement(page: Page, opts?: { within?: Loc
     'input[name="postal"], input[name="postalCode"], input[autocomplete="postal-code"]';
 
   const outer = root.frameLocator('iframe[src*="js.stripe.com"]').first();
+
+  // Accordion Payment Element: "Card" lives inside the Stripe iframe (not page root).
+  const cardInIframe = outer.getByRole("button", { name: /^card$/i });
+  if ((await cardInIframe.count()) > 0) {
+    await cardInIframe.first().click({ timeout: 5_000 }).catch(() => {});
+  } else {
+    const cardOnPage = root.getByRole("button", { name: /^card$/i }).or(root.getByText(/^card$/i));
+    if ((await cardOnPage.count()) > 0) {
+      await cardOnPage.first().click({ timeout: 5_000 }).catch(() => {});
+    }
+  }
 
   // Prefer nested Payment Element frame; fall back to fields on the outer frame.
   const candidates = [outer.frameLocator("iframe").first(), outer];

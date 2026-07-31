@@ -308,10 +308,19 @@ router.get('/history', supabaseAuth, async (req: any, res) => {
           // Schedule-derived fields
           nextPaymentDate: nextPaymentDate,
           source: 'database' as const,
-          // Discount tracking fields
-          subtotalAmount: payment.subtotalAmount || null,
-          discountTotal: payment.discountTotal || null,
-          discountSnapshot: payment.discountSnapshot || null
+          // Discount tracking — top-level columns or payments.metadata (cart fulfill path)
+          subtotalAmount:
+            payment.subtotalAmount ??
+            payment.metadata?.subtotalAmount ??
+            null,
+          discountTotal:
+            payment.discountTotal ??
+            payment.metadata?.discountTotal ??
+            null,
+          discountSnapshot:
+            payment.discountSnapshot ??
+            payment.metadata?.discountSnapshot ??
+            null,
         };
       })
     );

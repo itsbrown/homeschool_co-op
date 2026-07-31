@@ -62,6 +62,59 @@ export async function postSetupCartScenario(
   return { response, json };
 }
 
+
+export type SetupFreeAfterCartScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    parent: { email: string; password: string; id: number };
+    admin?: { email: string; password: string; id: number };
+    school: {
+      id: number;
+      name: string;
+      freeAfterThresholdEnabled?: boolean;
+      freeAfterThreshold?: number;
+    };
+    enrollments: Array<{
+      id: number;
+      childId: number;
+      childName: string;
+      classId: number;
+      className: string;
+      totalCost: number;
+      remainingBalance: number;
+    }>;
+    pricing: {
+      subtotalCents: number;
+      freeAmountCents: number;
+      expectedPayableCents: number;
+      freeCount: number;
+    };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupFreeAfterCartScenario(
+  request: APIRequestContext,
+  body: Record<string, unknown> = {},
+): Promise<{ response: APIResponse; json: SetupFreeAfterCartScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-free-after-cart-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupFreeAfterCartScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupFreeAfterCartScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export async function postEnsureTechnicalSupportSchema(
   request: APIRequestContext,
 ): Promise<{ response: APIResponse; json: { success?: boolean; error?: string } | null }> {

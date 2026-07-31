@@ -1,5 +1,14 @@
 # App knowledge changelog
 
+## 2026-07-31 (Free-after-threshold money path ship)
+
+- **Money path:** `create-payment-intent` sizes from `calculateCartPricing`; fulfill applies Free After comps then `allocatePaymentByBalance`; `discountSnapshot` on PI metadata → payments + `stripe_payment_history`.
+- **Audit UI:** parent Payment History Family discount; admin family Payments Discount column; DiscountsPage Recent Free After Uses.
+- **Tests/E2E:** unit pricing/snapshot/comps; seed `setup-free-after-cart-scenario`; Playwright `e2e/checkout-free-after-threshold.spec.ts`.
+- **Ops:** `server/scripts/audit-free-after-candidates.ts`; migration `256-stripe-payment-history-discount-audit.sql`.
+- **Watch:** Amy Misso (`amym151@gmail.com`, parent **91**) — Fall 2026 `pending_payment` for all 4 kids; first real post-fix FAT checkout candidate (do not pre-comp; verify PI + comps after pay).
+- **Prod cleanup:** Violet Zegarelli enr **425** `comp_reason` set to `Free After Threshold` (comp amount already $900; balance unchanged).
+
 ## 2026-07-28 (Parent Profile campus Select / AlertDialog race)
 
 - Staff campus change on Parent Profile opened confirm in the same tick as Select dismiss → dialog closed immediately and PATCH never ran.
