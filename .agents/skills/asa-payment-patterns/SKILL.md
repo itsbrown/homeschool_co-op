@@ -171,6 +171,19 @@ discounts:
 - `combinableWithOthers` — stacking rules
 - `priority` — higher priority discounts apply first
 
+### Free After Threshold (school-level, not a `discounts` row)
+- **Config:** `schools.free_after_threshold_enabled` / `schools.free_after_threshold` (default off / 3). Admin: `PATCH /api/school-admin/my-school/free-after-threshold`, UI `DiscountsPage`. Recent uses: `GET /api/school-admin/my-school/free-after-applications`.
+- **Trigger:** `enabled && uniqueChildrenInCart > threshold`.
+- **Amount:** `freeCount = uniqueChildren - threshold`; sort **cart line items** by price ascending; make the cheapest `freeCount` items free (`discounts.freeAfterThree` + `freeItemIds`). Not “Nth child free” by identity — cheapest enrollments win.
+- **Mutual exclusion:** When active, sibling discount, automatic discounts, and promo codes are skipped (double-dip prevention). Sibling still applies when enabled but `uniqueChildren <= threshold`.
+- **Authoritative path:** `server/utils/cart-pricing.ts` `calculateCartPricing`. Client `CartContext` mirrors for optimistic UI; server wins at `/api/cart/calculate` and checkout.
+- **Money path (required):**
+  1. `create-payment-intent` recomputes `calculateCartPricing` after enrollments resolve; sizes PI with free lines as $0 outstanding (comps not written yet). Puts `discountSnapshot` on PI metadata (`server/lib/checkout-discount-snapshot.ts`).
+  2. On fulfill (`applyClassPoolToEnrollments`): apply comps (`compReason: Free After Threshold`) from snapshot, then `allocatePaymentByBalance` (not even-split).
+  3. Persist snapshot on `payments.metadata` + `stripe_payment_history` so parent Payment History and admin family Payments / DiscountsPage “Recent Free After Uses” can show who/when/how much.
+- **E2E:** `e2e/checkout-free-after-threshold.spec.ts` + seed `POST /api/test/setup-free-after-cart-scenario`.
+- **Tests:** `server/tests/free-after-threshold-pricing.test.ts`, `checkout-discount-snapshot.test.ts`, `apply-free-after-comps.test.ts`.
+
 ## Comp & Prorate on Enrollments
 
 ### Comp (Admin-Applied Discounts)

@@ -73,7 +73,7 @@ npm run test:e2e:headed -- e2e/school-code-registration.spec.ts
 | `E2E_PARENT_EMAIL`, `E2E_PARENT_PASSWORD` | `auth.setup.ts` + `e2e/authenticated/**` project |
 | `E2E_EDUCATOR_EMAIL` (+ password if added later) | `e2e/authenticated/educator-progress-tab.spec.ts` |
 | `E2E_TEST_API_TOKEN` | `X-Test-Token` header (default `test-secret-token`) |
-| `TESTING_STRIPE_SECRET_KEY`, `VITE_TESTING_STRIPE_PUBLIC_KEY` | Live Stripe test mode checkout specs |
+| `TESTING_STRIPE_SECRET_KEY`, `VITE_TESTING_STRIPE_PUBLIC_KEY` | Live Stripe test mode checkout specs — **same Stripe account** (mismatched pk → PaymentElement 401 / “Loading Payment Form…”) |
 | `VITE_E2E_EXPOSE_CART` | Set `true` by Playwright webServer for membership cart hook |
 
 Placeholder Supabase keys in `playwright.config.ts` are enough for **smoke** and **public custom forms**. Specs that call `isRealSupabaseConfigured()` or need `supabaseLinked: true` **skip** without real keys.
@@ -150,6 +150,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/checkout-volunteer-credits.spec.ts`](../e2e/checkout-volunteer-credits.spec.ts) | `npm run test:e2e -- e2e/checkout-volunteer-credits.spec.ts` | Credits reduce Stripe charge at checkout | `setup-cart-scenario` (`withCredits`) |
 | [`e2e/checkout-payment-options-audit.spec.ts`](../e2e/checkout-payment-options-audit.spec.ts) | `npm run test:e2e -- e2e/checkout-payment-options-audit.spec.ts` | **Payment options audit:** pay-in-full, biweekly, Upcoming Pay Now, partial credits, credits unchecked (no auto-spend), credits-only confirm, class+membership | `setup-cart-scenario` (+ `withCredits` / `unpaidMembershipFeeCents` / `seed-upcoming-scheduled-payment`); Stripe + Supabase; runbook [checkout-payment-e2e-audit.md](./APP_KNOWLEDGE/runbooks/checkout-payment-e2e-audit.md) |
 | [`e2e/checkout-membership-order-summary.spec.ts`](../e2e/checkout-membership-order-summary.spec.ts) | `npm run test:e2e:checkout-membership` | Membership lines + `__E2E_CART__` refresh | `setup-cart-scenario` (`membershipRequired`) |
+| [`e2e/checkout-free-after-threshold.spec.ts`](../e2e/checkout-free-after-threshold.spec.ts) | `npm run test:e2e -- e2e/checkout-free-after-threshold.spec.ts` | Free-after-threshold: cheapest of 4 kids free; Pay amount + ledger comps | `setup-free-after-cart-scenario` (`childCount: 4`, threshold 3) |
 | [`e2e/parent-full-journey.spec.ts`](../e2e/parent-full-journey.spec.ts) | `npm run test:e2e -- e2e/parent-full-journey.spec.ts` | Register → 2 sessions → biweekly → autopay #2 | `setup-registration-scenario` (`openSessionCount: 2`) + Stripe + test autopay APIs |
 
 Stripe helpers: [`e2e/helpers/stripePlaywright.ts`](../e2e/helpers/stripePlaywright.ts). Use **test mode** keys from the same Stripe account.
@@ -180,6 +181,7 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `POST /api/test/setup-registration-scenario` | `school-code-registration`, `parent-full-journey` |
 | `POST /api/test/setup-session-enrollment-scenario` | `session-enrollment-flow` |
 | `POST /api/test/setup-cart-scenario` | Payment, credits, membership, profile credits, help issue submission |
+| `POST /api/test/setup-free-after-cart-scenario` | `checkout-free-after-threshold` (4 kids + school FAT enabled) |
 | `POST /api/test/ensure-technical-support-schema` | `help-issue-submission.spec.ts` |
 | `GET /api/test/technical-support-issue/:id` | `help-issue-submission.spec.ts` (persistence verify) |
 | `POST /api/test/setup-credit-lookup-scenario` | `credit-management-parent-lookup` |

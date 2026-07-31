@@ -3367,6 +3367,92 @@ router.patch("/my-school/free-after-threshold", supabaseAuth, async (req: any, r
   }
 });
 
+/**
+ * Recent Free After Threshold uses for this school (from payments.metadata.discountSnapshot).
+ * GET /api/school-admin/my-school/free-after-applications?limit=50
+ */
+router.get("/my-school/free-after-applications", supabaseAuth, async (req: any, res) => {
+  try {
+    const role = req.user?.role || req.auth?.payload?.role;
+    const allowedRoles = ['schoolAdmin', 'superAdmin', 'admin'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
+
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const limitRaw = Number(req.query?.limit);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(1, Math.floor(limitRaw)), 200) : 50;
+
+    const allPayments = await storage.getAllPayments();
+
+    const applications: Array<{
+      paymentId: number;
+      parentEmail: string;
+      parentId: number | null;
+      amountSavedCents: number;
+      discountName: string;
+      paymentDate: string | null;
+      enrollmentIds: number[];
+      stripePaymentIntentId: string | null;
+      description: string | null;
+    }> = [];
+
+    for (const payment of allPayments as any[]) {
+      if (payment.schoolId != null && payment.schoolId !== schoolId) continue;
+      const meta = (payment.metadata ?? {}) as Record<string, any>;
+      const snapshot = meta.discountSnapshot;
+      if (!snapshot || typeof snapshot !== 'object') continue;
+      const lines = Array.isArray(snapshot.appliedDiscounts) ? snapshot.appliedDiscounts : [];
+      const fatLine = lines.find((d: any) => d?.source === 'free_after_threshold');
+      const amountSaved =
+        typeof fatLine?.amount === 'number'
+          ? fatLine.amount
+          : typeof snapshot.freeAfterThree === 'number'
+            ? snapshot.freeAfterThree
+            : 0;
+      if (amountSaved <= 0) continue;
+
+      applications.push({
+        paymentId: payment.id,
+        parentEmail: payment.parentEmail || '',
+        parentId: payment.parentId ?? null,
+        amountSavedCents: amountSaved,
+        discountName: fatLine?.name || `Free After ${snapshot.threshold ?? 3}`,
+        paymentDate: payment.paymentDate
+          ? new Date(payment.paymentDate).toISOString()
+          : payment.createdAt
+            ? new Date(payment.createdAt).toISOString()
+            : null,
+        enrollmentIds: Array.isArray(fatLine?.enrollmentIds)
+          ? fatLine.enrollmentIds
+          : Array.isArray(snapshot.freeEnrollmentIds)
+            ? snapshot.freeEnrollmentIds
+            : Array.isArray(payment.enrollmentIds)
+              ? payment.enrollmentIds
+              : [],
+        stripePaymentIntentId: payment.stripePaymentIntentId || null,
+        description: payment.description || null,
+      });
+    }
+
+    applications.sort((a, b) => {
+      const ta = a.paymentDate ? Date.parse(a.paymentDate) : 0;
+      const tb = b.paymentDate ? Date.parse(b.paymentDate) : 0;
+      return tb - ta;
+    });
+
+    return res.json({
+      applications: applications.slice(0, limit),
+      total: applications.length,
+    });
+  } catch (error) {
+    console.error('Error listing free-after applications:', error);
+    return res.status(500).json({ message: 'Server error while listing free-after applications' });
+  }
+});
+
 router.get("/knowledge-bases", supabaseAuth, async (req: any, res) => {
   try {
     const schoolId = await getSchoolIdFromRequest(req, res);

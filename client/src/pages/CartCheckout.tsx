@@ -78,10 +78,15 @@ function CheckoutForm({ selectedPaymentPlan, selectedPlanAmount, autoPayEnabled,
   const [processing, setProcessing] = useState(false);
   const [elementsReady, setElementsReady] = useState(false);
   const [pendingAutoPayEnabled, setPendingAutoPayEnabled] = useState(false);
-  
-  // Reset ready state when stripe or elements change (e.g., when clientSecret changes)
+
+  // Only clear ready when Stripe hooks are unavailable. Resetting on every
+  // stripe/elements identity change left Pay stuck on "Loading..." because
+  // PaymentElement onReady does not re-fire. New PIs remount this form via
+  // parent Elements key={clientSecret}.
   useEffect(() => {
-    setElementsReady(false);
+    if (!stripe || !elements) {
+      setElementsReady(false);
+    }
   }, [stripe, elements]);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -1908,10 +1913,13 @@ export default function CartCheckout() {
                       )}
 
                       {cart.discounts.freeAfterThree > 0 && (
-                        <div className="flex justify-between text-sm text-green-600">
+                        <div
+                          className="flex justify-between text-sm text-green-600"
+                          data-testid="checkout-summary-free-after"
+                        >
                           <span className="flex items-center gap-1">
                             <Gift className="h-3 w-3" />
-                            Free After Three:
+                            Free After {cart.schoolSettings?.freeAfterThreshold ?? 3}:
                           </span>
                           <span>-{formatCurrency(cart.discounts.freeAfterThree)}</span>
                         </div>

@@ -236,10 +236,13 @@ export default function CartDrawer() {
                     )}
 
                     {cart.discounts.freeAfterThree > 0 && (
-                      <div className="flex justify-between text-sm text-green-600">
+                      <div
+                        className="flex justify-between text-sm text-green-600"
+                        data-testid="cart-summary-free-after"
+                      >
                         <span className="flex items-center gap-1">
                           <Gift className="h-3 w-3" />
-                          Free After Three:
+                          Free After {cart.schoolSettings?.freeAfterThreshold ?? 3}:
                         </span>
                         <span>-{formatCurrency(cart.discounts.freeAfterThree)}</span>
                       </div>

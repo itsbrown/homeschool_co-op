@@ -176,6 +176,8 @@ Abandoned Pay Now attempts can leave `scheduled_payments` in `processing` + `cha
 | **Cron auto-heal** | `payment-flow-monitor` (~15m on Reserved VM) — signal `stuck_parent_manual`, releases rows older than **15m** (never charges a card). |
 | **Admin health** | `GET /api/admin/payment-health` — latest monitor snapshot includes `stuck_parent_manual` and `installment_not_available_spike`. |
 
+**Ops note (2026-07-30):** If parents report “auto-pay didn’t run” but card + `users.auto_pay_enabled` look fine, check the due `scheduled_payments` row for `status=processing` + `charged_by=parent_manual` (abandoned Pay Now). Autopay will not charge that row until released. If multiple such rows linger days, verify the Reserved VM is running the monitor (`AUTO_PAY_SINGLE_INSTANCE=true`, `ENABLE_BACKGROUND_JOBS=true`).
+
 ```bash
 # Prod audit (dry run)
 node scripts/with-prod-env.mjs npx tsx server/scripts/audit-stuck-parent-manual-installments.ts
@@ -278,6 +280,8 @@ School-admin **Financial Reports → Collections Overview** counts `summary.auto
 | Effective balance | `shared/schema.ts` — `computeEffectiveBalance`, `resolveEnrollmentEffectiveBalance` |
 | Collections / autopay history | `server/lib/financial-collections.ts`, `client/.../CollectionsOverviewTab.tsx` |
 | Cart / checkout pricing | `server/utils/cart-pricing.ts`, `server/api/stripe.ts` |
+| Free-after-threshold | School flags → `calculateCartPricing` → PI sized with free lines $0 → fulfill comps + `allocatePaymentByBalance` → `discountSnapshot` on payment history. Admin: DiscountsPage recent uses + family Payments discount column. E2E: `checkout-free-after-threshold.spec.ts` |
+| Free-after watch (Misso) | Amy Misso parent **91** (`amym151@gmail.com`): Fall 2026 four `pending_payment` full-day rows — when she checks out all 4 together, confirm cheapest is free + `compReason: Free After Threshold` + payment `discountSnapshot`. Do **not** manually pre-comp. Audit: `audit-free-after-candidates.ts` |
 | Credit ledger | `server/services/` (FIFO consumption), `unified_credit_usage_logs` |
 | Family balance (email/UI) | `server/lib/family-balance-email.ts` |
 | Correction email | `server/lib/account-correction-email.ts`, `server/scripts/send-account-correction-email.ts` |
@@ -310,3 +314,4 @@ When volunteer credits cover the full cart, `POST /api/stripe/create-payment-int
 | Admin shows $441 “paid” per session; Payments tab empty; PI `requires_payment_method` | Phantom `total_paid` — ledger updated without succeeded payment | Reset via `fix-kendra-crofoot-session-phantom-paid-production.ts` pattern; implement [ledger parity plan](../../plans/enrollment-ledger-stripe-parity.md) |
 | Collections Overview **Auto-pay on (0)** but parents have plans / `auto_pay_enabled` | Was: `loadParentInfo` used `db.execute().rows` (undefined under postgres-js); catch → all false | Fixed: select `users.autoPayEnabled` via drizzle in `loadParentInfo` |
 | Apply credits → “Checkout did not finish loading” | Credits cover cart → no `clientSecret`; recovery gate used pre-credit `actualPayableAmount` | Gate on `displayPayableAmount` + `!creditOnlyEligible` |
+| Free-after shows in cart but balances still owed / charge ignores discount | Pre-fix: create-PI ignored cart pricing; fulfill even-split; no comps | **Fixed:** PI sized from cart pricing; fulfill applies comps + `allocatePaymentByBalance`; see skill Free After Threshold |

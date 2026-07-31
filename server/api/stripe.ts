@@ -6,12 +6,23 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { getStripeClient, getStripePublishableKey } from '../config/stripe';
 import { calculateMembershipDiscount } from '../utils/membership';
-import { resolveMembershipOwedForCheckout, resolveCheckoutSchoolId, type CartItem } from '../utils/cart-pricing';
+import {
+  calculateCartPricing,
+  resolveMembershipOwedForCheckout,
+  resolveCheckoutSchoolId,
+  type CartItem,
+} from '../utils/cart-pricing';
 import { calculateCanonicalAmounts } from '../services/canonical-amount-calculator';
 import { enrollmentOutstandingCentsForCheckout } from '../lib/checkout-enrollment-balance';
 import { findProgramEnrollmentForCartItem } from '../lib/cart-checkout-enrollment-match';
 import { completeCartCreditsOnlyCheckout } from '../services/cart-credits-only-checkout';
 import { normalizeCheckoutPaymentPlanRequest } from '@shared/checkout-payment-plan';
+import {
+  buildCartItemEnrollmentMap,
+  buildCheckoutDiscountSnapshot,
+  resolveFreeEnrollmentIds,
+  type CheckoutDiscountSnapshot,
+} from '../lib/checkout-discount-snapshot';
 
 /** Stripe minimum charge in USD cents for card-present checkouts. */
 const STRIPE_MINIMUM_CHECKOUT_CENTS = 50;
@@ -270,6 +281,8 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
     try {
       // Find or use existing pending enrollments (created when items were added to cart)
       const enrollmentIds: number[] = [];
+      /** Parallel to enrollmentIds — stable cart lines for server pricing / free-after mapping */
+      const resolvedCartItems: CartItem[] = [];
       
       // Only process items if there are any (skip for membership-only carts)
       if (hasItems) {
@@ -336,6 +349,15 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
           // Payment plan is stored on the PaymentIntent and committed to enrollments
           // only after the first installment succeeds (webhook).
           enrollmentIds.push(enrollment.id);
+          resolvedCartItems.push({
+            id: `enrollment-${enrollment.id}`,
+            classId: item.classId ?? item.marketplaceClassId ?? enrollment.marketplaceClassId ?? enrollment.classId,
+            childId: item.childId,
+            childName: item.childName || enrollment.childName || '',
+            variantId: item.variantId,
+            enrollmentId: enrollment.id,
+            remainingBalance: enrollmentOutstandingCentsForCheckout(enrollment),
+          });
         } else {
           if (Number.isFinite(cartEnrollmentId) && cartEnrollmentId > 0) {
             throw new Error(
@@ -405,6 +427,15 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             enrollmentDate: new Date()
           });
           enrollmentIds.push(enrollment.id);
+          resolvedCartItems.push({
+            id: `enrollment-${enrollment.id}`,
+            classId: actualClassId,
+            childId: item.childId,
+            childName: item.childName || '',
+            variantId: item.variantId,
+            enrollmentId: enrollment.id,
+            remainingBalance: lineAmountCents,
+          });
         }
         }
       } // End of hasItems block
@@ -454,6 +485,62 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         }
       }
 
+      // Server-authoritative cart discounts (free-after-threshold, sibling, auto/promo).
+      // Comps are written on fulfill — here we only size the PI using virtual free balances.
+      let checkoutDiscountSnapshot: CheckoutDiscountSnapshot | null = null;
+      const freeEnrollmentIdSet = new Set<number>();
+      if (hasItems && checkoutSchoolId && resolvedCartItems.length > 0) {
+        const appliedPromoCode =
+          typeof req.body?.promoCode === 'string'
+            ? req.body.promoCode
+            : typeof discounts?.appliedPromoCode === 'string'
+              ? discounts.appliedPromoCode
+              : null;
+        const pricing = await calculateCartPricing(
+          resolvedCartItems,
+          parent.id,
+          checkoutSchoolId,
+          appliedPromoCode || undefined,
+          userEmail,
+        );
+        const itemEnrollmentMap = buildCartItemEnrollmentMap(resolvedCartItems, enrollmentIds);
+        const freeEnrollmentIds = resolveFreeEnrollmentIds(
+          pricing.discounts.freeItemIds || [],
+          itemEnrollmentMap,
+        );
+        for (const id of freeEnrollmentIds) freeEnrollmentIdSet.add(id);
+
+        const freeEnrollmentAmounts: Record<number, number> = {};
+        for (let i = 0; i < resolvedCartItems.length; i++) {
+          const enrollmentId = enrollmentIds[i];
+          if (!enrollmentId || !freeEnrollmentIdSet.has(enrollmentId)) continue;
+          const fromPricing = pricing.itemPrices[i]?.price;
+          const fromEnrollment = enrollmentsForAmount[i]
+            ? enrollmentOutstandingCentsForCheckout(enrollmentsForAmount[i])
+            : 0;
+          freeEnrollmentAmounts[enrollmentId] = Math.max(
+            0,
+            typeof fromPricing === 'number' ? fromPricing : fromEnrollment,
+          );
+        }
+
+        checkoutDiscountSnapshot = buildCheckoutDiscountSnapshot({
+          pricing,
+          freeEnrollmentIds,
+          freeEnrollmentAmounts,
+        });
+
+        if (checkoutDiscountSnapshot?.freeAfterThree) {
+          console.log('🏷️ Free-after-threshold applied to checkout PI sizing:', {
+            freeAfterThree: checkoutDiscountSnapshot.freeAfterThree,
+            freeEnrollmentIds,
+            threshold: checkoutDiscountSnapshot.threshold,
+            pricingTotal: pricing.total,
+            subtotal: pricing.subtotal,
+          });
+        }
+      }
+
       const authoritativeAmountResult = calculateCanonicalAmounts({
         mode: 'checkout',
         items: enrollmentsForAmount
@@ -462,7 +549,10 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
             id: String(enrollment.id),
             totalCostCents: enrollment.totalCost,
             totalPaidCents: enrollment.totalPaid,
-            remainingBalanceCents: enrollmentOutstandingCentsForCheckout(enrollment),
+            // Free-after lines are $0 for PI sizing; comps persist on fulfill.
+            remainingBalanceCents: freeEnrollmentIdSet.has(enrollment.id)
+              ? 0
+              : enrollmentOutstandingCentsForCheckout(enrollment),
           })),
         membershipAmountCents: membershipAmount || 0
       });
@@ -758,6 +848,9 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         membership: serverMembership,
         savePaymentMethodForAutoPay,
         enableAutoPayAfterCheckout,
+        ...(checkoutDiscountSnapshot
+          ? { discountSnapshot: checkoutDiscountSnapshot }
+          : {}),
         ...(appliedVolunteerCreditsCents > 0
           ? {
               creditsAppliedCents: appliedVolunteerCreditsCents,

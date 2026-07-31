@@ -844,6 +844,18 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
           metadata: payment.metadata,
         });
         const display = paymentSettlementToDisplayFields(settlement);
+        const meta = (payment.metadata ?? {}) as Record<string, unknown>;
+        const discountSnapshot =
+          meta.discountSnapshot && typeof meta.discountSnapshot === 'object'
+            ? meta.discountSnapshot
+            : null;
+        const discountTotalCents =
+          typeof meta.discountTotal === 'number'
+            ? meta.discountTotal
+            : discountSnapshot &&
+                typeof (discountSnapshot as { discountTotal?: unknown }).discountTotal === 'number'
+              ? (discountSnapshot as { discountTotal: number }).discountTotal
+              : null;
         return {
           id: payment.id,
           ...display,
@@ -855,6 +867,8 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
             [payment.childName, payment.className].filter(Boolean).join(' — ') ||
             'Payment',
           transactionId: payment.stripePaymentIntentId,
+          discountTotalCents,
+          discountSnapshot,
         };
       }),
       scheduledPayments: scheduledPayments.map(payment => {

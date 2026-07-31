@@ -14,6 +14,7 @@ Catalog of **parent/member money paths** and which Playwright specs verify them.
 | **Credits-only (full cover)** | Apply → **confirm** (no auto-spend) | `e2e/checkout-payment-options-audit.spec.ts` | Requires `confirmCreditsOnlyCheckout` |
 | **Credits available but unchecked** | Full card amount; no confirm | `e2e/checkout-payment-options-audit.spec.ts` | Must not auto-spend |
 | **Class + unpaid membership** | Order summary $ class + fee | `e2e/checkout-membership-order-summary.spec.ts` | UI amount; full pay in audit suite |
+| **Free after threshold** | Card for discounted total (cheapest N free) | `e2e/checkout-free-after-threshold.spec.ts` | Seed enables school FAT; comps on free enrollments after pay |
 | **Membership dashboard drift** | Combined PI already paid | `e2e/membership-dashboard-after-combined-payment.spec.ts` | Regression Spencer |
 | **Public store merch / class** | Guest + test fulfill | `e2e/public-store.spec.ts` | Separate lane |
 | **Deposit-only / custom plans** | Not primary parent UI | — | Seed supports `deposit_only`/`custom`; checkout UI filters deposit. Cover via API/integration if needed. |
@@ -28,6 +29,7 @@ npm run test:e2e -- e2e/checkout-payment-options-audit.spec.ts
 npm run test:e2e -- e2e/parent-payment-flow.spec.ts
 npm run test:e2e -- e2e/checkout-volunteer-credits.spec.ts
 npm run test:e2e:checkout-membership
+npm run test:e2e -- e2e/checkout-free-after-threshold.spec.ts
 npm run test:e2e -- e2e/parent-full-journey.spec.ts
 ```
 
@@ -44,3 +46,4 @@ Restart the dev server after rotating keys (`reuseExistingServer` reuses whateve
 2. Credits never spend on passive `create-payment-intent` — only with Apply + confirm when payable is $0.
 3. Stripe min $0.50 enforced for positive card charges.
 4. Scheduled payments created after first confirmed payment (biweekly), not at abandoned checkout.
+5. Free-after-threshold sizes the PI from discounted cart pricing; free lines get comps on fulfill; cash allocates by effective balance.
