@@ -64,9 +64,10 @@ waitlist        → enrolled           (spot opens up)
 - Used when removing items from cart
 
 ### Admin-Initiated
-- Endpoint: `DELETE /api/enrollments/:id`
-- Can remove any enrollment regardless of status
-- Deletes the enrollment record after verification
+- Endpoint: `DELETE /api/admin/enrollments/:id` (soft-cancel → `cancelled`; preserves payment history)
+- Used by school-admin **Manage Enrollments** (`ClassEnrollmentsPage`) and parent-profile unenroll
+- Do **not** use legacy `DELETE /api/enrollments/:id` for admin Remove — that path historically only hit mem/file storage and returned `404 Enrollment not found` for Postgres roster rows
+- `CombinedStorage.removeEnrollment` must delete from Postgres (`deleteProgramEnrollment`) when the row exists in DB
 
 ### Bulk Cancel (Cart Clear)
 - Endpoint: `POST /api/enrollments/cancel-multiple`

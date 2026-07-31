@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-07-29 (Class Manage Enrollments Remove → 404)
+
+- School-admin **Manage Enrollments** Remove called legacy `DELETE /api/enrollments/:id`, which looked up Postgres rows then `CombinedStorage.removeEnrollment` (mem-only) → `404 Enrollment not found`.
+- Fix: pages call `DELETE /api/admin/enrollments/:id` (soft-cancel); `removeEnrollment` deletes DB program enrollments (+ pending scheduled payments) when present.
+- Skill: `.agents/skills/asa-enrollment-classes/SKILL.md` (Admin-Initiated unenroll).
+
 ## 2026-07-28 (Parent Profile campus Select / AlertDialog race)
 
 - Staff campus change on Parent Profile opened confirm in the same tick as Select dismiss → dialog closed immediately and PATCH never ran.
