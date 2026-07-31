@@ -300,6 +300,7 @@ Previously, the cart display and payment processor used independent calculation 
 - **Comp leaves overdue installments on the books** → cancellation logic filters only `status = 'pending'`, missing `overdue` records → always filter `p.status === 'pending' || p.status === 'overdue'` when cancelling or reducing scheduled payments after a comp
 - **Outstanding Balance card doesn't update after a credit-only payment** → payment success handler invalidated `/api/payment-history` and `/api/scheduled-payments` but missed `/api/parent/enrollments` → the Outstanding Balance card reads from the enrollment query; always include `["/api/parent/enrollments"]` in post-payment cache invalidation alongside the other payment query keys
 - **Collections Overview shows Auto-pay on (0) despite `users.auto_pay_enabled`** → `loadParentInfo` must select `users.autoPayEnabled` via drizzle; never iterate `db.execute(...).rows` under postgres-js (returns an array, no `.rows`) — see `server/lib/financial-collections.ts` and payments domain doc
+- **Stuck `parent_manual` installments linger for days / autopay skips a due row** → abandoned Pay Now leaves `processing` + `charged_by=parent_manual`; autopay reconciliation skips those rows. **`payment-flow-monitor` (~15m) must run on the `ENABLE_BACKGROUND_JOBS` worker** (`server/index.ts` — not unused `app-init.ts`) to auto-release them. Verify startup log `[PaymentFlowMonitorJob] scheduled`
 
 ## Best Practices
 

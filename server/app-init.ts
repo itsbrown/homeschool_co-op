@@ -421,10 +421,16 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
     console.warn('WARN: PAYMENT_PROCESSOR_ENABLED is not set to "true". Webhook idempotency protection is reduced (relying solely on stripe_payment_history DB lookup). Set PAYMENT_PROCESSOR_ENABLED=true on Reserved VM deployments.');
   }
 
+  // NOTE: Production boots `server/index.ts`, which does not call initializeApp.
+  // Payment-flow monitor + scheduled timers are started from index.ts when
+  // ENABLE_BACKGROUND_JOBS=true (dev: always). Keep the starts below for any
+  // alternate entry that still uses initializeApp — they are idempotent.
+
   // Deployment safety note: startAutoPayJob() and startReconciliationJob() require
   // AUTO_PAY_SINGLE_INSTANCE=true to start. Both jobs will emit a CRITICAL log and
   // refuse to start if this env var is missing — preventing double-charges in
   // autoscaled deployments. Set AUTO_PAY_SINGLE_INSTANCE=true only on Reserved VM.
+  // Payment-flow monitor also starts when ENABLE_BACKGROUND_JOBS=true (heal/alert only).
 
   const { backupService } = await import('./services/backupService.js');
   const { MembershipStatusService } = await import('./services/membership-status-service.js');

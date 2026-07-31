@@ -2,12 +2,15 @@
  * Payment-Flow Health Monitor Job
  * --------------------------------
  * Singleton background scheduler that runs `runPaymentFlowMonitor()` on a fixed
- * cadence. Like the other money-path jobs, it refuses to start unless
- * AUTO_PAY_SINGLE_INSTANCE=true so autoscaled web replicas never run it (which
- * would duplicate auto-heal writes / alerts).
+ * cadence. Started from `server/index.ts` when background jobs are enabled
+ * (`ENABLE_BACKGROUND_JOBS` in prod/staging; always in development).
+ *
+ * Also accepts `AUTO_PAY_SINGLE_INSTANCE=true` so Reserved VM money-path configs
+ * still start the heal/alert loop even if the two flags diverge.
  */
 
-import { runPaymentFlowMonitor } from "./payment-flow-monitor";
+import { canStartPaymentFlowMonitor } from '../lib/background-jobs-singleton';
+import { runPaymentFlowMonitor } from './payment-flow-monitor';
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const MIN_INTERVAL_MS = 60 * 1000;
@@ -32,44 +35,52 @@ function resolveIntervalMs(): number {
 
 async function tick(): Promise<void> {
   if (isRunning) {
-    console.log("[PaymentFlowMonitorJob] previous sweep still running, skipping...");
+    console.log('[PaymentFlowMonitorJob] previous sweep still running, skipping...');
     return;
   }
   isRunning = true;
   try {
     await runPaymentFlowMonitor({ autoHeal: true, notify: true });
   } catch (err) {
-    console.error("[PaymentFlowMonitorJob] sweep failed:", err);
+    console.error('[PaymentFlowMonitorJob] sweep failed:', err);
   } finally {
     isRunning = false;
   }
 }
 
+/** True when the interval (or initial timeout) is scheduled. Exported for tests/ops checks. */
+export function isPaymentFlowMonitorJobScheduled(): boolean {
+  return monitorInterval != null || initialTimeout != null;
+}
+
 /**
- * Start the recurring monitor. Requires AUTO_PAY_SINGLE_INSTANCE=true (Reserved
- * VM / single worker) — mirrors startAutoPayJob/startReconciliationJob guards.
+ * Start the recurring monitor on the singleton background worker.
+ * Safe to call twice — second call is a no-op.
  */
 export function startPaymentFlowMonitorJob(): void {
-  if (process.env.AUTO_PAY_SINGLE_INSTANCE !== "true") {
+  if (!canStartPaymentFlowMonitor()) {
     console.error(
-      "CRITICAL: [PaymentFlowMonitorJob] blocked — requires AUTO_PAY_SINGLE_INSTANCE=true (Reserved VM only). Monitor will NOT start.",
+      'CRITICAL: [PaymentFlowMonitorJob] blocked — requires ENABLE_BACKGROUND_JOBS=true on the singleton worker ' +
+        '(or AUTO_PAY_SINGLE_INSTANCE=true). Monitor will NOT start. Stuck parent_manual Pay Now rows will not auto-heal.',
     );
     return;
   }
   if (monitorInterval || initialTimeout) {
-    console.log("[PaymentFlowMonitorJob] job already scheduled");
+    console.log('[PaymentFlowMonitorJob] job already scheduled');
     return;
   }
 
   const intervalMs = resolveIntervalMs();
   console.log(
-    `[PaymentFlowMonitorJob] scheduled every ${(intervalMs / 60000).toFixed(1)}m (first run in ${(INITIAL_DELAY_MS / 1000).toFixed(0)}s)`,
+    `[PaymentFlowMonitorJob] scheduled every ${(intervalMs / 60000).toFixed(1)}m ` +
+      `(first run in ${(INITIAL_DELAY_MS / 1000).toFixed(0)}s)`,
   );
 
   initialTimeout = setTimeout(() => {
     initialTimeout = null;
     void tick();
     monitorInterval = setInterval(() => void tick(), intervalMs);
+    // Keep the timer referenced while the HTTP server is alive; unref on stop.
   }, INITIAL_DELAY_MS);
 }
 
@@ -81,6 +92,6 @@ export function stopPaymentFlowMonitorJob(): void {
   if (monitorInterval) {
     clearInterval(monitorInterval);
     monitorInterval = null;
-    console.log("[PaymentFlowMonitorJob] stopped");
+    console.log('[PaymentFlowMonitorJob] stopped');
   }
 }
