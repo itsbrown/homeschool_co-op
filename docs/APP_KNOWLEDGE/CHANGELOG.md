@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-07-31 (Payment-flow monitor actually starts on worker)
+
+- **Bug:** `startPaymentFlowMonitorJob()` lived only in unused `app-init.ts` (never called from `server/index.ts`) → zero monitor sweeps/alerts in prod; stuck `parent_manual` rows could linger for days while off-session autopay still charged.
+- **Fix:** start/stop monitor from `index.ts` `ENABLE_BACKGROUND_JOBS` block; guard accepts `ENABLE_BACKGROUND_JOBS` **or** `AUTO_PAY_SINGLE_INSTANCE` (`server/lib/background-jobs-singleton.ts`).
+- **Verify:** worker log `[PaymentFlowMonitorJob] scheduled…` + `[payment-flow-monitor] tier=…`; unit `server/tests/background-jobs-singleton.test.ts`.
+- **Support context:** Clare MacDougall (parent 215) Jul 23 installment stuck `processing` + `parent_manual`; released manually then charged via autopay. Same pattern on Karen Raczka / Ana Cardoso.
+
 ## 2026-07-28 (Parent Profile campus Select / AlertDialog race)
 
 - Staff campus change on Parent Profile opened confirm in the same tick as Select dismiss → dialog closed immediately and PATCH never ran.

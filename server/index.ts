@@ -416,7 +416,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
         AUTOPAY_RECONCILIATION_INTERVAL_MS,
       } = await import('./services/scheduled-payment-reminders.js');
       console.log(
-        `🔧 Starting background services (role=${singletonRole}) — reminders ~6h, AutoPay stuck-processing reconciliation ~${Math.round(
+        `🔧 Starting background services (role=${singletonRole}) — reminders ~6h, payment-flow monitor ~15m, AutoPay stuck-processing reconciliation ~${Math.round(
           AUTOPAY_RECONCILIATION_INTERVAL_MS / 60_000,
         )}min; enable this process only on one worker when running multiple web replicas`,
       );
@@ -446,6 +446,11 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       
       // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
       startScheduledPaymentReminderJob();
+
+      // Payment-flow health monitor (~15m): stuck parent_manual auto-heal + alerts.
+      // Must run on the same singleton worker as reminders / off-session charges.
+      const { startPaymentFlowMonitorJob } = await import('./services/payment-flow-monitor-job.js');
+      startPaymentFlowMonitorJob();
 
       const { startLocationActivationScheduler } = await import(
         './services/location-activation-scheduler.js'
@@ -478,6 +483,9 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
             const { stopLocationActivationScheduler } = await import(
               './services/location-activation-scheduler.js'
             );
+            const { stopPaymentFlowMonitorJob } = await import(
+              './services/payment-flow-monitor-job.js'
+            );
             backup.stopAutomaticBackups();
             MembershipSvc.stopMembershipStatusJob();
             stopEnrollmentReminderScheduler();
@@ -485,6 +493,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
             stopScheduledPaymentReminderJob();
             stopCreditExpirationJob();
             stopLocationActivationScheduler();
+            stopPaymentFlowMonitorJob();
           } catch (err) {
             console.warn('⚠️ Error while stopping background intervals:', (err as Error).message);
           }

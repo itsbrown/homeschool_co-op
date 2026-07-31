@@ -58,9 +58,11 @@ Immediate error email is provider-backed by `server/services/error-notification.
 
 Recurring monitor cadence:
 
-- `startPaymentFlowMonitorJob()` is wired in `server/app-init.ts`.
-- Job still requires singleton guard `AUTO_PAY_SINGLE_INSTANCE=true`.
+- `startPaymentFlowMonitorJob()` starts from **`server/index.ts`** on the same `ENABLE_BACKGROUND_JOBS` singleton as reminders / off-session charges (dev: always on). Stops on SIGTERM with other background timers.
+- Guard: `canStartPaymentFlowMonitor` — `ENABLE_BACKGROUND_JOBS=true` **or** `AUTO_PAY_SINGLE_INSTANCE=true` (so heal cannot stay off while charges still run).
+- **Incident (2026-07):** monitor was only started from unused `app-init.ts` → never ran in prod; stuck `parent_manual` rows lingered for days. Fixed by wiring into `index.ts`.
 - Recommended worker env: `ENABLE_BACKGROUND_JOBS=true`, `AUTO_PAY_SINGLE_INSTANCE=true`, `POST_PAYMENT_VERIFY_ENABLED=true`.
+- Verify after deploy: startup log `[PaymentFlowMonitorJob] scheduled every 15.0m`; within ~90s a `[payment-flow-monitor] tier=...` line; `GET /api/admin/payment-health` has a fresh `generatedAt`.
 
 ## Interactive fulfillment (primary) vs webhook (backup)
 
@@ -175,6 +177,8 @@ Abandoned Pay Now attempts can leave `scheduled_payments` in `processing` + `cha
 | **Single parent release** | `server/scripts/release-stuck-parent-manual-scheduled-payment.ts --email …` |
 | **Cron auto-heal** | `payment-flow-monitor` (~15m on Reserved VM) — signal `stuck_parent_manual`, releases rows older than **15m** (never charges a card). |
 | **Admin health** | `GET /api/admin/payment-health` — latest monitor snapshot includes `stuck_parent_manual` and `installment_not_available_spike`. |
+
+**Ops note (2026-07-30):** If parents report “auto-pay didn’t run” but card + `users.auto_pay_enabled` look fine, check the due `scheduled_payments` row for `status=processing` + `charged_by=parent_manual` (abandoned Pay Now). Autopay will not charge that row until released. After the 2026-07-31 wiring fix, the monitor should auto-release those within ~15m on the `ENABLE_BACKGROUND_JOBS` worker; if rows linger, check worker logs for `PaymentFlowMonitorJob`.
 
 ```bash
 # Prod audit (dry run)

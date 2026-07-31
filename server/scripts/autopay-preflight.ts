@@ -110,7 +110,11 @@ async function main() {
   console.log(`STRIPE_SECRET_KEY                 : ${present('STRIPE_SECRET_KEY')}`);
   console.log(`STRIPE_WEBHOOK_SECRET             : ${present('STRIPE_WEBHOOK_SECRET')}`);
   console.log(`BREVO_API_KEY                     : ${present('BREVO_API_KEY')}`);
+  const autoPaySingleton = isTruthyEnv(process.env.AUTO_PAY_SINGLE_INSTANCE);
+  const monitorWouldStart = bgJobs || autoPaySingleton || nodeEnv === 'development';
   console.log(`ENABLE_BACKGROUND_JOBS            : ${bgJobs ? '✅ true (this is a worker)' : 'off'}`);
+  console.log(`AUTO_PAY_SINGLE_INSTANCE          : ${autoPaySingleton ? '✅ true' : 'off'}`);
+  console.log(`Payment-flow monitor would start  : ${monitorWouldStart ? '✅ yes (heal/alert ~15m)' : '❌ no — stuck parent_manual will not auto-heal'}`);
   console.log(`AUTOPAY_OFF_SESSION_CHARGES       : ${offSession ? '⚠️  true (will charge cards)' : 'off (no auto-charges)'}`);
   console.log(`AUTOPAY_REQUIRE_METADATA_AUTO_PAY : ${requireMeta ? 'true (only metadata.autoPay rows)' : 'off (all due rows eligible)'}`);
   console.log(`Retry cap / stale cutoff          : ${AUTOPAY_MAX_RETRY_ATTEMPTS} attempts / ${AUTOPAY_STALE_ATTEMPT_DAYS} days`);
@@ -119,6 +123,16 @@ async function main() {
   if (offSession && !bgJobs) {
     warnings.push(
       'AUTOPAY_OFF_SESSION_CHARGES=true but ENABLE_BACKGROUND_JOBS is off on this process — charges only run on the singleton worker.',
+    );
+  }
+  if (bgJobs && !monitorWouldStart) {
+    warnings.push(
+      'Background jobs are on but payment-flow monitor would not start — unexpected; check canStartPaymentFlowMonitor.',
+    );
+  }
+  if (!bgJobs && nodeEnv !== 'development' && !autoPaySingleton) {
+    warnings.push(
+      'Neither ENABLE_BACKGROUND_JOBS nor AUTO_PAY_SINGLE_INSTANCE is set — payment-flow monitor will not run on this process.',
     );
   }
   if (offSession && !process.env.STRIPE_WEBHOOK_SECRET) {
