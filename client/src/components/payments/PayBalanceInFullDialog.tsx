@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
-import { Loader2, CreditCard } from "lucide-react";
+import { Loader2, CreditCard, Gift } from "lucide-react";
 import { stripePromise } from "@/config/stripe";
 import {
   Dialog,
@@ -14,6 +14,9 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { finalizePaymentAfterStripeSuccess } from "@/lib/finalizePaymentAfterStripeSuccess";
+import { useParentCredits } from "@/hooks/useParentCredits";
+import { computeManualPayDisplay } from "@/utils/parentBalance";
+import { refreshPostPaymentState } from "@/lib/postPaymentRefresh";
 
 export type PayInFullTarget = {
   enrollmentIds: number[];
@@ -21,6 +24,13 @@ export type PayInFullTarget = {
   title: string;
   subtitle?: string;
 };
+
+function formatCurrency(cents: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(cents / 100);
+}
 
 function PayInFullForm({
   amountCents,
@@ -86,7 +96,7 @@ function PayInFullForm({
           ) : (
             <>
               <CreditCard className="mr-2 h-4 w-4" />
-              Pay ${(amountCents / 100).toFixed(2)}
+              Pay {formatCurrency(amountCents)}
             </>
           )}
         </Button>
@@ -109,14 +119,41 @@ export function PayBalanceInFullDialog({
   onSuccess,
 }: PayBalanceInFullDialogProps) {
   const { toast } = useToast();
+  const { totalAvailableCents } = useParentCredits();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [chargeAmountCents, setChargeAmountCents] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [applyCredits, setApplyCredits] = useState(true);
+  const [creditsOnlySuccess, setCreditsOnlySuccess] = useState(false);
+  const dialogSessionKeyRef = React.useRef<string | null>(null);
+
+  const payDisplay = computeManualPayDisplay({
+    amount: target?.totalAmountCents ?? 0,
+    availableCredits: totalAvailableCents,
+    applyCredits: totalAvailableCents > 0 ? applyCredits : false,
+  });
 
   useEffect(() => {
     if (!isOpen || !target) {
+      dialogSessionKeyRef.current = null;
       setClientSecret(null);
       setError(null);
+      setCreditsOnlySuccess(false);
+      return;
+    }
+    const key = target.enrollmentIds.join(",");
+    if (dialogSessionKeyRef.current !== key) {
+      dialogSessionKeyRef.current = key;
+      setApplyCredits(totalAvailableCents > 0);
+      setCreditsOnlySuccess(false);
+      setClientSecret(null);
+      setError(null);
+    }
+  }, [isOpen, target, totalAvailableCents]);
+
+  useEffect(() => {
+    if (!isOpen || !target || creditsOnlySuccess) {
       return;
     }
 
@@ -126,16 +163,39 @@ export function PayBalanceInFullDialog({
       setError(null);
       setClientSecret(null);
       try {
+        const display = computeManualPayDisplay({
+          amount: target.totalAmountCents,
+          availableCredits: totalAvailableCents,
+          applyCredits: totalAvailableCents > 0 ? applyCredits : false,
+        });
+
         const response = await apiRequest("POST", "/api/billing/pay-balance", {
           enrollmentIds: target.enrollmentIds,
           paymentPlan: "full_payment",
           totalAmount: target.totalAmountCents,
+          applyCredits: totalAvailableCents > 0 ? applyCredits : false,
+          expectedChargeAmount: display.amountAfterCredits,
         });
         const data = await response.json();
-        if (!response.ok || !data.clientSecret) {
+        if (!response.ok) {
           throw new Error(data.error || data.message || "Could not start payment");
         }
-        if (!cancelled) setClientSecret(data.clientSecret);
+
+        if (data.mode === "credits_only") {
+          if (!cancelled) {
+            setCreditsOnlySuccess(true);
+            setChargeAmountCents(0);
+          }
+          return;
+        }
+
+        if (!data.clientSecret) {
+          throw new Error(data.error || data.message || "Could not start payment");
+        }
+        if (!cancelled) {
+          setClientSecret(data.clientSecret);
+          setChargeAmountCents(display.amountAfterCredits);
+        }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Could not start payment";
         if (!cancelled) setError(message);
@@ -148,13 +208,23 @@ export function PayBalanceInFullDialog({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, target?.enrollmentIds.join(","), target?.totalAmountCents]);
+  }, [
+    isOpen,
+    target?.enrollmentIds.join(","),
+    target?.totalAmountCents,
+    applyCredits,
+    totalAvailableCents,
+    creditsOnlySuccess,
+  ]);
 
-  const handleSuccess = () => {
+  const handleSuccess = async () => {
     toast({
-      title: "Payment successful",
-      description: "Your balance has been paid in full. Remaining installments were cleared.",
+      title: creditsOnlySuccess ? "Paid with credits" : "Payment successful",
+      description: creditsOnlySuccess
+        ? "Your balance was fully covered by available credits. Remaining installments were cleared."
+        : "Your balance has been paid in full. Remaining installments were cleared.",
     });
+    await refreshPostPaymentState(queryClient);
     onSuccess();
     onClose();
   };
@@ -168,28 +238,79 @@ export function PayBalanceInFullDialog({
             {target?.title}
             {target?.subtitle ? ` — ${target.subtitle}` : ""}
             {target
-              ? ` · One payment of $${(target.totalAmountCents / 100).toFixed(2)} closes the balance and clears future installments on this plan.`
+              ? ` · Balance of ${formatCurrency(target.totalAmountCents)} — close it in one payment and clear future installments on this plan.`
               : ""}
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading && (
+        {target && (
+          <div className="rounded-lg border bg-muted/40 p-3 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span>Balance due</span>
+              <span className="font-medium">{formatCurrency(target.totalAmountCents)}</span>
+            </div>
+            {totalAvailableCents > 0 && (
+              <div className="flex items-center justify-between gap-2 pt-2 border-t">
+                <label htmlFor="pay-in-full-apply-credits" className="cursor-pointer flex items-center gap-1.5">
+                  <Gift className="h-3.5 w-3.5 text-emerald-700" />
+                  Apply available credits ({formatCurrency(totalAvailableCents)})
+                </label>
+                <input
+                  id="pay-in-full-apply-credits"
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300"
+                  checked={applyCredits}
+                  onChange={(e) => setApplyCredits(e.target.checked)}
+                  data-testid="checkbox-pay-in-full-apply-credits"
+                />
+              </div>
+            )}
+            {payDisplay.creditsToApply > 0 && (
+              <div className="space-y-1 pt-1 text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>Credits applied</span>
+                  <span className="text-emerald-800 font-medium">
+                    −{formatCurrency(payDisplay.creditsToApply)}
+                  </span>
+                </div>
+                <div className="flex justify-between font-semibold text-foreground">
+                  <span>Card charge</span>
+                  <span>{formatCurrency(payDisplay.amountAfterCredits)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {creditsOnlySuccess && (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <p className="font-medium">Paid with credits</p>
+            <p className="mt-1">
+              This balance was fully covered by your available credits. No card charge was required.
+            </p>
+            <Button className="mt-4 w-full" type="button" onClick={() => void handleSuccess()}>
+              Done
+            </Button>
+          </div>
+        )}
+
+        {isLoading && !creditsOnlySuccess && (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin mr-2" />
             Preparing secure checkout…
           </div>
         )}
 
-        {error && !isLoading && (
+        {error && !isLoading && !creditsOnlySuccess && (
           <p className="text-sm text-destructive">{error}</p>
         )}
 
-        {clientSecret && !isLoading && !error && target && (
+        {clientSecret && !isLoading && !error && !creditsOnlySuccess && target && (
           <Elements stripe={stripePromise} options={{ clientSecret }}>
             <PayInFullForm
-              amountCents={target.totalAmountCents}
+              amountCents={chargeAmountCents}
               enrollmentIds={target.enrollmentIds}
-              onSuccess={handleSuccess}
+              onSuccess={() => void handleSuccess()}
               onCancel={onClose}
               onError={(message) => {
                 setError(message);

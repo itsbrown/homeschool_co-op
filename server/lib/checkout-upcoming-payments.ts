@@ -34,6 +34,15 @@ async function bundleHasPaidFirstInstallment(enrollmentIds: number[]): Promise<b
   return false;
 }
 
+function scheduledInstallmentNumber(payment: {
+  installmentNumber?: number | null;
+  installment_number?: number | null;
+}): number {
+  const raw = payment.installmentNumber ?? payment.installment_number ?? 0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
 /**
  * Installment 1 is collected at checkout (Stripe PI), not stored in scheduled_payments.
  * Surface it here when checkout was started but not paid yet.
@@ -140,12 +149,25 @@ export async function buildCheckoutFirstInstallmentDueRows(
   return out;
 }
 
-/** Hide installments 2+ until installment 1 has been paid for that bundle. */
+/**
+ * Hide installments 2+ until the first payment for that enrollment bundle has been collected.
+ *
+ * Keep installment 1 (and sole lump-sum rows with installment_number <= 1) even when
+ * `total_paid` is still 0 — e.g. admin-created "remaining balance" schedules that never
+ * collected a checkout deposit. Hiding those made Upcoming Payments empty for families
+ * who still owe (Amy Misso / parent 91).
+ */
 export async function filterScheduledPaymentsUntilFirstPaid(
   scheduledRows: any[],
 ): Promise<any[]> {
   const kept: any[] = [];
   for (const payment of scheduledRows) {
+    const installmentNumber = scheduledInstallmentNumber(payment);
+    if (installmentNumber <= 1) {
+      kept.push(payment);
+      continue;
+    }
+
     const ids = resolveEnrollmentIdsFromScheduledRow(payment);
     if (await bundleHasPaidFirstInstallment(ids)) {
       kept.push(payment);

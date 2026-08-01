@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-08-01 (Upcoming Payments hid unpaid installment-1 schedules)
+
+- **Bug:** `filterScheduledPaymentsUntilFirstPaid` required `total_paid > 0` before showing any scheduled row. Admin-created remaining-balance schedules with `installment_number = 1` and `$0` paid (Amy Misso SP 557–559) were dropped → parent saw “No upcoming payments.”
+- **Fix:** always keep `installment_number <= 1`; still hide 2+ until first payment collected. Test: `server/tests/checkout-upcoming-payments-filter.test.ts`.
+- **Also:** Pay in full dialog had no credits toggle (`/api/billing/pay-balance` ignored credits); Upcoming hid Pay Now when credits fully covered an installment. Fixed: apply-credits on Pay in full + keep Apply credits / Pay Now when fully covered.
+- **Workaround until deploy:** admin can apply credits, or cart path if seats are cart-eligible.
+
 ## 2026-07-29 (Class Manage Enrollments Remove → 404)
 
 - School-admin **Manage Enrollments** Remove called legacy `DELETE /api/enrollments/:id`, which looked up Postgres rows then `CombinedStorage.removeEnrollment` (mem-only) → `404 Enrollment not found`.

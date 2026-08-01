@@ -33,10 +33,21 @@ import {
   reconcileMembershipAfterPaymentIntent,
   runMembershipReconcileForParentUser,
 } from '../lib/reconcile-membership-ledger';
+import {
+  computeManualPayCredits,
+  isChargeAmountDivergent,
+} from '../utils/manualPayCredits';
+import { settlePayBalanceCreditsOnly } from '../lib/settle-pay-balance-credits-only';
 
 const router = Router();
 const PAY_BALANCE_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
-type PayBalanceResponsePayload = { success: true; clientSecret: string | null; paymentIntentId: string };
+type PayBalanceResponsePayload = {
+  success: true;
+  mode?: 'stripe' | 'credits_only';
+  clientSecret: string | null;
+  paymentIntentId?: string;
+  creditsApplied?: number;
+};
 const payBalanceIdempotencyStore = createInMemoryIdempotencyStore<PayBalanceResponsePayload>();
 type DivergenceAction = 'REFRESH_AND_REPRICE';
 
@@ -975,7 +986,13 @@ router.post('/pay-balance', async (req, res) => {
       return res.status(401).json({ error: 'User email not found' });
     }
 
-    const { enrollmentIds, paymentDetails, paymentPlan } = req.body;
+    const {
+      enrollmentIds,
+      paymentDetails,
+      paymentPlan,
+      applyCredits: applyCreditsRaw,
+      expectedChargeAmount,
+    } = req.body;
     if (!Array.isArray(enrollmentIds) || enrollmentIds.length === 0) {
       return res.status(400).json({ error: 'enrollmentIds is required' });
     }
@@ -1036,6 +1053,50 @@ router.post('/pay-balance', async (req, res) => {
       });
     }
 
+    const parentDbUser = await resolveParentDbUser(storage, {
+      email: userEmail,
+      supabaseId: user.id,
+    });
+    if (!parentDbUser?.id) {
+      return res.status(404).json({ error: 'Parent account not found' });
+    }
+
+    const availableRows = await storage.getAvailableCredits(parentDbUser.id);
+    const availableCredits = availableRows.reduce(
+      (sum, c) => sum + (c.creditAmountCents - (c.usedAmountCents || 0)),
+      0,
+    );
+    const applyCredits = applyCreditsRaw !== false;
+    const decision = computeManualPayCredits({
+      amount: amountCents,
+      availableCredits,
+      applyCredits,
+    });
+
+    if (
+      isChargeAmountDivergent(expectedChargeAmount, decision.chargeAmount) &&
+      typeof expectedChargeAmount === 'number'
+    ) {
+      return res.status(409).json({
+        success: false,
+        error: 'Charge amount mismatch — pricing was refreshed.',
+        authoritative: {
+          chargeAmountCents: decision.chargeAmount,
+          creditsToApplyCents: decision.creditsToApply,
+          originalAmountCents: decision.originalAmount,
+          availableCreditsCents: decision.availableCredits,
+        },
+      });
+    }
+
+    if (decision.tooSmall && !decision.isCreditsOnly) {
+      return res.status(400).json({
+        error:
+          'This balance is below the card minimum. Apply credits or wait until the balance can be charged.',
+        decision,
+      });
+    }
+
     const idempotencyKeyRaw = req.get('Idempotency-Key');
     const idempotencyKey = typeof idempotencyKeyRaw === 'string' ? idempotencyKeyRaw.trim() : '';
     const schoolIdForFingerprint = validEnrollments[0]?.schoolId ?? null;
@@ -1043,7 +1104,7 @@ router.post('/pay-balance', async (req, res) => {
       ? buildIdempotencyFingerprint({
           parentEmail: userEmail,
           enrollmentIds: enrollmentIds as number[],
-          amountCents,
+          amountCents: decision.chargeAmount,
           operation: 'billing_pay_balance',
           schoolId: schoolIdForFingerprint,
         })
@@ -1071,32 +1132,96 @@ router.post('/pay-balance', async (req, res) => {
       }
     }
 
-    console.log('💳 Processing payment for:', userEmail, 'Amount (cents):', amountCents);
-
-    // Create payment intent
-    const stripe = await getStripeClient();
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountCents,
-      currency: 'usd',
-      metadata: {
-        parentEmail: userEmail,
-        enrollmentIds: JSON.stringify(enrollmentIds),
-        amountCents: amountCents.toString(),
-        paymentPlan: paymentPlan,
-        paymentType: 'balance_payment'
-      },
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: 'never'
-      }
+    console.log('💳 Processing payment for:', userEmail, 'Amount (cents):', amountCents, {
+      chargeAmount: decision.chargeAmount,
+      creditsToApply: decision.creditsToApply,
     });
+
+    if (decision.isCreditsOnly) {
+      const settled = await settlePayBalanceCreditsOnly({
+        parentId: parentDbUser.id,
+        parentEmail: userEmail,
+        enrollmentIds: enrollmentIds as number[],
+        creditsToApply: decision.creditsToApply,
+        originalAmountCents: decision.originalAmount,
+      });
+      const responsePayload: PayBalanceResponsePayload = {
+        success: true,
+        mode: 'credits_only',
+        clientSecret: null,
+        creditsApplied: settled.creditsApplied,
+      };
+      if (idempotencyKey && idempotencyFingerprint) {
+        payBalanceIdempotencyStore.set({
+          key: idempotencyKey,
+          fingerprint: idempotencyFingerprint,
+          createdAtMs: Date.now(),
+          expiresAtMs: Date.now() + PAY_BALANCE_IDEMPOTENCY_TTL_MS,
+          response: responsePayload,
+        });
+      }
+      return res.json(responsePayload);
+    }
+
+    let creditHoldSessionId: string | null = null;
+    if (decision.creditsToApply > 0) {
+      creditHoldSessionId = `pay_balance_${parentDbUser.id}_${Date.now()}`;
+      const { totalHeld } = await storage.createCreditHolds(
+        parentDbUser.id,
+        decision.creditsToApply,
+        creditHoldSessionId,
+        `Pay balance — card + credits (${(enrollmentIds as number[]).join(',')})`,
+        60,
+      );
+      if (totalHeld < decision.creditsToApply) {
+        await storage.releaseCreditHolds(creditHoldSessionId).catch(() => {});
+        return res.status(400).json({
+          error: 'Could not reserve enough credits for this payment. Try again or pay by card only.',
+        });
+      }
+    }
+
+    const stripe = await getStripeClient();
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: decision.chargeAmount,
+        currency: 'usd',
+        metadata: {
+          parentEmail: userEmail,
+          userId: String(parentDbUser.id),
+          enrollmentIds: JSON.stringify(enrollmentIds),
+          amountCents: amountCents.toString(),
+          paymentPlan: paymentPlan,
+          paymentType: 'balance_payment',
+          ...(decision.creditsToApply > 0
+            ? {
+                creditsAppliedCents: String(decision.creditsToApply),
+                originalAmountCents: String(decision.originalAmount),
+                creditHoldSessionId: creditHoldSessionId ?? '',
+              }
+            : {}),
+        },
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: 'never'
+        }
+      });
+    } catch (stripeErr) {
+      if (creditHoldSessionId) {
+        await storage.releaseCreditHolds(creditHoldSessionId).catch(() => {});
+      }
+      throw stripeErr;
+    }
 
     console.log('✅ Payment intent created:', paymentIntent.id);
 
     const responsePayload: PayBalanceResponsePayload = {
       success: true,
+      mode: 'stripe',
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
+      creditsApplied: decision.creditsToApply,
     };
 
     if (idempotencyKey && idempotencyFingerprint) {
