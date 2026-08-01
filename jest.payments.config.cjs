@@ -22,6 +22,7 @@ module.exports = {
     '<rootDir>/server/tests/integration/credit-ledger-repair.integration.test.ts',
     '<rootDir>/server/tests/scheduled-payment-due-query-source.test.ts',
     '<rootDir>/server/tests/scheduled-payment-intent-metadata.test.ts',
+    '<rootDir>/server/tests/checkout-upcoming-payments-filter.test.ts',
     '<rootDir>/server/tests/payment-plan-policy-matrix.test.ts',
     '<rootDir>/server/tests/scheduled-payment-installment-variants.test.ts',
     '<rootDir>/server/tests/reconciliation-ledger-equivalence.test.ts',

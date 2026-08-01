@@ -1652,36 +1652,41 @@ export default function PaymentManagement({ childId, defaultTab }: PaymentManage
                                 : formatCurrency(payment.amount)}
                             </p>
                           </div>
-                          {fullyCovered ? (
-                            <span className="text-xs text-emerald-700 font-medium text-right max-w-[10rem]">
-                              No card charge if credits settle this installment.
-                            </span>
-                          ) : (
-                          <Button 
-                            size="sm"
-                            onClick={() => {
-                              if (payment.isCheckoutDue) {
-                                setLocation('/cart/checkout');
-                                return;
-                              }
-                              setSelectedPaymentForDialog({
-                                id: payment.id,
-                                amount: payment.amount,
-                                description: payment.description,
-                                programName: payment.programName,
-                                childName: payment.childName,
-                                dueDate: payment.dueDate,
-                                installmentNumber: payment.installmentNumber,
-                                totalInstallments: payment.totalInstallments,
-                                paymentPlan: payment.paymentPlan
-                              });
-                              setPaymentDialogOpen(true);
-                            }}
-                            data-testid={`button-pay-upcoming-${payment.id}`}
-                          >
-                            {payment.isCheckoutDue ? 'Complete checkout' : 'Pay Now'}
-                          </Button>
-                          )}
+                          <div className="flex flex-col items-end gap-1">
+                            {fullyCovered && (
+                              <span className="text-xs text-emerald-700 font-medium text-right max-w-[10rem]">
+                                Fully covered by credits — confirm to apply
+                              </span>
+                            )}
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                if (payment.isCheckoutDue) {
+                                  setLocation('/cart/checkout');
+                                  return;
+                                }
+                                setSelectedPaymentForDialog({
+                                  id: payment.id,
+                                  amount: payment.amount,
+                                  description: payment.description,
+                                  programName: payment.programName,
+                                  childName: payment.childName,
+                                  dueDate: payment.dueDate,
+                                  installmentNumber: payment.installmentNumber,
+                                  totalInstallments: payment.totalInstallments,
+                                  paymentPlan: payment.paymentPlan
+                                });
+                                setPaymentDialogOpen(true);
+                              }}
+                              data-testid={`button-pay-upcoming-${payment.id}`}
+                            >
+                              {payment.isCheckoutDue
+                                ? 'Complete checkout'
+                                : fullyCovered
+                                  ? 'Apply credits'
+                                  : 'Pay Now'}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                         );

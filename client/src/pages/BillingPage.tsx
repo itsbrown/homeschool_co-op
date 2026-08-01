@@ -701,20 +701,19 @@ function UpcomingPaymentsTab({
                   </div>
                 </div>
                 
-                {cov?.fullyCovered ? (
+                {cov?.fullyCovered && (
                   <span className="text-sm text-emerald-700 font-medium text-right">
-                    No card charge needed if credits settle this installment.
+                    Fully covered by credits — confirm to apply
                   </span>
-                ) : (
-                <Button 
-                  size="sm" 
+                )}
+                <Button
+                  size="sm"
                   className="bg-green-600 hover:bg-green-700"
                   onClick={() => handlePayScheduledPayment(payment)}
                   disabled={isPending}
                 >
-                  {isPending ? 'Processing...' : 'Pay Now'}
+                  {isPending ? 'Processing...' : cov?.fullyCovered ? 'Apply credits' : 'Pay Now'}
                 </Button>
-                )}
               </div>
             </div>
           </CardContent>

@@ -162,6 +162,10 @@ Dry-run first: `--dry-run`.
 
 **Fix (2026-06-07):** `server/lib/scheduled-payment-parent-pay.ts` — resume existing `parent_manual` PI (`resumed: true` in response); cancel/clear stale PIs before reclaim. **Stripe:** `resolveStripeCustomerIdsForParentEmail` (DB customer ids + Stripe email search) and `paymentIntentBelongsToParent` (metadata email, receipt_email, customer id). New Pay Now PIs attach `customer` + `receipt_email`. `/upcoming` hides rows when enrollment `effective_balance <= 0`.
 
+**Upcoming filter (2026-08-01):** `filterScheduledPaymentsUntilFirstPaid` must keep `installment_number <= 1` even when `total_paid = 0`. Requiring a prior first payment hid admin-created remaining-balance schedules (Amy Misso SP 557–559) and showed “No upcoming payments” while cart also excluded those enrollments.
+
+**Pay in full + credits (2026-08-01):** `POST /api/billing/pay-balance` accepts `applyCredits` / `expectedChargeAmount` (same rules as scheduled Pay Now via `computeManualPayCredits`). Credits-only settles via `settle-pay-balance-credits-only.ts`. UI: `PayBalanceInFullDialog` shows Apply available credits. Upcoming must still show a Pay/Apply-credits button when an installment is fully credit-covered — do not replace the button with text only.
+
 ### Stuck parent Pay Now audit & auto-heal (2026-06-01)
 
 Abandoned Pay Now attempts can leave `scheduled_payments` in `processing` + `charged_by: parent_manual` (or `failed` / `pending` / `overdue` with a stale PI id), blocking retries with **409 `INSTALLMENT_NOT_AVAILABLE`**.

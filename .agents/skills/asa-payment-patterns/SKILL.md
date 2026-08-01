@@ -72,16 +72,21 @@ pending → processing → completed
                     → skipped
 ```
 
-### 5. Payment Reminders
+### 5. Upcoming Payments filter (`filterScheduledPaymentsUntilFirstPaid`)
+`/api/scheduled-payments/upcoming` hides installments **2+** until the enrollment bundle has `total_paid > 0` (checkout collected installment 1). It must **always keep `installment_number <= 1`**, including sole lump-sum “remaining balance” rows with `$0` paid — otherwise parents see an empty Upcoming tab while cart also excludes those enrollments (on payment plan). When credits fully cover an installment, still show **Apply credits / Pay Now** (do not hide the button).
+
+**Pay in full (`POST /api/billing/pay-balance`):** must honor `applyCredits` (default on) like scheduled Pay Now — reduce PI amount, put `creditsAppliedCents` + `userId` on metadata, or settle credits-only via `settle-pay-balance-credits-only.ts`.
+
+### 6. Payment Reminders
 Each scheduled payment tracks:
 - `reminderCount` — how many reminders have been sent
 - `lastReminderSentAt` — when the last reminder was sent
 - Reminder logs stored in `payment_reminder_logs` table with audit trail
 
-### 6. Unique Constraint
+### 7. Unique Constraint
 `(enrollmentId, scheduledDate, installmentNumber)` ensures no duplicate installments per enrollment per date.
 
-### 7. Sync Gap Risk
+### 8. Sync Gap Risk
 
 Scheduled payment cancellation after a successful payment is wrapped in a non-fatal `try/catch` — it must not roll back a confirmed payment. If it silently fails, `scheduled_payments` can still show `status = 'pending'` while `program_enrollments.remainingBalance` is already $0. Consequences:
 - Financial reports overstate what families owe
