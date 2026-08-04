@@ -67,6 +67,12 @@ const unreadCount = notifications.filter(n => n.recipientStatus !== "read").leng
 - Unread badge shown in educator sidebar and mobile header
 - Polling via TanStack Query (no WebSocket — uses `staleTime: Infinity` with manual invalidation)
 
+### Paid enrollment → school admin (automatic)
+- **When:** Cart/enrollment checkout succeeds (`finalizeSucceededPaymentIntent` or credits-only cart). **Not** on child registration, balance paydowns, or scheduled installments.
+- **What:** Parent name/email/phone; student name, age (from birthdate), grade; class/item paid for; amount.
+- **How:** `notifySchoolAdminsOfEnrollmentPaymentIdempotent` → Brevo/SendGrid email (`paid_enrollment_admin`) + in-app notification. Deduped with `payments.metadata.adminEnrollmentNotifySentAt`.
+- Free 100%-discount enrollments still use the separate pending-approval in-app path in `server/api/stripe.ts`.
+
 ## Error Monitoring System
 
 ### Error Log Schema

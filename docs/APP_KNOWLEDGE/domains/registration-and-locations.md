@@ -18,6 +18,7 @@ Parents register with a **school registration code**, pick a location when offer
 - **No auto-seed** “Main Campus” on wrong school (removed as source of cross-school pollution).
 - **Campus visibility** — parent Settings and student profile show `locationName`; `GET /api/users/profile`, `GET /api/school-admin/students/:id`, and `GET /api/parent-profile/:parentId` include campus fields.
 - **School admin students list** — `GET /api/school-admin/students` must stay set-based (memberships + `user_roles` + legacy `users.school_id`, batch children/locations). Never `getAllUsers()` + per-user `getUserRolesByUserId` (hangs `/schools/students` on real DBs). Sync (`POST …/students/sync`) must scope by `children.school_id` / `getSchoolStudentsBySchoolId`, not `getAllChildren` / `getAllSchoolStudents`.
+- **No admin email on child registration** — signup / add-child does not notify school admins. Admins are notified when enrollment is **paid** (see [payments-and-billing.md](./payments-and-billing.md#school-admin-paid-enrollment-alert)).
 
 ## Flow (happy path)
 

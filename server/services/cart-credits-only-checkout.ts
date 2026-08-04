@@ -409,6 +409,29 @@ export async function completeCartCreditsOnlyCheckout(params: {
       console.warn('[grade-placement] credits-only sync failed:', err);
     }
 
+    try {
+      const paymentForNotify =
+        createdPayment ?? (await storage.getPaymentByStripeId(syntheticPaymentIntentId));
+      if (paymentForNotify?.id && enrollmentIds.length > 0) {
+        const { notifySchoolAdminsOfEnrollmentPaymentIdempotent } = await import(
+          '../lib/notify-school-admins-of-enrollment-payment'
+        );
+        await notifySchoolAdminsOfEnrollmentPaymentIdempotent({
+          payment: paymentForNotify,
+          enrollmentIds,
+          paymentType: 'cart_checkout',
+          paymentPlan: 'credits_only',
+          paymentIntentId: syntheticPaymentIntentId,
+          amountPaidCents: appliedVolunteerCreditsCents,
+        });
+      }
+    } catch (adminNotifyErr) {
+      console.error(
+        '[cart-credits-only] admin enrollment notify failed (non-blocking):',
+        adminNotifyErr,
+      );
+    }
+
     return { creditsApplied: appliedVolunteerCreditsCents, syntheticPaymentIntentId };
   } catch (err) {
     if (holdCreated) {

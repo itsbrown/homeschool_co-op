@@ -73,6 +73,22 @@ After Stripe `confirmPayment` succeeds in the browser, the client **must** call 
 
 Rules: one finalize per succeeded PI; membership apply capped at remaining owed; `payments` row before enrollment mutation on scheduled path; double client+webhook calls are idempotent.
 
+### School admin paid-enrollment alert
+
+After a **cart/enrollment** payment succeeds (not balance paydowns, not scheduled installments), school admins get email + in-app:
+
+| Field | Source |
+|-------|--------|
+| Parent name / email / phone | `users` |
+| Student name, age, grade | `children` (age from `birthdate`) |
+| What was paid for | Enrollment class name + amounts |
+| Total this payment | `payments.amount` / credits applied |
+
+- Module: `server/lib/notify-school-admins-of-enrollment-payment.ts`
+- Hooked from `finalizeSucceededPaymentIntent` and credits-only cart checkout
+- Idempotent: `payments.metadata.adminEnrollmentNotifySentAt`
+- Child **registration** does **not** notify admins (product: notify only when someone paid)
+
 Key files: `server/lib/finalize-succeeded-payment-intent.ts`, `server/lib/finalize-succeeded-scheduled-payment-intent.ts`, `client/src/lib/finalizePaymentAfterStripeSuccess.ts`. Legacy `POST /api/billing/confirm-payment` returns **410**.
 
 ## Prod balance audit (read-only)
