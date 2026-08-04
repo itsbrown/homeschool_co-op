@@ -11,6 +11,7 @@ const mockGetClassById = jest.fn();
 const mockCreateNotification = jest.fn();
 const mockCreateNotificationRecipient = jest.fn();
 const mockUpdatePayment = jest.fn();
+const mockGetPaymentByStripeId = jest.fn();
 const mockSendPaidEnrollmentAdminNotificationEmail = jest.fn();
 
 jest.mock('../storage', () => ({
@@ -26,6 +27,7 @@ jest.mock('../storage', () => ({
     createNotification: (...a: unknown[]) => mockCreateNotification(...a),
     createNotificationRecipient: (...a: unknown[]) => mockCreateNotificationRecipient(...a),
     updatePayment: (...a: unknown[]) => mockUpdatePayment(...a),
+    getPaymentByStripeId: (...a: unknown[]) => mockGetPaymentByStripeId(...a),
   },
 }));
 
@@ -48,6 +50,7 @@ describe('notify-school-admins-of-enrollment-payment', () => {
     mockCreateNotification.mockReset();
     mockCreateNotificationRecipient.mockReset();
     mockUpdatePayment.mockReset();
+    mockGetPaymentByStripeId.mockReset();
     mockSendPaidEnrollmentAdminNotificationEmail.mockReset();
 
     mockGetSchoolStaffBySchoolId.mockResolvedValue([]);
@@ -98,6 +101,15 @@ describe('notify-school-admins-of-enrollment-payment', () => {
     mockCreateNotification.mockResolvedValue({ id: 99 });
     mockCreateNotificationRecipient.mockResolvedValue({ id: 1 });
     mockUpdatePayment.mockResolvedValue({});
+    mockGetPaymentByStripeId.mockImplementation(async () => ({
+      id: 55,
+      schoolId: 5,
+      parentId: 20,
+      parentEmail: 'parent@test.com',
+      amount: 15000,
+      stripePaymentIntentId: 'pi_test_123',
+      metadata: { confirmationEmailSentAt: '2026-07-27T12:00:00.000Z' },
+    }));
     mockSendPaidEnrollmentAdminNotificationEmail.mockResolvedValue(true);
   });
 
@@ -162,9 +174,36 @@ describe('notify-school-admins-of-enrollment-payment', () => {
       expect.objectContaining({
         metadata: expect.objectContaining({
           adminEnrollmentNotifySentAt: expect.any(String),
+          confirmationEmailSentAt: '2026-07-27T12:00:00.000Z',
         }),
       }),
     );
+  });
+
+  it('does not mark sent when no admins receive email or in-app', async () => {
+    mockGetAllUsers.mockResolvedValue([]);
+    mockGetSchoolStaffBySchoolId.mockResolvedValue([]);
+    const { notifySchoolAdminsOfEnrollmentPaymentIdempotent } = await import(
+      '../lib/notify-school-admins-of-enrollment-payment'
+    );
+
+    const sent = await notifySchoolAdminsOfEnrollmentPaymentIdempotent({
+      payment: {
+        id: 55,
+        schoolId: 5,
+        parentId: 20,
+        parentEmail: 'parent@test.com',
+        amount: 15000,
+        stripePaymentIntentId: 'pi_test_123',
+        metadata: {},
+      } as any,
+      enrollmentIds: [100],
+      paymentType: 'cart_checkout',
+      amountPaidCents: 15000,
+    });
+
+    expect(sent).toBe(false);
+    expect(mockUpdatePayment).not.toHaveBeenCalled();
   });
 
   it('skips when already notified (idempotent)', async () => {

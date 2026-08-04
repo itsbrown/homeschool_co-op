@@ -292,7 +292,7 @@ export async function notifySchoolAdminsOfEnrollmentPaymentIdempotent(params: {
 
   const senderId = parentUser?.id || params.payment.parentId || 1;
 
-  await notifySchoolAdminsOfEnrollmentPayment({
+  const result = await notifySchoolAdminsOfEnrollmentPayment({
     schoolId,
     senderId,
     parentName:
@@ -309,9 +309,27 @@ export async function notifySchoolAdminsOfEnrollmentPaymentIdempotent(params: {
     paidAt: params.payment.paymentDate ?? new Date(),
   });
 
+  // Only mark sent when at least one channel delivered; otherwise allow retry.
+  if (result.emailed <= 0 && result.inApp <= 0) {
+    return false;
+  }
+
+  // Re-read payment so we do not clobber metadata written after the in-memory snapshot
+  // (confirmationEmailSentAt, allocationBreakdown, etc.).
+  const stripeId = params.payment.stripePaymentIntentId || params.paymentIntentId || '';
+  const freshPayment = stripeId
+    ? await storage.getPaymentByStripeId(stripeId)
+    : undefined;
+  const freshMeta =
+    freshPayment?.metadata &&
+    typeof freshPayment.metadata === 'object' &&
+    !Array.isArray(freshPayment.metadata)
+      ? (freshPayment.metadata as Record<string, unknown>)
+      : priorMeta;
+
   await storage.updatePayment(params.payment.id, {
     metadata: {
-      ...priorMeta,
+      ...freshMeta,
       adminEnrollmentNotifySentAt: new Date().toISOString(),
       adminEnrollmentNotifyPaymentIntentId:
         params.paymentIntentId ?? params.payment.stripePaymentIntentId,
