@@ -48,6 +48,7 @@ waitlist        → enrolled           (spot opens up)
 5. Server verifies payment with Stripe
 6. Status updated to `enrolled`
 7. Scheduled payments created (if biweekly/custom plan)
+8. School admins notified (email + in-app) with parent, student age/grade, and what was paid — see `notify-school-admins-of-enrollment-payment.ts` (not on registration alone)
 
 ### Duplicate Prevention
 - Check `getEnrollmentsByChildId(childId)` before creating new enrollments

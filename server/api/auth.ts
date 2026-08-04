@@ -426,7 +426,8 @@ router.post('/register', async (req, res) => {
               gender: row.gender ?? null,
               school: signupSchoolDisplayName ?? null,
             },
-            sendAdminNotifications: true,
+            // School admins are notified on paid enrollment, not child registration.
+            sendAdminNotifications: false,
           });
           createdSignupChildrenSummaries.push({
             id: savedChild.id,

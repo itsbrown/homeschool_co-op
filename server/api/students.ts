@@ -1,6 +1,5 @@
 import express from 'express';
 import { storage } from '../storage';
-import { sendNewStudentNotificationEmail } from '../lib/email-service';
 const router = express.Router();
 
 // Student registration endpoint
@@ -184,55 +183,8 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // 🔔 Notify school admins about new student registration
-    if (studentSchoolId) {
-      try {
-        console.log('🔔 Sending notifications to school admins for school:', studentSchoolId);
-        
-        // Fetch all users and filter for school admins
-        const allUsers = await storage.getAllUsers();
-        const schoolAdmins = allUsers.filter(user => 
-          user.schoolId === studentSchoolId && 
-          (user.role === 'schoolAdmin' || user.role === 'superAdmin')
-        );
-        console.log(`📋 Found ${schoolAdmins.length} school admin(s) to notify`);
-        
-        // Get school details for better notifications
-        const school = await storage.getSchool(studentSchoolId);
-        const schoolName = school?.name || 'Your School';
-        
-        // Only send notifications if we have admins
-        if (schoolAdmins.length > 0) {
-          // Send email notifications to each admin
-          for (const admin of schoolAdmins) {
-            try {
-              sendNewStudentNotificationEmail({
-                adminEmail: admin.email,
-                adminName: admin.name || `${admin.firstName} ${admin.lastName}`,
-                schoolName: schoolName,
-                studentFirstName: normalizedData.childFirstName,
-                studentLastName: normalizedData.childLastName,
-                studentGradeLevel: normalizedData.childGradeLevel,
-                parentEmail: normalizedData.parentEmail,
-                parentPhone: normalizedData.parentPhone,
-                registrationDate: new Date()
-              }).catch(err => console.error(`[Email fire-and-forget] sendNewStudentNotificationEmail to ${admin.email} failed:`, err));
-              console.log(`✅ Email notification dispatched to admin: ${admin.email}`);
-            } catch (notificationError) {
-              const error = notificationError as Error;
-              console.error(`❌ Failed to dispatch email to admin ${admin.email}:`, error.message);
-              // Continue notifying other admins even if one fails
-            }
-          }
-        }
-        
-        console.log('✅ Admin notification process completed');
-      } catch (notificationError) {
-        const error = notificationError as Error;
-        console.error('⚠️ Error during admin notification process:', error.message);
-        // Don't fail registration if notifications fail
-      }
-    }
+    // School admins are notified on paid enrollment (finalizeSucceededPaymentIntent),
+    // not on student registration alone.
 
     // Send confirmation email (if email service is available)
     try {

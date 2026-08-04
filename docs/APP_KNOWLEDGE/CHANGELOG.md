@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-08-04 (School admin notify on paid enrollment only)
+
+- School admins are **not** emailed on child/student registration (`sendAdminNotifications: false` on signup/parent child create; removed from `POST /api/students/register`).
+- On cart/enrollment checkout success, `finalizeSucceededPaymentIntent` (and credits-only cart) calls `notifySchoolAdminsOfEnrollmentPaymentIdempotent` → email + in-app with parent contact, student name/age/grade, class paid for, amount. Skips `balance_payment` and `scheduled_payment`. Idempotent via `payments.metadata.adminEnrollmentNotifySentAt`.
+- Key files: `server/lib/notify-school-admins-of-enrollment-payment.ts`, `sendPaidEnrollmentAdminNotificationEmail` in `email-service.ts`. Domain: [payments-and-billing.md](./domains/payments-and-billing.md).
+
 ## 2026-08-01 (Upcoming Payments hid unpaid installment-1 schedules)
 
 - **Bug:** `filterScheduledPaymentsUntilFirstPaid` required `total_paid > 0` before showing any scheduled row. Admin-created remaining-balance schedules with `installment_number = 1` and `$0` paid (Amy Misso SP 557–559) were dropped → parent saw “No upcoming payments.”

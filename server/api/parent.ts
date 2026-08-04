@@ -280,7 +280,8 @@ router.post('/children', jwtCheck, async (req: any, res) => {
         additionalLanguages: additionalLanguages ?? null,
         notes: notes ?? null,
       },
-      sendAdminNotifications: true,
+      // School admins are notified on paid enrollment, not child registration.
+      sendAdminNotifications: false,
       parentPhoneOverride: parentPhone ?? undefined,
     });
 

@@ -1182,6 +1182,165 @@ ${process.env.APP_URL || 'https://accounts.americanseekersacademy.com'}/schools/
   }
 }
 
+/** School-admin alert when a parent completes a paid enrollment (cart/checkout). */
+export interface PaidEnrollmentAdminNotificationData {
+  adminEmail: string;
+  adminName: string;
+  schoolName: string;
+  parentName: string;
+  parentEmail: string;
+  parentPhone?: string;
+  amountPaidCents: number;
+  paymentPlan?: string;
+  paymentIntentId?: string;
+  lines: Array<{
+    studentName: string;
+    age: number | null;
+    gradeLevel: string;
+    className: string;
+    amountPaidCents: number;
+    totalCostCents: number;
+  }>;
+  paidAt: Date;
+}
+
+export async function sendPaidEnrollmentAdminNotificationEmail(
+  data: PaidEnrollmentAdminNotificationData,
+): Promise<boolean> {
+  try {
+    const formatCurrency = (cents: number) =>
+      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+    const formatDate = (date: Date) =>
+      new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(date);
+
+    const subject = `New Paid Enrollment — ${data.lines.map((l) => l.studentName).join(', ')}`;
+
+    if (!apiInstance && !process.env.SENDGRID_API_KEY) {
+      console.log('📧 Email provider not configured, skipping paid enrollment admin notification');
+      await logEmailAttempt({
+        recipientEmail: data.adminEmail,
+        type: 'paid_enrollment_admin',
+        subject,
+        status: 'failed',
+        error: 'Email provider not configured',
+      });
+      return true;
+    }
+
+    const linesHtml = data.lines
+      .map((line) => {
+        const ageLabel = line.age != null ? String(line.age) : '—';
+        return `
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${line.studentName}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${ageLabel}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${line.gradeLevel}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${line.className}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(line.amountPaidCents)}</td>
+            </tr>`;
+      })
+      .join('');
+
+    const linesText = data.lines
+      .map((line) => {
+        const ageLabel = line.age != null ? `age ${line.age}` : 'age unknown';
+        return `- ${line.studentName} (${ageLabel}, ${line.gradeLevel}): ${line.className} — paid ${formatCurrency(line.amountPaidCents)} of ${formatCurrency(line.totalCostCents)}`;
+      })
+      .join('\n');
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">
+        <div style="background-color: #0F766E; padding: 24px; border-radius: 8px 8px 0 0;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 22px;">New Paid Enrollment</h1>
+          <p style="color: #CCFBF1; margin: 8px 0 0 0;">${data.schoolName}</p>
+        </div>
+        <div style="background-color: #ffffff; padding: 28px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+          <p>Hello ${data.adminName},</p>
+          <p>A parent completed a paid enrollment at ${data.schoolName}.</p>
+
+          <div style="background-color: #F0FDFA; padding: 16px; border-radius: 8px; margin: 16px 0; border-left: 4px solid #0F766E;">
+            <h3 style="margin: 0 0 10px 0; color: #115E59;">Parent</h3>
+            <p style="margin: 0 0 6px 0;"><strong>Name:</strong> ${data.parentName}</p>
+            <p style="margin: 0 0 6px 0;"><strong>Email:</strong> ${data.parentEmail}</p>
+            ${data.parentPhone ? `<p style="margin: 0;"><strong>Phone:</strong> ${data.parentPhone}</p>` : ''}
+          </div>
+
+          <h3 style="color: #374151; margin-bottom: 8px;">Students &amp; what was paid for</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="background-color: #F9FAFB;">
+                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #E5E7EB;">Student</th>
+                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #E5E7EB;">Age</th>
+                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #E5E7EB;">Grade</th>
+                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #E5E7EB;">Class / item</th>
+                <th style="padding: 8px; text-align: right; border-bottom: 2px solid #E5E7EB;">Paid</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${linesHtml}
+            </tbody>
+          </table>
+
+          <div style="background-color: #F3F4F6; padding: 16px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0 0 6px 0;"><strong>Total this payment:</strong> ${formatCurrency(data.amountPaidCents)}</p>
+            ${data.paymentPlan ? `<p style="margin: 0 0 6px 0;"><strong>Payment plan:</strong> ${data.paymentPlan}</p>` : ''}
+            <p style="margin: 0 0 6px 0;"><strong>Paid at:</strong> ${formatDate(data.paidAt)}</p>
+            ${data.paymentIntentId ? `<p style="margin: 0;"><strong>Payment ID:</strong> ${data.paymentIntentId}</p>` : ''}
+          </div>
+
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="${process.env.APP_URL || 'https://accounts.americanseekersacademy.com'}/schools/enrollments"
+               style="display: inline-block; background-color: #0F766E; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              View Enrollments
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const textContent = `
+New Paid Enrollment — ${data.schoolName}
+
+Hello ${data.adminName},
+
+A parent completed a paid enrollment at ${data.schoolName}.
+
+Parent:
+- Name: ${data.parentName}
+- Email: ${data.parentEmail}
+${data.parentPhone ? `- Phone: ${data.parentPhone}` : ''}
+
+Students & what was paid for:
+${linesText}
+
+Total this payment: ${formatCurrency(data.amountPaidCents)}
+${data.paymentPlan ? `Payment plan: ${data.paymentPlan}` : ''}
+Paid at: ${formatDate(data.paidAt)}
+${data.paymentIntentId ? `Payment ID: ${data.paymentIntentId}` : ''}
+
+View enrollments: ${process.env.APP_URL || 'https://accounts.americanseekersacademy.com'}/schools/enrollments
+    `;
+
+    return await sendEmail(
+      data.adminEmail,
+      data.adminName,
+      subject,
+      htmlContent,
+      textContent,
+      'paid_enrollment_admin',
+    );
+  } catch (error) {
+    console.error('❌ Error sending paid enrollment admin notification email:', error);
+    return false;
+  }
+}
+
 // Welcome Email for New Registrants
 interface WelcomeEmailData {
   email: string;

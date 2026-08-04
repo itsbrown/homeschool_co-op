@@ -252,6 +252,33 @@ export async function completeCartCreditsOnlyCheckout(params: {
   const existingPayment = await storage.getPaymentByStripeId(syntheticPaymentIntentId);
   if (existingPayment && (await cartCreditsUsageAlreadyLogged(syntheticPaymentIntentId))) {
     // Fully completed earlier — do not re-apply enrollment/membership balances.
+    // Still attempt admin notify (idempotent) in case a prior attempt applied credits
+    // but failed before the alert was sent.
+    if (enrollmentIds.length > 0) {
+      try {
+        const { notifySchoolAdminsOfEnrollmentPaymentIdempotent } = await import(
+          '../lib/notify-school-admins-of-enrollment-payment'
+        );
+        const meta = (existingPayment.metadata ?? {}) as Record<string, unknown>;
+        const amountPaidCents =
+          typeof meta.creditsAppliedCents === 'number'
+            ? meta.creditsAppliedCents
+            : appliedVolunteerCreditsCents;
+        await notifySchoolAdminsOfEnrollmentPaymentIdempotent({
+          payment: existingPayment,
+          enrollmentIds,
+          paymentType: 'cart_checkout',
+          paymentPlan: 'credits_only',
+          paymentIntentId: syntheticPaymentIntentId,
+          amountPaidCents,
+        });
+      } catch (adminNotifyErr) {
+        console.error(
+          '[cart-credits-only] admin enrollment notify on retry failed (non-blocking):',
+          adminNotifyErr,
+        );
+      }
+    }
     return { creditsApplied: appliedVolunteerCreditsCents, syntheticPaymentIntentId };
   }
 
@@ -407,6 +434,29 @@ export async function completeCartCreditsOnlyCheckout(params: {
       }
     } catch (err) {
       console.warn('[grade-placement] credits-only sync failed:', err);
+    }
+
+    try {
+      const paymentForNotify =
+        createdPayment ?? (await storage.getPaymentByStripeId(syntheticPaymentIntentId));
+      if (paymentForNotify?.id && enrollmentIds.length > 0) {
+        const { notifySchoolAdminsOfEnrollmentPaymentIdempotent } = await import(
+          '../lib/notify-school-admins-of-enrollment-payment'
+        );
+        await notifySchoolAdminsOfEnrollmentPaymentIdempotent({
+          payment: paymentForNotify,
+          enrollmentIds,
+          paymentType: 'cart_checkout',
+          paymentPlan: 'credits_only',
+          paymentIntentId: syntheticPaymentIntentId,
+          amountPaidCents: appliedVolunteerCreditsCents,
+        });
+      }
+    } catch (adminNotifyErr) {
+      console.error(
+        '[cart-credits-only] admin enrollment notify failed (non-blocking):',
+        adminNotifyErr,
+      );
     }
 
     return { creditsApplied: appliedVolunteerCreditsCents, syntheticPaymentIntentId };

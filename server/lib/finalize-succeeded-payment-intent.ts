@@ -329,6 +329,34 @@ export async function finalizeSucceededPaymentIntent(
     );
   }
 
+  // School admins: notify only on paid enrollment checkout (not balance paydowns).
+  const paymentForAdminNotify = payment ?? existingPayment;
+  if (paymentForAdminNotify?.id) {
+    try {
+      const { notifySchoolAdminsOfEnrollmentPaymentIdempotent } = await import(
+        './notify-school-admins-of-enrollment-payment'
+      );
+      const amountPaidCents =
+        paymentForAdminNotify.amount ??
+        paymentIntent.amount ??
+        fulfillment.enrollmentApply.appliedCents ??
+        0;
+      await notifySchoolAdminsOfEnrollmentPaymentIdempotent({
+        payment: paymentForAdminNotify,
+        enrollmentIds,
+        paymentType: meta.paymentType || meta.type,
+        paymentPlan: meta.paymentPlan,
+        paymentIntentId: paymentIntent.id,
+        amountPaidCents,
+      });
+    } catch (adminNotifyErr) {
+      console.error(
+        '[finalizeSucceededPaymentIntent] admin enrollment notify failed (non-blocking):',
+        adminNotifyErr,
+      );
+    }
+  }
+
   const parentEmail = (meta.parentEmail || '').trim();
   if (!options?.skipRealtimeRefresh && parentEmail) {
     await new Promise((resolve) => setTimeout(resolve, 100));
