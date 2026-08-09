@@ -1,5 +1,13 @@
 # App knowledge changelog
 
+## 2026-08-09 (Edit Student grade save + age−5 auto-grade)
+
+- **Symptom:** School Admin → Edit Student → grade dropdown blank / changes appear not to stick.
+- **Causes:** Select item values (`1st`, `K`) mismatched stored labels (`1st Grade`); students list cache (`staleTime: Infinity`) not invalidated after PUT.
+- **Fix:** `StudentRegistrationPage` uses `GRADE_LEVEL_OPTIONS` labels, auto-fills grade from DOB via `gradeLevelFromBirthdate` (age − 5), invalidates `/api/school-admin/students` after save; PUT normalizes grade labels and syncs `school_students.grade`.
+- **Shared:** `ageFromBirthdate`, `gradeLevelFromAge`, `gradeLevelFromBirthdate`, `toDateInputValue` in `shared/grade-levels.ts`.
+- **Docs:** [grades-ages-classes.md](domains/grades-ages-classes.md).
+
 ## 2026-08-08 (School-admin half/full day session signup view)
 
 - **Sessions** (`/schools/sessions`): fill line `N/cap half · N/cap full` (+ waitlist) from `GET /api/admin/sessions` counts.
