@@ -3877,14 +3877,19 @@ router.get('/students/:id', supabaseAuth, async (req: any, res) => {
         ? await storage.getSchool(schoolId)
         : null;
 
+    const { toDateInputValue, gradeSlugToLabel, normalizeGradeLevel } = await import(
+      '../../shared/grade-levels'
+    );
+    const gradeSlug = normalizeGradeLevel(student.gradeLevel);
+
     // Format the student data for the detail view
     const formattedStudent = {
       id: student.id,
       firstName: student.firstName,
       lastName: student.lastName,
       name: `${student.firstName} ${student.lastName}`.trim(),
-      birthdate: student.birthdate,
-      gradeLevel: student.gradeLevel,
+      birthdate: toDateInputValue(student.birthdate) || student.birthdate,
+      gradeLevel: gradeSlug ? gradeSlugToLabel(gradeSlug) : student.gradeLevel,
       specialNeeds: student.specialNeeds || '',
       allergies: student.allergies || '',
       interests: student.interests || [],
@@ -3935,17 +3940,56 @@ router.put('/students/:id', supabaseAuth, async (req: any, res) => {
       return res.status(403).json({ message: 'Access denied to this student' });
     }
 
-    // Update student with new data using updateChild
-    const updatedStudent = await storage.updateChild(studentId, {
-      firstName: updateData.firstName,
-      lastName: updateData.lastName,
-      birthdate: updateData.dateOfBirth,
-      gradeLevel: updateData.gradeLevel,
-      parentEmail: updateData.parentEmail,
-      emergencyContact: updateData.emergencyContact,
-      medicalInfo: updateData.medicalNotes,
-      specialNeeds: updateData.specialNeeds,
-    });
+    const { gradeSlugToLabel, normalizeGradeLevel, toDateInputValue } = await import(
+      '../../shared/grade-levels'
+    );
+
+    const patch: Record<string, unknown> = {};
+    if (updateData.firstName != null && String(updateData.firstName).trim()) {
+      patch.firstName = String(updateData.firstName).trim();
+    }
+    if (updateData.lastName != null && String(updateData.lastName).trim()) {
+      patch.lastName = String(updateData.lastName).trim();
+    }
+    if (updateData.dateOfBirth != null && String(updateData.dateOfBirth).trim()) {
+      const dob = toDateInputValue(updateData.dateOfBirth);
+      if (dob) patch.birthdate = dob;
+    }
+    if (updateData.gradeLevel != null && String(updateData.gradeLevel).trim()) {
+      const slug = normalizeGradeLevel(updateData.gradeLevel);
+      patch.gradeLevel = slug ? gradeSlugToLabel(slug) : String(updateData.gradeLevel).trim();
+    }
+    if (updateData.parentEmail != null) {
+      patch.parentEmail = String(updateData.parentEmail).trim() || null;
+    }
+    if (updateData.emergencyContact != null) {
+      patch.emergencyContact =
+        typeof updateData.emergencyContact === 'string'
+          ? updateData.emergencyContact
+          : updateData.emergencyContact?.name || existingStudent.emergencyContact;
+    }
+    if (updateData.medicalNotes != null) {
+      patch.medicalInfo = String(updateData.medicalNotes);
+    }
+    if (updateData.specialNeeds != null) {
+      patch.specialNeeds = String(updateData.specialNeeds);
+    }
+
+    const updatedStudent = await storage.updateChild(studentId, patch as any);
+
+    // Keep school_students.grade in sync when present (affiliation copy).
+    if (patch.gradeLevel) {
+      try {
+        const schoolStudent = await storage.getSchoolStudentByChildAndSchool(studentId, schoolId);
+        if (schoolStudent) {
+          await storage.updateSchoolStudent(schoolStudent.id, {
+            grade: String(patch.gradeLevel),
+          });
+        }
+      } catch (syncErr) {
+        console.warn('Could not sync school_students.grade after child update:', syncErr);
+      }
+    }
 
     if (updateData.secondaryParentEmail) {
       try {

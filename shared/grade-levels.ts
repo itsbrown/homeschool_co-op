@@ -196,3 +196,82 @@ export function gradeSlugToLabel(slug: string | null | undefined): string {
   if (!normalized) return slug?.trim() || "Unknown";
   return GRADE_LEVEL_OPTIONS.find((o) => o.value === normalized)?.label ?? normalized;
 }
+
+/**
+ * Age in completed years from a birthdate (YYYY-MM-DD or parseable date string).
+ * Returns null when the date is missing/invalid.
+ */
+export function ageFromBirthdate(
+  birthdate: string | Date | null | undefined,
+  asOf: Date = new Date(),
+): number | null {
+  if (birthdate == null || birthdate === "") return null;
+  const birth =
+    birthdate instanceof Date
+      ? birthdate
+      : new Date(typeof birthdate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(birthdate)
+          ? `${birthdate}T12:00:00`
+          : birthdate);
+  if (Number.isNaN(birth.getTime())) return null;
+
+  let age = asOf.getFullYear() - birth.getFullYear();
+  const monthDiff = asOf.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && asOf.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age < 0 ? 0 : age;
+}
+
+const ORDINAL_GRADE_SLUGS: CanonicalGradeSlug[] = [
+  "1st-grade",
+  "2nd-grade",
+  "3rd-grade",
+  "4th-grade",
+  "5th-grade",
+  "6th-grade",
+  "7th-grade",
+  "8th-grade",
+  "9th-grade",
+  "10th-grade",
+  "11th-grade",
+  "12th-grade",
+];
+
+/**
+ * School grade from age using age − 5:
+ * ≤3 → Littles, 4 → Pre-K, 5 → Kindergarten, 6 → 1st … capped at 12th.
+ */
+export function gradeLevelFromAge(age: number | null | undefined): CanonicalGradeSlug | null {
+  if (age == null || !Number.isFinite(age)) return null;
+  const years = Math.floor(age);
+  if (years <= 3) return "littles";
+  if (years === 4) return "pre-k";
+  if (years === 5) return "kindergarten";
+  const gradeNum = years - 5; // 6→1 … 17→12
+  if (gradeNum < 1) return "kindergarten";
+  if (gradeNum > 12) return "12th-grade";
+  return ORDINAL_GRADE_SLUGS[gradeNum - 1] ?? null;
+}
+
+/** Canonical grade slug from birthdate via age − 5. */
+export function gradeLevelFromBirthdate(
+  birthdate: string | Date | null | undefined,
+  asOf: Date = new Date(),
+): CanonicalGradeSlug | null {
+  return gradeLevelFromAge(ageFromBirthdate(birthdate, asOf));
+}
+
+/** YYYY-MM-DD for `<input type="date">` from ISO or date-only strings. */
+export function toDateInputValue(birthdate: string | Date | null | undefined): string {
+  if (birthdate == null || birthdate === "") return "";
+  if (birthdate instanceof Date) {
+    if (Number.isNaN(birthdate.getTime())) return "";
+    const y = birthdate.getFullYear();
+    const m = String(birthdate.getMonth() + 1).padStart(2, "0");
+    const d = String(birthdate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  const trimmed = String(birthdate).trim();
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? "";
+}

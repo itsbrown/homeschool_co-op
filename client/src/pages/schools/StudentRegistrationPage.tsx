@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, UserPlus, Mail, Edit, MapPin } from "lucide-react";
 import { useAuth } from "@/components/SupabaseProvider";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, parseApiErrorMessage } from "@/lib/queryClient";
+import {
+  GRADE_LEVEL_OPTIONS,
+  gradeLevelFromBirthdate,
+  gradeSlugToLabel,
+  normalizeGradeLevel,
+  toDateInputValue,
+} from "@shared/grade-levels";
 
 interface StudentData {
   id: number;
@@ -53,27 +60,32 @@ function getEmergencyContactPhone(ec: StudentData['emergencyContact']): string {
   return ec.phone || '';
 }
 
+function gradeLabelFromBirthdate(birthdate: string): string {
+  const slug = gradeLevelFromBirthdate(birthdate);
+  return slug ? gradeSlugToLabel(slug) : "";
+}
+
 export default function StudentRegistrationPage() {
   const [, setLocation] = useLocation();
   const [match, params] = useRoute("/schools/students/:id/edit");
   const { toast } = useToast();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sendInvitation, setSendInvitation] = useState(true);
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [gradeLevel, setGradeLevel] = useState("");
-  const [locationId, setLocationId] = useState<string>("");
+  const [gradeManuallyEdited, setGradeManuallyEdited] = useState(false);
+  const [locationId, setLocationId] = useState<string>("none");
   
-  // Check if we're in edit mode
   const isEditMode = !!match && !!params?.id;
   const studentId = params?.id;
 
-  // Fetch student data if in edit mode
   const { data: studentData, isLoading } = useQuery<StudentData>({
-    queryKey: [`/api/school-admin/students/${studentId}`],
-    enabled: isEditMode
+    queryKey: ['/api/school-admin/students', studentId],
+    enabled: isEditMode && !!studentId,
   });
 
-  // Fetch school info to get schoolId for locations
   const { data: schoolData } = useQuery<SchoolData>({
     queryKey: ['/api/school-parents/school', user?.email],
     enabled: !!user?.email,
@@ -81,19 +93,35 @@ export default function StudentRegistrationPage() {
 
   const schoolId = schoolData?.id;
 
-  // Fetch available locations for the school
-  const { data: locations, isLoading: locationsLoading } = useQuery<LocationData[]>({
+  const { data: locations } = useQuery<LocationData[]>({
     queryKey: ['/api/locations', { schoolId }],
     enabled: !!schoolId,
   });
 
-  // Populate form when student data is loaded
   useEffect(() => {
     if (studentData && isEditMode) {
-      setGradeLevel(studentData.gradeLevel || "");
-      setLocationId(studentData.locationId?.toString() || "");
+      const dob = toDateInputValue(studentData.birthdate);
+      setDateOfBirth(dob);
+      const autoLabel = gradeLabelFromBirthdate(dob);
+      const storedSlug = normalizeGradeLevel(studentData.gradeLevel);
+      // Default to age − 5 when DOB is known; otherwise show stored grade.
+      setGradeLevel(autoLabel || (storedSlug ? gradeSlugToLabel(storedSlug) : ""));
+      setGradeManuallyEdited(false);
+      setLocationId(studentData.locationId != null ? String(studentData.locationId) : "none");
     }
   }, [studentData, isEditMode]);
+
+  const handleBirthdateChange = (value: string) => {
+    setDateOfBirth(value);
+    if (!gradeManuallyEdited) {
+      setGradeLevel(gradeLabelFromBirthdate(value));
+    }
+  };
+
+  const handleGradeChange = (value: string) => {
+    setGradeLevel(value);
+    setGradeManuallyEdited(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -101,13 +129,24 @@ export default function StudentRegistrationPage() {
 
     try {
       const formData = new FormData(e.currentTarget);
+      const resolvedGrade =
+        gradeLevel || gradeLabelFromBirthdate(dateOfBirth);
+      if (!resolvedGrade) {
+        toast({
+          title: "Grade Level Required",
+          description: "Enter a date of birth so grade can be calculated, or select a grade.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
       const submissionData = {
         firstName: formData.get('firstName'),
         lastName: formData.get('lastName'),
-        dateOfBirth: formData.get('dateOfBirth'),
-        gradeLevel: gradeLevel, // Use state value instead of FormData
-        // schoolId is derived server-side from authenticated admin's JWT token for security
-        locationId: locationId ? parseInt(locationId) : null, // Server validates this belongs to your school
+        dateOfBirth,
+        gradeLevel: resolvedGrade,
+        locationId: locationId !== "none" ? parseInt(locationId, 10) : null,
         parentEmail: formData.get('parentEmail'),
         parentPhone: formData.get('parentPhone'),
         emergencyContact: formData.get('emergencyContact'),
@@ -115,32 +154,41 @@ export default function StudentRegistrationPage() {
         medicalNotes: formData.get('medicalNotes'),
         specialNeeds: formData.get('specialNeeds'),
         sendInvitation: sendInvitation,
-        ...(isEditMode && formData.get('secondaryParentEmail') ? { secondaryParentEmail: formData.get('secondaryParentEmail') } : {}),
+        ...(isEditMode && formData.get('secondaryParentEmail')
+          ? { secondaryParentEmail: formData.get('secondaryParentEmail') }
+          : {}),
       };
 
-      console.log('Form submission data:', submissionData);
-
-      // Choose endpoint and method based on mode
       const endpoint = isEditMode ? `/api/school-admin/students/${studentId}` : '/api/students/register';
       const method = isEditMode ? 'PUT' : 'POST';
 
-      // Use apiRequest for authenticated requests
       const response = await apiRequest(method, endpoint, submissionData);
-      const result = await response.json();
-      console.log('Registration success:', result);
+      await response.json();
+
+      await queryClient.invalidateQueries({ queryKey: ['/api/school-admin/students'] });
+      if (isEditMode && studentId) {
+        await queryClient.invalidateQueries({
+          queryKey: ['/api/school-admin/students', studentId],
+        });
+      }
 
       toast({
-        title: "Student Registered Successfully",
-        description: sendInvitation 
-          ? "Student registered and invitation email sent to parent."
-          : "Student registered and linked to parent account.",
+        title: isEditMode ? "Student Updated" : "Student Registered Successfully",
+        description: isEditMode
+          ? "Student information has been saved."
+          : sendInvitation
+            ? "Student registered and invitation email sent to parent."
+            : "Student registered and linked to parent account.",
       });
 
       setLocation("/schools/students");
     } catch (error) {
       toast({
         title: isEditMode ? "Update Failed" : "Registration Failed",
-        description: `There was an error ${isEditMode ? 'updating' : 'registering'} the student. Please try again.`,
+        description: parseApiErrorMessage(
+          error,
+          `There was an error ${isEditMode ? 'updating' : 'registering'} the student. Please try again.`,
+        ),
         variant: "destructive",
       });
     } finally {
@@ -222,37 +270,30 @@ export default function StudentRegistrationPage() {
                     name="dateOfBirth"
                     type="date"
                     required
-                    defaultValue={studentData?.birthdate || ""}
+                    value={dateOfBirth}
+                    onChange={(e) => handleBirthdateChange(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="gradeLevel">Grade Level *</Label>
-                  <Select value={gradeLevel} onValueChange={setGradeLevel}>
-                    <SelectTrigger>
+                  <Select value={gradeLevel || undefined} onValueChange={handleGradeChange}>
+                    <SelectTrigger data-testid="select-grade-level">
                       <SelectValue placeholder="Select grade level" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Littles">Littles</SelectItem>
-                      <SelectItem value="Pre-K">Pre-K</SelectItem>
-                      <SelectItem value="K">Kindergarten</SelectItem>
-                      <SelectItem value="1st">1st Grade</SelectItem>
-                      <SelectItem value="2nd">2nd Grade</SelectItem>
-                      <SelectItem value="3rd">3rd Grade</SelectItem>
-                      <SelectItem value="4th">4th Grade</SelectItem>
-                      <SelectItem value="5th">5th Grade</SelectItem>
-                      <SelectItem value="6th">6th Grade</SelectItem>
-                      <SelectItem value="7th">7th Grade</SelectItem>
-                      <SelectItem value="8th">8th Grade</SelectItem>
-                      <SelectItem value="9th">9th Grade</SelectItem>
-                      <SelectItem value="10th">10th Grade</SelectItem>
-                      <SelectItem value="11th">11th Grade</SelectItem>
-                      <SelectItem value="12th">12th Grade</SelectItem>
+                      {GRADE_LEVEL_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.label}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-sm text-muted-foreground">
+                    Auto-set from age (age − 5). Change the date of birth to recalculate, or pick a grade to override.
+                  </p>
                 </div>
               </div>
 
-              {/* Location Selector */}
               {locations && locations.length > 0 && (
                 <div className="space-y-2">
                   <Label htmlFor="location" className="flex items-center gap-2">
@@ -264,8 +305,8 @@ export default function StudentRegistrationPage() {
                       <SelectValue placeholder="Select a location (optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
-                      {locations.map((location: any) => (
+                      <SelectItem value="none">None</SelectItem>
+                      {locations.map((location) => (
                         <SelectItem key={location.id} value={location.id.toString()}>
                           {location.name} - {location.city}, {location.state}
                         </SelectItem>
@@ -398,7 +439,7 @@ export default function StudentRegistrationPage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting} data-testid="button-save-student">
                   {isSubmitting ? (
                     <>
                       <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
