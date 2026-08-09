@@ -18,6 +18,7 @@ import {
   getStoreListingState,
 } from "../lib/store-listing-sync";
 import { setProgramDeliveryDocuments } from "../lib/store-storage";
+import { getSessionVariantCountsForSessions } from "../lib/session-enrollment-counts";
 
 const router = Router();
 
@@ -40,7 +41,21 @@ router.get("/", supabaseAuth, requireAdminOrDirector, requireSchoolContext, asyn
       .where(eq(sessions.schoolId, schoolId))
       .orderBy(desc(sessions.sortOrder));
 
-    res.json(result);
+    const countsBySession = await getSessionVariantCountsForSessions(
+      result.map((s) => s.id),
+    );
+    const withCounts = result.map((s) => {
+      const counts = countsBySession.get(s.id);
+      return {
+        ...s,
+        halfDayEnrolled: counts?.halfDayEnrolled ?? 0,
+        fullDayEnrolled: counts?.fullDayEnrolled ?? 0,
+        halfDayWaitlist: counts?.halfDayWaitlist ?? 0,
+        fullDayWaitlist: counts?.fullDayWaitlist ?? 0,
+      };
+    });
+
+    res.json(withCounts);
   } catch (error) {
     console.error("Error fetching sessions:", error);
     res.status(500).json({ message: "Failed to fetch sessions" });

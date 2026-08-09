@@ -49,13 +49,85 @@ import {
   TrendingUp,
   Gift,
   Percent,
-  Bell
+  Bell,
+  Download,
 } from "lucide-react";
 import { formatCurrency } from "@/utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RefundDialog } from "@/components/payments/RefundDialog";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
+
+type DayTypeFilter = "all" | "half_day" | "full_day" | "non_session";
+
+type SessionOption = {
+  id: number;
+  name: string;
+  halfDayCapacity?: number | null;
+  fullDayCapacity?: number | null;
+  halfDayEnrolled?: number;
+  fullDayEnrolled?: number;
+  halfDayWaitlist?: number;
+  fullDayWaitlist?: number;
+};
+
+function dayTypeLabel(dayType: string | null | undefined): string {
+  if (dayType === "half_day") return "Half Day";
+  if (dayType === "full_day") return "Full Day";
+  return "—";
+}
+
+function formatSessionFillSummary(s: SessionOption): string {
+  const halfCap = s.halfDayCapacity != null ? String(s.halfDayCapacity) : "—";
+  const fullCap = s.fullDayCapacity != null ? String(s.fullDayCapacity) : "—";
+  let text = `${s.halfDayEnrolled ?? 0}/${halfCap} half · ${s.fullDayEnrolled ?? 0}/${fullCap} full`;
+  if ((s.halfDayWaitlist ?? 0) > 0) text += ` · ${s.halfDayWaitlist} half waitlist`;
+  if ((s.fullDayWaitlist ?? 0) > 0) text += ` · ${s.fullDayWaitlist} full waitlist`;
+  return text;
+}
+
+function exportEnrollmentsCsv(
+  rows: Enrollment[],
+  sessionNameById: Map<number, string>,
+) {
+  const headers = [
+    "Student",
+    "Parent email",
+    "Class",
+    "Day Type",
+    "Session",
+    "Status",
+    "Total (USD)",
+    "Paid (USD)",
+    "Remaining (USD)",
+  ];
+  const escape = (value: string | number | null | undefined) => {
+    const str = value == null ? "" : String(value);
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+  const lines = rows.map((row) => {
+    const sessionName =
+      row.sessionId != null ? sessionNameById.get(row.sessionId) ?? "" : "";
+    return [
+      escape(row.childName),
+      escape(row.parentEmail),
+      escape(row.className),
+      escape(dayTypeLabel(row.dayType)),
+      escape(sessionName),
+      escape(row.status || row.paymentStatus),
+      escape(((row.totalCost || 0) / 100).toFixed(2)),
+      escape(((row.totalPaid || 0) / 100).toFixed(2)),
+      escape((getEffectiveBalance(row) / 100).toFixed(2)),
+    ].join(",");
+  });
+  const csv = [headers.join(","), ...lines].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `enrollments_${new Date().toISOString().split("T")[0]}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
 
 /** Returns the effective amount owed for an enrollment (in cents).
  *  Prefers the server-computed effectiveBalance field; falls back to the
@@ -82,6 +154,10 @@ interface Enrollment {
   programEndDate?: string;
   parentEmail?: string;
   parentId?: number | null;
+  childId?: number | null;
+  sessionId?: number | null;
+  dayType?: "half_day" | "full_day" | string | null;
+  variantId?: string | null;
   compPercentage?: number | null;
   proratedFromCents?: number | null;
   proratePercentage?: number | null;
@@ -273,6 +349,8 @@ export default function EnrollmentsAdminPage() {
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
   const [refundEnrollment, setRefundEnrollment] = useState<Enrollment | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [dayTypeFilter, setDayTypeFilter] = useState<DayTypeFilter>("all");
+  const [sessionFilter, setSessionFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [compDialogOpen, setCompDialogOpen] = useState(false);
@@ -291,6 +369,22 @@ export default function EnrollmentsAdminPage() {
   const { data: enrollments = [], isLoading, refetch } = useQuery<Enrollment[]>({
     queryKey: ["/api/school-admin/enrollments"],
   });
+
+  const { data: sessionsList = [] } = useQuery<SessionOption[]>({
+    queryKey: ["/api/admin/sessions"],
+  });
+
+  const sessionNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const s of sessionsList) map.set(s.id, s.name);
+    return map;
+  }, [sessionsList]);
+
+  const selectedSessionSummary = useMemo(() => {
+    if (sessionFilter === "all") return null;
+    const sessionId = Number(sessionFilter);
+    return sessionsList.find((s) => s.id === sessionId) ?? null;
+  }, [sessionFilter, sessionsList]);
 
   // Fetch the balance audit (proactively surfaces enrollments whose cached
   // remaining_balance diverges from effectiveBalance, plus related issues).
@@ -366,7 +460,7 @@ export default function EnrollmentsAdminPage() {
     };
   }, [enrollments]);
 
-  // Filter enrollments based on status and search
+  // Filter enrollments based on status, day type, session, and search
   const filteredEnrollments = useMemo(() => {
     return enrollments.filter(enrollment => {
       // Status filter
@@ -387,6 +481,21 @@ export default function EnrollmentsAdminPage() {
           return false;
         }
       }
+
+      if (dayTypeFilter === "half_day" && enrollment.dayType !== "half_day") {
+        return false;
+      }
+      if (dayTypeFilter === "full_day" && enrollment.dayType !== "full_day") {
+        return false;
+      }
+      if (dayTypeFilter === "non_session" && enrollment.sessionId != null) {
+        return false;
+      }
+
+      if (sessionFilter !== "all") {
+        const sessionId = Number(sessionFilter);
+        if (enrollment.sessionId !== sessionId) return false;
+      }
       
       // Search filter
       if (searchTerm) {
@@ -400,7 +509,7 @@ export default function EnrollmentsAdminPage() {
       
       return true;
     });
-  }, [enrollments, statusFilter, searchTerm]);
+  }, [enrollments, statusFilter, dayTypeFilter, sessionFilter, searchTerm]);
 
   // Count by status for tabs
   const statusCounts = useMemo(() => ({
@@ -1010,7 +1119,7 @@ export default function EnrollmentsAdminPage() {
                   {filteredEnrollments.length} of {enrollments.length} enrollments
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -1018,8 +1127,46 @@ export default function EnrollmentsAdminPage() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-9 w-[200px] sm:w-[250px]"
+                    data-testid="input-enrollments-search"
                   />
                 </div>
+                <Select
+                  value={dayTypeFilter}
+                  onValueChange={(v) => setDayTypeFilter(v as DayTypeFilter)}
+                >
+                  <SelectTrigger className="w-[140px]" data-testid="select-day-type-filter">
+                    <SelectValue placeholder="Day type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All day types</SelectItem>
+                    <SelectItem value="half_day">Half Day</SelectItem>
+                    <SelectItem value="full_day">Full Day</SelectItem>
+                    <SelectItem value="non_session">Non-session</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={sessionFilter} onValueChange={setSessionFilter}>
+                  <SelectTrigger className="w-[180px]" data-testid="select-session-filter">
+                    <SelectValue placeholder="Session" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All sessions</SelectItem>
+                    {sessionsList.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => exportEnrollmentsCsv(filteredEnrollments, sessionNameById)}
+                  disabled={filteredEnrollments.length === 0}
+                  data-testid="button-export-enrollments-csv"
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Export CSV
+                </Button>
                 <div className="hidden sm:flex border rounded-md">
                   <Button
                     variant={viewMode === 'table' ? 'secondary' : 'ghost'}
@@ -1040,6 +1187,14 @@ export default function EnrollmentsAdminPage() {
                 </div>
               </div>
             </div>
+            {selectedSessionSummary && (
+              <p
+                className="mt-3 text-sm font-medium"
+                data-testid="enrollments-session-fill-summary"
+              >
+                {selectedSessionSummary.name}: {formatSessionFillSummary(selectedSessionSummary)}
+              </p>
+            )}
           </CardHeader>
 
           {/* Status Tabs */}
@@ -1074,6 +1229,7 @@ export default function EnrollmentsAdminPage() {
                     <TableRow>
                       <TableHead>Student</TableHead>
                       <TableHead className="hidden md:table-cell">Class</TableHead>
+                      <TableHead data-testid="column-day-type">Day Type</TableHead>
                       <TableHead className="hidden lg:table-cell">Payment Plan</TableHead>
                       <TableHead>Payment Progress</TableHead>
                       <TableHead>Status</TableHead>
@@ -1083,15 +1239,19 @@ export default function EnrollmentsAdminPage() {
                   <TableBody>
                     {filteredEnrollments.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                          {searchTerm || statusFilter !== 'all' 
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                          {searchTerm || statusFilter !== 'all' || dayTypeFilter !== 'all' || sessionFilter !== 'all'
                             ? 'No enrollments match your filters'
                             : 'No enrollments found'}
                         </TableCell>
                       </TableRow>
                     ) : (
                       filteredEnrollments.map((enrollment) => (
-                        <TableRow key={enrollment.id}>
+                        <TableRow
+                          key={enrollment.id}
+                          data-testid={`enrollment-row-${enrollment.id}`}
+                          data-day-type={enrollment.dayType ?? ""}
+                        >
                           <TableCell>
                             <div>
                               <div className="font-medium">{enrollment.childName}</div>
@@ -1111,6 +1271,18 @@ export default function EnrollmentsAdminPage() {
                             </div>
                           </TableCell>
                           <TableCell className="hidden md:table-cell">{enrollment.className}</TableCell>
+                          <TableCell>
+                            {enrollment.dayType === "half_day" || enrollment.dayType === "full_day" ? (
+                              <Badge
+                                variant="outline"
+                                data-testid={`badge-day-type-${enrollment.id}`}
+                              >
+                                {dayTypeLabel(enrollment.dayType)}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
+                          </TableCell>
                           <TableCell className="hidden lg:table-cell">
                             {formatFrequency(enrollment.paymentFrequency)}
                           </TableCell>
@@ -1216,18 +1388,28 @@ export default function EnrollmentsAdminPage() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {filteredEnrollments.length === 0 ? (
                   <div className="col-span-full text-center text-muted-foreground py-8">
-                    {searchTerm || statusFilter !== 'all' 
+                    {searchTerm || statusFilter !== 'all' || dayTypeFilter !== 'all' || sessionFilter !== 'all'
                       ? 'No enrollments match your filters'
                       : 'No enrollments found'}
                   </div>
                 ) : (
                   filteredEnrollments.map((enrollment) => (
-                    <Card key={enrollment.id} className="relative">
+                    <Card
+                      key={enrollment.id}
+                      className="relative"
+                      data-testid={`enrollment-card-${enrollment.id}`}
+                      data-day-type={enrollment.dayType ?? ""}
+                    >
                       <CardHeader className="pb-2">
                         <div className="flex items-start justify-between">
                           <div>
                             <CardTitle className="text-base">{enrollment.childName}</CardTitle>
                             <CardDescription>{enrollment.className}</CardDescription>
+                            {(enrollment.dayType === "half_day" || enrollment.dayType === "full_day") && (
+                              <Badge variant="outline" className="mt-1">
+                                {dayTypeLabel(enrollment.dayType)}
+                              </Badge>
+                            )}
                           </div>
                           <Badge variant={getStatusBadgeVariant(enrollment.status || enrollment.paymentStatus)}>
                             {getStatusDisplayText(enrollment)}

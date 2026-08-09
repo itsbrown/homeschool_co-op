@@ -19,6 +19,22 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Plus, Edit, Trash2, Calendar, Clock, Users, DollarSign } from "lucide-react";
 import type { EnrollmentSession as Session } from "@shared/schema";
 
+type SessionWithCounts = Session & {
+  halfDayEnrolled?: number;
+  fullDayEnrolled?: number;
+  halfDayWaitlist?: number;
+  fullDayWaitlist?: number;
+};
+
+function formatSessionFillSummary(s: SessionWithCounts): string {
+  const halfCap = s.halfDayCapacity != null ? String(s.halfDayCapacity) : "—";
+  const fullCap = s.fullDayCapacity != null ? String(s.fullDayCapacity) : "—";
+  let text = `${s.halfDayEnrolled ?? 0}/${halfCap} half · ${s.fullDayEnrolled ?? 0}/${fullCap} full`;
+  if ((s.halfDayWaitlist ?? 0) > 0) text += ` · ${s.halfDayWaitlist} half waitlist`;
+  if ((s.fullDayWaitlist ?? 0) > 0) text += ` · ${s.fullDayWaitlist} full waitlist`;
+  return text;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   upcoming: "bg-blue-100 text-blue-800",
   active: "bg-green-100 text-green-800",
@@ -138,7 +154,7 @@ export default function SessionsManagementPage() {
     queryKey: ["/api/school-admin/documents"],
   });
 
-  const { data: sessionsList = [], isLoading } = useQuery<Session[]>({
+  const { data: sessionsList = [], isLoading } = useQuery<SessionWithCounts[]>({
     queryKey: ["/api/admin/sessions"],
   });
 
@@ -365,6 +381,13 @@ export default function SessionsManagementPage() {
                       </div>
                     </div>
                   </div>
+                  <p
+                    className="mt-3 text-sm font-medium text-foreground"
+                    data-testid={`session-fill-summary-${s.id}`}
+                  >
+                    <Users className="inline h-3.5 w-3.5 mr-1.5 text-muted-foreground align-text-bottom" />
+                    {formatSessionFillSummary(s)}
+                  </p>
                 </CardContent>
               </Card>
             ))}

@@ -3474,6 +3474,11 @@ router.get('/enrollments', supabaseAuth, requireSchoolContext, async (req: any, 
         parentEmail: enrollment.parentEmail ?? null,
         cancelledAt: enrollment.cancelledAt,
         cancellationReason: enrollment.cancellationReason,
+        sessionId: enrollment.sessionId ?? null,
+        dayType: enrollment.dayType ?? null,
+        variantId: enrollment.variantId ?? null,
+        waitlistPosition: enrollment.waitlistPosition ?? null,
+        childId: enrollment.childId ?? null,
       };
     });
     
