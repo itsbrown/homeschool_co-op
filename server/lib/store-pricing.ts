@@ -1,6 +1,6 @@
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 import { getDb } from '../db';
-import { programEnrollments, sessions, classes } from '@shared/schema';
+import { programEnrollments } from '@shared/schema';
 import { storage } from '../storage';
 import {
   parentHasMemberIdForCheckout,
@@ -20,6 +20,10 @@ import {
   isLocationActivationCancelled,
   isLocationInNoticePeriod,
 } from '@shared/location-activation';
+import {
+  countSessionVariantEnrollments,
+  countSessionWaitlist,
+} from './session-enrollment-counts';
 
 export type StoreCartLineType = 'product' | 'session' | 'class';
 
@@ -67,36 +71,6 @@ export interface StoreSnapshotResult {
   amountDueCents: number;
   hasMembersOnlyLine: boolean;
   membershipAlreadyPaid: boolean;
-}
-
-async function countSessionVariantEnrollments(sessionId: number, variant: string): Promise<number> {
-  const db = await getDb();
-  const [result] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(programEnrollments)
-    .where(
-      and(
-        eq(programEnrollments.sessionId, sessionId),
-        eq(programEnrollments.variantId, variant),
-        notInArray(programEnrollments.status, ['cancelled']),
-      ),
-    );
-  return result?.count ?? 0;
-}
-
-async function countSessionWaitlist(sessionId: number, variant: string): Promise<number> {
-  const db = await getDb();
-  const [result] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(programEnrollments)
-    .where(
-      and(
-        eq(programEnrollments.sessionId, sessionId),
-        eq(programEnrollments.variantId, variant),
-        eq(programEnrollments.status, 'waitlist'),
-      ),
-    );
-  return result?.count ?? 0;
 }
 
 async function countClassEnrollments(classId: number): Promise<number> {

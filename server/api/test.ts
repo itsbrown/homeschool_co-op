@@ -892,6 +892,204 @@ router.post('/setup-session-enrollment-scenario', async (req: Request, res: Resp
 });
 
 /**
+ * POST /api/test/setup-session-day-type-admin-scenario
+ * Seeds school admin + session (20/25 capacity) + one half-day and one full-day enrolled child
+ * for school-admin Sessions fill summary + Enrollments Day Type filters.
+ */
+router.post('/setup-session-day-type-admin-scenario', async (req: Request, res: Response) => {
+  try {
+    const { createEnrollmentDataSimple } = await import('@shared/enrollment-factory');
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    const db = await getDb();
+    const adminPassword = 'TestPassword123!';
+
+    const admin = await testDb.createTestUser({
+      email: `daytype_admin_${uniqueId}@test.com`,
+      username: `daytypeadmin_${uniqueId}`,
+      name: 'Day Type Admin',
+      role: 'schoolAdmin',
+    });
+    const bcrypt = await import('bcryptjs');
+    await storage.updateUser(admin.id, { password: await bcrypt.hash(adminPassword, 10) });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Day Type School ${uniqueId}`,
+      registrationCode: `DT${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    const parentEmail = `daytype_parent_${uniqueId}@test.com`;
+    const parentPassword = 'TestPassword123!';
+    const parent = await testDb.createTestUser({
+      email: parentEmail,
+      username: `daytypeparent_${uniqueId}`,
+      name: 'Day Type Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    await storage.updateUser(parent.id, { password: await bcrypt.hash(parentPassword, 10) });
+
+    const halfChild = await storage.createChild({
+      parentId: parent.id,
+      parentEmail,
+      firstName: 'Half',
+      lastName: `Kid${uniqueId}`,
+      birthdate: '2015-06-01',
+      gradeLevel: '3rd Grade',
+      schoolId: school.id,
+    });
+    const fullChild = await storage.createChild({
+      parentId: parent.id,
+      parentEmail,
+      firstName: 'Full',
+      lastName: `Kid${uniqueId}`,
+      birthdate: '2014-06-01',
+      gradeLevel: '4th Grade',
+      schoolId: school.id,
+    });
+
+    const today = new Date();
+    const start = today.toISOString().slice(0, 10);
+    const endDate = new Date(today);
+    endDate.setMonth(endDate.getMonth() + 3);
+    const end = endDate.toISOString().slice(0, 10);
+
+    const [sessionRow] = await db
+      .insert(sessions)
+      .values({
+        schoolId: school.id,
+        name: `Day Type Session ${uniqueId}`,
+        description: 'Playwright day-type admin seed',
+        startDate: start,
+        endDate: end,
+        status: 'upcoming',
+        enrollmentOpen: true,
+        halfDayPrice: 15000,
+        fullDayPrice: 25000,
+        halfDayCapacity: 20,
+        fullDayCapacity: 25,
+        sortOrder: 0,
+      })
+      .returning();
+
+    const halfEnrollmentData = createEnrollmentDataSimple({
+      schoolId: school.id,
+      classType: 'marketplace',
+      classId: null,
+      marketplaceClassId: null,
+      sessionId: sessionRow.id,
+      enrollmentVersion: 'v2',
+      dayType: 'half_day',
+      enrolledHalfDayPrice: sessionRow.halfDayPrice ?? null,
+      enrolledFullDayPrice: sessionRow.fullDayPrice ?? null,
+      childId: halfChild.id,
+      childName: `${halfChild.firstName} ${halfChild.lastName}`,
+      className: `${sessionRow.name} - Half Day`,
+      variantId: 'half_day',
+      parentId: parent.id,
+      parentEmail,
+      totalCost: sessionRow.halfDayPrice ?? 15000,
+      totalPaid: sessionRow.halfDayPrice ?? 15000,
+      remainingBalance: 0,
+      depositRequired: 0,
+      paymentStatus: 'completed',
+      paymentPlan: null,
+      paymentFrequency: 'one_time',
+      programStartDate: sessionRow.startDate,
+      programEndDate: sessionRow.endDate,
+      status: 'enrolled',
+    });
+    const fullEnrollmentData = createEnrollmentDataSimple({
+      schoolId: school.id,
+      classType: 'marketplace',
+      classId: null,
+      marketplaceClassId: null,
+      sessionId: sessionRow.id,
+      enrollmentVersion: 'v2',
+      dayType: 'full_day',
+      enrolledHalfDayPrice: sessionRow.halfDayPrice ?? null,
+      enrolledFullDayPrice: sessionRow.fullDayPrice ?? null,
+      childId: fullChild.id,
+      childName: `${fullChild.firstName} ${fullChild.lastName}`,
+      className: `${sessionRow.name} - Full Day`,
+      variantId: 'full_day',
+      parentId: parent.id,
+      parentEmail,
+      totalCost: sessionRow.fullDayPrice ?? 25000,
+      totalPaid: sessionRow.fullDayPrice ?? 25000,
+      remainingBalance: 0,
+      depositRequired: 0,
+      paymentStatus: 'completed',
+      paymentPlan: null,
+      paymentFrequency: 'one_time',
+      programStartDate: sessionRow.startDate,
+      programEndDate: sessionRow.endDate,
+      status: 'enrolled',
+    });
+
+    const halfEnrollment = await storage.createProgramEnrollment(halfEnrollmentData as any);
+    const fullEnrollment = await storage.createProgramEnrollment(fullEnrollmentData as any);
+
+    let adminSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthAdmin === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuthAdmin requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      try {
+        adminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: admin.id,
+          email: admin.email,
+          password: adminPassword,
+          role: 'schoolAdmin',
+          schoolId: school.id,
+          displayName: admin.name || 'Day Type Admin',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthAdmin failed (day-type scenario):', e);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        adminSupabaseLinked,
+        school: { id: school.id, name: school.name },
+        admin: { id: admin.id, email: admin.email, password: adminPassword },
+        parent: { id: parent.id, email: parentEmail, password: parentPassword },
+        session: {
+          id: sessionRow.id,
+          name: sessionRow.name,
+          halfDayCapacity: sessionRow.halfDayCapacity,
+          fullDayCapacity: sessionRow.fullDayCapacity,
+        },
+        halfEnrollment: {
+          id: halfEnrollment.id,
+          childName: halfEnrollment.childName,
+          dayType: 'half_day',
+        },
+        fullEnrollment: {
+          id: fullEnrollment.id,
+          childName: fullEnrollment.childName,
+          dayType: 'full_day',
+        },
+        expectedFillSummary: '1/20 half · 1/25 full',
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error setting up session day-type admin scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup session day-type admin scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
  * POST /api/test/seed-upcoming-scheduled-payment
  * Inserts a pending DB scheduled payment row for an enrollment (harness only).
  * Lets Playwright exercise /payments → Upcoming → Pay without waiting on Stripe webhooks.

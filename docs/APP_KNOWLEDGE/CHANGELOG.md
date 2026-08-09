@@ -1,5 +1,13 @@
 # App knowledge changelog
 
+## 2026-08-08 (School-admin half/full day session signup view)
+
+- **Sessions** (`/schools/sessions`): fill line `N/cap half · N/cap full` (+ waitlist) from `GET /api/admin/sessions` counts.
+- **Enrollments** (`/schools/enrollments`): Day Type column, half/full/non-session + session filters, CSV of filtered rows; list API now returns `sessionId` / `dayType` / `variantId`.
+- **Counts:** `server/lib/session-enrollment-counts.ts` (same non-`cancelled` seat predicate as enroll-time capacity).
+- **E2E:** `e2e/school-admin-session-day-type.spec.ts` — seed `setup-session-day-type-admin-scenario` + `linkSupabaseAuthAdmin` (cataloged in [E2E_COMMANDS.md](../../E2E_COMMANDS.md)).
+- **Skill:** `asa-enrollment-classes` F001 school-admin visibility section.
+
 ## 2026-08-04 (School admin notify on paid enrollment only)
 
 - School admins are **not** emailed on child/student registration (`sendAdminNotifications: false` on signup/parent child create; removed from `POST /api/students/register`).

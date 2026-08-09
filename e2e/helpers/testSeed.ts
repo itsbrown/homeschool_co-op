@@ -207,6 +207,47 @@ export async function postSetupSessionEnrollmentScenario(
   return { response, json };
 }
 
+export type SetupSessionDayTypeAdminScenarioResponse = {
+  success: boolean;
+  data?: {
+    adminSupabaseLinked?: boolean;
+    school: { id: number; name: string };
+    admin: { id: number; email: string; password: string };
+    parent: { id: number; email: string; password: string };
+    session: {
+      id: number;
+      name: string;
+      halfDayCapacity: number | null;
+      fullDayCapacity: number | null;
+    };
+    halfEnrollment: { id: number; childName: string | null; dayType: string };
+    fullEnrollment: { id: number; childName: string | null; dayType: string };
+    expectedFillSummary: string;
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupSessionDayTypeAdminScenario(
+  request: APIRequestContext,
+  body: { linkSupabaseAuthAdmin?: boolean } = {},
+): Promise<{ response: APIResponse; json: SetupSessionDayTypeAdminScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-session-day-type-admin-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupSessionDayTypeAdminScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupSessionDayTypeAdminScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export type SetupPublicFormScenarioResponse = {
   success: boolean;
   data?: {

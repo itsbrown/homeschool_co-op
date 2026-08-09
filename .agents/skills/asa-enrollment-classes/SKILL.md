@@ -207,6 +207,17 @@ const allEnrollments = allProgramEnrollments.filter((enrollment: any) =>
 );
 ```
 
+## F001 session day type (school-admin visibility)
+
+Enrollment-period sessions (`sessions` table) use half/full day variants on `program_enrollments.day_type` / `variant_id` (`half_day` | `full_day`). Capacity is enforced at enroll/store time by counting non-`cancelled` rows per `sessionId` + `variantId`.
+
+School-admin observability (not a separate roster product):
+
+- **Sessions** (`/schools/sessions`): `GET /api/admin/sessions` includes `halfDayEnrolled`, `fullDayEnrolled`, `halfDayWaitlist`, `fullDayWaitlist` via `server/lib/session-enrollment-counts.ts`
+- **Enrollments** (`/schools/enrollments`): `GET /api/school-admin/enrollments` returns `sessionId`, `dayType`, `variantId`, `waitlistPosition`, `childId` for Day Type column, half/full + session filters, and CSV export
+- Do **not** parse day type from denormalized `className` — use `dayType` / `variantId`
+- Do **not** confuse enrollment `sessions` with educator attendance `class_sessions`
+
 ## Grade Placement (auto-place by grade)
 
 - Class fields: `sessionId`, `autoPlaceByGrade`, `gradeLevels`, `locationId` (all required to enable Auto-place)
@@ -250,6 +261,8 @@ const allEnrollments = allProgramEnrollments.filter((enrollment: any) =>
 ## Key Files
 - `server/api/enrollments.ts` — enrollment CRUD, confirm, unenroll, bulk cancel
 - `server/api/admin-enrollment-payment.ts` — admin payment management for enrollments
+- `server/api/admin-sessions.ts` — enrollment-period sessions CRUD + fill counts
+- `server/lib/session-enrollment-counts.ts` — half/full seat + waitlist aggregates
 - `server/api/classes.ts` — class creation and management
 - `server/api/admin-classes.ts` — admin class management endpoints
 - `server/services/grade-placement-sync.ts` — Grade Placement preview/sync
@@ -257,4 +270,6 @@ const allEnrollments = allProgramEnrollments.filter((enrollment: any) =>
 - `server/lib/prorate-calculator.ts` — proration date math
 - `server/utils/cart-pricing.ts` — pricing calculations for enrollments
 - `shared/schema.ts` — `programEnrollments`, `schoolClassEnrollments`, `schoolClasses`, `classes` tables
+- `client/src/pages/schools/SessionsManagementPage.tsx` — session config + fill summary
+- `client/src/pages/schools/EnrollmentsAdminPage.tsx` — Day Type filters + CSV
 - `client/src/contexts/CartContext.tsx` — cart state with enrollment creation
