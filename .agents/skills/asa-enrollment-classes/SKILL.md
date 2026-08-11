@@ -220,6 +220,7 @@ Enrollment-period sessions (`sessions` table) use half/full day variants on `pro
 School-admin observability (not a separate roster product):
 
 - **Sessions** (`/schools/sessions`): `GET /api/admin/sessions` includes `halfDayEnrolled`, `fullDayEnrolled`, `halfDayWaitlist`, `fullDayWaitlist` via `server/lib/session-enrollment-counts.ts`
+- **Close online enrollment:** set `sessions.enrollment_open = false`. Optional `sessions.enrollment_closed_message` is returned on `GET /api/admin/sessions/open` as `closedNotices` and shown on parent `/enroll` + dashboard when no sessions are open (case-by-case / contact-us copy). Response shape is `{ sessions, closedNotices }` (clients normalize via `parseOpenSessionsResponse`).
 - **Enrollments** (`/schools/enrollments`): `GET /api/school-admin/enrollments` returns `sessionId`, `dayType`, `variantId`, `waitlistPosition`, `childId` for Day Type column, half/full + session filters, and CSV export
 - Do **not** parse day type from denormalized `className` — use `dayType` / `variantId`
 - Do **not** confuse enrollment `sessions` with educator attendance `class_sessions`

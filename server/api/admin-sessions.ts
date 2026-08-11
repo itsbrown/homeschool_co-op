@@ -103,6 +103,7 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
       .orderBy(asc(sessions.startDate), desc(sessions.sortOrder));
 
     const result = [];
+    const closedNotices: { sessionId: number; name: string; message: string }[] = [];
     for (const session of allForSchool) {
       if (session.locationId != null && parentLocationId != null) {
         if (session.locationId !== parentLocationId) continue;
@@ -115,6 +116,15 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
         continue;
       }
 
+      const closedMsg = (session.enrollmentClosedMessage || "").trim();
+      if (closedMsg && session.status !== "cancelled" && session.status !== "completed") {
+        closedNotices.push({
+          sessionId: session.id,
+          name: session.name,
+          message: closedMsg,
+        });
+      }
+
       if (session.locationId != null) {
         const loc = await getLocationCore(session.locationId);
         if (isLocationCollectingWishlist(loc)) {
@@ -123,7 +133,7 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
       }
     }
 
-    res.json(result);
+    res.json({ sessions: result, closedNotices });
   } catch (error) {
     console.error("Error fetching open sessions:", error);
     res.status(500).json({ message: "Failed to fetch open sessions" });

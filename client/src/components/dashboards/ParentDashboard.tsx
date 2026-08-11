@@ -5,11 +5,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2, Megaphone, MapPin } from "lucide-react";
-import type { EnrollmentSession } from "@shared/schema";
 import {
   formatSessionSignupCta,
   formatSessionStartDate,
   getNextOpenSessionByStartDate,
+  parseOpenSessionsResponse,
 } from "@/lib/open-sessions";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -583,15 +583,17 @@ export default function ParentDashboard() {
     enabled: !!user && !!session,
   });
 
-  const { data: openSessions = [] } = useQuery<EnrollmentSession[]>({
+  const { data: openSessionsPayload } = useQuery({
     queryKey: ["/api/admin/sessions/open"],
     enabled: !!user && !!session && childCount > 0,
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/admin/sessions/open");
-      if (!res.ok) return [];
-      return res.json();
+      if (!res.ok) return parseOpenSessionsResponse([]);
+      return parseOpenSessionsResponse(await res.json());
     },
   });
+  const openSessions = openSessionsPayload?.sessions ?? [];
+  const closedNotices = openSessionsPayload?.closedNotices ?? [];
 
   const nextOpenSession = useMemo(
     () => getNextOpenSessionByStartDate(openSessions),
@@ -869,6 +871,19 @@ export default function ParentDashboard() {
                   </Button>
                 </div>
               </div>
+            ) : closedNotices.length > 0 ? (
+              <Alert className="border-amber-200 bg-amber-50" data-testid="enroll-closed-notice-banner">
+                <Megaphone className="h-4 w-4 text-amber-800" />
+                <AlertTitle className="text-amber-950">{closedNotices[0].name} registration update</AlertTitle>
+                <AlertDescription className="flex flex-col gap-3 text-amber-950">
+                  <span className="whitespace-pre-wrap">{closedNotices[0].message}</span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href="/enroll">View enrollment info</Link>
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
             ) : (
               <Alert className="border-muted bg-muted/30" data-testid="enroll-cta-banner">
                 <BookOpen className="h-4 w-4" />

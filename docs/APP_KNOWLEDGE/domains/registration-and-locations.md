@@ -69,6 +69,7 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 | POST /api/locations 400 | `code` validated before derive | Derive code before `insertLocationSchema.parse` |
 | associate-school 500 on Replit | Self-HTTP or wrong storage | `associate-parent-school.ts` direct storage |
 | Enrollment Sessions page shows no data and create fails | `sessions.location_id` missing in older DBs while API/schema expect it | Ensure startup migration runs `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location_id ...` (`server/init-db.ts`) |
+| Need to stop self-serve Fall signup but still take case-by-case | Turning off Enrollment Open alone shows a generic empty state | Set `enrollment_closed_message` on the session (migration `257`); parents see it via `GET /api/admin/sessions/open` → `closedNotices` on `/enroll` + dashboard |
 | `/schools/students` stuck on “Loading students…” | `GET /api/school-admin/students` N+1 (all users × `getUserRolesByUserId`) or sync loading full tables | Use v5 set-based query in `school-admin.ts`; RoleSwitcher console warns are unrelated |
 
 ## Key files

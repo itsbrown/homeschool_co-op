@@ -1,4 +1,16 @@
 import type { EnrollmentSession } from "@shared/schema";
+import {
+  parseOpenSessionsResponse as parseShared,
+  type OpenSessionsResponse as SharedOpenSessionsResponse,
+  type SessionClosedNotice,
+} from "@shared/open-sessions-response";
+
+export type { SessionClosedNotice };
+export type OpenSessionsResponse = SharedOpenSessionsResponse<EnrollmentSession>;
+
+export function parseOpenSessionsResponse(data: unknown): OpenSessionsResponse {
+  return parseShared<EnrollmentSession>(data);
+}
 
 /** Earliest open session by start date (API should already sort; this is defensive). */
 export function getNextOpenSessionByStartDate(
