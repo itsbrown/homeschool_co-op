@@ -61,6 +61,10 @@ import stream from 'stream';
 import { promisify } from 'util';
 import Stripe from "stripe";
 import { getStripeClient } from "./config/stripe";
+import {
+  deleteSchoolAdminChild,
+  DeleteSchoolAdminChildError,
+} from "./lib/delete-school-admin-child";
 
 // For historical and test users (keep these for test compatibility)
 const testUsers = {
@@ -2798,38 +2802,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('🗑️ Deleting child with ID:', childId);
 
-      // First, get the child data before deleting
-      const child = await storage.getChildById(childId);
-      
-      if (!child) {
-        return res.status(404).json({ message: 'Child not found' });
+      const { child, deletedSchoolStudentIds } = await deleteSchoolAdminChild(storage, childId);
+
+      if (deletedSchoolStudentIds.length > 0) {
+        console.log('✅ Deleted school student record(s):', deletedSchoolStudentIds.join(', '));
       }
-
-      const enrollments = await storage.getEnrollmentsByChildId(childId);
-      if (enrollments.length > 0) {
-        return res.status(400).json({
-          message: 'Cannot delete child with enrollments. Remove or transfer enrollments first.',
-          enrollmentCount: enrollments.length,
-        });
-      }
-
-      // Now delete the child record
-      await storage.deleteChild(childId);
-
-      // Also delete the corresponding school student record
-      try {
-        const schoolStudents = await storage.getAllSchoolStudents();
-        const schoolStudent = schoolStudents.find(ss => ss.childId === childId);
-        
-        if (schoolStudent) {
-          await storage.deleteSchoolStudent(schoolStudent.id);
-          console.log('✅ Also deleted school student record with ID:', schoolStudent.id);
-        }
-      } catch (schoolStudentError) {
-        console.warn('⚠️ Failed to delete school student record:', schoolStudentError);
-        // Don't fail the entire operation if school student deletion fails
-      }
-
       console.log('✅ Child deleted successfully:', child.firstName, child.lastName);
 
       res.json({
@@ -2842,11 +2819,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-    } catch (error) {
+    } catch (error: any) {
+      if (error instanceof DeleteSchoolAdminChildError) {
+        return res.status(error.status).json({
+          message: error.message,
+          ...(typeof error.enrollmentCount === 'number'
+            ? { enrollmentCount: error.enrollmentCount }
+            : {}),
+        });
+      }
       console.error('❌ Error deleting child:', error);
       res.status(500).json({ 
         message: 'Failed to delete child',
-        error: error.message 
+        error: error?.message 
       });
     }
   });

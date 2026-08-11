@@ -72,7 +72,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, parseApiErrorMessage } from '@/lib/queryClient';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { useSchoolAdmin } from '@/hooks/useSchoolAdmin';
 
@@ -709,6 +709,7 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
   const [selectedChild, setSelectedChild] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [childToDelete, setChildToDelete] = useState<any>(null);
+  const [isDeletingChild, setIsDeletingChild] = useState(false);
   const [addEnrollmentDialogOpen, setAddEnrollmentDialogOpen] = useState(false);
   const [membershipPaymentDialog, setMembershipPaymentDialog] = useState<{ open: boolean; membership: any }>({ open: false, membership: null });
   const [createMembershipDialog, setCreateMembershipDialog] = useState(false);
@@ -1496,8 +1497,9 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
   };
 
   const handleDeleteChild = async () => {
-    if (!childToDelete) return;
+    if (!childToDelete || isDeletingChild) return;
 
+    setIsDeletingChild(true);
     try {
       // Delete the child using the school admin endpoint
       await apiRequest("DELETE", `/api/school-admin/children/${childToDelete.id}`);
@@ -1512,26 +1514,16 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
       
       setDeleteDialogOpen(false);
       setChildToDelete(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to delete child:", error);
-      
-      // Check if this is a blocking reference error (409 Conflict)
-      let errorMessage = "Failed to delete child. Please try again.";
-      
-      if (error?.message) {
-        // The apiRequest throws with the server message
-        errorMessage = error.message;
-      }
-      
       toast({
         title: "Cannot Delete Child",
-        description: errorMessage,
+        description: parseApiErrorMessage(error, "Failed to delete child. Please try again."),
         variant: "destructive",
       });
-      
-      // Close dialog so user can see the error
-      setDeleteDialogOpen(false);
-      setChildToDelete(null);
+      // Keep dialog open so staff can read the reason / cancel
+    } finally {
+      setIsDeletingChild(false);
     }
   };
 
@@ -2164,27 +2156,43 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
             </Dialog>
 
             {/* Delete Child Confirmation Dialog */}
-            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <AlertDialog
+              open={deleteDialogOpen}
+              onOpenChange={(open) => {
+                if (isDeletingChild) return;
+                setDeleteDialogOpen(open);
+                if (!open) setChildToDelete(null);
+              }}
+            >
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete Child</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Are you sure you want to delete {childToDelete?.firstName} {childToDelete?.lastName}? 
-                    This action cannot be undone and will remove all associated enrollment and payment history.
+                    Are you sure you want to delete {childToDelete?.firstName} {childToDelete?.lastName}?
+                    This cannot be undone. Children with enrollments must have those enrollments
+                    removed or transferred first.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel onClick={() => {
-                    setDeleteDialogOpen(false);
-                    setChildToDelete(null);
-                  }}>
+                  <AlertDialogCancel
+                    disabled={isDeletingChild}
+                    onClick={() => {
+                      setDeleteDialogOpen(false);
+                      setChildToDelete(null);
+                    }}
+                  >
                     Cancel
                   </AlertDialogCancel>
                   <AlertDialogAction
-                    onClick={handleDeleteChild}
+                    data-testid="confirm-delete-child"
+                    disabled={isDeletingChild}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void handleDeleteChild();
+                    }}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    Delete Child
+                    {isDeletingChild ? "Deleting…" : "Delete Child"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-08-10 (School admin delete child FK order)
+
+- **Bug:** Parent Profile delete called `DELETE /api/school-admin/children/:id`, which deleted `children` before `school_students` → Postgres FK 500 for orphan/dup kids; enrolled kids correctly 400.
+- **Fix:** `server/lib/delete-school-admin-child.ts` drains `school_students` then deletes child; UI uses `parseApiErrorMessage` + `preventDefault` on confirm.
+- **E2E:** `e2e/parent-profile-delete-child.spec.ts` via `setup-cart-scenario` `withDeletableChild` (cataloged in [E2E_COMMANDS.md](../../E2E_COMMANDS.md)).
+- **Unit:** `server/tests/delete-school-admin-child.test.ts`.
+
 ## 2026-08-09 (Edit Student grade save + age−5 auto-grade)
 
 - **Symptom:** School Admin → Edit Student → grade dropdown blank / changes appear not to stick.
