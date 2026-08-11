@@ -1,5 +1,14 @@
 # App knowledge changelog
 
+
+## 2026-08-11 (Close Fall registration + closed message)
+
+- Closing online session enrollment: `sessions.enrollment_open = false`.
+- New optional `sessions.enrollment_closed_message` (migration `257`) for parent-facing case-by-case / contact copy when closed.
+- `GET /api/admin/sessions/open` now returns `{ sessions, closedNotices }` (clients normalize via `parseOpenSessionsResponse`).
+- Admin edit field on Sessions Management; parents see notices on `/enroll` and dashboard when no sessions are open.
+- Prod close script: `server/scripts/close-fall-2026-enrollment-production.ts`.
+
 ## 2026-08-10 (School admin delete child FK order)
 
 - **Bug:** Parent Profile delete called `DELETE /api/school-admin/children/:id`, which deleted `children` before `school_students` → Postgres FK 500 for orphan/dup kids; enrolled kids correctly 400.

@@ -48,8 +48,11 @@ test.describe("session enrollment flow (admin sessions → parent /enroll)", () 
     await page.goto("/enroll", { waitUntil: "domcontentloaded" });
     await dismissStaffGuideIfVisible(page);
     const openRes = await openApi;
-    const openBody = (await openRes.json()) as { id: number; name: string }[];
-    expect(openBody.length).toBeGreaterThanOrEqual(openSessions.length);
+    const openBody = (await openRes.json()) as {
+      sessions: { id: number; name: string }[];
+      closedNotices?: { sessionId: number; message: string }[];
+    };
+    expect(openBody.sessions.length).toBeGreaterThanOrEqual(openSessions.length);
 
     const child = json.data!.child;
     const wizard = page.getByTestId("session-enrollment-wizard");
@@ -159,11 +162,15 @@ test.describe("session enrollment flow (admin sessions → parent /enroll)", () 
 
     const apiRes = await page.request.get("/api/admin/sessions/open", { headers: auth });
     expect(apiRes.ok()).toBeTruthy();
-    const sessions = (await apiRes.json()) as { id: number; enrollmentOpen?: boolean; name: string }[];
-    expect(sessions.length).toBe(1);
-    expect(sessions[0].name).toBe(json.data!.openSessions[0].name);
+    const body = (await apiRes.json()) as {
+      sessions: { id: number; enrollmentOpen?: boolean; name: string }[];
+      closedNotices: { sessionId: number; name: string; message: string }[];
+    };
+    expect(Array.isArray(body.sessions)).toBeTruthy();
+    expect(body.sessions.length).toBe(1);
+    expect(body.sessions[0].name).toBe(json.data!.openSessions[0].name);
     if (json.data!.closedSession) {
-      expect(sessions.some((s) => s.id === json.data!.closedSession!.id)).toBe(false);
+      expect(body.sessions.some((s) => s.id === json.data!.closedSession!.id)).toBe(false);
     }
   });
 });

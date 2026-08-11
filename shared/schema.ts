@@ -459,6 +459,11 @@ export const sessions = pgTable("sessions", {
     .notNull()
     .default("upcoming"),
   enrollmentOpen: boolean("enrollment_open").notNull().default(false),
+  /**
+   * Parent-facing note when enrollmentOpen is false (e.g. case-by-case contact instructions).
+   * Returned on GET /api/admin/sessions/open as closedNotices.
+   */
+  enrollmentClosedMessage: text("enrollment_closed_message"),
   halfDayPrice: integer("half_day_price"),
   fullDayPrice: integer("full_day_price"),
   halfDayStartTime: text("half_day_start_time"),

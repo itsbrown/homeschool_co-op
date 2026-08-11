@@ -2493,6 +2493,10 @@ async function runMigrations() {
     `);
     await db.execute(sql`
       ALTER TABLE sessions
+      ADD COLUMN IF NOT EXISTS enrollment_closed_message TEXT;
+    `);
+    await db.execute(sql`
+      ALTER TABLE sessions
       ADD COLUMN IF NOT EXISTS cover_image TEXT;
     `);
     console.log('✅ Migration completed: sessions table created');

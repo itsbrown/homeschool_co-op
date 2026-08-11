@@ -61,6 +61,8 @@ interface SessionFormData {
   endDate: string;
   status: string;
   enrollmentOpen: boolean;
+  /** Shown to parents when Enrollment Open is off */
+  enrollmentClosedMessage: string;
   halfDayPrice: string;
   fullDayPrice: string;
   halfDayStartTime: string;
@@ -82,6 +84,7 @@ const emptyForm: SessionFormData = {
   endDate: "",
   status: "upcoming",
   enrollmentOpen: true,
+  enrollmentClosedMessage: "",
   halfDayPrice: "",
   fullDayPrice: "",
   halfDayStartTime: "08:00",
@@ -104,6 +107,7 @@ function sessionToForm(s: Session): SessionFormData {
     endDate: s.endDate,
     status: s.status,
     enrollmentOpen: s.enrollmentOpen,
+    enrollmentClosedMessage: s.enrollmentClosedMessage || "",
     halfDayPrice: s.halfDayPrice != null ? String(s.halfDayPrice / 100) : "",
     fullDayPrice: s.fullDayPrice != null ? String(s.fullDayPrice / 100) : "",
     halfDayStartTime: s.halfDayStartTime || "08:00",
@@ -127,6 +131,7 @@ function formToPayload(f: SessionFormData) {
     endDate: f.endDate,
     status: f.status,
     enrollmentOpen: f.enrollmentOpen,
+    enrollmentClosedMessage: f.enrollmentClosedMessage.trim() ? f.enrollmentClosedMessage.trim() : null,
     halfDayPrice: f.halfDayPrice ? Math.round(parseFloat(f.halfDayPrice) * 100) : null,
     fullDayPrice: f.fullDayPrice ? Math.round(parseFloat(f.fullDayPrice) * 100) : null,
     halfDayStartTime: f.halfDayStartTime || null,
@@ -317,9 +322,18 @@ export default function SessionsManagementPage() {
                       <CardTitle className="text-xl flex items-center gap-2">
                         {s.name}
                         <Badge className={STATUS_COLORS[s.status] || ""}>{s.status}</Badge>
-                        {s.enrollmentOpen && <Badge variant="outline" className="border-green-500 text-green-700">Enrollment Open</Badge>}
+                        {s.enrollmentOpen ? (
+                          <Badge variant="outline" className="border-green-500 text-green-700">Enrollment Open</Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-500 text-amber-800">Enrollment Closed</Badge>
+                        )}
                       </CardTitle>
                       {s.description && <CardDescription className="mt-1">{s.description}</CardDescription>}
+                      {!s.enrollmentOpen && s.enrollmentClosedMessage && (
+                        <p className="mt-2 text-sm text-amber-900 bg-amber-50 border border-amber-100 rounded-md px-3 py-2">
+                          Closed message: {s.enrollmentClosedMessage}
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => openEdit(s)}>
@@ -459,6 +473,18 @@ export default function SessionsManagementPage() {
               <div className="flex items-center gap-3 pt-6">
                 <Switch checked={form.enrollmentOpen} onCheckedChange={(v) => setForm({ ...form, enrollmentOpen: v })} />
                 <Label>Enrollment Open</Label>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Closed enrollment message</Label>
+                <Textarea
+                  placeholder="Shown to parents when Enrollment Open is off (e.g. still accepting case-by-case — contact us)"
+                  value={form.enrollmentClosedMessage}
+                  onChange={(e) => setForm({ ...form, enrollmentClosedMessage: e.target.value })}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Parents see this on the enrollment page and dashboard when online registration is closed.
+                </p>
               </div>
             </div>
 

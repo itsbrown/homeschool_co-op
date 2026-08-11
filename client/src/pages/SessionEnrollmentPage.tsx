@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCart } from "@/contexts/CartContext";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
+import { parseOpenSessionsResponse, type SessionClosedNotice } from "@/lib/open-sessions";
 import { formatScheduleTimeRange } from "@/utils/formatScheduleTime";
 import { ArrowLeft, ArrowRight, Check, Calendar, Clock, DollarSign, User, ShoppingCart, Sun, Sunrise, Loader2, AlertCircle } from "lucide-react";
 import type { EnrollmentSession as Session } from "@shared/schema";
@@ -50,15 +51,17 @@ export default function SessionEnrollmentPage() {
     },
   });
 
-  const { data: openSessions = [], isLoading: sessionsLoading } = useQuery<Session[]>({
+  const { data: openSessionsPayload, isLoading: sessionsLoading } = useQuery({
     queryKey: ["/api/admin/sessions/open"],
     enabled: isAuthenticated,
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/admin/sessions/open");
       if (!response.ok) throw new Error("Failed to fetch sessions");
-      return response.json();
+      return parseOpenSessionsResponse(await response.json());
     },
   });
+  const openSessions: Session[] = openSessionsPayload?.sessions ?? [];
+  const closedNotices: SessionClosedNotice[] = openSessionsPayload?.closedNotices ?? [];
 
   const enrollMutation = useMutation({
     mutationFn: async (data: { childIds: number[]; sessionIds: number[]; variant: string }) => {
@@ -256,13 +259,28 @@ export default function SessionEnrollmentPage() {
                   <Loader2 className="h-6 w-6 animate-spin" />
                 </div>
               ) : openSessions.length === 0 ? (
-                <div className="text-center py-8">
-                  <AlertCircle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-muted-foreground">No sessions are currently open for enrollment.</p>
-                  <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-                    Your school admin must create a session, turn on Enrollment Open, and set half-day or
-                    full-day pricing. If you just registered, check back once your school publishes a session.
-                  </p>
+                <div className="text-center py-8 space-y-4">
+                  <AlertCircle className="h-10 w-10 text-muted-foreground mx-auto" />
+                  <p className="text-muted-foreground">No sessions are currently open for online enrollment.</p>
+                  {closedNotices.length > 0 ? (
+                    <div className="max-w-lg mx-auto space-y-3 text-left">
+                      {closedNotices.map((notice) => (
+                        <div
+                          key={notice.sessionId}
+                          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                          data-testid={`session-closed-notice-${notice.sessionId}`}
+                        >
+                          <p className="font-medium mb-1">{notice.name}</p>
+                          <p className="whitespace-pre-wrap">{notice.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+                      Your school admin must create a session, turn on Enrollment Open, and set half-day or
+                      full-day pricing. If you just registered, check back once your school publishes a session.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
