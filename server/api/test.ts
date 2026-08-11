@@ -346,8 +346,11 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Postgres required (getDb returned null)' });
     }
 
-    // Parent label so unified User Profile shows Family & Billing (campus Select E2E)
-    if (withCampuses) {
+    // Parent label so unified User Profile shows Family & Billing
+    // (campus Select E2E, delete-child E2E, etc.). users.role alone is not enough —
+    // profile meta uses user_roles for capabilities.viewFamily.
+    const withDeletableChild = req.body?.withDeletableChild === true;
+    if (withCampuses || withDeletableChild) {
       await db.insert(userRoles).values({
         userId: parent.id,
         role: 'parent',
@@ -453,12 +456,39 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
       }
     }
 
+    // Optional orphan sibling: school_students linked, no program_enrollments
+    // (reproduces Parent Profile delete FK bug / Lauren-style duplicates).
+    let deletableChild: { id: number; firstName: string; lastName: string } | null = null;
+    if (withDeletableChild) {
+      const orphan = await testDb.createTestChild(parent.id, {
+        firstName: 'Deletable',
+        lastName: 'Sibling',
+        birthdate: '2016-06-15',
+        gradeLevel: '2nd Grade',
+        schoolId: school.id,
+        parentEmail: parentEmail,
+      });
+      await db.insert(schoolStudents).values({
+        schoolId: school.id,
+        childId: orphan.id,
+        grade: orphan.gradeLevel || '2nd Grade',
+        status: 'active',
+        enrollmentDate: new Date(),
+      });
+      deletableChild = {
+        id: orphan.id,
+        firstName: orphan.firstName,
+        lastName: orphan.lastName,
+      };
+    }
+
     console.log(`✅ Created cart test scenario:
       - Parent: ${parentEmail}
       - Child: ${child.firstName} ${child.lastName} (ID: ${child.id})
       - Class: ${classItem.title} (ID: ${classItem.id})
       - Enrollment: ID ${enrollment.id} (status: ${enrollment.status}, totalCost: ${enrollment.totalCost}, remainingBalance: ${enrollment.remainingBalance})
       - School: ${school.name} (Code: ${school.registrationCode})
+      ${deletableChild ? `- Deletable child: ${deletableChild.firstName} ${deletableChild.lastName} (ID: ${deletableChild.id})` : ''}
     `);
 
     res.json({
@@ -481,6 +511,7 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
           firstName: child.firstName,
           lastName: child.lastName
         },
+        ...(deletableChild ? { deletableChild } : {}),
         class: {
           id: classItem.id,
           title: classItem.title,

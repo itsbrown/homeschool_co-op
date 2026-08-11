@@ -21,6 +21,8 @@ export type SetupCartScenarioResponse = {
       remainingBalance?: number;
     };
     child: { id: number; firstName: string; lastName: string };
+    /** Present when seed used `withDeletableChild: true` (no enrollments; has school_students). */
+    deletableChild?: { id: number; firstName: string; lastName: string };
     class?: { id: number; title: string; price: number };
     school?: {
       id: number;

@@ -70,6 +70,12 @@ waitlist        → enrolled           (spot opens up)
 - Do **not** use legacy `DELETE /api/enrollments/:id` for admin Remove — that path historically only hit mem/file storage and returned `404 Enrollment not found` for Postgres roster rows
 - `CombinedStorage.removeEnrollment` must delete from Postgres (`deleteProgramEnrollment`) when the row exists in DB
 
+### School-admin delete child (Parent Profile)
+- Endpoint: `DELETE /api/school-admin/children/:id` → `deleteSchoolAdminChild`
+- **400** if any `program_enrollments` rows exist (remove/transfer first)
+- Delete **`school_students` first**, then `children` — `school_students.child_id` has no ON DELETE CASCADE
+- E2E: `e2e/parent-profile-delete-child.spec.ts` (`setup-cart-scenario` + `withDeletableChild`)
+
 ### Bulk Cancel (Cart Clear)
 - Endpoint: `POST /api/enrollments/cancel-multiple`
 - Validates all enrollment IDs belong to the authenticated parent's children

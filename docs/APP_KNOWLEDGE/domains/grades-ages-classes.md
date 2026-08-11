@@ -43,11 +43,13 @@ How child grade/age relate to classes and enrollment **today**.
 | Grade dropdown shows placeholder after load | Select values (`1st`) ≠ stored labels (`1st Grade`) | Use `GRADE_LEVEL_OPTIONS` labels as Select values; normalize on GET/PUT |
 | Grade “didn't save” after Update | `staleTime: Infinity` + no query invalidation on students list | `invalidateQueries(['/api/school-admin/students'])` after PUT |
 | DOB date input blank | ISO datetime in `birthdate` | `toDateInputValue()` → `YYYY-MM-DD` |
+| Parent Profile trash “Delete Child” fails | `DELETE /api/school-admin/children/:id` — **400** if any `program_enrollments`; historically **500** when deleting `children` before `school_students` (no CASCADE) | Use `deleteSchoolAdminChild` (school_students first). E2E: `e2e/parent-profile-delete-child.spec.ts` (`withDeletableChild`) |
 
 ## Key files
 
 - `shared/schema.ts` — `children`, `classes`, `programEnrollments`
 - `shared/grade-levels.ts` — normalize, age−5 helpers, `GRADE_LEVEL_OPTIONS`
+- `server/lib/delete-school-admin-child.ts` — school-admin hard delete (FK-safe order)
 - `server/api/classes.ts` — enroll (no grade check)
 - `server/api/school-admin.ts` — `GET/PUT /students/:id`, `GET /classes/:id/roster`
 - `.agents/skills/asa-enrollment-classes/SKILL.md` — enrollment lifecycle
