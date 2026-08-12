@@ -15,6 +15,7 @@ import { fulfillBalancePaymentIntent } from './fulfill-balance-payment-intent';
 import { sendPaymentConfirmationEmail } from './email-service';
 import { resolveMembershipReserveForPaymentIntent } from './resolve-membership-reserve-for-payment';
 import { StripePaymentPlanService } from '../services/stripe-payment-plans';
+import { parseDiscountSnapshotFromPaymentIntentMetadata } from './checkout-discount-snapshot';
 
 export type FinalizeSucceededPaymentIntentResult = {
   appliedCents: number;
@@ -173,6 +174,8 @@ async function ensurePaymentRecord(
     throw new Error(`Cannot create payment record: no valid school ID for parent ${parentEmail}`);
   }
 
+  const discountSnapshot = parseDiscountSnapshotFromPaymentIntentMetadata(meta);
+
   const paymentRecord: InsertPayment = {
     schoolId,
     parentId: parentUser?.id || null,
@@ -196,6 +199,13 @@ async function ensurePaymentRecord(
       installmentNumber: 1,
       totalInstallments: 1,
       isFirstInstallment: true,
+      ...(discountSnapshot
+        ? {
+            discountSnapshot,
+            subtotalAmount: discountSnapshot.subtotal,
+            discountTotal: discountSnapshot.discountTotal,
+          }
+        : {}),
       ...(creditsAppliedCents > 0
         ? {
             creditsAppliedCents,
@@ -305,8 +315,47 @@ export async function finalizeSucceededPaymentIntent(
     existingPayment,
   );
 
+  // Persist discount audit on stripe_payment_history (parent Payment History UI + admin reports).
+  let stripeHistoryId: number | null = null;
+  try {
+    const existingStripeHistory = await storage.getStripePaymentByIntentId(paymentIntent.id);
+    if (existingStripeHistory?.id) {
+      stripeHistoryId = existingStripeHistory.id;
+    } else {
+      const parentEmail = (meta.parentEmail || '').trim();
+      const parentUser = parentEmail ? await storage.getUserByEmail(parentEmail) : null;
+      if (parentUser?.id) {
+        const discountSnapshot = parseDiscountSnapshotFromPaymentIntentMetadata(meta);
+        const customerId =
+          typeof paymentIntent.customer === 'string'
+            ? paymentIntent.customer
+            : paymentIntent.customer && typeof paymentIntent.customer === 'object'
+              ? (paymentIntent.customer as { id?: string }).id || `cus_unknown_${Date.now()}`
+              : `cus_unknown_${Date.now()}`;
+        const saved = await storage.saveStripePayment({
+          userId: parentUser.id,
+          paymentIntentId: paymentIntent.id,
+          customerId,
+          subscriptionId: null,
+          amount: parseIntegerCents(paymentIntent.amount) ?? 0,
+          currency: paymentIntent.currency || 'usd',
+          status: 'succeeded',
+          paymentMethod: paymentIntent.payment_method_types?.[0] || 'card',
+          description: payment?.description || `Cart checkout ${paymentIntent.id}`,
+          stripeCreatedAt: new Date((paymentIntent.created || Math.floor(Date.now() / 1000)) * 1000),
+          subtotalAmount: discountSnapshot?.subtotal ?? null,
+          discountTotal: discountSnapshot?.discountTotal ?? null,
+          discountSnapshot: discountSnapshot ?? null,
+        } as any);
+        stripeHistoryId = saved?.id ?? null;
+      }
+    }
+  } catch (histErr) {
+    console.warn('⚠️ Failed to persist stripe_payment_history discount snapshot (non-blocking):', histErr);
+  }
+
   const fulfillment = await fulfillBalancePaymentIntent(paymentIntent, enrollmentIds, {
-    paymentHistoryId: payment?.id ?? existingPayment?.id,
+    paymentHistoryId: stripeHistoryId ?? undefined,
   });
 
   let scheduledRowsCreated = 0;

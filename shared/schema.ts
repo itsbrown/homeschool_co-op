@@ -1039,6 +1039,12 @@ export const stripePaymentHistory = pgTable("stripe_payment_history", {
   // Payment details (amounts in cents)
   amount: integer("amount").notNull(),
   currency: text("currency").default("usd").notNull(),
+  /** Pre-discount class subtotal in cents (when discounts applied at checkout). */
+  subtotalAmount: integer("subtotal_amount"),
+  /** Total discount in cents from checkout pricing. */
+  discountTotal: integer("discount_total"),
+  /** Normalized discount audit blob (appliedDiscounts[], freeEnrollmentIds, etc.). */
+  discountSnapshot: jsonb("discount_snapshot"),
   
   // Payment status from Stripe
   status: text("status", { 
@@ -1061,6 +1067,9 @@ export const insertStripePaymentHistorySchema = createInsertSchema(stripePayment
     subscriptionId: z.string().nullable().default(null),
     paymentMethod: z.string().nullable().default(null),
     description: z.string().nullable().default(null),
+    subtotalAmount: z.number().nullable().optional(),
+    discountTotal: z.number().nullable().optional(),
+    discountSnapshot: z.any().nullable().optional(),
   });
 export type InsertStripePaymentHistory = z.infer<typeof insertStripePaymentHistorySchema>;
 export type StripePaymentHistory = typeof stripePaymentHistory.$inferSelect;
