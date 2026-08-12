@@ -176,6 +176,21 @@ discounts:
 - `combinableWithOthers` — stacking rules
 - `priority` — higher priority discounts apply first
 
+### Free After Threshold (school-level, not a `discounts` row)
+- **Config:** `schools.free_after_threshold_enabled` / `schools.free_after_threshold` (default off / 3).
+- **Authoritative path:** `server/utils/cart-pricing.ts` `calculateCartPricing`.
+- **Money path:** `create-payment-intent` sizes free lines as $0 outstanding; fulfill applies `Free After Threshold` comps from `discountSnapshot`, then `allocatePaymentByBalance`.
+
+### Promo / sibling / automatic cart discounts (money path)
+- **Cart pricing:** Percentage/fixed promos and sibling discounts are **cart-level lumps** on `subtotal` (`itemPrices` stay full list/outstanding). Result: `pricing.total = subtotal - totalDiscountAmount`.
+- **Money path (required — do not stop at UI/snapshot):**
+  1. `create-payment-intent` builds `discountSnapshot` with `compEnrollmentAmounts`: allocate `(totalDiscountAmount - freeAfterThree)` **proportionally** across enrollment outstanding balances (`allocateCartLevelDiscountComps`). Free-after enrollments are excluded.
+  2. PI sizing uses `checkoutRemainingBalanceCentsForPi`: free-after → `$0`; otherwise `outstanding - compEnrollmentAmounts[id]`.
+  3. On fulfill (`applyClassPoolToEnrollments` → `applyCheckoutDiscountCompsFromSnapshot`): free-after comps first, then cart-level comps (`compReason` starts with `Checkout Cart Discount`), then `allocatePaymentByBalance`.
+- **Pitfall (fixed 2026-08-11):** Snapshot/UI showed promo % off but PI used full enrollment outstanding — charge ignored the code. Always assert PI amount == `pricing.total` (+ membership − credits).
+- **Key file:** `server/lib/checkout-discount-snapshot.ts`
+- **Tests:** `checkout-discount-snapshot.test.ts`, `apply-cart-discount-comps.test.ts`, `apply-free-after-comps.test.ts`.
+
 ## Comp & Prorate on Enrollments
 
 ### Comp (Admin-Applied Discounts)

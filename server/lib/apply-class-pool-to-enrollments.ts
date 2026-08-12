@@ -1,6 +1,5 @@
 import { computeEffectiveBalance } from '@shared/schema';
 import { storage } from '../storage';
-import { splitCentsEvenly } from '../api/billing';
 import {
   enrollmentPoolCentsForBalanceIntent,
   membershipCentsReservedForPaymentIntent,
@@ -8,6 +7,11 @@ import {
   totalCentsForBalanceAllocation,
 } from './balance-payment-metadata';
 import { resolveMembershipReserveForPaymentIntent } from './resolve-membership-reserve-for-payment';
+import { allocatePaymentByBalance } from './splitIntegerEvenly';
+import {
+  applyCheckoutDiscountCompsFromSnapshot,
+  parseDiscountSnapshotFromPaymentIntentMetadata,
+} from './checkout-discount-snapshot';
 import type Stripe from 'stripe';
 
 export type ApplyClassPoolResult = {
@@ -20,6 +24,10 @@ export type ApplyClassPoolResult = {
 /**
  * Apply the class portion of a balance/cart PaymentIntent to program enrollments.
  * Caps each share at remaining owed so webhook replays do not over-credit.
+ *
+ * Checkout discount comps (free-after + promo/sibling/automatic) are applied from
+ * PI metadata before allocation so discounted lines have the correct effective
+ * balance; cash is then split by balance (not evenly).
  */
 export async function applyClassPoolToEnrollments(
   paymentIntent: Pick<Stripe.PaymentIntent, 'amount' | 'metadata'>,
@@ -29,8 +37,13 @@ export async function applyClassPoolToEnrollments(
     return { enrollmentIds: [], appliedCents: 0, skippedCents: 0, classPoolCents: 0 };
   }
 
-  const amountCents = typeof paymentIntent.amount === 'number' ? paymentIntent.amount : 0;
   const meta = paymentIntent.metadata as Record<string, string | undefined>;
+  const discountSnapshot = parseDiscountSnapshotFromPaymentIntentMetadata(meta);
+  if (discountSnapshot) {
+    await applyCheckoutDiscountCompsFromSnapshot(discountSnapshot);
+  }
+
+  const amountCents = typeof paymentIntent.amount === 'number' ? paymentIntent.amount : 0;
   const { creditsAppliedCents, originalAmountCents } = parseBalanceIntentCredits(meta);
 
   const resolved = await resolveMembershipReserveForPaymentIntent(paymentIntent);
@@ -55,19 +68,58 @@ export async function applyClassPoolToEnrollments(
     resolved?.classPoolCents ?? enrollmentPoolCentsForBalanceIntent(totalCharged, membershipCents);
 
   if (classPoolCents <= 0) {
+    // Still mark enrollments enrolled when comps alone zeroed them (100% promo / free-after).
+    const maybeZeroed = new Set<number>([
+      ...(discountSnapshot?.freeEnrollmentIds ?? []),
+      ...Object.keys(discountSnapshot?.compEnrollmentAmounts ?? {}).map(Number),
+    ]);
+    for (const enrollmentId of maybeZeroed) {
+      if (!Number.isFinite(enrollmentId) || enrollmentId <= 0) continue;
+      const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+      if (!enrollment) continue;
+      const owed = computeEffectiveBalance(
+        enrollment.totalCost ?? 0,
+        enrollment.totalPaid ?? 0,
+        enrollment.compAmountCents ?? 0,
+      );
+      if (owed <= 0 && enrollment.status !== 'enrolled') {
+        await storage.updateProgramEnrollment(enrollment.id, {
+          remainingBalance: 0,
+          paymentStatus: 'completed',
+          paymentSystemVersion: 'v2_stripe',
+          status: 'enrolled',
+        });
+      }
+    }
     return { enrollmentIds: [], appliedCents: 0, skippedCents: 0, classPoolCents: 0 };
   }
 
-  const allocation = splitCentsEvenly(classPoolCents, enrollmentIds.length);
+  const balanceInputs: { enrollmentId: number; effectiveBalanceCents: number }[] = [];
+  for (const enrollmentId of enrollmentIds) {
+    const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      balanceInputs.push({ enrollmentId, effectiveBalanceCents: 0 });
+      continue;
+    }
+    const owed = computeEffectiveBalance(
+      enrollment.totalCost ?? 0,
+      enrollment.totalPaid ?? 0,
+      enrollment.compAmountCents ?? 0,
+    );
+    balanceInputs.push({ enrollmentId, effectiveBalanceCents: owed });
+  }
+
+  const allocation = allocatePaymentByBalance(classPoolCents, balanceInputs);
+  const shareByEnrollmentId = new Map(
+    allocation.map((row) => [row.enrollmentId, row.amountCents]),
+  );
 
   let appliedCents = 0;
   let skippedCents = 0;
   const updatedIds: number[] = [];
 
-  for (let i = 0; i < enrollmentIds.length; i++) {
-    const enrollmentId = enrollmentIds[i];
-    const shareCents = allocation[i] ?? 0;
-    if (shareCents <= 0) continue;
+  for (const enrollmentId of enrollmentIds) {
+    const shareCents = shareByEnrollmentId.get(enrollmentId) ?? 0;
 
     const enrollment = await storage.getProgramEnrollmentById(enrollmentId);
     if (!enrollment) {
@@ -78,6 +130,26 @@ export async function applyClassPoolToEnrollments(
     const totalCost = enrollment.totalCost ?? 0;
     const compAmount = enrollment.compAmountCents ?? 0;
     const owedBefore = computeEffectiveBalance(totalCost, enrollment.totalPaid ?? 0, compAmount);
+
+    // Free-after (or already paid) lines: ensure enrolled status even with $0 cash.
+    if (owedBefore <= 0) {
+      if (shareCents > 0) {
+        skippedCents += shareCents;
+      }
+      if (enrollment.status !== 'enrolled' || (enrollment.remainingBalance ?? 0) > 0) {
+        await storage.updateProgramEnrollment(enrollment.id, {
+          remainingBalance: 0,
+          paymentStatus: 'completed',
+          paymentSystemVersion: 'v2_stripe',
+          status: 'enrolled',
+        });
+        updatedIds.push(enrollment.id);
+      }
+      continue;
+    }
+
+    if (shareCents <= 0) continue;
+
     const toApply = Math.min(shareCents, owedBefore);
     if (toApply <= 0) {
       skippedCents += shareCents;

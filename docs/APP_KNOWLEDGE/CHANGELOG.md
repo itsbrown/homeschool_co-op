@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-08-11 (Promo/sibling discounts now size Stripe PI)
+
+- **Bug:** Cart/UI applied promo % codes via `calculateCartPricing`, but `create-payment-intent` still charged full enrollment outstanding; fulfill only even-split cash (no cart-level comps).
+- **Fix:** `discountSnapshot.compEnrollmentAmounts` — proportional allocation of cart-level discount; PI remaining = outstanding − comps; fulfill `applyCheckoutDiscountCompsFromSnapshot` writes `Checkout Cart Discount` comps before balance-aware cash split. Free-after uses the same snapshot helpers.
+- **Files:** `server/lib/checkout-discount-snapshot.ts`, `server/api/stripe.ts`, `server/lib/apply-class-pool-to-enrollments.ts`, `server/services/stripe-payment-plans.ts`, `server/lib/finalize-succeeded-payment-intent.ts`.
+- **Tests:** `checkout-discount-snapshot.test.ts`, `apply-cart-discount-comps.test.ts`, `apply-free-after-comps.test.ts`.
+- **Skill:** `asa-payment-patterns` promo money-path section.
 
 ## 2026-08-11 (Close Fall registration + closed message)
 

@@ -56,6 +56,26 @@ export interface PaymentPlanData {
   savePaymentMethodForAutoPay?: boolean;
   /** After success, set users.auto_pay_enabled when card is synced. */
   enableAutoPayAfterCheckout?: boolean;
+  /** Server-built checkout discount audit (free-after, sibling, promo). Stored on PI metadata. */
+  discountSnapshot?: {
+    subtotal: number;
+    discountTotal: number;
+    freeAfterThree?: number;
+    freeItemIds?: string[];
+    freeEnrollmentIds?: number[];
+    freeEnrollmentAmounts?: Record<string, number>;
+    /** Promo/sibling/automatic comps allocated per enrollment (cents). */
+    compEnrollmentAmounts?: Record<string, number>;
+    threshold?: number;
+    appliedDiscounts?: Array<{
+      source: string;
+      name: string;
+      code?: string | null;
+      amount: number;
+      enrollmentIds?: number[];
+      freeItemIds?: string[];
+    }>;
+  } | null;
 }
 
 export interface PaymentPhase {
@@ -171,58 +191,7 @@ export class StripePaymentPlanService {
 
     const appliedCredits = Math.floor(data.creditsAppliedCents ?? 0);
 
-    if (skipStripeApiInTests()) {
-      // Inline PaymentIntent when tests are not exercising the Stripe client mock
-      paymentIntent = {
-        id: `pi_test_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-        object: 'payment_intent',
-        amount: firstPhase.amount,
-        currency: 'usd',
-        client_secret: `pi_test_${Date.now()}_secret_${Math.random().toString(36).substring(7)}`,
-        customer: customer.id,
-        description: `ASA Learning Platform - ${data.paymentPlan} payment (${firstPhase.description})`,
-        metadata: {
-          enrollmentIds: JSON.stringify(data.enrollmentIds),
-          parentEmail: data.parentEmail,
-          paymentPlan: data.paymentPlan,
-          paymentFrequency: data.paymentFrequency ?? 'one_time',
-          totalAmount: data.totalAmount.toString(),
-          installmentNumber: '1',
-          totalInstallments: phases.length.toString(),
-          createdBy: 'asa_payment_system',
-          version: 'v2_stripe_simplified',
-          ...(appliedCredits > 0
-            ? {
-                creditsAppliedCents: String(appliedCredits),
-                originalAmountCents: String(
-                  data.originalAmountCents != null && data.originalAmountCents > 0
-                    ? Math.floor(data.originalAmountCents)
-                    : data.totalAmount + appliedCredits
-                ),
-                ...(data.creditUserId != null && data.creditUserId > 0
-                  ? { userId: String(Math.floor(data.creditUserId)) }
-                  : {}),
-                ...(data.membership
-                  ? (() => {
-                      const split = allocateVolunteerCreditsWaterfall({
-                        creditsCents: appliedCredits,
-                        membershipOwedCents: data.membership!.amount,
-                      });
-                      return {
-                        creditAllocation: JSON.stringify(split),
-                      };
-                    })()
-                  : {}),
-              }
-            : {}),
-        },
-        status: 'requires_payment_method',
-        created: Math.floor(Date.now() / 1000)
-      } as Stripe.PaymentIntent;
-      console.log('🧪 Test mode: Created mock PaymentIntent:', paymentIntent.id);
-    } else {
-      const stripe = await getStripeClient();
-      // Build metadata including membership if present
+    const buildPaymentMetadata = (): Record<string, string> => {
       const paymentMetadata: Record<string, string> = {
         enrollmentIds: JSON.stringify(data.enrollmentIds),
         parentEmail: data.parentEmail,
@@ -260,23 +229,55 @@ export class StripePaymentPlanService {
           paymentMetadata.creditAllocation = JSON.stringify(split);
         }
       }
-      
-      // Add membership metadata if present (derived server-side, not from client)
+
       if (data.membership) {
         paymentMetadata.hasMembership = 'true';
         paymentMetadata.membershipParentUserId = data.membership.parentUserId.toString();
         paymentMetadata.membershipSchoolId = data.membership.schoolId.toString();
         paymentMetadata.membershipAmount = data.membership.amount.toString();
         paymentMetadata.membershipYear = data.membership.year.toString();
-        
-        // Include discount info if a discount was applied
+
         if (data.membership.discountId) {
           paymentMetadata.membershipDiscountId = data.membership.discountId.toString();
           paymentMetadata.membershipDiscountName = data.membership.discountName || '';
-          paymentMetadata.membershipOriginalAmount = (data.membership.originalAmount || data.membership.amount).toString();
-          paymentMetadata.membershipDiscountAmount = (data.membership.discountAmount || 0).toString();
+          paymentMetadata.membershipOriginalAmount = (
+            data.membership.originalAmount || data.membership.amount
+          ).toString();
+          paymentMetadata.membershipDiscountAmount = (
+            data.membership.discountAmount || 0
+          ).toString();
         }
-        
+      }
+
+      if (data.discountSnapshot && data.discountSnapshot.discountTotal > 0) {
+        paymentMetadata.discountSnapshot = JSON.stringify(data.discountSnapshot);
+        paymentMetadata.subtotalAmount = String(data.discountSnapshot.subtotal ?? 0);
+        paymentMetadata.discountTotal = String(data.discountSnapshot.discountTotal ?? 0);
+      }
+
+      return paymentMetadata;
+    };
+
+    if (skipStripeApiInTests()) {
+      // Inline PaymentIntent when tests are not exercising the Stripe client mock
+      paymentIntent = {
+        id: `pi_test_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        object: 'payment_intent',
+        amount: firstPhase.amount,
+        currency: 'usd',
+        client_secret: `pi_test_${Date.now()}_secret_${Math.random().toString(36).substring(7)}`,
+        customer: customer.id,
+        description: `ASA Learning Platform - ${data.paymentPlan} payment (${firstPhase.description})`,
+        metadata: buildPaymentMetadata(),
+        status: 'requires_payment_method',
+        created: Math.floor(Date.now() / 1000)
+      } as Stripe.PaymentIntent;
+      console.log('🧪 Test mode: Created mock PaymentIntent:', paymentIntent.id);
+    } else {
+      const stripe = await getStripeClient();
+      const paymentMetadata = buildPaymentMetadata();
+
+      if (data.membership) {
         console.log('🎫 Adding membership metadata to payment intent:', {
           parentUserId: data.membership.parentUserId,
           schoolId: data.membership.schoolId,

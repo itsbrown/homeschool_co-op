@@ -298,6 +298,7 @@ School-admin **Financial Reports → Collections Overview** counts `summary.auto
 | Effective balance | `shared/schema.ts` — `computeEffectiveBalance`, `resolveEnrollmentEffectiveBalance` |
 | Collections / autopay history | `server/lib/financial-collections.ts`, `client/.../CollectionsOverviewTab.tsx` |
 | Cart / checkout pricing | `server/utils/cart-pricing.ts`, `server/api/stripe.ts` |
+| Checkout discount money path (promo / sibling / free-after) | `server/lib/checkout-discount-snapshot.ts` → PI sizing + fulfill comps; see skill Discount System |
 | Credit ledger | `server/services/` (FIFO consumption), `unified_credit_usage_logs` |
 | Family balance (email/UI) | `server/lib/family-balance-email.ts` |
 | Correction email | `server/lib/account-correction-email.ts`, `server/scripts/send-account-correction-email.ts` |
@@ -330,3 +331,4 @@ When volunteer credits cover the full cart, `POST /api/stripe/create-payment-int
 | Admin shows $441 “paid” per session; Payments tab empty; PI `requires_payment_method` | Phantom `total_paid` — ledger updated without succeeded payment | Reset via `fix-kendra-crofoot-session-phantom-paid-production.ts` pattern; implement [ledger parity plan](../../plans/enrollment-ledger-stripe-parity.md) |
 | Collections Overview **Auto-pay on (0)** but parents have plans / `auto_pay_enabled` | Was: `loadParentInfo` used `db.execute().rows` (undefined under postgres-js); catch → all false | Fixed: select `users.autoPayEnabled` via drizzle in `loadParentInfo` |
 | Apply credits → “Checkout did not finish loading” | Credits cover cart → no `clientSecret`; recovery gate used pre-credit `actualPayableAmount` | Gate on `displayPayableAmount` + `!creditOnlyEligible` |
+| Promo code shows in cart but Stripe charges full tuition | create-PI snapshotted promo in UI only; sized PI from full outstanding; fulfill ignored promo comps | **Fixed (2026-08-11):** `compEnrollmentAmounts` + PI remaining − comps + fulfill cart-level comps; see skill Promo money path |
