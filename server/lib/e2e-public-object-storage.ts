@@ -5,11 +5,17 @@ const E2E_PUBLIC_ROOT = path.join(process.cwd(), "uploads", "e2e-public");
 const E2E_PRIVATE_ROOT = path.join(process.cwd(), "uploads", "e2e-private");
 
 export function isE2eObjectStorageStubEnabled(): boolean {
-  return (
-    process.env.NODE_ENV !== "production" &&
-    (process.env.PLAYWRIGHT_WEB_SERVER === "true" ||
-      process.env.E2E_STUB_FORM_UPLOADS === "true")
-  );
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+  if (process.env.PLAYWRIGHT_WEB_SERVER === "true") {
+    return true;
+  }
+  if (process.env.E2E_STUB_FORM_UPLOADS === "true") {
+    return true;
+  }
+  // Local `npm run dev` without Replit Object Storage (same disk stub as Playwright).
+  return !process.env.PRIVATE_OBJECT_DIR?.trim();
 }
 
 export function e2eObjectLocalPath(objectPath: string): string | null {

@@ -63,6 +63,7 @@ Apply **additive** SQL only when columns/tables are missing:
 |------|------|
 | `server/migrations/locations-schema-align.sql` | Location table/column errors (42703) |
 | `server/migrations/f001-phase1-schema.sql` | F001 session / `family_payment_plans` / enrollment columns |
+| `server/migrations/255-store-affiliate-products.sql` | Public store Amazon affiliate columns on `store_products` — apply **before or with** deploy; Drizzle selects `product_kind` / `affiliate_url` / `asin` / `affiliate_metadata` for all merch |
 
 Verify with read-only checks or `scripts/verify-f001-schema.mjs` against a **non-prod** mirror when possible.
 

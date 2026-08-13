@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { ExternalLink } from "lucide-react";
 import type { StoreCatalogItem } from "@/lib/store-catalog";
 
 type StoreCatalogItemActionsProps = {
@@ -23,6 +24,20 @@ export function StoreCatalogItemActions({
     : "flex flex-col sm:flex-row flex-wrap gap-2 w-full";
 
   if (item.listingType === "product") {
+    if (item.productKind === "affiliate" && item.affiliateUrl) {
+      return (
+        <Button asChild className={buttonClass} data-testid={`store-buy-amazon-${item.listingId}`}>
+          <a
+            href={item.affiliateUrl}
+            target="_blank"
+            rel="noopener noreferrer sponsored"
+          >
+            Buy on Amazon
+            <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
+          </a>
+        </Button>
+      );
+    }
     return (
       <Button
         disabled={item.inStock === false}

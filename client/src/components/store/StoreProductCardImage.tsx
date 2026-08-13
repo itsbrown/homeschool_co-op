@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +16,15 @@ export function StoreProductCardImage({
   className,
   "data-testid": dataTestId,
 }: StoreProductCardImageProps) {
-  if (!src) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  const showPlaceholder = !src || failed;
+
+  if (showPlaceholder) {
     return (
       <div
         className={cn(
@@ -24,6 +32,7 @@ export function StoreProductCardImage({
           className,
         )}
         aria-hidden
+        data-testid={dataTestId}
       >
         <Package className="h-10 w-10 text-muted-foreground/40" />
       </div>
@@ -38,6 +47,7 @@ export function StoreProductCardImage({
         className="h-full w-full object-cover"
         loading="lazy"
         data-testid={dataTestId}
+        onError={() => setFailed(true)}
       />
     </div>
   );

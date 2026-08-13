@@ -42,6 +42,13 @@ export function usePublicStoreCart(schoolSlug: string) {
   };
 
   const addProduct = (item: StoreCatalogItem) => {
+    if (item.productKind === "affiliate") {
+      toast({
+        title: "Buy on Amazon",
+        description: "This item is purchased on Amazon, not through the store cart.",
+      });
+      return;
+    }
     const next = addProductLine(cart, {
       listingId: item.listingId,
       listingType: "product",

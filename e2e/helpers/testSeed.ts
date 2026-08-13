@@ -423,8 +423,19 @@ export type SetupPublicStoreScenarioResponse = {
       name: string;
       priceCents: number;
       imageUrl: string | null;
+      productKind?: "owned" | "affiliate";
     };
     listing: { id: number; isPublished: boolean };
+    affiliateProduct?: {
+      id: number;
+      name: string;
+      priceCents: number;
+      imageUrl: string | null;
+      productKind: "affiliate";
+      affiliateUrl: string;
+      asin: string;
+    };
+    affiliateListing?: { id: number; isPublished: boolean };
     class?: {
       id: number;
       title: string;

@@ -47,7 +47,15 @@ router.post("/request-url", supabaseAuth, async (req: Request, res: Response) =>
     });
   } catch (error) {
     console.error("Error generating upload URL:", error);
-    res.status(500).json({ error: "Failed to generate upload URL" });
+    const message = error instanceof Error ? error.message : "";
+    const missingObjectStorage = /PRIVATE_OBJECT_DIR|PUBLIC_OBJECT_SEARCH_PATHS/.test(
+      message,
+    );
+    return res.status(missingObjectStorage ? 503 : 500).json({
+      error: missingObjectStorage
+        ? "Object storage is not configured (PRIVATE_OBJECT_DIR). Merch and affiliate photos use the same upload path."
+        : "Failed to generate upload URL",
+    });
   }
 });
 

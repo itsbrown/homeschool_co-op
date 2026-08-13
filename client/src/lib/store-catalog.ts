@@ -13,6 +13,8 @@ export type StoreCatalogItem = {
   endDate?: string | null;
   membersOnly: boolean;
   inStock?: boolean;
+  productKind?: "owned" | "affiliate";
+  affiliateUrl?: string | null;
 };
 
 export function storeItemDetailPath(

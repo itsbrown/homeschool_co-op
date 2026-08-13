@@ -51,10 +51,12 @@ export function StoreCatalogCard({
       <CardContent className="flex flex-1 flex-col gap-3 p-4 pt-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="font-normal text-xs">
-            {storeListingTypeLabel(item.listingType)}
+            {storeListingTypeLabel(item.listingType, item.productKind)}
           </Badge>
           {item.membersOnly && <Badge variant="secondary">Members only</Badge>}
-          {item.listingType === "product" && item.inStock === false && (
+          {item.listingType === "product" &&
+            item.productKind !== "affiliate" &&
+            item.inStock === false && (
             <Badge variant="destructive">Out of stock</Badge>
           )}
         </div>

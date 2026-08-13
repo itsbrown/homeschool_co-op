@@ -3802,6 +3802,16 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
         typeof req.body?.sessionCoverImage === 'string' ? req.body.sessionCoverImage : null,
       withPublishedSessionListing: req.body?.withPublishedSessionListing === true,
       withParent: req.body?.withParent === true,
+      withAffiliateProduct: req.body?.withAffiliateProduct === true,
+      affiliateUrl: typeof req.body?.affiliateUrl === 'string' ? req.body.affiliateUrl : undefined,
+      affiliateAsin: typeof req.body?.affiliateAsin === 'string' ? req.body.affiliateAsin : undefined,
+      affiliateName: typeof req.body?.affiliateName === 'string' ? req.body.affiliateName : undefined,
+      affiliatePriceCents:
+        typeof req.body?.affiliatePriceCents === 'number'
+          ? req.body.affiliatePriceCents
+          : undefined,
+      affiliateImageUrl:
+        typeof req.body?.affiliateImageUrl === 'string' ? req.body.affiliateImageUrl : null,
     });
 
     let adminSupabaseLinked = false;

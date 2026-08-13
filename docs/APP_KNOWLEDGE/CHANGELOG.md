@@ -1,5 +1,13 @@
 # App knowledge changelog
 
+## 2026-08-13 (Public store — Amazon affiliate products)
+
+- `store_products` affiliate fields (`product_kind`, `affiliate_url`, `asin`, `affiliate_metadata`); additive SQL `server/migrations/255-store-affiliate-products.sql` (apply on prod Neon after merge; never `db:push`).
+- Admin Products tab: paste Associates `/dp/ASIN`, `amzn.to`, or search URL **with ISBN in `k=`** → `POST …/affiliate/preview` (PA-API 5.0 or non-prod mock) → create. Storefront CTA is **Buy on Amazon** (external); never cart/Stripe. Snapshot/checkout returns `400` `AFFILIATE_NOT_PURCHASABLE`.
+- Cover upload is the same merch `ImageUpload` / `storeProducts` path. Local `npm run dev` without `PRIVATE_OBJECT_DIR` uses the E2E disk stub. Non-prod store-admin routes auto-apply 251+255 via `ensurePublicStoreSchema`.
+- Env for live title/image: `AMAZON_PAAPI_ACCESS_KEY`, `AMAZON_PAAPI_SECRET_KEY`, `AMAZON_PAAPI_PARTNER_TAG` (optional `AMAZON_PAAPI_MOCK=1`).
+- E2E: `e2e/public-store-affiliate.spec.ts`. Domain: [public-store.md](./domains/public-store.md).
+
 ## 2026-08-11 (Promo/sibling discounts now size Stripe PI)
 
 - **Bug:** Cart/UI applied promo % codes via `calculateCartPricing`, but `create-payment-intent` still charged full enrollment outstanding; fulfill only even-split cash (no cart-level comps).

@@ -163,15 +163,9 @@ export interface UploadOptions {
   metadata?: Record<string, string>;
 }
 
-/** Skip GCS when Playwright starts the dev server (no object storage in local/CI E2E). */
+/** Skip GCS when Playwright / local dev has no Replit Object Storage. */
 function shouldStubFormUploadForE2e(): boolean {
-  if (process.env.NODE_ENV === "production") {
-    return false;
-  }
-  if (process.env.E2E_STUB_FORM_UPLOADS === "true") {
-    return true;
-  }
-  return process.env.PLAYWRIGHT_WEB_SERVER === "true";
+  return isE2eObjectStorageStubEnabled();
 }
 
 class FileUploadService {
