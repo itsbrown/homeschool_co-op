@@ -4,7 +4,7 @@
 
 - `store_products` affiliate fields (`product_kind`, `affiliate_url`, `asin`, `affiliate_metadata`); additive SQL `server/migrations/255-store-affiliate-products.sql` (apply on prod Neon after merge; never `db:push`).
 - Admin Products tab: paste Associates `/dp/ASIN`, `amzn.to`, or search URL **with ISBN in `k=`** → `POST …/affiliate/preview` (PA-API 5.0 or non-prod mock) → create. Storefront CTA is **Buy on Amazon** (external); never cart/Stripe. Snapshot/checkout returns `400` `AFFILIATE_NOT_PURCHASABLE`.
-- Cover upload is the same merch `ImageUpload` / `storeProducts` path. Local `npm run dev` without `PRIVATE_OBJECT_DIR` uses the E2E disk stub. Non-prod store-admin routes auto-apply 251+255 via `ensurePublicStoreSchema`.
+- Cover upload is the same merch `ImageUpload` / `storeProducts` path. Local `npm run dev` without `PRIVATE_OBJECT_DIR` uses the E2E disk stub. Non-prod store-admin routes auto-apply 251+255 via `ensurePublicStoreSchema`. Broken covers overlay a Package icon on the `<img>` (keep `src` / `object-cover` for merch E2E).
 - Env for live title/image: `AMAZON_PAAPI_ACCESS_KEY`, `AMAZON_PAAPI_SECRET_KEY`, `AMAZON_PAAPI_PARTNER_TAG` (optional `AMAZON_PAAPI_MOCK=1`).
 - E2E: `e2e/public-store-affiliate.spec.ts`. Domain: [public-store.md](./domains/public-store.md).
 
