@@ -222,7 +222,7 @@ Note: this endpoint streams from object storage rather than returning a presigne
 - **Presigned URL expired** → upload took longer than 15 minutes → request a new presigned URL and retry
 - **Private file 403** → tried to access private file without presigned download URL → use `getDownloadUrl()` for private files
 - **Legacy path not found** → old upload path format doesn't match new pattern → check for both `/objects/.private/` prefix and raw paths without prefix when resolving stored file references
-- **File lost after restart** → stored file on local filesystem instead of object storage → always use the presigned URL upload flow
+- **Upload 500 `Failed to generate upload URL` on local `npm run dev`** → `PRIVATE_OBJECT_DIR` unset (Replit Object Storage sidecar missing). Merch and affiliate both use `ImageUpload` + `storeProducts` + `POST /api/unified-uploads/request-url`. Non-prod without that env uses the Playwright disk stub (`uploads/e2e-public`). Production still requires Object Storage.
 - **pdf-parse crashes server on startup** → imported `pdf-parse` at top level → use dynamic import: `(await import('pdf-parse/lib/pdf-parse.js')).default` (see "PDF Text Extraction" section)
 - **PDF read as garbled text** → tried to read PDF with `fs.readFileSync(path, 'utf-8')` → PDFs are binary, must use `pdf-parse` to extract text
 - **KB file content empty** → assumed all files are in Object Storage or all are local → KB files exist in 3 formats (data URIs, `/uploads/`, Object Storage) — handle all three

@@ -19,8 +19,19 @@ export type PublicStoreSeedResult = {
     name: string;
     priceCents: number;
     imageUrl: string | null;
+    productKind: 'owned' | 'affiliate';
   };
   listing: { id: number; isPublished: boolean };
+  affiliateProduct?: {
+    id: number;
+    name: string;
+    priceCents: number;
+    imageUrl: string | null;
+    productKind: 'affiliate';
+    affiliateUrl: string;
+    asin: string;
+  };
+  affiliateListing?: { id: number; isPublished: boolean };
   parent?: { id: number; email: string; password: string };
   child?: { id: number; firstName: string; lastName: string };
   class?: {
@@ -64,6 +75,13 @@ export async function seedPublicStoreScenario(
     parentPassword?: string;
     /** Override merch unit price (use 0 for Stripe-free checkout E2E). */
     productPriceCents?: number;
+    /** Also seed a published Amazon affiliate product. */
+    withAffiliateProduct?: boolean;
+    affiliateUrl?: string;
+    affiliateAsin?: string;
+    affiliateName?: string;
+    affiliatePriceCents?: number;
+    affiliateImageUrl?: string | null;
   } = {},
 ): Promise<PublicStoreSeedResult> {
   await ensurePublicStoreSchema();
@@ -106,6 +124,7 @@ export async function seedPublicStoreScenario(
     priceCents:
       typeof options.productPriceCents === 'number' ? options.productPriceCents : 1999,
     imageUrl: options.productImageUrl ?? null,
+    productKind: 'owned',
     isActive: true,
     sortOrder: 0,
   });
@@ -128,9 +147,52 @@ export async function seedPublicStoreScenario(
       name: product.name,
       priceCents: product.priceCents,
       imageUrl: product.imageUrl,
+      productKind: 'owned',
     },
     listing: { id: listing.id, isPublished: listing.isPublished },
   };
+
+  if (options.withAffiliateProduct) {
+    const affiliateUrl =
+      options.affiliateUrl ??
+      `https://www.amazon.com/dp/B08AFFIL01?tag=asa-e2e-20`;
+    const asin = (options.affiliateAsin ?? 'B08AFFIL01').toUpperCase();
+    const affiliateProduct = await createStoreProduct({
+      schoolId: school.id,
+      name: options.affiliateName ?? `E2E Affiliate ${uniqueId}`,
+      description: 'Playwright seeded Amazon affiliate item',
+      priceCents: options.affiliatePriceCents ?? 2499,
+      imageUrl: options.affiliateImageUrl ?? null,
+      productKind: 'affiliate',
+      affiliateUrl,
+      asin,
+      affiliateMetadata: { mock: true, asin },
+      inventoryQty: null,
+      isActive: true,
+      sortOrder: 1,
+    });
+    const affiliateListing = await upsertStoreListing({
+      schoolId: school.id,
+      listingType: 'product',
+      sourceId: affiliateProduct.id,
+      isPublished: true,
+      membersOnly: false,
+      sortOrder: 1,
+    });
+    result.affiliateProduct = {
+      id: affiliateProduct.id,
+      name: affiliateProduct.name,
+      priceCents: affiliateProduct.priceCents,
+      imageUrl: affiliateProduct.imageUrl,
+      productKind: 'affiliate',
+      affiliateUrl,
+      asin,
+    };
+    result.affiliateListing = {
+      id: affiliateListing.id,
+      isPublished: affiliateListing.isPublished,
+    };
+  }
 
   if (options.withClass) {
     const classPriceCents = options.classPriceCents ?? 7500;

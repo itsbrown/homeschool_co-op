@@ -320,6 +320,7 @@ Previously, the cart display and payment processor used independent calculation 
 - **Comp leaves overdue installments on the books** → cancellation logic filters only `status = 'pending'`, missing `overdue` records → always filter `p.status === 'pending' || p.status === 'overdue'` when cancelling or reducing scheduled payments after a comp
 - **Outstanding Balance card doesn't update after a credit-only payment** → payment success handler invalidated `/api/payment-history` and `/api/scheduled-payments` but missed `/api/parent/enrollments` → the Outstanding Balance card reads from the enrollment query; always include `["/api/parent/enrollments"]` in post-payment cache invalidation alongside the other payment query keys
 - **Collections Overview shows Auto-pay on (0) despite `users.auto_pay_enabled`** → `loadParentInfo` must select `users.autoPayEnabled` via drizzle; never iterate `db.execute(...).rows` under postgres-js (returns an array, no `.rows`) — see `server/lib/financial-collections.ts` and payments domain doc
+- **Amazon affiliate listings in the public store cart / Stripe** → `product_kind = 'affiliate'` is Buy on Amazon only. Snapshot/checkout must throw `StoreAffiliateCartError` (`400` `AFFILIATE_NOT_PURCHASABLE`). Never create a PaymentIntent for an affiliate line. See `server/lib/store-pricing.ts` and `docs/APP_KNOWLEDGE/domains/public-store.md`.
 
 ## Best Practices
 
@@ -367,3 +368,4 @@ Previously, the cart display and payment processor used independent calculation 
 - `server/api/enrollments.ts` — enrollment creation with payment confirmation
 - `server/services/enrollmentReminderScheduler.ts` — payment reminder scheduling
 - `shared/schema.ts` — `programEnrollments`, `scheduledPayments`, `payments`, `paymentAllocations`, `discounts`, `refunds` tables
+- `server/lib/store-pricing.ts` — store-lane snapshot; `StoreAffiliateCartError` blocks Amazon affiliate products from Stripe

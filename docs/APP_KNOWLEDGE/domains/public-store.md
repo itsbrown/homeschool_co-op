@@ -18,6 +18,7 @@ Parallel **store lane** at `/store/:storeSlug` — isolated from member `/cart` 
 - **Program images:** `sessions.cover_image` (migration 252) and `classes.cover_image`; admin `ImageUpload` uses presigned category `storePrograms`; catalog exposes `imageUrl` as `/public/store-programs/…`
 - **Store-ready classes:** `enrollmentOpen` + price (same gate as parent catalog); not legacy `isPublished`
 - **Merch photos:** `store_products.image_url`; admin `ImageUpload` with category `storeProducts`; public cards use square `object-cover` via `StoreProductCardImage`
+- **Amazon affiliate products:** same `ImageUpload` / `storeProducts` cover upload as merch. `product_kind = 'affiliate'` (+ `affiliate_url`, `asin`, `affiliate_metadata`). Admin pastes an Associates URL → `POST …/affiliate/preview` (PA-API 5.0 or non-prod mock) → create product. Accepted: product `/dp/ASIN`, `amzn.to`, or search `amazon.com/s?k=…` **with ISBN-13/10 in the query** (ISBN-13 `978…` converts to ISBN-10 book ASIN). Search with no ISBN/ASIN returns `400` `ASIN_NOT_FOUND`. Mock image URL is the Associates ASIN widget (not `/images/I/{ASIN}`). Storefront CTA is **Buy on Amazon** (external); never Add to cart / Stripe. Broken covers overlay a Package icon on the `<img>` (do not unmount `src`). Migration `255-store-affiliate-products.sql`. Env: `AMAZON_PAAPI_ACCESS_KEY`, `AMAZON_PAAPI_SECRET_KEY`, `AMAZON_PAAPI_PARTNER_TAG` (optional `AMAZON_PAAPI_MOCK=1`). Local cover upload without Replit Object Storage uses the E2E disk stub. Non-prod school-admin store routes auto-apply 251+255 via `ensurePublicStoreSchema`.
 
 ### Image upload flow (store)
 
@@ -33,9 +34,10 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 ## Storefront UX
 
 - **Browse** (`/store/:storeSlug`): Cards are teasers only (2-line description). Price, type badge, and dates show on the card; **“View program/product details”** opens the full page. School description shows once below the header (not in the sticky bar).
-- **Detail** (`/store/:storeSlug/:itemSlug`): Same route for programs, sessions, and merch — layout adapts by `listingType` (stock/shipping copy for products; schedule/enrollment copy for programs). Full description is never truncated. **Share** button builds a message with description + link (`?userId=` when logged in).
+- **Detail** (`/store/:storeSlug/:itemSlug`): Same route for programs, sessions, and merch — layout adapts by `listingType` (stock/shipping copy for owned products; **Buy on Amazon** for affiliate; schedule/enrollment copy for programs). Full description is never truncated. **Share** button builds a message with description + link (`?userId=` when logged in).
 - **Referral:** Landing with `?userId=` stores referrer in session; checkout saves `metadata.referral` on the order (self-referrals rejected server-side).
-- **Sections:** When both exist, catalog groups **Programs & classes** (2-col grid) and **Shop** (3-col grid for merch).
+- **Sections:** When both exist, catalog groups **Programs & classes** (2-col grid) and **Shop** (3-col grid for merch + affiliate).
+- **Affiliate cart guard:** Snapshot/checkout returns `400` + `AFFILIATE_NOT_PURCHASABLE` if an affiliate listing is submitted.
 
 ## API
 
@@ -48,8 +50,10 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 - `GET /api/school-admin/public-store/programs` — admin: sessions + classes with listing state
 - `GET /api/school-admin/public-store/signups` — program + product sign-ups with parent/child/emergency contact
 - `GET /api/school-admin/public-store/signups/export` — CSV download
+- `POST /api/school-admin/public-store/affiliate/preview` — `{ url }` → Amazon ASIN metadata (PA-API or mock)
 - `PATCH /api/school-admin/public-store/programs/:listingType/:sourceId` — publish, members-only, cover image
 - **Uploads:** `/api/unified-uploads/*` with categories `storePrograms`, `storeProducts` (not dedicated store multipart routes)
+- **E2E:** `e2e/public-store-affiliate.spec.ts` — Buy on Amazon CTA, snapshot reject, admin fetch+create (mocked PA-API)
 
 ## Fulfillment
 
@@ -98,4 +102,6 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 - `client/src/components/store/StoreItemShareButton.tsx`
 - `client/src/components/store/StoreSignupsTab.tsx`
 - `server/migrations/251-public-store.sql`
+- `server/migrations/255-store-affiliate-products.sql`
+- `server/lib/amazon-paapi.ts`
 - `server/migrations/252-session-cover-image.sql`

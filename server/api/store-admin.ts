@@ -10,6 +10,7 @@ import {
   getStoreProductsBySchoolId,
   createStoreProduct,
   updateStoreProduct,
+  getStoreProductById,
   getStoreListingsBySchoolId,
   upsertStoreListing,
   updateStoreListing,
@@ -21,6 +22,10 @@ import {
 import { getStoreProgramsForSchool, patchStoreProgram } from '../lib/store-programs';
 import { getPublicStoreSignups, buildStoreSignupsCsv } from '../lib/store-signups';
 import { storage } from '../storage';
+import {
+  AmazonPaapiError,
+  fetchAmazonProductByUrl,
+} from '../lib/amazon-paapi';
 
 const router = Router();
 
@@ -34,7 +39,7 @@ function handleStoreRouteError(res: Response, err: unknown, fallbackMessage: str
   if (isStoreSchemaMissing(err)) {
     return res.status(503).json({
       message:
-        'Public store schema is missing on this database. Apply server/migrations/251-public-store.sql, then restart the server.',
+        'Public store schema is missing on this database. Apply server/migrations/251-public-store.sql and 255-store-affiliate-products.sql, then restart the server.',
       code: 'STORE_SCHEMA_MISSING',
     });
   }
@@ -42,6 +47,19 @@ function handleStoreRouteError(res: Response, err: unknown, fallbackMessage: str
 }
 
 router.use(supabaseAuth, requireSchoolContext);
+
+router.use(async (_req, _res, next) => {
+  if (process.env.NODE_ENV === 'production') {
+    return next();
+  }
+  try {
+    const { ensurePublicStoreSchema } = await import('../lib/ensure-public-store-schema');
+    await ensurePublicStoreSchema();
+  } catch (err) {
+    console.error('[store-admin] ensurePublicStoreSchema failed:', err);
+  }
+  next();
+});
 
 router.get('/settings', async (req: any, res) => {
   try {
@@ -144,30 +162,132 @@ router.patch('/programs/:listingType/:sourceId', async (req: any, res) => {
 router.post('/products', async (req: any, res) => {
   try {
     const schoolId = parseInt(req.schoolId, 10);
-    const schema = z.object({
-      name: z.string().min(1),
-      description: z.string().nullable().optional(),
-      priceCents: z.number().int().positive(),
-      imageUrl: z.string().nullable().optional(),
-      inventoryQty: z.number().int().nullable().optional(),
-      isActive: z.boolean().optional(),
-      sortOrder: z.number().int().optional(),
-    });
+    const schema = z
+      .object({
+        name: z.string().min(1),
+        description: z.string().nullable().optional(),
+        priceCents: z.number().int().positive(),
+        imageUrl: z.string().nullable().optional(),
+        inventoryQty: z.number().int().nullable().optional(),
+        isActive: z.boolean().optional(),
+        sortOrder: z.number().int().optional(),
+        productKind: z.enum(['owned', 'affiliate']).optional(),
+        affiliateUrl: z.string().url().nullable().optional(),
+        asin: z.string().min(10).max(10).nullable().optional(),
+        affiliateMetadata: z.record(z.unknown()).optional(),
+      })
+      .superRefine((data, ctx) => {
+        if (data.productKind === 'affiliate') {
+          if (!data.affiliateUrl) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'affiliateUrl is required for affiliate products',
+              path: ['affiliateUrl'],
+            });
+          }
+          if (!data.asin) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'asin is required for affiliate products',
+              path: ['asin'],
+            });
+          }
+        }
+      });
     const data = schema.parse(req.body);
-    const product = await createStoreProduct({ schoolId, ...data });
+    const productKind = data.productKind ?? 'owned';
+    const product = await createStoreProduct({
+      schoolId,
+      name: data.name,
+      description: data.description,
+      priceCents: data.priceCents,
+      imageUrl: data.imageUrl,
+      inventoryQty: productKind === 'affiliate' ? null : data.inventoryQty,
+      isActive: data.isActive,
+      sortOrder: data.sortOrder,
+      productKind,
+      affiliateUrl: productKind === 'affiliate' ? data.affiliateUrl : null,
+      asin: productKind === 'affiliate' ? data.asin?.toUpperCase() : null,
+      affiliateMetadata:
+        productKind === 'affiliate' ? (data.affiliateMetadata ?? {}) : {},
+    });
     res.status(201).json(product);
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Invalid product', errors: err.flatten() });
+    }
     handleStoreRouteError(res, err, 'Failed to create store product');
+  }
+});
+
+router.post('/affiliate/preview', async (req: any, res) => {
+  try {
+    const schema = z.object({ url: z.string().min(1) });
+    const { url } = schema.parse(req.body);
+    const preview = await fetchAmazonProductByUrl(url);
+    res.json({
+      asin: preview.asin,
+      name: preview.name,
+      description: preview.description,
+      priceCents: preview.priceCents,
+      imageUrl: preview.imageUrl,
+      detailPageUrl: preview.detailPageUrl,
+      affiliateUrl: url.trim(),
+      affiliateMetadata: preview.raw,
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ message: 'URL is required' });
+    }
+    if (err instanceof AmazonPaapiError) {
+      const status =
+        err.code === 'NOT_CONFIGURED'
+          ? 503
+          : err.code === 'INVALID_URL' || err.code === 'ASIN_NOT_FOUND'
+            ? 400
+            : 502;
+      return res.status(status).json({ message: err.message, code: err.code });
+    }
+    handleStoreRouteError(res, err, 'Failed to fetch Amazon product');
   }
 });
 
 router.patch('/products/:id', async (req: any, res) => {
   try {
+    const schoolId = parseInt(req.schoolId, 10);
     const id = parseInt(req.params.id, 10);
-    const product = await updateStoreProduct(id, req.body);
+    const existing = await getStoreProductById(id);
+    if (!existing || existing.schoolId !== schoolId) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const schema = z.object({
+      name: z.string().min(1).optional(),
+      description: z.string().nullable().optional(),
+      priceCents: z.number().int().positive().optional(),
+      imageUrl: z.string().nullable().optional(),
+      inventoryQty: z.number().int().nullable().optional(),
+      isActive: z.boolean().optional(),
+      sortOrder: z.number().int().optional(),
+      productKind: z.enum(['owned', 'affiliate']).optional(),
+      affiliateUrl: z.string().url().nullable().optional(),
+      asin: z.string().min(10).max(10).nullable().optional(),
+      affiliateMetadata: z.record(z.unknown()).optional(),
+    });
+    const data = schema.parse(req.body);
+    const nextKind = data.productKind ?? existing.productKind;
+    const product = await updateStoreProduct(id, {
+      ...data,
+      asin: data.asin != null ? data.asin.toUpperCase() : data.asin,
+      inventoryQty: nextKind === 'affiliate' ? null : data.inventoryQty,
+      affiliateUrl: nextKind === 'affiliate' ? (data.affiliateUrl ?? existing.affiliateUrl) : null,
+    });
     if (!product) return res.status(404).json({ message: 'Product not found' });
     res.json(product);
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Invalid product update', errors: err.flatten() });
+    }
     handleStoreRouteError(res, err, 'Failed to update store product');
   }
 });

@@ -18,7 +18,7 @@ import {
   getStoreOrderByAccessToken,
   updateStoreOrder,
 } from '../lib/store-storage';
-import { calculateStoreSnapshot, type StoreCartLineInput } from '../lib/store-pricing';
+import { calculateStoreSnapshot, StoreAffiliateCartError, type StoreCartLineInput } from '../lib/store-pricing';
 import {
   resolveStoreParent,
   resolveStoreChild,
@@ -177,6 +177,9 @@ router.post('/:storeSlug/snapshot', async (req, res) => {
       checkoutEnabled: isStoreCheckoutAllowed(),
     });
   } catch (err) {
+    if (err instanceof StoreAffiliateCartError) {
+      return res.status(400).json({ message: err.message, code: 'AFFILIATE_NOT_PURCHASABLE' });
+    }
     console.error('POST snapshot:', err);
     res.status(500).json({ message: 'Failed to calculate totals' });
   }
@@ -433,6 +436,9 @@ router.post('/:storeSlug/checkout', async (req, res) => {
 
     res.json({ checkoutUrl: session.url, accessToken, snapshotId });
   } catch (err: any) {
+    if (err instanceof StoreAffiliateCartError) {
+      return res.status(400).json({ message: err.message, code: 'AFFILIATE_NOT_PURCHASABLE' });
+    }
     console.error('POST checkout:', err);
     res.status(500).json({ message: err.message || 'Checkout failed' });
   }

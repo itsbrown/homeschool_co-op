@@ -27,6 +27,13 @@ import {
 
 export type StoreCartLineType = 'product' | 'session' | 'class';
 
+export class StoreAffiliateCartError extends Error {
+  constructor(message = 'Affiliate products cannot be purchased through the store cart') {
+    super(message);
+    this.name = 'StoreAffiliateCartError';
+  }
+}
+
 export interface StoreCartLineInput {
   lineId: string;
   listingId: number;
@@ -188,6 +195,11 @@ export async function calculateStoreSnapshot(params: {
     if (line.listingType === 'product') {
       const product = await getStoreProductById(line.sourceId);
       if (!product || !product.isActive) continue;
+      if (product.productKind === 'affiliate') {
+        throw new StoreAffiliateCartError(
+          'Amazon affiliate products cannot be added to the cart. Use Buy on Amazon instead.',
+        );
+      }
       const lineTotal = product.priceCents * qty;
       itemsTotalCents += lineTotal;
       snapshotLines.push({

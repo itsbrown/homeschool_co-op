@@ -32,6 +32,7 @@ export function StoreItemDetailView({
   const dateRange = formatStoreListingDateRange(item.startDate, item.endDate);
   const priceLine = formatStoreListingPrice(item);
   const isProduct = item.listingType === "product";
+  const isAffiliate = isProduct && item.productKind === "affiliate";
 
   return (
     <div className="space-y-6" data-testid="store-item-detail">
@@ -79,12 +80,14 @@ export function StoreItemDetailView({
         <aside className="lg:sticky lg:top-24 space-y-4">
           <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{storeListingTypeLabel(item.listingType)}</Badge>
+              <Badge variant="outline">
+                {storeListingTypeLabel(item.listingType, item.productKind)}
+              </Badge>
               {item.membersOnly && <Badge variant="secondary">Members only</Badge>}
-              {isProduct && item.inStock === false && (
+              {isProduct && !isAffiliate && item.inStock === false && (
                 <Badge variant="destructive">Out of stock</Badge>
               )}
-              {isProduct && item.inStock !== false && (
+              {isProduct && !isAffiliate && item.inStock !== false && (
                 <Badge variant="secondary" className="bg-emerald-50 text-emerald-800 border-emerald-200">
                   In stock
                 </Badge>
@@ -95,7 +98,12 @@ export function StoreItemDetailView({
               <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900" data-testid="store-item-title">
                 {item.title}
               </h1>
-              {isProduct ? (
+              {isAffiliate ? (
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <Package className="h-4 w-4 shrink-0" aria-hidden />
+                  Sold on Amazon — you will leave this site to purchase.
+                </p>
+              ) : isProduct ? (
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                   <Package className="h-4 w-4 shrink-0" aria-hidden />
                   Choose pickup or shipping at checkout.
@@ -139,9 +147,11 @@ export function StoreItemDetailView({
           </div>
 
           <p className="text-xs text-muted-foreground px-1">
-            {isProduct
-              ? "Browse photos and full item details on this page. Add to cart when you are ready — checkout works for guests and members."
-              : "Full schedule and program details are on this page. Choose half or full day when adding sessions, then assign a child at checkout."}
+            {isAffiliate
+              ? "Price shown is a snapshot from Amazon and may change. Purchases are completed on Amazon."
+              : isProduct
+                ? "Browse photos and full item details on this page. Add to cart when you are ready — checkout works for guests and members."
+                : "Full schedule and program details are on this page. Choose half or full day when adding sessions, then assign a child at checkout."}
           </p>
         </aside>
       </div>

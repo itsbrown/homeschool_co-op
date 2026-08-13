@@ -3296,6 +3296,9 @@ export const generateQuarterlyReportBodySchema = z.object({
 
 // --- Public storefront (v1) ---
 
+export const storeProductKinds = ["owned", "affiliate"] as const;
+export type StoreProductKind = (typeof storeProductKinds)[number];
+
 export const storeProducts = pgTable("store_products", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
@@ -3304,6 +3307,10 @@ export const storeProducts = pgTable("store_products", {
   priceCents: integer("price_cents").notNull(),
   imageUrl: text("image_url"),
   inventoryQty: integer("inventory_qty"),
+  productKind: text("product_kind", { enum: ["owned", "affiliate"] }).default("owned").notNull(),
+  affiliateUrl: text("affiliate_url"),
+  asin: text("asin"),
+  affiliateMetadata: jsonb("affiliate_metadata").$type<Record<string, unknown>>().default({}).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   sortOrder: integer("sort_order").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

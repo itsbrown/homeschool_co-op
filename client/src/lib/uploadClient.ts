@@ -41,7 +41,7 @@ async function requestUploadUrl(
     contentType: file.type || "application/octet-stream",
     category,
     schoolId,
-  });
+  }, { passthroughStatuses: [400, 500, 503] });
 
   if (!response.ok) {
     const error = (await response.json().catch(() => ({ error: "Upload failed" }))) as {

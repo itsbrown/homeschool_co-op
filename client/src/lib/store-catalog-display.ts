@@ -10,7 +10,13 @@ export type StoreCatalogSection = {
   items: StoreCatalogItem[];
 };
 
-export function storeListingTypeLabel(listingType: StoreCatalogItem["listingType"]): string {
+export function storeListingTypeLabel(
+  listingType: StoreCatalogItem["listingType"],
+  productKind?: StoreCatalogItem["productKind"],
+): string {
+  if (listingType === "product" && productKind === "affiliate") {
+    return "Amazon";
+  }
   switch (listingType) {
     case "product":
       return "Merch";
@@ -71,7 +77,7 @@ export function groupStoreCatalogItems(items: StoreCatalogItem[]): StoreCatalogS
     sections.push({
       id: "shop",
       title: "Shop",
-      description: "School merch and supplies — sizes, details, and photos on each product page.",
+      description: "School merch, supplies, and Amazon affiliate picks — details on each product page.",
       items: shop,
     });
   }

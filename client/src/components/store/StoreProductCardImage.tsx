@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,12 @@ export function StoreProductCardImage({
   className,
   "data-testid": dataTestId,
 }: StoreProductCardImageProps) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
   if (!src) {
     return (
       <div
@@ -31,14 +37,23 @@ export function StoreProductCardImage({
   }
 
   return (
-    <div className={cn("aspect-square overflow-hidden rounded-t-lg bg-muted", className)}>
+    <div className={cn("aspect-square overflow-hidden rounded-t-lg bg-muted relative", className)}>
       <img
         src={src}
         alt={alt}
-        className="h-full w-full object-cover"
+        className={cn("h-full w-full object-cover", failed && "opacity-0")}
         loading="lazy"
         data-testid={dataTestId}
+        onError={() => setFailed(true)}
       />
+      {failed ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-muted"
+          aria-hidden
+        >
+          <Package className="h-10 w-10 text-muted-foreground/40" />
+        </div>
+      ) : null}
     </div>
   );
 }

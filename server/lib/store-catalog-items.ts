@@ -21,6 +21,9 @@ export type StoreCatalogItem = {
   membersOnly: boolean;
   sortOrder: number;
   inStock?: boolean;
+  /** Owned merch vs Amazon affiliate (external buy). */
+  productKind?: 'owned' | 'affiliate';
+  affiliateUrl?: string | null;
 };
 
 export async function buildStoreCatalogItem(
@@ -41,7 +44,12 @@ export async function buildStoreCatalogItem(
       imageUrl: product.imageUrl,
       membersOnly: listing.membersOnly,
       sortOrder: listing.sortOrder,
-      inStock: product.inventoryQty == null || product.inventoryQty > 0,
+      inStock:
+        product.productKind === 'affiliate'
+          ? true
+          : product.inventoryQty == null || product.inventoryQty > 0,
+      productKind: (product.productKind as 'owned' | 'affiliate') ?? 'owned',
+      affiliateUrl: product.affiliateUrl ?? null,
     };
   }
 
