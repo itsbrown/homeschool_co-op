@@ -44,8 +44,8 @@ test.describe("parent household supply list", () => {
     await expect(page).toHaveURL(/\/parent\/supplies/, { timeout: 15_000 });
 
     await expect(page.getByTestId("parent-supply-list")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(/Water bottle/i)).toBeVisible();
-    await expect(page.getByText(/×2/)).toBeVisible();
+    await expect(page.getByText(/Water bottle ×2/i)).toBeVisible();
+    await expect(page.getByText(/Glue sticks ×2/i)).toBeVisible();
     await expect(page.getByText(/Maya/i).first()).toBeVisible();
     await expect(page.getByText(/Liam/i).first()).toBeVisible();
     await expect(page.getByText(/Trailblazers/i).first()).toBeVisible();

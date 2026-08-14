@@ -35,7 +35,9 @@ test.describe("school admin supply lists", () => {
     await page.getByTestId(`select-supply-product-${lastIndex}`).click();
     await page.getByRole("option", { name: /E2E Supply Tissues/ }).click();
     await page.getByTestId("button-save-supply-list").click();
-    await expect(page.getByText("Supply list saved")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Supply list saved", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test("session Supplies dialog can add an item", async ({ page, request }) => {
@@ -62,6 +64,8 @@ test.describe("school admin supply lists", () => {
     const lastIndex = (await rows.count()) - 1;
     await page.getByTestId(`input-supply-name-${lastIndex}`).fill("Extra socks");
     await page.getByTestId("button-save-supply-list").click();
-    await expect(page.getByText("Supply list saved")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Supply list saved", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
   });
 });
