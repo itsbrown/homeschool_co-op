@@ -1,12 +1,37 @@
 /** Session key for post-login redirect (survives OAuth round-trips). */
 export const AUTH_RETURN_TO_KEY = "auth_return_to";
 
+const AUTH_LANDING_PATHS = new Set([
+  "/login",
+  "/logout",
+  "/auth/logout",
+  "/auth/login",
+  "/auth/callback",
+  "/old-login",
+  "/embedded-login",
+  "/auth0-login",
+  "/school-admin-login",
+  "/emergency-logout",
+  "/forgot-password",
+  "/reset-password",
+  "/register",
+]);
+
 export function isSafeReturnPath(path: string): boolean {
   return path.startsWith("/") && !path.startsWith("//");
 }
 
+/** Reject /login (and other auth screens) so post-login cannot loop on Sign in. */
+export function isPostLoginDestination(path: string): boolean {
+  if (!isSafeReturnPath(path)) return false;
+  const pathname = path.split("?")[0].split("#")[0];
+  if (AUTH_LANDING_PATHS.has(pathname)) return false;
+  if (pathname.startsWith("/auth/")) return false;
+  return true;
+}
+
 export function persistAuthReturnTo(path: string): void {
-  if (!isSafeReturnPath(path)) return;
+  if (!isPostLoginDestination(path)) return;
   try {
     sessionStorage.setItem(AUTH_RETURN_TO_KEY, path);
   } catch {
@@ -19,7 +44,7 @@ export function syncAuthReturnToFromUrl(): void {
   try {
     const params = new URLSearchParams(window.location.search);
     const returnTo = params.get("returnTo") || params.get("redirect");
-    if (returnTo && isSafeReturnPath(returnTo)) {
+    if (returnTo && isPostLoginDestination(returnTo)) {
       persistAuthReturnTo(returnTo);
     }
   } catch {
@@ -31,11 +56,11 @@ export function resolveAuthReturnDestination(fallback = "/dashboard"): string {
   try {
     const params = new URLSearchParams(window.location.search);
     const fromParam = params.get("returnTo") || params.get("redirect");
-    if (fromParam && isSafeReturnPath(fromParam)) {
+    if (fromParam && isPostLoginDestination(fromParam)) {
       return fromParam;
     }
     const stored = sessionStorage.getItem(AUTH_RETURN_TO_KEY);
-    if (stored && isSafeReturnPath(stored)) {
+    if (stored && isPostLoginDestination(stored)) {
       return stored;
     }
   } catch {
@@ -49,12 +74,12 @@ export function consumeAuthReturnDestination(fallback = "/dashboard"): string {
   try {
     const params = new URLSearchParams(window.location.search);
     const fromParam = params.get("returnTo") || params.get("redirect");
-    if (fromParam && isSafeReturnPath(fromParam)) {
+    if (fromParam && isPostLoginDestination(fromParam)) {
       clearAuthReturnTo();
       return fromParam;
     }
     const stored = sessionStorage.getItem(AUTH_RETURN_TO_KEY);
-    if (stored && isSafeReturnPath(stored)) {
+    if (stored && isPostLoginDestination(stored)) {
       clearAuthReturnTo();
       return stored;
     }
@@ -62,6 +87,26 @@ export function consumeAuthReturnDestination(fallback = "/dashboard"): string {
     // ignore
   }
   return fallback;
+}
+
+/** True when /login should navigate away (session exists). Do not wait for roles — DashboardRouter already does. */
+export function canLeaveLoginPage(options: {
+  isAuthenticated: boolean;
+  hasUser: boolean;
+  registrationRequired?: boolean;
+  redirectBlocked?: boolean;
+}): boolean {
+  if (options.registrationRequired) return false;
+  // Only honor the block while sign-out is in progress. A leftover key from a
+  // prior 403 (often DB-down misread as unregistered) must not trap a valid session.
+  if (options.redirectBlocked && !options.isAuthenticated) return false;
+  return options.isAuthenticated && options.hasUser;
+}
+
+/** Full page load after login — same as typing /dashboard (wouter setLocation can no-op). */
+export function navigateAfterLogin(fallback = "/dashboard"): void {
+  const destination = consumeAuthReturnDestination(fallback);
+  window.location.assign(destination);
 }
 
 export function clearAuthReturnTo(): void {
@@ -76,9 +121,10 @@ export function loginPathWithReturnTo(
   returnTo: string,
   extraParams?: Record<string, string>,
 ): string {
-  persistAuthReturnTo(returnTo);
+  const dest = isPostLoginDestination(returnTo) ? returnTo : "/dashboard";
+  persistAuthReturnTo(dest);
   const params = new URLSearchParams(extraParams ?? {});
-  params.set("returnTo", returnTo);
+  params.set("returnTo", dest);
   return `/login?${params.toString()}`;
 }
 

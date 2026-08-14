@@ -236,6 +236,10 @@ School-admin observability (not a separate roster product):
 - School-admin Students list (`GET /api/school-admin/students`): `classes[]` via `loadClassEnrollmentRowsForChildren` + `buildCurrentClassesByChildId` (not `getEnrollmentsByChildIds` — mem fallback on schema drift)
 - Domain doc: `docs/APP_KNOWLEDGE/domains/grade-placement.md`
 
+## Supply lists (class + session)
+
+Parents see a household shopping list from active enrollments (`enrolled`, `pending_admin_approval`) — same status filter as educator views. Items live on `classes.id` / `sessions.id`, not `school_classes`. Optional `store_product_id` points at shop products (affiliates stay Buy on Amazon). See `docs/APP_KNOWLEDGE/domains/supply-lists.md`.
+
 ## Common Pitfalls
 
 - **Wrong enrollment table** → used `school_class_enrollments` for a payment-tracked enrollment → use `program_enrollments` (it has financial fields)
@@ -262,7 +266,7 @@ School-admin observability (not a separate roster product):
 - Don't recalculate financial fields from Stripe — enrollment fields are authoritative
 - Don't create enrollments without a valid `schoolId` — multi-tenant isolation requires it
 - Don't skip the Stripe payment verification step in the confirm endpoint
-- Don't assume `classId` is always set — marketplace enrollments use `marketplaceClassId` instead
+- Don't assume `classId` is always set — marketplace enrollments usually use `marketplaceClassId`. Don't assume `marketplaceClassId` is always set either — some seats only have `classId` pointing at `classes.id` (Yankee Doodle F2026 #625). Supply lists use `marketplaceClassId ?? classId`.
 - Don't look up class price via `programId` when computing `remainingBalance` — use `enrollment.totalCost` directly (see Common Pitfalls above)
 
 ## Key Files
@@ -277,6 +281,7 @@ School-admin observability (not a separate roster product):
 - `server/lib/prorate-calculator.ts` — proration date math
 - `server/utils/cart-pricing.ts` — pricing calculations for enrollments
 - `shared/schema.ts` — `programEnrollments`, `schoolClassEnrollments`, `schoolClasses`, `classes` tables
+- `docs/APP_KNOWLEDGE/domains/supply-lists.md` — household supply lists from class/session items
 - `client/src/pages/schools/SessionsManagementPage.tsx` — session config + fill summary
 - `client/src/pages/schools/EnrollmentsAdminPage.tsx` — Day Type filters + CSV
 - `client/src/contexts/CartContext.tsx` — cart state with enrollment creation

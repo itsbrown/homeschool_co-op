@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { createClient, User, Session } from "@supabase/supabase-js";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, setServiceUnavailable } from "@/lib/queryClient";
 import {
   buildOAuthLoginRedirectUrl,
   clearAuthReturnTo,
@@ -129,22 +129,29 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
         console.log("🗑️ Removed Supabase access token");
       }
 
-      // Handle logout completion
+      // Clear cache on sign-out so the next user does not see stale queries.
       if (event === "SIGNED_OUT") {
         console.log("🚪 User signed out - auth state cleared");
         setSession(null);
         setUser(null);
         setIsLoading(false);
-        // Clear React Query cache to prevent stale data display after logout/login
         queryClient.clear();
         console.log("🗑️ React Query cache cleared");
         return;
       }
-      
-      // Clear cache on sign in to ensure fresh data for the new user
+
+      // Do not queryClient.clear() on SIGNED_IN — RoleContext is already mounted
+      // and a full clear cancels /api/user/roles, trapping a valid session on /login.
       if (event === "SIGNED_IN") {
-        queryClient.clear();
-        console.log("🔄 React Query cache cleared for new session");
+        localStorage.removeItem("asa_explicit_logout");
+        setServiceUnavailable(false);
+        try {
+          sessionStorage.removeItem("registration_required_block_redirect");
+        } catch {
+          // ignore
+        }
+        void queryClient.invalidateQueries({ queryKey: ["/api/user/roles"] });
+        console.log("🔄 Invalidated roles query for new session");
       }
 
       // Handle successful OAuth login or session refresh
@@ -174,6 +181,13 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
       setSession(data.session);
       setUser(data.session.user);
       localStorage.setItem("supabase_token", data.session.access_token);
+      localStorage.removeItem("asa_explicit_logout");
+      setServiceUnavailable(false);
+      try {
+        sessionStorage.removeItem("registration_required_block_redirect");
+      } catch {
+        // ignore
+      }
     }
     return { data, error };
   };

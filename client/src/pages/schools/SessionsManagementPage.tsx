@@ -16,7 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { formatScheduleTimeRange } from "@/utils/formatScheduleTime";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Edit, Trash2, Calendar, Clock, Users, DollarSign } from "lucide-react";
+import { Plus, Edit, Trash2, Calendar, Clock, Users, DollarSign, ShoppingBag } from "lucide-react";
+import { SupplyListEditor } from "@/components/admin/SupplyListEditor";
 import type { EnrollmentSession as Session } from "@shared/schema";
 
 type SessionWithCounts = Session & {
@@ -150,6 +151,7 @@ function formToPayload(f: SessionFormData) {
 export default function SessionsManagementPage() {
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [suppliesSession, setSuppliesSession] = useState<SessionWithCounts | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<SessionFormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -336,6 +338,15 @@ export default function SessionsManagementPage() {
                       )}
                     </div>
                     <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSuppliesSession(s)}
+                        data-testid={`button-session-supplies-${s.id}`}
+                      >
+                        <ShoppingBag className="h-4 w-4 mr-1" />
+                        Supplies
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => openEdit(s)}>
                         <Edit className="h-4 w-4 mr-1" />
                         Edit
@@ -607,6 +618,24 @@ export default function SessionsManagementPage() {
               {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={suppliesSession !== null} onOpenChange={(open) => !open && setSuppliesSession(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Supply list — {suppliesSession?.name}</DialogTitle>
+            <DialogDescription>
+              These items apply to every child enrolled in this session (in addition to class lists).
+            </DialogDescription>
+          </DialogHeader>
+          {suppliesSession && (
+            <SupplyListEditor
+              ownerType="session"
+              ownerId={suppliesSession.id}
+              ownerLabel={suppliesSession.name}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </SchoolAdminLayout>

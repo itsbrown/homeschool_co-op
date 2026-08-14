@@ -30,6 +30,7 @@ import {
   ClipboardCheck,
   UserCheck,
   TrendingUp,
+  ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -285,6 +286,11 @@ export default function ParentSidebar() {
       href: "/parent/programs",
       title: "Programs & Classes",
       icon: <BookOpen className="h-5 w-5" />,
+    },
+    {
+      href: "/parent/supplies",
+      title: "Supply list",
+      icon: <ShoppingBag className="h-5 w-5" />,
     },
     {
       href: "/schedule",

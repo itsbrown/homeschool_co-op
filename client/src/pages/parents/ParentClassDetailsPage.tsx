@@ -1,4 +1,4 @@
-import { useRoute, useLocation } from "wouter";
+import { useRoute, useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import {
+  PARENT_SUPPLY_LIST_QUERY_KEY,
+  type ParentSupplyListResponse,
+} from "@/lib/parent-supply-list";
+import { storeItemDetailPath } from "@/lib/store-catalog";
 import { 
   ArrowLeft, 
   CalendarIcon, 
@@ -14,7 +19,8 @@ import {
   Users,
   DollarSign,
   BookOpen,
-  GraduationCap
+  GraduationCap,
+  ExternalLink
 } from "lucide-react";
 
 // Format currency - converts cents to dollars
@@ -198,6 +204,8 @@ export default function ParentClassDetailsPage() {
             </p>
           </CardContent>
         </Card>
+
+        <ClassSupplyListSection classId={Number(classId)} classTitle={classData.title} />
 
         {/* Time Options / Variants */}
         {variants && variants.length > 0 && (
@@ -472,6 +480,67 @@ function ClassRosterSection({ classId }: { classId: string | undefined }) {
             </div>
           ))}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ClassSupplyListSection({ classId, classTitle }: { classId: number; classTitle: string }) {
+  const { data } = useQuery<ParentSupplyListResponse>({
+    queryKey: PARENT_SUPPLY_LIST_QUERY_KEY,
+  });
+  const rows = (data?.items ?? []).filter((row) =>
+    row.for.some((entry) => entry.ownerType === "class" && entry.ownerId === classId),
+  );
+  if (rows.length === 0) return null;
+
+  return (
+    <Card data-testid="class-supply-list">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <BookOpen className="h-5 w-5" />
+          Supplies for {classTitle}
+        </CardTitle>
+        <CardDescription>
+          Also included on your{" "}
+          <Link href="/parent/supplies" className="underline text-primary">
+            household supply list
+          </Link>
+          .
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {rows.map((row) => (
+          <div key={row.mergeKey} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <p className="font-medium">
+                {row.name}
+                {row.quantity > 1 ? ` ×${row.quantity}` : ""}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {row.for
+                  .filter((entry) => entry.ownerId === classId)
+                  .map((entry) => entry.childName)
+                  .join(", ")}
+              </p>
+            </div>
+            {row.product?.productKind === "affiliate" && row.product.affiliateUrl && (
+              <Button asChild variant="outline" data-testid={`supply-buy-amazon-${row.product.id}`}>
+                <a href={row.product.affiliateUrl} target="_blank" rel="noopener noreferrer sponsored">
+                  Buy on Amazon
+                  <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
+                </a>
+              </Button>
+            )}
+            {row.product?.productKind === "owned" && data?.storeSlug && row.product.listingSlug && (
+              <Button asChild variant="outline" data-testid={`supply-view-shop-${row.product.id}`}>
+                <Link href={storeItemDetailPath(data.storeSlug, row.product.listingSlug)}>
+                  View in shop
+                </Link>
+              </Button>
+            )}
+          </div>
+        ))}
       </CardContent>
     </Card>
   );

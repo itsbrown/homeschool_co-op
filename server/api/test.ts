@@ -3885,6 +3885,69 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
 });
 
 /**
+ * POST /api/test/setup-supply-list-scenario
+ * Two children, two classes, one session, affiliate-linked supply items.
+ */
+router.post('/setup-supply-list-scenario', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+    }
+
+    const { seedSupplyListScenario } = await import('../tests/helpers/seedSupplyListScenario');
+    const seed = await seedSupplyListScenario(new TestDatabase());
+
+    let adminSupabaseLinked = false;
+    let parentSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthAdmin === true) {
+      try {
+        adminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.admin.id,
+          email: seed.admin.email,
+          password: seed.admin.password,
+          role: 'schoolAdmin',
+          schoolId: seed.school.id,
+          displayName: 'Supply List Admin',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthAdmin failed:', e);
+      }
+    }
+    if (req.body?.linkSupabaseAuthParent === true || req.body?.linkSupabaseAuth === true) {
+      try {
+        parentSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.parent.id,
+          email: seed.parent.email,
+          password: seed.parent.password,
+          role: 'parent',
+          schoolId: seed.school.id,
+          displayName: 'Supply List Parent',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthParent failed:', e);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...seed,
+        adminSupabaseLinked,
+        parentSupabaseLinked,
+        supabaseLinked: parentSupabaseLinked,
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-supply-list-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup supply list scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
  * POST /api/test/fulfill-store-checkout
  * Simulates Stripe webhook fulfillment for a pending public-store checkout (E2E only).
  */

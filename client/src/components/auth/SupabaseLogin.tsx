@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../SupabaseProvider';
 import { useRole } from '@/contexts/RoleContext';
 import { REGISTRATION_REDIRECT_BLOCK_KEY } from '@/lib/registration-required';
@@ -10,7 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import {
-  consumeAuthReturnDestination,
+  canLeaveLoginPage,
+  navigateAfterLogin,
   syncAuthReturnToFromUrl,
 } from '@/lib/auth-return-to';
 
@@ -21,7 +22,6 @@ export const SupabaseLogin: React.FC = () => {
     rolesBootstrapRole,
     isLoadingRoles,
     isSettingUpAccount,
-    isAccountReady,
     rolesError,
   } = useRole();
   const { toast } = useToast();
@@ -35,6 +35,19 @@ export const SupabaseLogin: React.FC = () => {
     message: string;
     email: string;
   } | null>(null);
+  const leavingLoginRef = useRef(false);
+
+  const leaveLoginPage = () => {
+    if (leavingLoginRef.current) return;
+    leavingLoginRef.current = true;
+    try {
+      sessionStorage.removeItem(REGISTRATION_REDIRECT_BLOCK_KEY);
+    } catch {
+      // ignore
+    }
+    console.log('👤 User logged in, leaving /login');
+    navigateAfterLogin("/dashboard");
+  };
 
   // Banner when middleware reports the Supabase user has no app DB row.
   useEffect(() => {
@@ -84,27 +97,28 @@ export const SupabaseLogin: React.FC = () => {
   const isFinishingLogin =
     isAuthenticated && !!user && (isLoadingRoles || isSettingUpAccount);
 
-  // Leave /login once Supabase session + app role bootstrap are ready.
+  // Leave /login as soon as Supabase has a session. Waiting for isAccountReady
+  // races queryClient.clear() on SIGNED_IN and traps a valid session on this page
+  // (typing /dashboard still works because DashboardRouter loads roles itself).
   useEffect(() => {
-    if (!isAuthenticated || !user || !isAccountReady || !effectiveRole) {
+    const redirectBlocked =
+      typeof sessionStorage !== "undefined" &&
+      sessionStorage.getItem(REGISTRATION_REDIRECT_BLOCK_KEY) === "1";
+    if (
+      !canLeaveLoginPage({
+        isAuthenticated,
+        hasUser: !!user,
+        registrationRequired: !!registrationRequired,
+        redirectBlocked,
+      })
+    ) {
       return;
     }
-    if (sessionStorage.getItem(REGISTRATION_REDIRECT_BLOCK_KEY) === '1') {
-      return;
-    }
-    if (registrationRequired) {
-      return;
-    }
-    const destination = consumeAuthReturnDestination("/dashboard");
-    console.log('👤 User logged in with role, redirecting to', destination);
-    setLocation(destination);
+    leaveLoginPage();
   }, [
     isAuthenticated,
     user,
-    isAccountReady,
-    effectiveRole,
     registrationRequired,
-    setLocation,
   ]);
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -113,7 +127,7 @@ export const SupabaseLogin: React.FC = () => {
     setError(null);
 
     const { error } = await signIn(email, password);
-    
+
     if (error) {
       setError(error.message);
       toast({
@@ -121,10 +135,11 @@ export const SupabaseLogin: React.FC = () => {
         description: error.message,
         variant: "destructive",
       });
+      setIsLoading(false);
+      return;
     }
-    // Redirect + welcome toast happen after roles load (see isFinishingLogin / redirect effect).
 
-    setIsLoading(false);
+    leaveLoginPage();
   };
 
   const handleGoogleSignIn = async () => {

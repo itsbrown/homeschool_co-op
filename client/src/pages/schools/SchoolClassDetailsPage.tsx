@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate, formatClassSchedule } from "@/lib/utils";
+import { SupplyListEditor } from "@/components/admin/SupplyListEditor";
 
 export default function SchoolClassDetailsPage() {
   const [, navigate] = useLocation();
@@ -255,6 +256,7 @@ export default function SchoolClassDetailsPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="students">Students ({students.length})</TabsTrigger>
             <TabsTrigger value="schedule">Schedule</TabsTrigger>
+            <TabsTrigger value="supplies" data-testid="tab-class-supplies">Supplies</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -479,6 +481,27 @@ export default function SchoolClassDetailsPage() {
                       {classData.startTime} - {classData.endTime}
                     </p>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="supplies">
+            <Card>
+              <CardHeader>
+                <CardTitle>Supply list</CardTitle>
+                <CardDescription>
+                  Parents see these items on their household shopping list. Link Amazon affiliates
+                  from Public Store → Products.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {classId && (
+                  <SupplyListEditor
+                    ownerType="class"
+                    ownerId={Number(classId)}
+                    ownerLabel={classData.title}
+                  />
                 )}
               </CardContent>
             </Card>
