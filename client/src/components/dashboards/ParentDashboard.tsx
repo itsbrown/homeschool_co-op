@@ -4,13 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2, Megaphone, MapPin } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2, Megaphone, MapPin, ShoppingBag } from "lucide-react";
 import {
   formatSessionSignupCta,
   formatSessionStartDate,
   getNextOpenSessionByStartDate,
   parseOpenSessionsResponse,
 } from "@/lib/open-sessions";
+import {
+  PARENT_SUPPLY_LIST_QUERY_KEY,
+  type ParentSupplyListResponse,
+} from "@/lib/parent-supply-list";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/components/SupabaseProvider";
@@ -592,6 +596,10 @@ export default function ParentDashboard() {
       return parseOpenSessionsResponse(await res.json());
     },
   });
+  const { data: supplyList, isLoading: supplyListLoading } = useQuery<ParentSupplyListResponse>({
+    queryKey: PARENT_SUPPLY_LIST_QUERY_KEY,
+    enabled: !!user && !!session,
+  });
   const openSessions = openSessionsPayload?.sessions ?? [];
   const closedNotices = openSessionsPayload?.closedNotices ?? [];
 
@@ -829,6 +837,30 @@ export default function ParentDashboard() {
               </Button>
             </Alert>
           )}
+          <Card data-testid="dashboard-supply-list-card">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <ShoppingBag className="h-5 w-5" />
+                    Supply list
+                  </CardTitle>
+                  <CardDescription>
+                    {supplyListLoading
+                      ? "Loading…"
+                      : (supplyList?.items.length ?? 0) > 0
+                        ? `${supplyList!.items.length} item${supplyList!.items.length === 1 ? "" : "s"} across ${supplyList!.classCount} class${supplyList!.classCount === 1 ? "" : "es"}${
+                            supplyList!.sessionCount > 0
+                              ? ` and ${supplyList!.sessionCount} session${supplyList!.sessionCount === 1 ? "" : "s"}`
+                              : ""
+                          }`
+                        : "Lists from your classes will show up here."}
+                  </CardDescription>
+                </div>
+                <Button asChild data-testid="btn-view-supply-list">
+                  <Link href="/parent/supplies">View list</Link>
+                </Button>
+              </CardHeader>
+            </Card>
           {childCount > 0 &&
             !enrollmentsLoading &&
             (enrollmentsData?.length ?? 0) === 0 &&
@@ -1174,6 +1206,16 @@ export default function ParentDashboard() {
                     <div className="text-left">
                       <div className="font-medium">Enrollments</div>
                       <div className="text-sm text-muted-foreground">View program status</div>
+                    </div>
+                  </Link>
+                </Button>
+
+                <Button asChild variant="outline" className="w-full justify-start h-auto p-4" data-testid="btn-supply-list">
+                  <Link href="/parent/supplies">
+                    <ShoppingBag className="mr-3 h-5 w-5" />
+                    <div className="text-left">
+                      <div className="font-medium">Supply list</div>
+                      <div className="text-sm text-muted-foreground">What to buy or bring</div>
                     </div>
                   </Link>
                 </Button>

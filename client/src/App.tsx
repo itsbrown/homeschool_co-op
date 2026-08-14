@@ -68,6 +68,7 @@ const MyDocumentsPage = lazy(() => import("@/pages/parent/MyDocumentsPage"));
 const DocumentDetailPage = lazy(() => import("@/pages/parent/DocumentDetailPage"));
 const MyAssessmentsPage = lazy(() => import("@/pages/parent/MyAssessmentsPage"));
 const ParentProgressPage = lazy(() => import("@/pages/parent/ParentProgressPage"));
+const ParentSupplyListPage = lazy(() => import("@/pages/parent/ParentSupplyListPage"));
 const SimpleClassesPage = lazy(() => import("./pages/SimpleClassesPage").then(m => ({ default: m.SimpleClassesPage })));
 const StaffInvitePage = lazy(() => import("./pages/schools/StaffInvitePage"));
 const StaffPositionsPage = lazy(() => import("./pages/schools/StaffPositionsPage"));
@@ -454,9 +455,22 @@ function Router() {
   // Handle redirects in useEffect to avoid state updates during render
   useEffect(() => {
     // Redirect to login if not authenticated (except for public routes)
-    if (!isAuthenticated && !isLoading && !['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(location) && !location.startsWith('/accept-invitation') && !location.startsWith('/school-registration') && !location.startsWith('/accept-educator-invitation') && !location.startsWith('/register/') && !location.startsWith('/school/') && !location.startsWith('/forms/') && !location.startsWith('/qr/') && !location.startsWith('/store/') && !location.startsWith('/fundraiser/')) {
+    const pathname = location.split('?')[0];
+    const onAuthOrPublicPath =
+      ['/login', '/auth-callback', '/register', '/emergency-logout', '/auth/logout', '/forgot-password', '/reset-password'].includes(pathname) ||
+      pathname.startsWith('/login') ||
+      pathname.startsWith('/accept-invitation') ||
+      pathname.startsWith('/school-registration') ||
+      pathname.startsWith('/accept-educator-invitation') ||
+      pathname.startsWith('/register/') ||
+      pathname.startsWith('/school/') ||
+      pathname.startsWith('/forms/') ||
+      pathname.startsWith('/qr/') ||
+      pathname.startsWith('/store/') ||
+      pathname.startsWith('/fundraiser/');
+    if (!isAuthenticated && !isLoading && !onAuthOrPublicPath) {
       console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
-      setLocation(loginPathWithReturnTo(location));
+      setLocation(loginPathWithReturnTo(pathname));
     }
   }, [isAuthenticated, isLoading, location, setLocation]);
 
@@ -684,6 +698,7 @@ function Router() {
       <Route path="/parent/assessments" component={MyAssessmentsPage} />
       <Route path="/parent/progress" component={ParentProgressPage} />
       <Route path="/parent/weekly-schedule" component={WeeklySchedulePage} />
+      <Route path="/parent/supplies" component={ParentSupplyListPage} />
 
       {/* Educator routes - use ParentAppShell when activeRole is 'parent', EducatorAppShell otherwise */}
       <Route path="/educator" component={() => <EducatorShellWrapper><EducatorDashboardPage /></EducatorShellWrapper>} />

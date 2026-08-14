@@ -532,3 +532,50 @@ export async function postSetupGradePlacementScenario(
   }
   return { response, json };
 }
+
+export type SetupSupplyListScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    adminSupabaseLinked?: boolean;
+    parentSupabaseLinked?: boolean;
+    admin: { id: number; email: string; password: string };
+    parent: { id: number; email: string; password: string };
+    school: { id: number; name: string; storeSlug: string };
+    storeSlug: string;
+    affiliateProduct: { id: number; name: string; affiliateUrl: string };
+    session: { id: number; name: string };
+    classA: { id: number; title: string };
+    classB: { id: number; title: string };
+    children: {
+      maya: { id: number; firstName: string; lastName: string };
+      liam: { id: number; firstName: string; lastName: string };
+    };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupSupplyListScenario(
+  request: APIRequestContext,
+  body: {
+    linkSupabaseAuth?: boolean;
+    linkSupabaseAuthAdmin?: boolean;
+    linkSupabaseAuthParent?: boolean;
+  } = {},
+): Promise<{ response: APIResponse; json: SetupSupplyListScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-supply-list-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupSupplyListScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupSupplyListScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}

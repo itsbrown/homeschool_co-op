@@ -35,6 +35,7 @@ import schoolAdminRouter from "./api/school-admin";
 import educatorRouter from "./api/educator";
 import roleInvitationsRouter from "./api/role-invitations";
 import parentRouter from "./api/parent";
+import supplyListsRouter, { parentSupplyListRouter } from "./api/supply-lists";
 import creditsRouter from "./api/credits";
 import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import { handleEnrollmentMessage } from "./api/enrollment-assistant";
@@ -2782,6 +2783,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/educator", educatorRouter);
+  app.use("/api/supply-lists", supplyListsRouter);
+  app.use("/api/parent/supply-list", parentSupplyListRouter);
   app.use("/api/parent", parentRouter);
   app.use("/api/credits", creditsRouter);
   app.use("/api/user", autoPayRouter);

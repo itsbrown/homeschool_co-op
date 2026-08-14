@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { LogOut, Menu, User, Bell, Home, Users, BookOpen, Calendar, DollarSign, Settings, FolderOpen, Sparkles, GraduationCap, Clock, ClipboardList, Building2, Shield, ChevronDown, LayoutGrid, CalendarDays, ClipboardCheck, UserCheck, AlertTriangle, RefreshCw, X } from "lucide-react";
+import { LogOut, Menu, User, Bell, Home, Users, BookOpen, Calendar, DollarSign, Settings, FolderOpen, Sparkles, GraduationCap, Clock, ClipboardList, Building2, Shield, ChevronDown, LayoutGrid, CalendarDays, ClipboardCheck, UserCheck, AlertTriangle, RefreshCw, X, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   apiRequest,
@@ -37,6 +37,7 @@ const mobileNavigationItems = [
   { href: "/children", title: "My Children", icon: Users },
   { href: "/parent/emergency-contacts", title: "Emergency Contacts", icon: AlertTriangle },
   { href: "/programs", title: "Programs & Classes", icon: BookOpen },
+  { href: "/parent/supplies", title: "Supply list", icon: ShoppingBag },
   { href: "/schedule", title: "Family Schedule", icon: Calendar },
   { href: "/payments", title: "Payments", icon: DollarSign },
   { href: "/parent/documents", title: "My Documents", icon: FolderOpen },

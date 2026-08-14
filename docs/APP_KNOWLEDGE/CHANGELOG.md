@@ -1,5 +1,15 @@
 # App knowledge changelog
 
+## 2026-08-14 (Family supply lists)
+
+- Class + session structured `supply_items` (scopes: student / class / family). Parents get `/parent/supplies` household merge from active enrollments (`enrolled`, `pending_admin_approval`).
+- Parent **Supply list** is always in desktop sidebar and mobile menu. Dashboard Overview card and Quick Action are always visible (empty copy when no items).
+- Household list uses `marketplaceClassId ?? classId` so seats that only set `class_id` (Yankee Doodle F2026 #625) still match class items.
+- Optional link to existing shop products (Amazon affiliate **Buy on Amazon**, owned **View in shop**). Do not paste Associates URLs on the supply row; add products under Public Store → Products first.
+- Session `completed` / end date does not hide items; next term does not auto-copy — use **Copy from…**.
+- Migration `258-supply-lists.sql`. E2E: `school-admin-supply-list`, `parent-supply-list`; seed `setup-supply-list-scenario`.
+- Login: leave `/login` with `window.location.assign` once the session exists; reject auth landing paths as `returnTo`; do not `queryClient.clear()` on `SIGNED_IN`.
+
 ## 2026-08-13 (Public store — Amazon affiliate products)
 
 - `store_products` affiliate fields (`product_kind`, `affiliate_url`, `asin`, `affiliate_metadata`); additive SQL `server/migrations/255-store-affiliate-products.sql` (apply on prod Neon after merge; never `db:push`).

@@ -2,6 +2,7 @@ import {
   AUTH_RETURN_TO_KEY,
   buildOAuthLoginRedirectUrl,
   consumeAuthReturnDestination,
+  canLeaveLoginPage,
   loginPathWithReturnTo,
   resolveAuthReturnDestination,
   stripOAuthTokensFromUrl,
@@ -55,6 +56,49 @@ describe("auth-return-to", () => {
     stripOAuthTokensFromUrl();
     expect(window.location.pathname).toBe("/login");
     expect(window.location.search).toBe("?returnTo=%2Fstore%2Fx%2Fcheckout");
+  });
+
+  it("loginPathWithReturnTo rejects /login as a destination", () => {
+    const path = loginPathWithReturnTo("/login?returnTo=%2Fstore%2Fasa");
+    expect(path).toBe("/login?returnTo=%2Fdashboard");
+    expect(sessionStorage.getItem(AUTH_RETURN_TO_KEY)).toBe("/dashboard");
+  });
+
+  it("consumeAuthReturnDestination ignores auth landing pages", () => {
+    window.history.replaceState({}, "", "/login?returnTo=%2Flogin");
+    expect(consumeAuthReturnDestination()).toBe("/dashboard");
+    sessionStorage.setItem(AUTH_RETURN_TO_KEY, "/login?returnTo=/store/x");
+    expect(consumeAuthReturnDestination()).toBe("/dashboard");
+  });
+
+  it("canLeaveLoginPage is true with a session even before roles load", () => {
+    expect(
+      canLeaveLoginPage({ isAuthenticated: true, hasUser: true }),
+    ).toBe(true);
+    expect(
+      canLeaveLoginPage({ isAuthenticated: false, hasUser: false }),
+    ).toBe(false);
+    expect(
+      canLeaveLoginPage({
+        isAuthenticated: true,
+        hasUser: true,
+        registrationRequired: true,
+      }),
+    ).toBe(false);
+    expect(
+      canLeaveLoginPage({
+        isAuthenticated: true,
+        hasUser: true,
+        redirectBlocked: true,
+      }),
+    ).toBe(true);
+    expect(
+      canLeaveLoginPage({
+        isAuthenticated: false,
+        hasUser: false,
+        redirectBlocked: true,
+      }),
+    ).toBe(false);
   });
 
   it("consumeAuthReturnDestination clears storage after first read", () => {

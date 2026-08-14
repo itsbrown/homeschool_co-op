@@ -51,6 +51,7 @@ import assessmentUploadRouter from "./api/assessment-upload";
 import progressRouter from "./api/progress";
 import progressInsightsRouter from "./api/progress-insights";
 import progressAnalyticsRouter from "./api/progress-analytics";
+import supplyListsRouter, { parentSupplyListRouter } from "./api/supply-lists";
 import schoolAnalyticsRouter from "./api/school-analytics";
 import telemetryActivityRouter from "./api/telemetry-activity";
 import analyticsRouter from "./api/analytics";
@@ -218,6 +219,8 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/progress", progressRouter);
   app.use("/api/progress/insights", progressInsightsRouter);
   app.use("/api/progress/analytics", progressAnalyticsRouter);
+  app.use("/api/supply-lists", supplyListsRouter);
+  app.use("/api/parent/supply-list", parentSupplyListRouter);
   app.use("/api/school-analytics", schoolAnalyticsRouter);
   app.use("/api/telemetry", telemetryActivityRouter);
   app.use("/api/analytics", analyticsRouter);
@@ -404,6 +407,12 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
       await initializeDatabase();
     } catch (err) {
       console.error('⚠️ initializeDatabase failed (non-fatal):', err);
+    }
+    try {
+      const { ensureSupplyListsSchema } = await import('./lib/ensure-supply-lists-schema');
+      await ensureSupplyListsSchema();
+    } catch (err) {
+      console.error('⚠️ ensureSupplyListsSchema failed (non-fatal):', err);
     }
   })();
 

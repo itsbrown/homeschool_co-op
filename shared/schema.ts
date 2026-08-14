@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique, doublePrecision, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -3463,3 +3463,49 @@ export const programDeliveryDocuments = pgTable("program_delivery_documents", {
   sortOrder: integer("sort_order").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// ==================== FAMILY SUPPLY LISTS ====================
+
+export const supplyOwnerTypes = ["class", "session"] as const;
+export const supplyScopes = ["student", "class", "family"] as const;
+
+export const supplyItems = pgTable("supply_items", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id")
+    .notNull()
+    .references(() => schools.id, { onDelete: "cascade" }),
+  ownerType: text("owner_type", { enum: ["class", "session"] }).notNull(),
+  ownerId: integer("owner_id").notNull(),
+  name: text("name").notNull(),
+  quantity: integer("quantity").default(1).notNull(),
+  unit: text("unit"),
+  scope: text("scope", { enum: ["student", "class", "family"] }).notNull(),
+  required: boolean("required").default(true).notNull(),
+  notes: text("notes"),
+  storeProductId: integer("store_product_id").references(() => storeProducts.id, {
+    onDelete: "set null",
+  }),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const parentSupplyChecks = pgTable(
+  "parent_supply_checks",
+  {
+    parentId: integer("parent_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    supplyItemId: integer("supply_item_id")
+      .notNull()
+      .references(() => supplyItems.id, { onDelete: "cascade" }),
+    checkedAt: timestamp("checked_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.parentId, t.supplyItemId] }),
+  }),
+);
+
+export type SupplyItem = typeof supplyItems.$inferSelect;
+export type InsertSupplyItem = typeof supplyItems.$inferInsert;
+export type ParentSupplyCheck = typeof parentSupplyChecks.$inferSelect;
