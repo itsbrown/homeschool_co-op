@@ -122,7 +122,7 @@ test.describe("public store amazon affiliate", () => {
     });
     await expect(page.getByTestId("input-affiliate-name")).not.toHaveValue("");
     await page.getByTestId("button-create-affiliate-product").click();
-    await expect(page.getByText(/Affiliate product listed/i)).toBeVisible({
+    await expect(page.getByText("Affiliate product listed on store", { exact: true })).toBeVisible({
       timeout: 30_000,
     });
     await expect(page.getByText(/Amazon product B08ADMIN01/i).first()).toBeVisible();
