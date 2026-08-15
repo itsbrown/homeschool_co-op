@@ -146,6 +146,13 @@ app.use('/api/schedule-builder', fileUpload({
   abortOnLimit: true,
 }));
 
+// Supply list CSV import (multipart FormData → req.files)
+app.use('/api/supply-lists', fileUpload({
+  useTempFiles: false,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB CSV
+  abortOnLimit: true,
+}));
+
 // Serve static files from uploads directory (legacy local uploads only)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 

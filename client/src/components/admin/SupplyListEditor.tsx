@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Download, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { SupplyOwnerType, SupplyScope } from "@shared/supply-list";
+import { SUPPLY_CSV_TEMPLATE } from "@shared/supply-list-csv";
+import { SupplyListCsvImportDialog } from "./SupplyListCsvImportDialog";
 
 type DraftItem = {
   key: string;
@@ -68,6 +70,20 @@ export function SupplyListEditor({
   const { toast } = useToast();
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
   const [copyValue, setCopyValue] = useState("");
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvText, setCsvText] = useState<string | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+
+  const downloadTemplate = () => {
+    const blob = new Blob([SUPPLY_CSV_TEMPLATE], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "supply-list-template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const listQuery = useQuery<{ items: Array<{
     id: number;
@@ -201,34 +217,70 @@ export function SupplyListEditor({
             ? `Items parents need for ${ownerLabel}. Link a shop product (including Amazon affiliates) instead of pasting a URL.`
             : "Items parents need for this class or session. Link a shop product instead of pasting a URL."}
         </p>
-        {copyOptions.length > 0 && (
-          <div className="flex gap-2 items-center">
-            <Select
-              value={copyValue || undefined}
-              onValueChange={setCopyValue}
-            >
-              <SelectTrigger className="w-[220px]" data-testid="select-copy-source">
-                <SelectValue placeholder="Copy from…" />
-              </SelectTrigger>
-              <SelectContent>
-                {copyOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!copyValue || copyMutation.isPending}
-              onClick={() => copyValue && copyMutation.mutate(copyValue)}
-              data-testid="button-copy-supply-list"
-            >
-              Copy
-            </Button>
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2 items-center">
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            data-testid="input-supply-csv-file"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              const text = await file.text();
+              setCsvFile(file);
+              setCsvText(text);
+              setCsvOpen(true);
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => csvInputRef.current?.click()}
+            data-testid="button-import-supply-csv"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Import CSV
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={downloadTemplate}
+            data-testid="button-download-supply-csv-template"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Download template
+          </Button>
+          {copyOptions.length > 0 && (
+            <>
+              <Select
+                value={copyValue || undefined}
+                onValueChange={setCopyValue}
+              >
+                <SelectTrigger className="w-[220px]" data-testid="select-copy-source">
+                  <SelectValue placeholder="Copy from…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {copyOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!copyValue || copyMutation.isPending}
+                onClick={() => copyValue && copyMutation.mutate(copyValue)}
+                data-testid="button-copy-supply-list"
+              >
+                Copy
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {drafts.length === 0 && (
@@ -243,7 +295,7 @@ export function SupplyListEditor({
             data-testid={`admin-supply-row-${index}`}
           >
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-              <div className="md:col-span-4 space-y-1">
+              <div className="md:col-span-3 space-y-1">
                 <Label htmlFor={`supply-name-${draft.key}`}>Item</Label>
                 <Input
                   id={`supply-name-${draft.key}`}
@@ -268,6 +320,16 @@ export function SupplyListEditor({
                   data-testid={`input-supply-qty-${index}`}
                 />
               </div>
+              <div className="md:col-span-2 space-y-1">
+                <Label htmlFor={`supply-unit-${draft.key}`}>Unit</Label>
+                <Input
+                  id={`supply-unit-${draft.key}`}
+                  value={draft.unit}
+                  onChange={(e) => updateDraft(draft.key, { unit: e.target.value })}
+                  placeholder="box"
+                  data-testid={`input-supply-unit-${index}`}
+                />
+              </div>
               <div className="md:col-span-3 space-y-1">
                 <Label>Who needs it</Label>
                 <Select
@@ -284,7 +346,7 @@ export function SupplyListEditor({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="md:col-span-3 flex items-end justify-between gap-2">
+              <div className="md:col-span-2 flex items-end justify-between gap-2">
                 <div className="flex items-center gap-2 pb-2">
                   <Switch
                     id={`supply-required-${draft.key}`}
@@ -385,6 +447,20 @@ export function SupplyListEditor({
           Save list
         </Button>
       </div>
+
+      <SupplyListCsvImportDialog
+        open={csvOpen}
+        ownerType={ownerType}
+        ownerId={ownerId}
+        existingItemCount={drafts.filter((d) => d.name.trim().length > 0).length}
+        file={csvFile}
+        csvText={csvText}
+        onClose={() => {
+          setCsvOpen(false);
+          setCsvFile(null);
+          setCsvText(null);
+        }}
+      />
     </div>
   );
 }

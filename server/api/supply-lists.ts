@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
+import type { UploadedFile } from "express-fileupload";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { requireSchoolContext } from "../middleware/require-school-context";
 import { storage } from "../storage";
@@ -19,8 +20,10 @@ import {
   replaceSupplyItems,
   setParentSupplyChecks,
 } from "../lib/supply-lists";
+import { importSupplyListFromCsv } from "../lib/import-supply-list-csv";
 import { ensureSupplyListsSchema } from "../lib/ensure-supply-lists-schema";
 import { SUPPLY_SCOPES } from "@shared/supply-list";
+import type { SupplyCsvColumnMapping } from "@shared/supply-list-csv";
 
 const router = Router();
 export const parentSupplyListRouter = Router();
@@ -68,6 +71,49 @@ const copySchema = z.object({
   fromOwnerType: z.enum(["class", "session"]),
   fromOwnerId: z.number().int().positive(),
 });
+
+const mappingSchema = z
+  .object({
+    name: z.string().optional(),
+    qty: z.string().optional(),
+    notes: z.string().optional(),
+    amazonLink: z.string().optional(),
+    affiliateLink: z.string().optional(),
+  })
+  .optional()
+  .nullable();
+
+function parseBool(raw: unknown): boolean {
+  return raw === true || raw === "true" || raw === "1";
+}
+
+function csvTextFromRequest(req: Request): string {
+  const files = req.files as { file?: UploadedFile | UploadedFile[] } | undefined;
+  const uploaded = files?.file;
+  if (uploaded) {
+    const file = Array.isArray(uploaded) ? uploaded[0] : uploaded;
+    return Buffer.from(file.data).toString("utf8");
+  }
+  if (typeof req.body?.csv === "string") return req.body.csv;
+  return "";
+}
+
+function mappingFromRequest(raw: unknown): SupplyCsvColumnMapping | null {
+  if (raw == null || raw === "") return null;
+  let value = raw;
+  if (typeof raw === "string") {
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      throw new SupplyListError("Invalid column mapping JSON", 400);
+    }
+  }
+  const parsed = mappingSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new SupplyListError("Invalid column mapping", 400);
+  }
+  return (parsed.data ?? null) as SupplyCsvColumnMapping | null;
+}
 
 router.use(async (_req, _res, next) => {
   await ensureReady();
@@ -121,6 +167,40 @@ router.put("/:ownerType/:ownerId", supabaseAuth, requireSchoolContext, async (re
     res.json({ items });
   } catch (err) {
     handleError(res, err, "Failed to save supply list");
+  }
+});
+
+router.post("/:ownerType/:ownerId/import-csv", supabaseAuth, requireSchoolContext, async (req: any, res: Response) => {
+  try {
+    const schoolId = Number(req.schoolId);
+    const ownerType = parseOwnerType(String(req.params.ownerType));
+    const ownerId = parseInt(req.params.ownerId, 10);
+    if (!Number.isFinite(ownerId)) return res.status(400).json({ message: "Invalid owner id" });
+    const csvText = csvTextFromRequest(req);
+    if (!csvText.trim()) {
+      return res.status(400).json({ message: "Upload a CSV file (Google Sheets: File → Download → CSV)." });
+    }
+    const mode = req.body?.mode === "append" ? "append" : "replace";
+    const dryRun = parseBool(req.body?.dryRun);
+    const mapping = mappingFromRequest(req.body?.mapping);
+    const result = await importSupplyListFromCsv({
+      schoolId,
+      ownerType,
+      ownerId,
+      csvText,
+      mapping,
+      mode,
+      dryRun,
+    });
+    res.json({
+      items: result.items,
+      preview: result.preview,
+      createdProducts: result.createdProducts,
+      reusedProducts: result.reusedProducts,
+      warnings: result.warnings,
+    });
+  } catch (err) {
+    handleError(res, err, "Failed to import supply list CSV");
   }
 });
 
