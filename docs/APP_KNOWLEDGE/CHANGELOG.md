@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-08-15 (Supply list CSV import)
+
+- Class/session **Supplies** can import a Google Sheets CSV (current tab: File → Download → CSV). Parser skips title rows; maps Supply Item / Qty / Notes / Affiliate Link (preferred) / Amazon Link.
+- Amazon URLs resolve sequentially via PA-API (or non-prod mock) into affiliate `store_products` keyed by `school_id` + uppercase ASIN. Fetch failures still import the name/qty/notes row without a product.
+- `POST /api/supply-lists/:ownerType/:ownerId/import-csv` (`replace` or `append`, optional `dryRun`). Multipart `file` or JSON `csv`. No schema change; `unit` is filled from qty text (e.g. `1 box`).
+- E2E: `school-admin-supply-list` CSV upload with `/dp/ASIN`.
+
 ## 2026-08-14 (Family supply lists)
 
 - Class + session structured `supply_items` (scopes: student / class / family). Parents get `/parent/supplies` household merge from active enrollments (`enrolled`, `pending_admin_approval`).

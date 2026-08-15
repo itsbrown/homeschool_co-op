@@ -238,7 +238,7 @@ School-admin observability (not a separate roster product):
 
 ## Supply lists (class + session)
 
-Parents see a household shopping list from active enrollments (`enrolled`, `pending_admin_approval`) — same status filter as educator views. Items live on `classes.id` / `sessions.id`, not `school_classes`. Optional `store_product_id` points at shop products (affiliates stay Buy on Amazon). See `docs/APP_KNOWLEDGE/domains/supply-lists.md`.
+Parents see a household shopping list from active enrollments (`enrolled`, `pending_admin_approval`) — same status filter as educator views. Items live on `classes.id` / `sessions.id`, not `school_classes`. Optional `store_product_id` points at shop products (affiliates stay Buy on Amazon). Class/session **Supplies** can **Import CSV** (Google Sheets current-tab download); Amazon URLs become/reuse affiliate `store_products` by school+ASIN — never stored as URLs on the row. See `docs/APP_KNOWLEDGE/domains/supply-lists.md`.
 
 ## Common Pitfalls
 
@@ -267,6 +267,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - Don't create enrollments without a valid `schoolId` — multi-tenant isolation requires it
 - Don't skip the Stripe payment verification step in the confirm endpoint
 - Don't assume `classId` is always set — marketplace enrollments usually use `marketplaceClassId`. Don't assume `marketplaceClassId` is always set either — some seats only have `classId` pointing at `classes.id` (Yankee Doodle F2026 #625). Supply lists use `marketplaceClassId ?? classId`.
+- Don't paste Amazon URLs onto `supply_items` — link `store_product_id` (CSV import reuses/creates affiliate products by school+ASIN)
 - Don't look up class price via `programId` when computing `remainingBalance` — use `enrollment.totalCost` directly (see Common Pitfalls above)
 
 ## Key Files
@@ -282,6 +283,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - `server/utils/cart-pricing.ts` — pricing calculations for enrollments
 - `shared/schema.ts` — `programEnrollments`, `schoolClassEnrollments`, `schoolClasses`, `classes` tables
 - `docs/APP_KNOWLEDGE/domains/supply-lists.md` — household supply lists from class/session items
+- `server/lib/import-supply-list-csv.ts` — admin CSV import (PA-API affiliate reuse by school+ASIN)
 - `client/src/pages/schools/SessionsManagementPage.tsx` — session config + fill summary
 - `client/src/pages/schools/EnrollmentsAdminPage.tsx` — Day Type filters + CSV
 - `client/src/contexts/CartContext.tsx` — cart state with enrollment creation

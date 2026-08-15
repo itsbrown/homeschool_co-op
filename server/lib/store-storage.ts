@@ -48,6 +48,27 @@ export async function getStoreProductById(id: number): Promise<StoreProduct | nu
   return row ?? null;
 }
 
+export async function findAffiliateProductByAsin(
+  schoolId: number,
+  asin: string,
+): Promise<StoreProduct | null> {
+  const normalized = asin.trim().toUpperCase();
+  if (!normalized) return null;
+  const db = await getDb();
+  const [row] = await db
+    .select()
+    .from(storeProducts)
+    .where(
+      and(
+        eq(storeProducts.schoolId, schoolId),
+        eq(storeProducts.productKind, 'affiliate'),
+        eq(storeProducts.asin, normalized),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 export async function createStoreProduct(data: typeof storeProducts.$inferInsert) {
   const db = await getDb();
   const [row] = await db.insert(storeProducts).values(data).returning();

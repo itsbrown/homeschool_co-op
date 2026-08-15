@@ -279,4 +279,4 @@ Note: this endpoint streams from object storage rather than returning a presigne
 | Product order photos | `productOrderImages` | order form field value |
 | Support screenshots | `supportScreenshots` | technical support report API |
 
-**Intentionally not migrated:** CSV imports (assessments, lexile, contacts), OCR temp uploads — in-memory/ephemeral only.
+**Intentionally not migrated:** CSV imports (assessments, lexile, contacts, schedule builder, supply lists), OCR temp uploads — in-memory/ephemeral only (`express-fileupload` on the API route).
