@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-08-15 (Affiliate products without PA-API)
+
+- Prod **Fetch product** no longer returns `NOT_CONFIGURED` when Amazon PA-API keys are missing. Preview resolves `/dp/` or `amzn.to` → ASIN + Associates image widget; admin enters name and display price.
+- `POST …/affiliate/preview` includes `source`: `paapi` | `mock` | `manual`. CSV supply import uses the same fallback (default $24.99 when price is empty).
+- Search URLs without ISBN/ASIN still return `400` `ASIN_NOT_FOUND`. Optional PA-API keys still fill live title/price when present.
+
 ## 2026-08-15 (Supply list CSV import)
 
 - Class/session **Supplies** can import a Google Sheets CSV (current tab: File → Download → CSV). Parser skips title rows; maps Supply Item / Qty / Notes / Affiliate Link (preferred) / Amazon Link.

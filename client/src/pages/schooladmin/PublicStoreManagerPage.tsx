@@ -34,6 +34,8 @@ type ProductFormState = {
   imageUrl: string;
 };
 
+type AffiliatePreviewSource = "paapi" | "mock" | "manual";
+
 type AffiliateFormState = {
   url: string;
   asin: string;
@@ -43,6 +45,7 @@ type AffiliateFormState = {
   imageUrl: string;
   affiliateMetadata: Record<string, unknown>;
   fetched: boolean;
+  previewSource: AffiliatePreviewSource | null;
 };
 
 const STORE_TAB_KEY = "public-store-manager-tab";
@@ -65,6 +68,7 @@ const emptyAffiliateForm = (): AffiliateFormState => ({
   imageUrl: "",
   affiliateMetadata: {},
   fetched: false,
+  previewSource: null,
 });
 
 function readInitialTab(): string {
@@ -219,9 +223,11 @@ export default function PublicStoreManagerPage() {
         imageUrl: string | null;
         affiliateUrl: string;
         affiliateMetadata: Record<string, unknown>;
+        source?: AffiliatePreviewSource;
       };
     },
     onSuccess: (preview) => {
+      const previewSource = preview.source ?? "paapi";
       setAffiliateForm((prev) => ({
         ...prev,
         asin: preview.asin,
@@ -231,8 +237,14 @@ export default function PublicStoreManagerPage() {
         imageUrl: preview.imageUrl || "",
         affiliateMetadata: preview.affiliateMetadata || {},
         fetched: true,
+        previewSource,
       }));
-      toast({ title: "Product details loaded from Amazon" });
+      toast({
+        title:
+          previewSource === "manual"
+            ? "ASIN loaded — enter the product name and display price"
+            : "Product details loaded from Amazon",
+      });
     },
     onError: (e: Error) =>
       toast({ title: parseApiErrorMessage(e, "Failed to fetch Amazon product"), variant: "destructive" }),
@@ -402,7 +414,8 @@ export default function PublicStoreManagerPage() {
                 <CardTitle>Amazon affiliate</CardTitle>
                 <CardDescription>
                   Paste a product page (/dp/…), an amzn.to short link, or an Associates
-                  search link that includes the book ISBN.
+                  search link that includes the book ISBN. Fetch works without Amazon API
+                  keys — you confirm the name and display price.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -410,7 +423,13 @@ export default function PublicStoreManagerPage() {
                   <Input
                     placeholder="https://www.amazon.com/dp/B0XXXXXXXX?tag=yourtag-20"
                     value={affiliateForm.url}
-                    onChange={(e) => updateAffiliateForm({ url: e.target.value, fetched: false })}
+                    onChange={(e) =>
+                      updateAffiliateForm({
+                        url: e.target.value,
+                        fetched: false,
+                        previewSource: null,
+                      })
+                    }
                     data-testid="input-affiliate-url"
                     aria-describedby="affiliate-url-hint"
                   />
@@ -434,6 +453,16 @@ export default function PublicStoreManagerPage() {
                     className="space-y-3 rounded-lg border p-3 bg-slate-50/80"
                     data-testid="affiliate-preview-fields"
                   >
+                    {affiliateForm.previewSource === "manual" ? (
+                      <p
+                        className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2"
+                        data-testid="affiliate-manual-preview-hint"
+                      >
+                        Amazon title and price were not fetched. Edit the name and enter a
+                        display price, then create the listing. Buy on Amazon still uses
+                        your pasted link.
+                      </p>
+                    ) : null}
                     <div className="flex gap-3 items-start">
                       <StoreProductCardImage
                         src={affiliateForm.imageUrl || null}
@@ -482,7 +511,9 @@ export default function PublicStoreManagerPage() {
                         previewAspectClass="aspect-square"
                       />
                       <p className="text-xs text-muted-foreground mt-2">
-                        Amazon fills this when PA-API is configured. If the cover is missing, upload one.
+                        {affiliateForm.previewSource === "manual"
+                          ? "Cover is the Amazon image widget. Upload a photo if it is missing or cropped poorly."
+                          : "Amazon fills this when PA-API is configured. If the cover is missing, upload one."}
                       </p>
                     </div>
                     <Button
