@@ -234,6 +234,7 @@ router.post('/affiliate/preview', async (req: any, res) => {
       detailPageUrl: preview.detailPageUrl,
       affiliateUrl: url.trim(),
       affiliateMetadata: preview.raw,
+      source: preview.source,
     });
   } catch (err) {
     if (err instanceof z.ZodError) {

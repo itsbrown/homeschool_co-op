@@ -43,7 +43,7 @@ Class owner id is `classes.id` (enrollment `marketplaceClassId`, or `classId` wh
 
 Tenant: `store_product_id` must belong to the same `school_id`. Copy/list 403 across schools.
 
-CSV import maps Google Sheets columns (skips title rows until a **Supply Item** / Item header). Qty text like `1 box` → quantity + `unit`; `Daily` / `As needed` → notes (qty 1). **Affiliate Link** wins over **Amazon Link**. URLs are never saved on `supply_items`: sequential PA-API preview (`amzn.to` followed) reuses `store_products` for this school + uppercase ASIN + `product_kind=affiliate`, or creates and auto-publishes a listing. Fetch failure → warning and the row still saves without a product. Max 100 rows (same as PUT). Prod needs `AMAZON_PAAPI_*`; non-prod mock is the same as the shop Products tab.
+CSV import maps Google Sheets columns (skips title rows until a **Supply Item** / Item header). Qty text like `1 box` → quantity + `unit`; `Daily` / `As needed` → notes (qty 1). **Affiliate Link** wins over **Amazon Link**. URLs are never saved on `supply_items`: sequential preview (`amzn.to` followed) reuses `store_products` for this school + uppercase ASIN + `product_kind=affiliate`, or creates and auto-publishes a listing. Preview uses PA-API when configured, otherwise ASIN + widget image (same as shop Products). Fetch failure → warning and the row still saves without a product. Max 100 rows (same as PUT).
 
 ## UI
 

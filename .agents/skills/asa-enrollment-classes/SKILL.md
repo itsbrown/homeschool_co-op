@@ -283,7 +283,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - `server/utils/cart-pricing.ts` — pricing calculations for enrollments
 - `shared/schema.ts` — `programEnrollments`, `schoolClassEnrollments`, `schoolClasses`, `classes` tables
 - `docs/APP_KNOWLEDGE/domains/supply-lists.md` — household supply lists from class/session items
-- `server/lib/import-supply-list-csv.ts` — admin CSV import (PA-API affiliate reuse by school+ASIN)
+- `server/lib/import-supply-list-csv.ts` — admin CSV import (affiliate reuse/create by school+ASIN; PA-API optional)
 - `client/src/pages/schools/SessionsManagementPage.tsx` — session config + fill summary
 - `client/src/pages/schools/EnrollmentsAdminPage.tsx` — Day Type filters + CSV
 - `client/src/contexts/CartContext.tsx` — cart state with enrollment creation

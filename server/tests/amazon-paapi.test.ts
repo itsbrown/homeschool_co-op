@@ -1,7 +1,9 @@
 import {
   AmazonPaapiError,
   asinFromAmazonSearchUrl,
+  buildManualAmazonProduct,
   buildMockAmazonProduct,
+  displayNameFromProductUrl,
   extractAsinFromUrl,
   fetchAmazonProductByUrl,
   isbn13ToIsbn10,
@@ -133,6 +135,20 @@ describe('amazon-paapi', () => {
     });
   });
 
+  describe('displayNameFromProductUrl', () => {
+    it('uses the title slug from a /dp/ URL', () => {
+      expect(
+        displayNameFromProductUrl(
+          'https://www.amazon.com/Dimensions-Common-Textbook-Writing-2013-05-04/dp/B01FGMWMUC?tag=asa-20',
+        ),
+      ).toBe('Dimensions Common Textbook Writing 2013 05 04');
+    });
+
+    it('returns null when the path has no slug', () => {
+      expect(displayNameFromProductUrl('https://www.amazon.com/dp/B0ABCD1234')).toBeNull();
+    });
+  });
+
   describe('buildMockAmazonProduct', () => {
     it('returns deterministic preview fields', () => {
       const preview = buildMockAmazonProduct('B08MOCK001', 'https://www.amazon.com/dp/B08MOCK001');
@@ -140,6 +156,7 @@ describe('amazon-paapi', () => {
       expect(preview.name).toContain('B08MOCK001');
       expect(preview.priceCents).toBe(2499);
       expect(preview.raw).toMatchObject({ mock: true });
+      expect(preview.source).toBe('mock');
     });
 
     it('uses the Associates ASIN image widget, not /images/I/{ASIN}', () => {
@@ -174,6 +191,30 @@ describe('amazon-paapi', () => {
         code: 'ASIN_NOT_FOUND',
         message: expect.stringMatching(/ISBN or ASIN/i),
       });
+    });
+
+    it('falls back to a manual preview when PA-API is not configured', async () => {
+      const preview = await fetchAmazonProductByUrl(
+        'https://www.amazon.com/America-250-Candle/dp/B0ABCD1234?tag=asa177607-20',
+        { useMock: false, paapiConfigured: false },
+      );
+      expect(preview.asin).toBe('B0ABCD1234');
+      expect(preview.name).toBe('America 250 Candle');
+      expect(preview.priceCents).toBeNull();
+      expect(preview.description).toBeNull();
+      expect(preview.source).toBe('manual');
+      expect(preview.raw).toMatchObject({ manual: true });
+      expect(preview.imageUrl).toContain('ASIN=B0ABCD1234');
+    });
+  });
+
+  describe('buildManualAmazonProduct', () => {
+    it('leaves price and description empty for the admin to fill', () => {
+      const preview = buildManualAmazonProduct('B08MANUAL1', 'https://www.amazon.com/dp/B08MANUAL1');
+      expect(preview.source).toBe('manual');
+      expect(preview.priceCents).toBeNull();
+      expect(preview.description).toBeNull();
+      expect(preview.imageUrl).toContain('ws-na.amazon-adsystem.com');
     });
   });
 

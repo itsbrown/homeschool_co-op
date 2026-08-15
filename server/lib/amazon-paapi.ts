@@ -1,5 +1,7 @@
 import { createHash, createHmac } from 'crypto';
 
+export type AmazonProductPreviewSource = 'paapi' | 'mock' | 'manual';
+
 export type AmazonProductPreview = {
   asin: string;
   name: string;
@@ -8,6 +10,8 @@ export type AmazonProductPreview = {
   imageUrl: string | null;
   detailPageUrl: string | null;
   raw: Record<string, unknown>;
+  /** How metadata was filled. `manual` = ASIN + widget image only (no PA-API). */
+  source: AmazonProductPreviewSource;
 };
 
 export class AmazonPaapiError extends Error {
@@ -138,6 +142,21 @@ function displayNameFromSearchKeywords(keywords: string | null): string | null {
   return name || null;
 }
 
+/** Title slug from `/Some-Product-Name/dp/ASIN` — used when PA-API is unavailable. */
+export function displayNameFromProductUrl(urlString: string): string | null {
+  try {
+    const path = new URL(urlString.trim()).pathname;
+    const slugMatch = path.match(/\/([^/]+)\/(?:dp|gp\/product|gp\/aw\/d|product)\//i);
+    if (!slugMatch?.[1]) return null;
+    const slug = decodeURIComponent(slugMatch[1]);
+    if (ASIN_RE.test(slug)) return null;
+    const name = slug.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return name.length >= 3 ? name : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Extract ASIN from common Amazon product URL shapes. */
 export function extractAsinFromUrl(urlString: string): string | null {
   let parsed: URL;
@@ -249,6 +268,29 @@ export function buildMockAmazonProduct(
     imageUrl: amazonAsinImageUrl(asin, partnerTagFromUrl(sourceUrl)),
     detailPageUrl: sourceUrl ?? `https://www.amazon.com/dp/${asin}`,
     raw: { mock: true, asin },
+    source: 'mock',
+  };
+}
+
+/**
+ * Production fallback when PA-API keys are missing: ASIN + Associates image widget.
+ * Name/price are placeholders for the admin to edit (CSV import uses $24.99 if price is empty).
+ */
+export function buildManualAmazonProduct(
+  asin: string,
+  sourceUrl?: string,
+  opts?: { name?: string | null },
+): AmazonProductPreview {
+  const { partnerTag } = getPaapiConfig();
+  return {
+    asin,
+    name: opts?.name?.trim() || `Amazon product ${asin}`,
+    description: null,
+    priceCents: null,
+    imageUrl: amazonAsinImageUrl(asin, partnerTagFromUrl(sourceUrl) ?? partnerTag),
+    detailPageUrl: sourceUrl ?? `https://www.amazon.com/dp/${asin}`,
+    raw: { manual: true, asin },
+    source: 'manual',
   };
 }
 
@@ -391,16 +433,20 @@ function mapGetItemsResponse(asin: string, data: any): AmazonProductPreview {
       detailPageUrl: item.DetailPageURL ?? null,
       fetchedAt: new Date().toISOString(),
     },
+    source: 'paapi',
   };
 }
 
 export type FetchAmazonProductDeps = {
   fetchImpl?: typeof fetch;
   resolveUrl?: typeof resolveAmazonProductUrl;
+  useMock?: boolean;
+  paapiConfigured?: boolean;
 };
 
 /**
- * Resolve Amazon URL → ASIN → product metadata (PA-API or mock).
+ * Resolve Amazon URL → ASIN → product metadata.
+ * Uses PA-API when configured; otherwise ASIN + Associates image (admin edits name/price).
  * Product `/dp/` URLs and Associates search links that include an ISBN/ASIN both work.
  */
 export async function fetchAmazonProductByUrl(
@@ -412,11 +458,11 @@ export async function fetchAmazonProductByUrl(
   const sourceUrl = urlString.trim();
 
   let asin: string | null = null;
-  let mockName: string | null = null;
+  let suggestedName: string | null = null;
 
   if (isAmazonSearchUrl(sourceUrl)) {
     asin = asinFromAmazonSearchUrl(sourceUrl);
-    mockName = displayNameFromSearchKeywords(extractAmazonSearchKeywords(sourceUrl));
+    suggestedName = displayNameFromSearchKeywords(extractAmazonSearchKeywords(sourceUrl));
     if (!asin) {
       throw new AmazonPaapiError(
         'That search link has no ISBN or ASIN. Add the book ISBN to the search (for example Title+978XXXXXXXXXX) or paste a product URL with /dp/.',
@@ -426,6 +472,7 @@ export async function fetchAmazonProductByUrl(
   } else {
     const resolvedUrl = await resolveUrl(sourceUrl, fetchImpl);
     asin = extractAsinFromUrl(resolvedUrl);
+    suggestedName = displayNameFromProductUrl(resolvedUrl);
     if (!asin) {
       throw new AmazonPaapiError(
         'Could not find an ASIN in that Amazon link. Use a product URL with /dp/ASIN.',
@@ -434,18 +481,18 @@ export async function fetchAmazonProductByUrl(
     }
   }
 
-  if (shouldUseAmazonPaapiMock()) {
-    return buildMockAmazonProduct(asin, sourceUrl, { name: mockName });
+  const useMock = deps.useMock ?? shouldUseAmazonPaapiMock();
+  const paapiConfigured = deps.paapiConfigured ?? isAmazonPaapiConfigured();
+
+  if (useMock) {
+    return buildMockAmazonProduct(asin, sourceUrl, { name: suggestedName });
   }
 
-  if (!isAmazonPaapiConfigured()) {
-    throw new AmazonPaapiError(
-      'Amazon Product Advertising API is not configured. Set AMAZON_PAAPI_ACCESS_KEY, AMAZON_PAAPI_SECRET_KEY, and AMAZON_PAAPI_PARTNER_TAG.',
-      'NOT_CONFIGURED',
-    );
+  if (paapiConfigured) {
+    return paapiGetItem(asin, fetchImpl);
   }
 
-  return paapiGetItem(asin, fetchImpl);
+  return buildManualAmazonProduct(asin, sourceUrl, { name: suggestedName });
 }
 
 async function paapiGetItem(
