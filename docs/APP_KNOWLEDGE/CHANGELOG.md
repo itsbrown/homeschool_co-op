@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-08-15 (Daily missed-PI sweep — plan Phase D)
+
+- Worker: `startMissedPiSweepJob()` from `server/index.ts` on `ENABLE_BACKGROUND_JOBS`. Default **detect + alert** in production (`MISSED_PI_SWEEP_ENABLED` unset = on). Auto-fix off (`MISSED_PI_SWEEP_AUTO_FIX`).
+- CLI: `node scripts/with-prod-env.mjs -- npx tsx server/scripts/sweep-missed-payment-intents.ts --days 90 --dry-run` (uses `STRIPE_SECRET_KEY`).
+- `updateEnrollmentsWithPaymentIntent` no longer forces `paymentStatus: 'pending'` after a successful apply.
+
 ## 2026-08-15 (Store product edit)
 
 - Public Store → Products **Edit** dialog updates name, description, display price, photo, and **List on public store**.

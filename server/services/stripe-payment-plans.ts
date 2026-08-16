@@ -845,7 +845,6 @@ export class StripePaymentPlanService {
           paymentPlan: dbPaymentPlan,
           paymentFrequency,
           paymentSystemVersion: 'v2_stripe_simplified',
-          paymentStatus: 'pending',
           metadata: {
             ...priorMeta,
             paymentPlan,
