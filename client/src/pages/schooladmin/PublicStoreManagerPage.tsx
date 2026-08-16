@@ -15,17 +15,12 @@ import { ImageUpload } from "@/components/ImageUpload";
 import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 import { StoreProgramsTab } from "@/components/store/StoreProgramsTab";
 import { StoreSignupsTab } from "@/components/store/StoreSignupsTab";
+import {
+  StoreProductEditDialog,
+  type EditableStoreProduct,
+} from "@/components/store/StoreProductEditDialog";
 
-type StoreProduct = {
-  id: number;
-  name: string;
-  priceCents: number;
-  description?: string | null;
-  imageUrl?: string | null;
-  productKind?: "owned" | "affiliate";
-  affiliateUrl?: string | null;
-  asin?: string | null;
-};
+type StoreProduct = EditableStoreProduct;
 
 type ProductFormState = {
   name: string;
@@ -160,6 +155,7 @@ export default function PublicStoreManagerPage() {
 
   const [productForm, setProductForm] = useState<ProductFormState>(readProductDraft);
   const [affiliateForm, setAffiliateForm] = useState<AffiliateFormState>(emptyAffiliateForm);
+  const [editingProduct, setEditingProduct] = useState<StoreProduct | null>(null);
 
   useEffect(() => {
     sessionStorage.setItem(PRODUCT_DRAFT_KEY, JSON.stringify(productForm));
@@ -549,7 +545,7 @@ export default function PublicStoreManagerPage() {
                       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md">
                         <StoreProductCardImage src={p.imageUrl} alt={p.name} className="rounded-md h-full" />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium truncate">{p.name}</p>
                           {p.productKind === "affiliate" ? (
@@ -558,6 +554,22 @@ export default function PublicStoreManagerPage() {
                             </Badge>
                           ) : (
                             <Badge variant="outline">Merch</Badge>
+                          )}
+                          {p.isPublished ? (
+                            <Badge
+                              className="bg-green-100 text-green-800 hover:bg-green-100"
+                              data-testid={`product-published-badge-${p.id}`}
+                            >
+                              On store
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="secondary"
+                              className="bg-gray-100 text-gray-800 hover:bg-gray-100"
+                              data-testid={`product-hidden-badge-${p.id}`}
+                            >
+                              Hidden
+                            </Badge>
                           )}
                         </div>
                         <p className="text-muted-foreground">${(p.priceCents / 100).toFixed(2)}</p>
@@ -572,11 +584,28 @@ export default function PublicStoreManagerPage() {
                           </a>
                         ) : null}
                       </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => setEditingProduct(p)}
+                        data-testid={`button-edit-product-${p.id}`}
+                      >
+                        Edit
+                      </Button>
                     </li>
                   ))}
                 </ul>
               </CardContent>
             </Card>
+            <StoreProductEditDialog
+              product={editingProduct}
+              open={editingProduct != null}
+              onOpenChange={(nextOpen) => {
+                if (!nextOpen) setEditingProduct(null);
+              }}
+            />
           </TabsContent>
         </Tabs>
       </div>

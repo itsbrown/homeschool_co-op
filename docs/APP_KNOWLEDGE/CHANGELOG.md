@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-08-15 (Store product edit)
+
+- Public Store → Products **Edit** dialog updates name, description, display price, photo, and **List on public store**.
+- `GET/PATCH /api/school-admin/public-store/products` include `listingId` + `isPublished`; publish uses school-scoped `upsertStoreListing`.
+- E2E: `e2e/public-store-product-edit.spec.ts` (merch hide/republish + affiliate price/photo).
+
 ## 2026-08-15 (Affiliate products without PA-API)
 
 - Prod **Fetch product** no longer returns `NOT_CONFIGURED` when Amazon PA-API keys are missing. Preview resolves `/dp/` or `amzn.to` → ASIN + Associates image widget; admin enters name and display price.

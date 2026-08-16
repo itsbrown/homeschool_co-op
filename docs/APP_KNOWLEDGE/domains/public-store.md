@@ -19,6 +19,7 @@ Parallel **store lane** at `/store/:storeSlug` — isolated from member `/cart` 
 - **Store-ready classes:** `enrollmentOpen` + price (same gate as parent catalog); not legacy `isPublished`
 - **Merch photos:** `store_products.image_url`; admin `ImageUpload` with category `storeProducts`; public cards use square `object-cover` via `StoreProductCardImage`
 - **Amazon affiliate products:** same `ImageUpload` / `storeProducts` cover upload as merch. `product_kind = 'affiliate'` (+ `affiliate_url`, `asin`, `affiliate_metadata`). Admin pastes an Associates URL → `POST …/affiliate/preview` → create product. Accepted: product `/dp/ASIN`, `amzn.to`, or search `amazon.com/s?k=…` **with ISBN-13/10 in the query** (ISBN-13 `978…` converts to ISBN-10 book ASIN). Search with no ISBN/ASIN returns `400` `ASIN_NOT_FOUND`. Preview sources: PA-API 5.0 when keys are set; non-prod mock; **manual** in production without keys (resolve short link → ASIN + Associates image widget; admin enters name/price). Image URL is the Associates ASIN widget (not `/images/I/{ASIN}`). Storefront CTA is **Buy on Amazon** (external); never Add to cart / Stripe. Broken covers overlay a Package icon on the `<img>` (do not unmount `src`). Migration `255-store-affiliate-products.sql`. Optional env for live title/price: `AMAZON_PAAPI_ACCESS_KEY`, `AMAZON_PAAPI_SECRET_KEY`, `AMAZON_PAAPI_PARTNER_TAG` (optional `AMAZON_PAAPI_MOCK=1`). Local cover upload without Replit Object Storage uses the E2E disk stub. Non-prod school-admin store routes auto-apply 251+255 via `ensurePublicStoreSchema`.
+- **Edit listed products:** Public Store → Products **Listed products** cards have **Edit**. Dialog updates name, description, display price, photo (`ImageUpload` / `storeProducts`), and **List on public store**. `PATCH /api/school-admin/public-store/products/:id` accepts those fields plus optional `isPublished`; publish/hide uses school-scoped `upsertStoreListing` (do not use unscoped `PATCH /listings/:id`). GET `/products` returns `listingId` + `isPublished`. Affiliate **display** price is a snapshot; Amazon checkout is authoritative. ASIN / affiliate URL stay read-only in the dialog.
 - **Supply lists** pick these same products (class/session editor → shop product dropdown, or **Import CSV** which reuses `school_id`+ASIN or creates a published affiliate listing). See [supply-lists.md](./supply-lists.md). Do not duplicate affiliate URLs on `supply_items`.
 
 ### Image upload flow (store)
@@ -51,10 +52,13 @@ Public assets served at `GET /public/:path` (object storage). Legacy `/uploads/s
 - `GET /api/school-admin/public-store/programs` — admin: sessions + classes with listing state
 - `GET /api/school-admin/public-store/signups` — program + product sign-ups with parent/child/emergency contact
 - `GET /api/school-admin/public-store/signups/export` — CSV download
+- `GET /api/school-admin/public-store/products` — products with `listingId` + `isPublished`
+- `PATCH /api/school-admin/public-store/products/:id` — name, description, `priceCents`, `imageUrl`, optional `isPublished` (upserts product listing)
 - `POST /api/school-admin/public-store/affiliate/preview` — `{ url }` → Amazon ASIN metadata (`source`: `paapi` | `mock` | `manual`)
 - `PATCH /api/school-admin/public-store/programs/:listingType/:sourceId` — publish, members-only, cover image
 - **Uploads:** `/api/unified-uploads/*` with categories `storePrograms`, `storeProducts` (not dedicated store multipart routes)
 - **E2E:** `e2e/public-store-affiliate.spec.ts` — Buy on Amazon CTA, snapshot reject, admin fetch+create (mocked PA-API)
+- **E2E:** `e2e/public-store-product-edit.spec.ts` — admin edit merch (fields, photo, hide/publish) + affiliate display price/photo
 
 ## Fulfillment
 
