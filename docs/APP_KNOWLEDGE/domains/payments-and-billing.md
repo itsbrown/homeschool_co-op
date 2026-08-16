@@ -46,6 +46,14 @@ Read-only checks after webhook when `POST_PAYMENT_VERIFY_ENABLED=true`. Includes
 
 **Phase B auto-fix** (optional, `POST_PAYMENT_VERIFY_AUTO_FIX=true`): on critical `stripe_db_parity` or `enrollment_ledger` checks, replays the same idempotent finalize module as interactive checkout — does **not** re-allocate mis-split historical PIs or reverse credits.
 
+**Daily missed-PI sweep (Layer 3 / plan Phase D):** `startMissedPiSweepJob()` from `server/index.ts` on the `ENABLE_BACKGROUND_JOBS` worker. Lists succeeded ASA checkout PIs in the last N days (default 30) and compares to `payments` / `stripe_payment_history`. Default prod posture: **detect + alert** (`error_logs` `error_type=missed_payment_intent`). Auto-fix is off (`MISSED_PI_SWEEP_AUTO_FIX=true` or CLI `--apply`) and reuses `finalizeSucceededPaymentIntent` only — never creates Stripe charges.
+
+```bash
+node scripts/with-prod-env.mjs -- npx tsx server/scripts/sweep-missed-payment-intents.ts --days 90 --dry-run
+```
+
+Worker: defaults **on** in production when `MISSED_PI_SWEEP_ENABLED` is unset. Uses `STRIPE_SECRET_KEY` (not `getStripeClient()` / Replit connector). Verify startup log `[missed-pi-sweep] scheduled every 24.0h`.
+
 ## Payment stuck-alert coverage
 
 Immediate error email is provider-backed by `server/services/error-notification.ts`:
@@ -309,6 +317,7 @@ School-admin **Financial Reports → Collections Overview** counts `summary.auto
 | **Stripe ↔ DB audit (email)** | `server/scripts/inspect-parent-stripe-by-email.ts` |
 | **Stuck Pay Now audit** | `server/lib/stuck-parent-manual-installments.ts`, `server/scripts/audit-stuck-parent-manual-installments.ts` |
 | **Payment flow monitor** | `server/services/payment-flow-monitor.ts` |
+| **Daily missed-PI sweep (Phase D)** | `server/lib/missed-payment-intent-sweep.ts`, `server/services/missed-payment-intent-sweep-job.ts`, `server/scripts/sweep-missed-payment-intents.ts` |
 | Payment patterns skill | `.agents/skills/asa-payment-patterns/SKILL.md` |
 | Credit skill | `.agents/skills/asa-credit-system/SKILL.md` |
 

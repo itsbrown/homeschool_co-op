@@ -1,7 +1,7 @@
 # Post-payment verification pipeline (architecture plan)
 
-**Status:** Phase A implemented (read-only; enable with `POST_PAYMENT_VERIFY_ENABLED=true` on webhook worker). **Phase B** auto-fix implemented behind `POST_PAYMENT_VERIFY_AUTO_FIX=true` (off until burn-in). Phases C–D not implemented.  
-**Last updated:** 2026-06-01  
+**Status:** Phase A implemented (read-only; enable with `POST_PAYMENT_VERIFY_ENABLED=true` on webhook worker). **Phase B** auto-fix implemented behind `POST_PAYMENT_VERIFY_AUTO_FIX=true` (off until burn-in). **Phase D daily missed-PI sweep implemented** (detect + alert; auto-fix off). Phase C (Cursor Automation webhook) is not implemented.  
+**Last updated:** 2026-08-15  
 **Related:** [`payment-flow-monitor.ts`](../../server/services/payment-flow-monitor.ts), [`payments-and-billing.md`](../APP_KNOWLEDGE/domains/payments-and-billing.md), [`AUTOPAY_PRODUCTION_CHECKLIST.md`](../AUTOPAY_PRODUCTION_CHECKLIST.md)
 
 ## Problem
@@ -98,7 +98,10 @@ Idempotent, bounded, no new Stripe charges:
 | `AUTO_PAY_SINGLE_INSTANCE` | 3 | Guard so autoscaled replicas do not duplicate money jobs |
 | `AUTOPAY_OFF_SESSION_CHARGES` | 3 | Off-session installment charges (worker only) |
 | `AUTOPAY_RECONCILIATION_INTERVAL_MS` | 3 | Stuck `processing` reconciliation tick |
-| `STRIPE_SECRET_KEY` | 1–3 | Stripe API for parity checks |
+| `STRIPE_SECRET_KEY` | 1–3 | Stripe API for parity checks **and** the daily missed-PI sweep (required on the worker; not Replit connector) |
+| `MISSED_PI_SWEEP_ENABLED` | 3 | Daily Stripe↔DB sweep. Default **on** in production when unset; off in dev unless `true` |
+| `MISSED_PI_SWEEP_AUTO_FIX` | 3 | Optional finalize replay for safe misses. Default **off** |
+| `MISSED_PI_SWEEP_LOOKBACK_DAYS` | 3 | Stripe list window (default 30) |
 | `DATABASE_URL` | 1–3 | Prod/staging DB |
 
 Layer 1 should run on the worker that processes webhooks **or** enqueue to the same singleton queue as other money-path jobs to avoid duplicate fixes.
@@ -132,11 +135,11 @@ Run `init-db` / deploy so `payment_verification_logs` exists.
 - POST minimal payload to `POST_PAYMENT_VERIFY_WEBHOOK_URL` (PI id, check keys, tiers, enrollment ids — **no PII** or tokenize).
 - Runbook for agent: prod read-only queries, compare Stripe, open PR for code fixes vs script for one-off ledger.
 
-### Phase D — Hardening + daily sweep
+### Phase D — Hardening + daily sweep ✅ (daily job)
 
-- Extend `payment-flow-monitor` signals for “verification failed in last 24h”.
-- Daily job: parents with succeeded Stripe PIs in last N days not in `payments` (email-indexed audit pattern).
-- Parent/admin communication templates for corrections.
+- Daily job: `startMissedPiSweepJob()` lists succeeded ASA Stripe PIs in the last N days (default 30) not in `payments`. CLI: `server/scripts/sweep-missed-payment-intents.ts`.
+- Default **detect + alert** (`error_type=missed_payment_intent`). Optional `MISSED_PI_SWEEP_AUTO_FIX` / `--apply` replays `finalizeSucceeded*`.
+- Still open: extend `payment-flow-monitor` signals for “verification failed in last 24h”; parent/admin communication templates.
 
 ## Communication matrix
 

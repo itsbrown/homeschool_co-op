@@ -70,6 +70,12 @@ For combined checkout PIs (`hasMembership: true`):
 node scripts/with-prod-env.mjs -- npx tsx server/scripts/reconcile-payment-intent-to-enrollments.ts pi_...
 ```
 
+Fleet scan (succeeded ASA PIs missing from `payments`; dry-run default):
+
+```bash
+node scripts/with-prod-env.mjs -- npx tsx server/scripts/sweep-missed-payment-intents.ts --days 90 --dry-run
+```
+
 ### 5. Verify in UI
 
 - Parent → **Dashboard** (`/parent/home`): no `membership-summary-due`, Member ID visible — reconcile runs on **`GET /api/parent/member-id`** and **`GET /api/billing/summary`** load
@@ -90,4 +96,5 @@ Regression E2E: `e2e/membership-dashboard-after-combined-payment.spec.ts`
 - [payments-and-billing.md](../domains/payments-and-billing.md) — Stripe audit section
 - [.agents/skills/asa-payment-patterns/SKILL.md](../../../.agents/skills/asa-payment-patterns/SKILL.md) — investigation protocol
 - `server/scripts/reconcile-payment-intent-to-enrollments.ts`
+- `server/scripts/sweep-missed-payment-intents.ts` — daily Stripe↔DB sweep CLI
 - `server/scripts/inspect-payment-divergence.ts` — legacy hard-coded incidents (prefer email audit script)
