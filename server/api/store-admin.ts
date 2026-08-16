@@ -7,13 +7,15 @@ import {
   validateStoreSlug,
 } from '../lib/store-config';
 import {
-  getStoreProductsBySchoolId,
+  getStoreProductsWithListingsBySchoolId,
   createStoreProduct,
   updateStoreProduct,
   getStoreProductById,
+  getStoreListingBySource,
   getStoreListingsBySchoolId,
   upsertStoreListing,
   updateStoreListing,
+  withProductListing,
   getStoreOrdersBySchoolId,
   updateSchoolStoreSettings,
   getProgramDeliveryDocumentIds,
@@ -110,7 +112,7 @@ router.patch('/settings', async (req: any, res) => {
 router.get('/products', async (req: any, res) => {
   try {
     const schoolId = parseInt(req.schoolId, 10);
-    res.json(await getStoreProductsBySchoolId(schoolId));
+    res.json(await getStoreProductsWithListingsBySchoolId(schoolId));
   } catch (err) {
     handleStoreRouteError(res, err, 'Failed to load store products');
   }
@@ -274,8 +276,9 @@ router.patch('/products/:id', async (req: any, res) => {
       affiliateUrl: z.string().url().nullable().optional(),
       asin: z.string().min(10).max(10).nullable().optional(),
       affiliateMetadata: z.record(z.unknown()).optional(),
+      isPublished: z.boolean().optional(),
     });
-    const data = schema.parse(req.body);
+    const { isPublished, ...data } = schema.parse(req.body);
     const nextKind = data.productKind ?? existing.productKind;
     const product = await updateStoreProduct(id, {
       ...data,
@@ -284,7 +287,16 @@ router.patch('/products/:id', async (req: any, res) => {
       affiliateUrl: nextKind === 'affiliate' ? (data.affiliateUrl ?? existing.affiliateUrl) : null,
     });
     if (!product) return res.status(404).json({ message: 'Product not found' });
-    res.json(product);
+    const listing =
+      isPublished !== undefined
+        ? await upsertStoreListing({
+            schoolId,
+            listingType: 'product',
+            sourceId: id,
+            isPublished,
+          })
+        : await getStoreListingBySource(schoolId, 'product', id);
+    res.json(withProductListing(product, listing));
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ message: 'Invalid product update', errors: err.flatten() });

@@ -33,6 +33,11 @@ export async function getSchoolByStoreSlug(storeSlug: string) {
   return row ?? null;
 }
 
+export type StoreProductWithListing = StoreProduct & {
+  listingId: number | null;
+  isPublished: boolean;
+};
+
 export async function getStoreProductsBySchoolId(schoolId: number): Promise<StoreProduct[]> {
   const db = await getDb();
   return db
@@ -40,6 +45,28 @@ export async function getStoreProductsBySchoolId(schoolId: number): Promise<Stor
     .from(storeProducts)
     .where(eq(storeProducts.schoolId, schoolId))
     .orderBy(asc(storeProducts.sortOrder), asc(storeProducts.id));
+}
+
+export async function getStoreProductsWithListingsBySchoolId(
+  schoolId: number,
+): Promise<StoreProductWithListing[]> {
+  const products = await getStoreProductsBySchoolId(schoolId);
+  const listings = await getStoreListingsBySchoolId(schoolId);
+  const bySourceId = new Map(
+    listings.filter((listing) => listing.listingType === "product").map((listing) => [listing.sourceId, listing]),
+  );
+  return products.map((product) => withProductListing(product, bySourceId.get(product.id) ?? null));
+}
+
+export function withProductListing(
+  product: StoreProduct,
+  listing: StoreListing | null,
+): StoreProductWithListing {
+  return {
+    ...product,
+    listingId: listing?.id ?? null,
+    isPublished: listing?.isPublished ?? false,
+  };
 }
 
 export async function getStoreProductById(id: number): Promise<StoreProduct | null> {
