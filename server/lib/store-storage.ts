@@ -112,6 +112,37 @@ export async function updateStoreProduct(id: number, data: Partial<typeof storeP
   return row ?? null;
 }
 
+/**
+ * Remove a school-scoped product and its listing. Past order lines keep `name`
+ * and have `product_id` / `listing_id` nulled (FKs have no ON DELETE).
+ * `supply_items.store_product_id` is ON DELETE SET NULL.
+ */
+export async function deleteStoreProduct(id: number, schoolId: number): Promise<boolean> {
+  const existing = await getStoreProductById(id);
+  if (!existing || existing.schoolId !== schoolId) return false;
+
+  const listing = await getStoreListingBySource(schoolId, 'product', id);
+  const db = await getDb();
+  return db.transaction(async (tx: any) => {
+    await tx
+      .update(storeOrderItems)
+      .set({ productId: null })
+      .where(eq(storeOrderItems.productId, id));
+    if (listing) {
+      await tx
+        .update(storeOrderItems)
+        .set({ listingId: null })
+        .where(eq(storeOrderItems.listingId, listing.id));
+      await tx.delete(storeListings).where(eq(storeListings.id, listing.id));
+    }
+    const deleted = await tx
+      .delete(storeProducts)
+      .where(and(eq(storeProducts.id, id), eq(storeProducts.schoolId, schoolId)))
+      .returning({ id: storeProducts.id });
+    return deleted.length > 0;
+  });
+}
+
 export async function getStoreListingsBySchoolId(schoolId: number): Promise<StoreListing[]> {
   const db = await getDb();
   return db

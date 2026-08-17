@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-08-17 (Store product links, delete, affiliate URL edit)
+
+- `store_products.affiliate_url` is optional on owned merch (Access Literacy, etc.) and required/editable on affiliates. Storefront CTA: Amazon host → **Buy on Amazon**; any other URL → **View product**; no URL → **Add to cart**.
+- Cart/snapshot rejects any product with an outbound URL (`AFFILIATE_NOT_PURCHASABLE`), not only `product_kind = affiliate`.
+- Edit dialog: editable affiliate/product URL, description `Textarea`, **Delete** (nulls order `product_id`/`listing_id`, listing gone, supply rows keep the name).
+- E2E: `e2e/public-store-product-edit.spec.ts` covers URL edit, View product, and delete.
+
 ## 2026-08-15 (Daily missed-PI sweep — plan Phase D)
 
 - Worker: `startMissedPiSweepJob()` from `server/index.ts` on `ENABLE_BACKGROUND_JOBS`. Default **detect + alert** in production (`MISSED_PI_SWEEP_ENABLED` unset = on). Auto-fix off (`MISSED_PI_SWEEP_AUTO_FIX`).

@@ -13,6 +13,7 @@ import {
   type StoreCartState,
 } from "@/lib/store-cart";
 import type { StoreCatalogItem } from "@/lib/store-catalog";
+import { storeProductCta } from "@shared/store-product-cta";
 
 export function usePublicStoreCart(schoolSlug: string) {
   const [, setLocation] = useLocation();
@@ -42,10 +43,14 @@ export function usePublicStoreCart(schoolSlug: string) {
   };
 
   const addProduct = (item: StoreCatalogItem) => {
-    if (item.productKind === "affiliate") {
+    const cta = storeProductCta({ affiliateUrl: item.affiliateUrl });
+    if (cta.kind !== "cart") {
       toast({
-        title: "Buy on Amazon",
-        description: "This item is purchased on Amazon, not through the store cart.",
+        title: cta.label,
+        description:
+          cta.kind === "amazon"
+            ? "This item is purchased on Amazon, not through the store cart."
+            : "This item is purchased on the vendor site, not through the store cart.",
       });
       return;
     }

@@ -24,6 +24,7 @@ import {
   countSessionVariantEnrollments,
   countSessionWaitlist,
 } from './session-enrollment-counts';
+import { storeProductIsCartPurchasable } from '@shared/store-product-cta';
 
 export type StoreCartLineType = 'product' | 'session' | 'class';
 
@@ -195,9 +196,9 @@ export async function calculateStoreSnapshot(params: {
     if (line.listingType === 'product') {
       const product = await getStoreProductById(line.sourceId);
       if (!product || !product.isActive) continue;
-      if (product.productKind === 'affiliate') {
+      if (!storeProductIsCartPurchasable(product.affiliateUrl)) {
         throw new StoreAffiliateCartError(
-          'Amazon affiliate products cannot be added to the cart. Use Buy on Amazon instead.',
+          'Products with an external buy link cannot be added to the cart.',
         );
       }
       const lineTotal = product.priceCents * qty;

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ExternalLink, Loader2, Printer, ShoppingBag } from "lucide-react";
+import { Loader2, Printer, ShoppingBag } from "lucide-react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { storeItemDetailPath } from "@/lib/store-catalog";
 import {
   PARENT_SUPPLY_LIST_QUERY_KEY,
+  supplyListProductAction,
   type ParentSupplyListResponse,
 } from "@/lib/parent-supply-list";
+import { StoreOutboundProductLink } from "@/components/store/StoreOutboundProductLink";
 
 type ViewMode = "shopping" | "child" | "class";
 
@@ -31,26 +32,22 @@ function SupplyBuyActions({
   row: ParentSupplyListResponse["items"][number];
   storeSlug: string | null;
 }) {
-  const product = row.product;
-  if (!product) return null;
-  if (product.productKind === "affiliate" && product.affiliateUrl) {
+  const action = supplyListProductAction(row.product, storeSlug);
+  if (!action) return null;
+  if (action.kind === "outbound") {
+    const testId =
+      action.cta.kind === "amazon"
+        ? `supply-buy-amazon-${action.productId}`
+        : `supply-view-product-${action.productId}`;
     return (
-      <Button asChild className="min-h-11" data-testid={`supply-buy-amazon-${product.id}`}>
-        <a href={product.affiliateUrl} target="_blank" rel="noopener noreferrer sponsored">
-          Buy on Amazon
-          <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
-        </a>
-      </Button>
+      <StoreOutboundProductLink url={action.cta.href} className="min-h-11" testId={testId} />
     );
   }
-  if (product.productKind === "owned" && storeSlug && product.listingSlug) {
-    return (
-      <Button asChild variant="outline" className="min-h-11" data-testid={`supply-view-shop-${product.id}`}>
-        <Link href={storeItemDetailPath(storeSlug, product.listingSlug)}>View in shop</Link>
-      </Button>
-    );
-  }
-  return null;
+  return (
+    <Button asChild variant="outline" className="min-h-11" data-testid={`supply-view-shop-${action.productId}`}>
+      <Link href={action.href}>View in shop</Link>
+    </Button>
+  );
 }
 
 export default function ParentSupplyListPage() {

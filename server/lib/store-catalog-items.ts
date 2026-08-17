@@ -45,7 +45,7 @@ export async function buildStoreCatalogItem(
       membersOnly: listing.membersOnly,
       sortOrder: listing.sortOrder,
       inStock:
-        product.productKind === 'affiliate'
+        product.productKind === 'affiliate' || Boolean(product.affiliateUrl?.trim())
           ? true
           : product.inventoryQty == null || product.inventoryQty > 0,
       productKind: (product.productKind as 'owned' | 'affiliate') ?? 'owned',

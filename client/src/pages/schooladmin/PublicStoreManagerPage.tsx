@@ -19,6 +19,7 @@ import {
   StoreProductEditDialog,
   type EditableStoreProduct,
 } from "@/components/store/StoreProductEditDialog";
+import { storeProductCta } from "@shared/store-product-cta";
 
 type StoreProduct = EditableStoreProduct;
 
@@ -27,6 +28,7 @@ type ProductFormState = {
   priceCents: number;
   description: string;
   imageUrl: string;
+  productLink: string;
 };
 
 type AffiliatePreviewSource = "paapi" | "mock" | "manual";
@@ -52,6 +54,7 @@ const emptyProductForm = (): ProductFormState => ({
   priceCents: 0,
   description: "",
   imageUrl: "",
+  productLink: "",
 });
 
 const emptyAffiliateForm = (): AffiliateFormState => ({
@@ -88,6 +91,7 @@ function readProductDraft(): ProductFormState {
       priceCents: typeof parsed.priceCents === "number" ? parsed.priceCents : 0,
       description: parsed.description ?? "",
       imageUrl: parsed.imageUrl ?? "",
+      productLink: parsed.productLink ?? "",
     };
   } catch {
     return emptyProductForm();
@@ -177,6 +181,7 @@ export default function PublicStoreManagerPage() {
         priceCents: Math.round(productForm.priceCents * 100),
         imageUrl: productForm.imageUrl || null,
         productKind: "owned",
+        affiliateUrl: productForm.productLink.trim() || null,
       });
       if (!res.ok) throw new Error("Failed to create product");
       const product = (await res.json()) as StoreProduct;
@@ -383,6 +388,20 @@ export default function PublicStoreManagerPage() {
                   onChange={(e) => updateProductForm({ description: e.target.value })}
                 />
                 <div>
+                  <Label htmlFor="create-product-link">Product link (optional)</Label>
+                  <Input
+                    id="create-product-link"
+                    type="url"
+                    placeholder="https://vendor.example/product"
+                    value={productForm.productLink}
+                    onChange={(e) => updateProductForm({ productLink: e.target.value })}
+                    data-testid="input-create-product-link"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    If set, families open this URL instead of adding to cart.
+                  </p>
+                </div>
+                <div>
                   <Label className="mb-2 block">Product photo</Label>
                   <ImageUpload
                     value={productForm.imageUrl}
@@ -548,7 +567,7 @@ export default function PublicStoreManagerPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium truncate">{p.name}</p>
-                          {p.productKind === "affiliate" ? (
+                          {storeProductCta({ affiliateUrl: p.affiliateUrl }).kind === "amazon" ? (
                             <Badge variant="secondary" data-testid={`affiliate-badge-${p.id}`}>
                               Amazon
                             </Badge>
@@ -573,16 +592,21 @@ export default function PublicStoreManagerPage() {
                           )}
                         </div>
                         <p className="text-muted-foreground">${(p.priceCents / 100).toFixed(2)}</p>
-                        {p.productKind === "affiliate" && p.affiliateUrl ? (
-                          <a
-                            href={p.affiliateUrl}
-                            target="_blank"
-                            rel="noopener noreferrer sponsored"
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                          >
-                            Affiliate link <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : null}
+                        {(() => {
+                          const cta = storeProductCta({ affiliateUrl: p.affiliateUrl });
+                          if (cta.kind === "cart") return null;
+                          return (
+                            <a
+                              href={cta.href}
+                              target="_blank"
+                              rel={cta.rel}
+                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                            >
+                              {cta.kind === "amazon" ? "Affiliate link" : "Product link"}{" "}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          );
+                        })()}
                       </div>
                       <Button
                         type="button"

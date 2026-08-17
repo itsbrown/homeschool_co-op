@@ -11,6 +11,7 @@ import {
 import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 import { StoreCatalogItemActions } from "@/components/store/StoreCatalogItemActions";
 import { StoreItemShareButton } from "@/components/store/StoreItemShareButton";
+import { storeProductCta } from "@shared/store-product-cta";
 
 type StoreCatalogCardProps = {
   item: StoreCatalogItem;
@@ -51,11 +52,11 @@ export function StoreCatalogCard({
       <CardContent className="flex flex-1 flex-col gap-3 p-4 pt-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="font-normal text-xs">
-            {storeListingTypeLabel(item.listingType, item.productKind)}
+            {storeListingTypeLabel(item.listingType, item.productKind, item.affiliateUrl)}
           </Badge>
           {item.membersOnly && <Badge variant="secondary">Members only</Badge>}
           {item.listingType === "product" &&
-            item.productKind !== "affiliate" &&
+            storeProductCta({ affiliateUrl: item.affiliateUrl }).kind === "cart" &&
             item.inStock === false && (
             <Badge variant="destructive">Out of stock</Badge>
           )}

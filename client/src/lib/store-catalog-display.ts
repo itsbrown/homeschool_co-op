@@ -1,4 +1,5 @@
 import type { StoreCatalogItem } from "@/lib/store-catalog";
+import { storeProductCta } from "@shared/store-product-cta";
 import { safeFormatDate } from "@/utils/safeFormatDate";
 
 const STORE_DATE_FORMAT = "MMM d, yyyy";
@@ -13,9 +14,13 @@ export type StoreCatalogSection = {
 export function storeListingTypeLabel(
   listingType: StoreCatalogItem["listingType"],
   productKind?: StoreCatalogItem["productKind"],
+  affiliateUrl?: StoreCatalogItem["affiliateUrl"],
 ): string {
-  if (listingType === "product" && productKind === "affiliate") {
-    return "Amazon";
+  if (listingType === "product") {
+    const cta = storeProductCta({ affiliateUrl });
+    if (cta.kind === "amazon" || (productKind === "affiliate" && cta.kind === "cart")) {
+      return "Amazon";
+    }
   }
   switch (listingType) {
     case "product":

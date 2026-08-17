@@ -16,6 +16,7 @@ type CatalogItem = {
   priceCents?: number;
   imageUrl?: string | null;
   productKind?: string;
+  affiliateUrl?: string | null;
 };
 
 async function fetchCatalog(request: APIRequestContext, slug: string) {
@@ -159,6 +160,10 @@ test.describe("public store product edit", () => {
     await expect(dialog).toBeVisible();
     await expect(page.getByTestId("input-edit-product-name")).toHaveValue(affiliate.name);
     await expect(dialog.getByText(/Display price is a snapshot/i)).toBeVisible();
+    await expect(page.getByTestId("input-edit-product-affiliate-url")).toHaveValue(affiliateUrl);
+
+    const updatedAffiliateUrl = "https://www.amazon.com/dp/B08EDIT002?tag=asa-e2e-20";
+    await page.getByTestId("input-edit-product-affiliate-url").fill(updatedAffiliateUrl);
 
     await page.getByTestId("input-edit-product-price").fill("18.75");
 
@@ -190,9 +195,82 @@ test.describe("public store product edit", () => {
     expect(listed!.productKind).toBe("affiliate");
     expect(listed!.priceCents).toBe(1875);
     expect(listed!.imageUrl).toMatch(/^\/public\/store-products\//);
+    expect(listed!.affiliateUrl).toBe(updatedAffiliateUrl);
 
     await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId(`store-buy-amazon-${listingId}`)).toBeVisible();
+    await expect(page.getByTestId(`store-buy-amazon-${listingId}`)).toHaveAttribute(
+      "href",
+      updatedAffiliateUrl,
+    );
     await expect(page.getByTestId(`store-add-product-${listingId}`)).toHaveCount(0);
+  });
+
+  test("owned product link shows View product; delete removes listing", async ({
+    page,
+    request,
+  }) => {
+    const { response, json } = await postSetupPublicStoreScenario(request, {
+      withPublishedProduct: true,
+      linkSupabaseAuthAdmin: true,
+    });
+    expect(response.ok(), json?.error ?? json?.details ?? "seed failed").toBeTruthy();
+    test.skip(
+      !json?.data?.adminSupabaseLinked,
+      "Supabase admin link required for Products tab UI",
+    );
+
+    const admin = json!.data!.admin;
+    const slug = json!.data!.storeSlug;
+    const product = json!.data!.product;
+    const listingId = json!.data!.listing.id;
+    const vendorUrl = "https://accessliteracy.com/e2e-orthography-notebook";
+
+    await loginSchoolAdmin(page, admin.email, admin.password);
+    await page.evaluate(() => localStorage.setItem("activeRole", "schoolAdmin"));
+    await page.goto("/school-admin/public-store?tab=products", {
+      waitUntil: "domcontentloaded",
+    });
+
+    await expect(page.getByTestId(`button-edit-product-${product.id}`)).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByTestId(`button-edit-product-${product.id}`).click();
+    const dialog = page.getByTestId("edit-product-dialog");
+    await expect(dialog).toBeVisible();
+    await page.getByTestId("input-edit-product-link").fill(vendorUrl);
+    await page.getByTestId("button-save-product").click();
+    await expect(page.getByText("Product updated", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const catalog = await fetchCatalog(request, slug);
+    const listed = catalog.items.find((item) => item.listingId === listingId);
+    expect(listed?.affiliateUrl).toBe(vendorUrl);
+
+    await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
+    const viewBtn = page.getByTestId(`store-view-product-${listingId}`);
+    await expect(viewBtn).toBeVisible();
+    await expect(viewBtn).toHaveAttribute("href", vendorUrl);
+    await expect(viewBtn).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(viewBtn).not.toHaveAttribute("rel", /sponsored/);
+    await expect(page.getByTestId(`store-add-product-${listingId}`)).toHaveCount(0);
+    await expect(page.getByTestId(`store-buy-amazon-${listingId}`)).toHaveCount(0);
+
+    await page.goto("/school-admin/public-store?tab=products", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.getByTestId(`button-edit-product-${product.id}`).click();
+    await expect(dialog).toBeVisible();
+    await page.getByTestId("button-delete-product").click();
+    await expect(page.getByText("Delete this product?")).toBeVisible();
+    await page.getByTestId("button-confirm-delete-product").click();
+    await expect(page.getByText("Product deleted", { exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId(`store-admin-product-${product.id}`)).toHaveCount(0);
+
+    const afterDelete = await fetchCatalog(request, slug);
+    expect(afterDelete.items.some((item) => item.listingId === listingId)).toBeFalsy();
   });
 });

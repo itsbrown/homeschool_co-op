@@ -8,9 +8,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import {
   PARENT_SUPPLY_LIST_QUERY_KEY,
+  supplyListProductAction,
   type ParentSupplyListResponse,
 } from "@/lib/parent-supply-list";
-import { storeItemDetailPath } from "@/lib/store-catalog";
+import { StoreOutboundProductLink } from "@/components/store/StoreOutboundProductLink";
 import { 
   ArrowLeft, 
   CalendarIcon, 
@@ -20,7 +21,6 @@ import {
   DollarSign,
   BookOpen,
   GraduationCap,
-  ExternalLink
 } from "lucide-react";
 
 // Format currency - converts cents to dollars
@@ -524,21 +524,28 @@ function ClassSupplyListSection({ classId, classTitle }: { classId: number; clas
                   .join(", ")}
               </p>
             </div>
-            {row.product?.productKind === "affiliate" && row.product.affiliateUrl && (
-              <Button asChild variant="outline" data-testid={`supply-buy-amazon-${row.product.id}`}>
-                <a href={row.product.affiliateUrl} target="_blank" rel="noopener noreferrer sponsored">
-                  Buy on Amazon
-                  <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
-                </a>
-              </Button>
-            )}
-            {row.product?.productKind === "owned" && data?.storeSlug && row.product.listingSlug && (
-              <Button asChild variant="outline" data-testid={`supply-view-shop-${row.product.id}`}>
-                <Link href={storeItemDetailPath(data.storeSlug, row.product.listingSlug)}>
-                  View in shop
-                </Link>
-              </Button>
-            )}
+            {(() => {
+              const action = supplyListProductAction(row.product, data?.storeSlug ?? null);
+              if (!action) return null;
+              if (action.kind === "outbound") {
+                const testId =
+                  action.cta.kind === "amazon"
+                    ? `supply-buy-amazon-${action.productId}`
+                    : `supply-view-product-${action.productId}`;
+                return (
+                  <StoreOutboundProductLink
+                    url={action.cta.href}
+                    variant="outline"
+                    testId={testId}
+                  />
+                );
+              }
+              return (
+                <Button asChild variant="outline" data-testid={`supply-view-shop-${action.productId}`}>
+                  <Link href={action.href}>View in shop</Link>
+                </Button>
+              );
+            })()}
           </div>
         ))}
       </CardContent>
