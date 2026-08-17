@@ -20,7 +20,12 @@ import {
   updateSchoolStoreSettings,
   getProgramDeliveryDocumentIds,
   setProgramDeliveryDocuments,
+  deleteStoreProduct,
 } from '../lib/store-storage';
+import {
+  optionalProductUrlSchema,
+  resolveStoreProductLinkUpdate,
+} from '../lib/store-product-links';
 import { getStoreProgramsForSchool, patchStoreProgram } from '../lib/store-programs';
 import { getPublicStoreSignups, buildStoreSignupsCsv } from '../lib/store-signups';
 import { storage } from '../storage';
@@ -174,7 +179,7 @@ router.post('/products', async (req: any, res) => {
         isActive: z.boolean().optional(),
         sortOrder: z.number().int().optional(),
         productKind: z.enum(['owned', 'affiliate']).optional(),
-        affiliateUrl: z.string().url().nullable().optional(),
+        affiliateUrl: optionalProductUrlSchema,
         asin: z.string().min(10).max(10).nullable().optional(),
         affiliateMetadata: z.record(z.unknown()).optional(),
       })
@@ -198,6 +203,16 @@ router.post('/products', async (req: any, res) => {
       });
     const data = schema.parse(req.body);
     const productKind = data.productKind ?? 'owned';
+    const link = resolveStoreProductLinkUpdate({
+      nextKind: productKind,
+      incomingUrl: data.affiliateUrl ?? null,
+      existingUrl: null,
+      incomingAsin: data.asin,
+      existingAsin: null,
+    });
+    if (!link.ok) {
+      return res.status(400).json({ message: link.message });
+    }
     const product = await createStoreProduct({
       schoolId,
       name: data.name,
@@ -208,8 +223,8 @@ router.post('/products', async (req: any, res) => {
       isActive: data.isActive,
       sortOrder: data.sortOrder,
       productKind,
-      affiliateUrl: productKind === 'affiliate' ? data.affiliateUrl : null,
-      asin: productKind === 'affiliate' ? data.asin?.toUpperCase() : null,
+      affiliateUrl: link.affiliateUrl,
+      asin: link.asin,
       affiliateMetadata:
         productKind === 'affiliate' ? (data.affiliateMetadata ?? {}) : {},
     });
@@ -273,18 +288,29 @@ router.patch('/products/:id', async (req: any, res) => {
       isActive: z.boolean().optional(),
       sortOrder: z.number().int().optional(),
       productKind: z.enum(['owned', 'affiliate']).optional(),
-      affiliateUrl: z.string().url().nullable().optional(),
+      affiliateUrl: optionalProductUrlSchema,
       asin: z.string().min(10).max(10).nullable().optional(),
       affiliateMetadata: z.record(z.unknown()).optional(),
       isPublished: z.boolean().optional(),
     });
     const { isPublished, ...data } = schema.parse(req.body);
-    const nextKind = data.productKind ?? existing.productKind;
+    const nextKind = (data.productKind ?? existing.productKind) as 'owned' | 'affiliate';
+    const link = resolveStoreProductLinkUpdate({
+      nextKind,
+      incomingUrl: data.affiliateUrl,
+      existingUrl: existing.affiliateUrl ?? null,
+      incomingAsin: data.asin,
+      existingAsin: existing.asin ?? null,
+    });
+    if (!link.ok) {
+      return res.status(400).json({ message: link.message });
+    }
+    const { affiliateUrl: _ignoredUrl, asin: _ignoredAsin, ...rest } = data;
     const product = await updateStoreProduct(id, {
-      ...data,
-      asin: data.asin != null ? data.asin.toUpperCase() : data.asin,
+      ...rest,
       inventoryQty: nextKind === 'affiliate' ? null : data.inventoryQty,
-      affiliateUrl: nextKind === 'affiliate' ? (data.affiliateUrl ?? existing.affiliateUrl) : null,
+      affiliateUrl: link.affiliateUrl,
+      asin: link.asin,
     });
     if (!product) return res.status(404).json({ message: 'Product not found' });
     const listing =
@@ -302,6 +328,18 @@ router.patch('/products/:id', async (req: any, res) => {
       return res.status(400).json({ message: 'Invalid product update', errors: err.flatten() });
     }
     handleStoreRouteError(res, err, 'Failed to update store product');
+  }
+});
+
+router.delete('/products/:id', async (req: any, res) => {
+  try {
+    const schoolId = parseInt(req.schoolId, 10);
+    const id = parseInt(req.params.id, 10);
+    const deleted = await deleteStoreProduct(id, schoolId);
+    if (!deleted) return res.status(404).json({ message: 'Product not found' });
+    res.status(204).send();
+  } catch (err) {
+    handleStoreRouteError(res, err, 'Failed to delete store product');
   }
 });
 

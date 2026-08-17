@@ -13,6 +13,7 @@ import {
 import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 import { StoreCatalogItemActions } from "@/components/store/StoreCatalogItemActions";
 import { StoreItemShareButton } from "@/components/store/StoreItemShareButton";
+import { storeProductCta } from "@shared/store-product-cta";
 
 type StoreItemDetailViewProps = {
   item: StoreCatalogItem;
@@ -32,7 +33,9 @@ export function StoreItemDetailView({
   const dateRange = formatStoreListingDateRange(item.startDate, item.endDate);
   const priceLine = formatStoreListingPrice(item);
   const isProduct = item.listingType === "product";
-  const isAffiliate = isProduct && item.productKind === "affiliate";
+  const outboundCta = storeProductCta({ affiliateUrl: item.affiliateUrl });
+  const isOutbound = outboundCta.kind !== "cart";
+  const isAmazon = outboundCta.kind === "amazon";
 
   return (
     <div className="space-y-6" data-testid="store-item-detail">
@@ -81,13 +84,13 @@ export function StoreItemDetailView({
           <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">
-                {storeListingTypeLabel(item.listingType, item.productKind)}
+                {storeListingTypeLabel(item.listingType, item.productKind, item.affiliateUrl)}
               </Badge>
               {item.membersOnly && <Badge variant="secondary">Members only</Badge>}
-              {isProduct && !isAffiliate && item.inStock === false && (
+              {isProduct && !isOutbound && item.inStock === false && (
                 <Badge variant="destructive">Out of stock</Badge>
               )}
-              {isProduct && !isAffiliate && item.inStock !== false && (
+              {isProduct && !isOutbound && item.inStock !== false && (
                 <Badge variant="secondary" className="bg-emerald-50 text-emerald-800 border-emerald-200">
                   In stock
                 </Badge>
@@ -98,10 +101,15 @@ export function StoreItemDetailView({
               <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900" data-testid="store-item-title">
                 {item.title}
               </h1>
-              {isAffiliate ? (
+              {isAmazon ? (
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                   <Package className="h-4 w-4 shrink-0" aria-hidden />
                   Sold on Amazon — you will leave this site to purchase.
+                </p>
+              ) : isOutbound ? (
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <Package className="h-4 w-4 shrink-0" aria-hidden />
+                  Sold on the vendor site — you will leave this site to view the product.
                 </p>
               ) : isProduct ? (
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5">
@@ -147,9 +155,11 @@ export function StoreItemDetailView({
           </div>
 
           <p className="text-xs text-muted-foreground px-1">
-            {isAffiliate
+            {isAmazon
               ? "Price shown is a snapshot from Amazon and may change. Purchases are completed on Amazon."
-              : isProduct
+              : isOutbound
+                ? "Open the vendor site to buy this item. It is not added to the store cart."
+                : isProduct
                 ? "Browse photos and full item details on this page. Add to cart when you are ready — checkout works for guests and members."
                 : "Full schedule and program details are on this page. Choose half or full day when adding sessions, then assign a child at checkout."}
           </p>

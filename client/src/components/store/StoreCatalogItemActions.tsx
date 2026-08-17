@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { ExternalLink } from "lucide-react";
 import type { StoreCatalogItem } from "@/lib/store-catalog";
+import { storeProductCta } from "@shared/store-product-cta";
+import { StoreOutboundProductLink } from "@/components/store/StoreOutboundProductLink";
 
 type StoreCatalogItemActionsProps = {
   item: StoreCatalogItem;
@@ -24,18 +25,23 @@ export function StoreCatalogItemActions({
     : "flex flex-col sm:flex-row flex-wrap gap-2 w-full";
 
   if (item.listingType === "product") {
-    if (item.productKind === "affiliate" && item.affiliateUrl) {
+    const cta = storeProductCta({ affiliateUrl: item.affiliateUrl });
+    if (cta.kind === "amazon") {
       return (
-        <Button asChild className={buttonClass} data-testid={`store-buy-amazon-${item.listingId}`}>
-          <a
-            href={item.affiliateUrl}
-            target="_blank"
-            rel="noopener noreferrer sponsored"
-          >
-            Buy on Amazon
-            <ExternalLink className="ml-2 h-4 w-4" aria-hidden />
-          </a>
-        </Button>
+        <StoreOutboundProductLink
+          url={cta.href}
+          className={buttonClass}
+          testId={`store-buy-amazon-${item.listingId}`}
+        />
+      );
+    }
+    if (cta.kind === "external") {
+      return (
+        <StoreOutboundProductLink
+          url={cta.href}
+          className={buttonClass}
+          testId={`store-view-product-${item.listingId}`}
+        />
       );
     }
     return (

@@ -1,6 +1,7 @@
 import {
   formatStoreListingPrice,
   groupStoreCatalogItems,
+  storeListingTypeLabel,
 } from "@/lib/store-catalog-display";
 import type { StoreCatalogItem } from "@/lib/store-catalog";
 
@@ -41,5 +42,23 @@ describe("store catalog display", () => {
     expect(sections[0].id).toBe("programs");
     expect(sections[1].id).toBe("shop");
     expect(sections[1].items).toHaveLength(1);
+  });
+
+  it("storeListingTypeLabel uses the outbound URL host, not productKind alone", () => {
+    expect(
+      storeListingTypeLabel(
+        "product",
+        "affiliate",
+        "https://www.amazon.com/dp/B08STORE01",
+      ),
+    ).toBe("Amazon");
+    expect(
+      storeListingTypeLabel(
+        "product",
+        "affiliate",
+        "https://accessliteracy.com/notebook",
+      ),
+    ).toBe("Merch");
+    expect(storeListingTypeLabel("product", "owned")).toBe("Merch");
   });
 });
