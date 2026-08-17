@@ -73,9 +73,11 @@ const mutation = useMutation({
 - Navigation items defined in `educatorNavigationItems` array
 
 ### Role Switching in Shells
-- `RoleSwitcher` component shown if user has multiple roles at current school
+- `RoleSwitcher` is **school-context only** (hidden unless roles span more than one school). Same-school parent+staff use additive nav, not a persona toggle.
+- Parent-only families keep a **flat** sidebar. Nest Family + Teaching **only** when `holdsParentAndTeaching` (direct parent + teaching job).
+- Parent+teaching stay in `ParentAppShell` even when `active_role` is Mentor; parent+admin without teaching keep today’s admin `/dashboard` (Phase 1).
 - `useRole()` provides `activeRole`, `availableRoles`, `setActiveRole(roleId)`
-- Role switch invalidates cached data
+- Role switch invalidates cached data. Helpers: `client/src/lib/user-jobs.ts`
 
 ## Styling & UI
 
@@ -192,6 +194,8 @@ Two separate pages list classes for parents, each using a **different API endpoi
 - `client/src/pages/ProgramsPage.tsx` — public class listing (uses `/api/classes`)
 - `client/src/pages/ProgramsParentPage.tsx` — parent class listing (uses `/api/school-admin/classes`, needs client-side filtering)
 - `client/src/components/layout/EducatorAppShell.tsx` — educator layout shell with sidebar
+- `client/src/components/layout/ParentAppShell.tsx` — parent chrome; nested Family/Teaching when `holdsParentAndTeaching`
+- `client/src/lib/user-jobs.ts` — direct job membership for chrome (not `hasRole` hierarchy)
 - `client/src/components/SupabaseProvider.tsx` — `useAuth()` hook, Supabase session management
 - `client/src/contexts/RoleContext.tsx` — `useRole()` hook, role switching logic
 - `client/src/contexts/CartContext.tsx` — cart state with TanStack Query

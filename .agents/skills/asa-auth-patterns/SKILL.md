@@ -200,35 +200,42 @@ if (!isAssigned) {
 - Always invalidate relevant TanStack Query caches after role switches
 - Always handle 401 token expiration gracefully — `apiRequest` retries once after refresh
 
-### Shell Wrappers Must Branch on `activeRole`, Never `hasRole`
+### Shell Wrappers: `activeRole` vs direct job membership
 
-Shell wrappers in `App.tsx` that select which sidebar to render **must** branch on `activeRole` (the role the user is currently acting as), **never** on `hasRole(...)` (which checks role membership, not the currently active role).
+`hasRole(...)` uses a **hierarchy** (`schoolAdmin` implies parent/educator/mentor). Never use it to pick chrome or to unhide Family/Teaching.
 
-**Why:** `hasRole('parent')` returns `true` for any user who holds the parent role — even if their active role is `schoolAdmin`. This causes multi-role users to always get wrapped in `ParentAppShell`, which sets `hasShell = true` in `LayoutShellContext`, and causes `SchoolAdminLayout` to skip rendering `UnifiedSchoolAdminSidebar`.
+**SchoolAdminShellWrapper** still branches on `activeRole === 'parent'` only. Do **not** wrap parent+admin-only (no teaching) in `ParentAppShell` from membership — that would steal `/dashboard` from school admins (Phase 1).
 
-**Wrong (role membership check — broken for multi-role users):**
+**EducatorShellWrapper + `/dashboard`:** parent+teaching (direct `user_roles` parent **and** a teaching job) stay in `ParentAppShell` even when `active_role` is `Mentor` / `educator`. Use `holdsParentAndTeaching(availableRoles)` from `client/src/lib/user-jobs.ts` — **not** `hasRole('parent')` and **not** `hasRole(['educator','teacher','mentor'])`.
+
+- `holdsParent` = direct `parent` row only (UC-10: schoolAdmin must not get Family)
+- `holdsTeaching` = educator/teacher/mentor/aide **or** a custom title not in `{parent,student,learner,schoolAdmin,director,admin,superAdmin}`
+- Same-school RoleSwitcher stays hidden (school-context switcher only if roles span schools)
+
+**Wrong (hierarchy leak — Family on pure admins):**
 ```typescript
-function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
-  const { hasRole } = useRole();
-  if (hasRole('parent')) {           // BUG: true even when actively acting as schoolAdmin
-    return <ParentAppShell>{children}</ParentAppShell>;
-  }
-  return <>{children}</>;
+if (hasRole('parent')) {
+  return <ParentAppShell>{children}</ParentAppShell>;
 }
 ```
 
-**Correct (active role check):**
+**Correct (SchoolAdminShellWrapper — still active role):**
 ```typescript
 function SchoolAdminShellWrapper({ children }: { children: React.ReactNode }) {
   const { activeRole } = useRole();
-  if (activeRole === 'parent') {     // Only wraps when user is currently acting as parent
+  if (activeRole === 'parent') {
     return <ParentAppShell>{children}</ParentAppShell>;
   }
   return <>{children}</>;
 }
 ```
 
-Apply the same rule to every shell wrapper (`EducatorShellWrapper`, etc.): always compare against `activeRole`, not `hasRole(...)`.
+**Correct (parent+teaching chrome — Phase 1):**
+```typescript
+if (holdsParentAndTeaching(availableRoles) || activeRole === 'parent') {
+  return <ParentAppShell>{children}</ParentAppShell>;
+}
+```
 
 ### Effective permissions (nav + API)
 
@@ -266,6 +273,9 @@ Staff Permissions UI writes location + school-wide rows; those unlock matching s
 - Don't redirect to login on every 401 — allow one token refresh retry first
 - Don't treat a thrown DB exception (`dbLookupFailed`) the same as a `null` return (user not found) — use separate flags and return `503` for DB errors, `403` only for a confirmed not-found user
 - Don't gate school-admin nav with `hasRole` while the user is acting as parent — use `activeRole` + effective permissions
+- Don't use `hasRole('parent')` or `hasRole(['educator','teacher','mentor'])` to unhide Family/Teaching — use `holdsParent` / `holdsParentAndTeaching` (direct `user_roles` membership)
+- Don't wrap parent+schoolAdmin (no teaching) in ParentAppShell from role membership — Phase 1 must not steal `/dashboard` from admins
+- Don't restore a same-school Parent/Staff/Admin RoleSwitcher — chrome is additive; switcher is school-context only
 - Don't use `db:push` for permissions schema — apply `server/migrations/permissions-scoping.sql` only
 
 ### Multi-Tenant Security Checklist
@@ -286,6 +296,7 @@ Staff Permissions UI writes location + school-wide rows; those unlock matching s
 - `client/src/lib/queryClient.ts` — `apiRequest`, default fetcher, token refresh
 - `client/src/components/SupabaseProvider.tsx` — `useAuth()` hook
 - `client/src/contexts/RoleContext.tsx` — `useRole()` hook, role switching
-- `client/src/components/RoleSwitcher.tsx` — role switching UI component
+- `client/src/lib/user-jobs.ts` — `holdsParent` / `holdsTeaching` / `holdsParentAndTeaching` (direct membership, not hierarchy)
+- `client/src/components/RoleSwitcher.tsx` — school-context switcher only (hidden for same-school multi-role)
 - `server/storage.ts` — `getUserRolesByUserId()`, `getUserByEmail()`
 - `docs/PERMISSIONS_ROLLOUT.md` — rollout / Replit apply steps

@@ -45,6 +45,12 @@ Admin:  POST /api/locations (school from resolve-school-id + body schoolId)
 
 Key files: `server/lib/registration-public-locations.ts`, `server/lib/location-db.ts`, `server/lib/associate-parent-school.ts`, `server/api/locations.ts`, `server/middleware/require-school-context.ts`.
 
+## Multi-role chrome (Phase 1)
+
+Parent+teaching (e.g. parent + custom `Mentor`) share **one parent chrome**: Family and Teaching are sibling nav groups. `/dashboard` is always the family hub for that cohort, even if `users.active_role` is `Mentor`. Parent-only families keep today’s flat sidebar. Parent+schoolAdmin without teaching still land on admin home. Same-school RoleSwitcher stays hidden.
+
+Helpers: `client/src/lib/user-jobs.ts`. Do **not** use `hasRole('parent')` (schoolAdmin hierarchy would show Family to pure admins). E2E: `e2e/additive-nav.spec.ts` via `POST /api/test/setup-additive-nav-scenario`.
+
 ## Testing lanes
 
 | Lane | What it proves |

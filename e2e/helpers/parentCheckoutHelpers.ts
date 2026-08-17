@@ -47,16 +47,27 @@ export async function loginParent(page: Page, email: string, password: string) {
 
 /** Bearer token for page.request — Playwright API context does not send localStorage automatically. */
 export async function waitForSupabaseToken(page: Page, timeoutMs = 45_000): Promise<string> {
-  await page.waitForFunction(
-    () => !!localStorage.getItem("supabase_token"),
-    null,
-    { timeout: timeoutMs },
-  );
-  const token = await page.evaluate(() => localStorage.getItem("supabase_token"));
-  if (!token) {
-    throw new Error("supabase_token missing from localStorage after login");
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const token = await page.evaluate(() => localStorage.getItem("supabase_token"));
+      if (token) return token;
+    } catch {
+      // Post-login redirect (returnTo / dashboard) destroys the execution context.
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    try {
+      await page.waitForFunction(
+        () => !!localStorage.getItem("supabase_token"),
+        null,
+        { timeout: Math.min(2_000, remaining) },
+      );
+    } catch {
+      // Predicate not true yet, or another navigation — retry until deadline.
+    }
   }
-  return token;
+  throw new Error("supabase_token missing from localStorage after login");
 }
 
 export function bearerAuthHeaders(token: string): { Authorization: string } {

@@ -117,6 +117,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | Spec | Command | What it covers | Seed endpoint |
 |------|---------|----------------|---------------|
 | [`e2e/school-code-registration.spec.ts`](../e2e/school-code-registration.spec.ts) | `npm run test:e2e -- e2e/school-code-registration.spec.ts` | `/register/:code` UI + live signup | `POST /api/test/setup-registration-scenario` |
+| [`e2e/additive-nav.spec.ts`](../e2e/additive-nav.spec.ts) | `npm run test:e2e -- e2e/additive-nav.spec.ts` | Parent+Mentor additive chrome: family hub, Family/Teaching groups, no RoleSwitcher, My Classes stays `shell-parent`; parent-only/educator-only unchanged | `setup-additive-nav-scenario` + `linkSupabaseAuth` (do **not** use `playwright/.auth/parent.json`) |
 | [`e2e/session-enrollment-flow.spec.ts`](../e2e/session-enrollment-flow.spec.ts) | `npm run test:e2e -- e2e/session-enrollment-flow.spec.ts` | Parent session wizard + `POST /api/session-enrollments` | `setup-session-enrollment-scenario` |
 | [`e2e/school-admin-session-day-type.spec.ts`](../e2e/school-admin-session-day-type.spec.ts) | `npm run test:e2e -- e2e/school-admin-session-day-type.spec.ts` | School-admin Sessions fill (`1/20 half · 1/25 full`) + Enrollments Day Type/session filters + CSV export control | `setup-session-day-type-admin-scenario` + `linkSupabaseAuthAdmin` |
 | [`e2e/quarterly-progress-report-wizard.spec.ts`](../e2e/quarterly-progress-report-wizard.spec.ts) | `npm run test:e2e -- e2e/quarterly-progress-report-wizard.spec.ts` | Educator NY \| Progress report wizard (save rubric, finalize) + parent PDF download + optional axe on parent hub | `setup-progress-scenario`, Supabase auth linked |
@@ -192,6 +193,7 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard` |
 | `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-weekly-schedule-plans`, `attendance-educator-mark`, `attendance-qr-clock-in` |
 | `POST /api/test/setup-grade-placement-scenario` | `grade-placement-auto-place`, `grade-placement-parent-card` |
+| `POST /api/test/setup-additive-nav-scenario` | `additive-nav.spec.ts` |
 | `POST /api/test/ensure-public-store-schema` | `public-store.spec.ts` |
 | `POST /api/test/setup-public-store-scenario` | `public-store.spec.ts`, `public-store-share.spec.ts`, `public-store-affiliate.spec.ts`, `public-store-product-edit.spec.ts`, `parent-supply-list.spec.ts` (empty nav) |
 | `POST /api/test/setup-supply-list-scenario` | `school-admin-supply-list.spec.ts`, `parent-supply-list.spec.ts` |

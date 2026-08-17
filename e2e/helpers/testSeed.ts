@@ -579,3 +579,45 @@ export async function postSetupSupplyListScenario(
   }
   return { response, json };
 }
+
+export type AdditiveNavPersona = {
+  id: number;
+  email: string;
+  password: string;
+  activeRole: string;
+};
+
+export type SetupAdditiveNavScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    school: { id: number; name: string };
+    class: { id: number; title: string };
+    parentOnly: AdditiveNavPersona;
+    parentMentor: AdditiveNavPersona;
+    parentMentorStaffActive: AdditiveNavPersona;
+    educatorOnly: AdditiveNavPersona;
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupAdditiveNavScenario(
+  request: APIRequestContext,
+  body: { linkSupabaseAuth?: boolean } = {},
+): Promise<{ response: APIResponse; json: SetupAdditiveNavScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-additive-nav-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupAdditiveNavScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupAdditiveNavScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}

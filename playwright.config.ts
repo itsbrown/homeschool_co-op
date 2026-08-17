@@ -28,14 +28,9 @@ const supabaseAnonKey = envOr("SUPABASE_ANON_KEY", defaultSupabaseAnonKey);
 const webServerEnv = {
   ...process.env,
   NODE_ENV: envOr("NODE_ENV", "test"),
-  DATABASE_URL: envOr(
-    "DATABASE_URL",
-    "postgresql://test:test@localhost:5432/asa_test",
-  ),
-  TEST_DATABASE_URL: envOr(
-    "TEST_DATABASE_URL",
-    envOr("DATABASE_URL", "postgresql://test:test@localhost:5432/asa_test"),
-  ),
+  // Do not inject a localhost `asa_test` fallback. That overrides repo `.env`
+  // (Railway) and makes `/api/test/*` seeds 500 when local Postgres is not running.
+  // CI/shell `DATABASE_URL` still flows through `...process.env`. Unset → `local-env.ts` loads `.env`.
   SUPABASE_URL: supabaseUrl,
   SUPABASE_ANON_KEY: supabaseAnonKey,
   SUPABASE_SERVICE_ROLE_KEY: envOr(

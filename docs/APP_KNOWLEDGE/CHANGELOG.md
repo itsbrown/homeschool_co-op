@@ -1,5 +1,13 @@
 # App knowledge changelog
 
+## 2026-08-17 (Additive parent+staff nav — Phase 1)
+
+- Parent+teaching (direct `user_roles` parent + teaching job, including custom titles like Mentor) stay in `ParentAppShell`; `/dashboard` is the family hub even when `active_role` is Mentor. Nested Family + Teaching groups only for that cohort; parent-only sidebar stays flat.
+- Do not use `hasRole('parent')` / educator hierarchy for chrome. Helpers: `client/src/lib/user-jobs.ts`. Same-school RoleSwitcher stays hidden.
+- E2E: `e2e/additive-nav.spec.ts` — `npm run test:e2e -- e2e/additive-nav.spec.ts` (seed `setup-additive-nav-scenario`). Skill: `asa-auth-patterns` shell-wrapper section.
+- Playwright `webServer` no longer injects localhost `asa_test` when `DATABASE_URL` is unset (that overrode `.env` and skipped seed specs). Worktrees need a `.env` (symlink is fine). HTML report “No tests found” on Skipped = `beforeAll` `test.skip`, not a missing file.
+- `waitForSupabaseToken` retries across post-login navigation so store `returnTo` E2E does not fail with “Execution context was destroyed”.
+
 ## 2026-08-17 (Store product links, delete, affiliate URL edit)
 
 - `store_products.affiliate_url` is optional on owned merch (Access Literacy, etc.) and required/editable on affiliates. Storefront CTA: Amazon host → **Buy on Amazon**; any other URL → **View product**; no URL → **Add to cart**.

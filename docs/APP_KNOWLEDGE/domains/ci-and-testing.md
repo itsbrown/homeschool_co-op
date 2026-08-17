@@ -88,6 +88,7 @@ Protocol: `~/.cursor/skills/maintain-app-knowledge/SKILL.md` (Step 2 = edit file
 | 49m Tests job, 180 failures | Full `test:server` in CI | Scoped to production-path + client only |
 | Jest hang | Open handles | `--forceExit` in CI production-path step |
 | E2E seed returns HTML / no data | Port 5000 reused by server without `/api/test` | `node scripts/free-port-5000.mjs` or `CI=true` for fresh `webServer` |
+| E2E all skipped; HTML Skipped filter empty | `beforeAll` `test.skip` after seed 500 (`getDb` / no Postgres); report counts skips but lists no rows | Worktree needs `.env` (symlink from main clone). Do not inject localhost `asa_test` in `playwright.config.ts` `webServer` env — it overrides `.env`. Check server log for `setup-*-scenario` 500 |
 
 ## Key files
 
