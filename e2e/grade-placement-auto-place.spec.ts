@@ -46,7 +46,12 @@ test.describe("grade placement auto-place", () => {
     const autoPlace = page.getByTestId("switch-auto-place-by-grade");
     await expect(autoPlace).toBeVisible({ timeout: 30_000 });
     await autoPlace.scrollIntoViewIfNeeded();
-    // Preview loads after auto-place is on; wait for the summary line.
+    // Switch stays disabled until location, session, and grades hydrate from GET class.
+    await expect(autoPlace).toBeEnabled({ timeout: 30_000 });
+    if ((await autoPlace.getAttribute("data-state")) !== "checked") {
+      await autoPlace.click();
+    }
+
     const preview = page.getByTestId("text-placement-preview");
     await expect(preview).toBeVisible({ timeout: 45_000 });
     await expect(preview).toContainText(/blocked|unpaid|placed/i);

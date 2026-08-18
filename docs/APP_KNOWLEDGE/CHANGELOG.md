@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-08-18 (E2E: CSV Done click + grade-placement preview)
+
+- `schedule-template-csv-import` hung on `schedule-csv-mapping-next` / `schedule-csv-done` because the first-visit **New to Weekly Templates?** Radix overlay (`schedule-tour-prompt`, 600ms after load) intercepts pointer events. Spec now seeds `schedule_builder_tour_seen` / session key; page dismisses the prompt when CSV import opens. After success, force-click `schedule-csv-done` (toast can still intercept). Do not use `networkidle`.
+- `grade-placement-auto-place`: wait until `switch-auto-place-by-grade` is enabled (form hydrate), click only if `data-state` is not `checked`, then wait for `text-placement-preview`. Preview renders only when auto-place is on and the GET preview returns `summaryLabel`.
+
 ## 2026-08-17 (Additive parent+staff nav — Phase 1)
 
 - Parent+teaching (direct `user_roles` parent + teaching job, including custom titles like Mentor) stay in `ParentAppShell`; `/dashboard` is the family hub even when `active_role` is Mentor. Nested Family + Teaching groups only for that cohort; parent-only sidebar stays flat.

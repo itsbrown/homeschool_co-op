@@ -63,7 +63,7 @@ Block completion stays admin/Week Planner in v1 (sets `week_plan_blocks.is_compl
 Interactive walkthrough id `schedule-builder` (`client/src/components/tutorials/tutorialDefinitions.ts`):
 
 - **How to use** on Weekly Templates + Week Planner headers
-- First-visit soft prompt on Schedule Builder (`localStorage` key `schedule_builder_tour_seen`)
+- First-visit soft prompt on Schedule Builder (`localStorage` key `schedule_builder_tour_seen`; session key `schedule_builder_tour_prompt_session`). Opening a CSV import dismisses the prompt so its Radix overlay cannot sit on the custom import dialog.
 - **Need Help?** → Tutorials & Guides (school-admin role list includes this guide)
 
 Steps: templates → class bind → blocks/CSV → Week Planner → New Week → Publish → optional Attendance Lesson plans KPI.
@@ -95,6 +95,7 @@ Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: 
 | Week Planner **Confirm Import** 500 / failed | Import built `{ dayOfWeek, startTime, data }` but `bulkUpdateWeekPlanBlocks` needs `skeletonBlockId` + flat fields | Resolve skeleton slot by day+start_time; pass correct shape (fixed 2026-07-14) |
 | Template CSV (`default_title`) on Week Planner looks wrong / empty titles | Week-plan columns use `title`; no mapper | Shared dialog maps `default_title` → title; server also falls back to `default_title` |
 | Educator Schedule “Unable to load” / `/schedules/week` 500 | Missing `getEducatorSchedulesForWeek` / events storage | Restored in `educator-schedules-db` + soft-fail `events-range-db`; overlay published plans via `schedule-day-index` |
+| E2E `schedule-csv-done` / `schedule-csv-mapping-next` click times out | First-visit tour prompt (`schedule-tour-prompt`) Radix overlay intercepts the custom CSV portal; CI often hits this on Done (tour fires during import), fast local runs on Next | Seed `schedule_builder_tour_seen`; dismiss prompt when CSV opens; force-click Done after success. Skip `networkidle`. |
 
 ## Key files
 

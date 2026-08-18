@@ -21,6 +21,27 @@ export async function dismissStaffGuideIfVisible(page: Page) {
   }
 }
 
+/** Schedule Builder first-visit tour overlay (z-9999) intercepts CSV dialog clicks. */
+export async function preventScheduleBuilderTour(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem("schedule_builder_tour_seen", "true");
+    sessionStorage.setItem("schedule_builder_tour_prompt_session", "true");
+  });
+}
+
+/** Close the Weekly Templates tour prompt if it already opened. */
+export async function dismissScheduleBuilderTourIfVisible(page: Page) {
+  const prompt = page.getByTestId("schedule-tour-prompt");
+  const dismiss = page.getByTestId("schedule-tour-dismiss");
+  try {
+    await prompt.waitFor({ state: "visible", timeout: 1500 });
+    await dismiss.click();
+    await expect(prompt).toBeHidden({ timeout: 5000 });
+  } catch {
+    // Prompt not shown.
+  }
+}
+
 /** Skip the first-run parent dashboard onboarding tour if it appears. */
 export async function dismissParentOnboardingTourIfVisible(page: Page) {
   const skip = page.getByTestId("tour-skip");

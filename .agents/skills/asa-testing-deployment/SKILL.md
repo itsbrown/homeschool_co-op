@@ -275,6 +275,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - **Frontend can't reach API** → port conflict or wrong binding → ensure only Express+Vite uses port 5000
 - **Server changes not visible** → workflow not restarted after code changes → restart "Start application" and verify clean startup
 - **Tests fail with "element not found"** → test assumes empty database state → generate unique test data with `nanoid` instead
+- **Playwright click hangs 120s after success UI** → first-visit `schedule-tour-prompt` overlay intercepts `schedule-csv-*` clicks (or a switch never hydrates) → seed `schedule_builder_tour_seen` / `schedule_builder_tour_prompt_session` before load; wait for enabled/visible; click Radix switches only if `data-state` is not already `checked`; `click({ force: true })` when a toast sits on the target. Do **not** `waitForLoadState("networkidle")` (this app keeps polling).
 - **Frontend env var undefined** → missing `VITE_` prefix → rename to `VITE_MY_VAR` and access via `import.meta.env.VITE_MY_VAR`
 - **Schema change not applied** → wrote raw SQL migration file → use `npm run db:push` (Drizzle handles it)
 - **`The server does not support SSL connections`** in dev → a `pg`/`postgres.js` client was opened with hardcoded `ssl: { rejectUnauthorized: false }` or `ssl: 'require'`. Replit dev uses Helium, which does not accept SSL handshakes. Replace the hardcoded option with `getDbSslConfig()` (for `pg`) or `getPostgresJsSslOption()` (for `postgres.js`) from `server/lib/database-url.ts` so SSL is enabled only when `NODE_ENV === 'production'`.
@@ -302,6 +303,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - Don't edit `vite.config.ts` or `drizzle.config.ts` without cause; `server/vite.ts` may only change for `/api/*` SPA-skip safety
 - Don't edit `package.json` scripts without user approval
 - Don't write Playwright tests that assume empty database state
+- Don't use `page.waitForLoadState("networkidle")` to stabilize UI — TanStack Query polling never goes idle; wait for the specific testid or API response instead
 - Don't expose or log secrets/API keys in code
 - Don't use raw `psql` for database debugging — use the SQL execution tool
 - Don't remove the `Cache-Control: no-cache` middleware from `server/index.ts` — post-deployment chunk-load failures will break all frontend routes for users with cached browsers
