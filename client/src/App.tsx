@@ -15,6 +15,7 @@ import { InteractiveTutorialProvider } from "@/components/tutorials/InteractiveT
 import PaymentHelpAssistant from "@/components/payments/PaymentHelpAssistant";
 import { SchoolRouteGuard } from "@/components/auth/SchoolRouteGuard";
 import { StaffGuideProvider } from "@/contexts/StaffGuideContext";
+import { holdsParentAndTeaching } from "@/lib/user-jobs";
 
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
@@ -255,10 +256,11 @@ const NotificationManagementPage = lazy(() => import("@/pages/NotificationManage
 const EnrollmentsAdminPage = lazy(() => import("./pages/schools/EnrollmentsAdminPage"));
 
 function EducatorShellWrapper({ children }: { children: React.ReactNode }) {
-  const { activeRole } = useRole();
-  // Multi-role parents keep ParentAppShell on /educator/*; Staff Guide highlights
-  // (My Classes, Start Session, My Hours) still need StaffGuideProvider.
-  if (activeRole === 'parent') {
+  const { activeRole, availableRoles } = useRole();
+  // Parent+teaching stay in ParentAppShell even when active_role is Mentor/educator.
+  // Staff Guide highlights (My Classes, Start Session, My Hours) still need StaffGuideProvider.
+  // Do not use hasRole('parent') — schoolAdmin hierarchy would wrap pure admins.
+  if (holdsParentAndTeaching(availableRoles) || activeRole === 'parent') {
     return (
       <StaffGuideProvider>
         <ParentAppShell>{children}</ParentAppShell>
@@ -304,7 +306,7 @@ function WeekPlannerRoute() {
 
 function DashboardRouter() {
   const { user } = useAuth();
-  const { activeRole, showRoleSelection, setActiveRole, isLoadingRoles, rolesError } = useRole();
+  const { activeRole, availableRoles, showRoleSelection, setActiveRole, isLoadingRoles, rolesError } = useRole();
 
   // Safety net: if role loading failed because the session expired,
   // trigger the centralized recovery. Limited to AuthExpiredError so a
@@ -325,6 +327,16 @@ function DashboardRouter() {
 
   // Show dashboard based on selected role (roles come from database via RoleContext)
   console.log(`🏠 Dashboard routing - activeRole:`, activeRole);
+
+  // Parent+teaching (Chelsey): always family hub — do not send Mentor active_role to EducatorAppShell.
+  // Parent+schoolAdmin without teaching keeps today's admin home (Phase 2).
+  if (holdsParentAndTeaching(availableRoles)) {
+    return (
+      <ParentAppShell key="dashboard-parent-teaching">
+        <ParentDashboard />
+      </ParentAppShell>
+    );
+  }
 
   // For parent - default landing is the parent dashboard (not AI Concierge)
   if (activeRole === 'parent') {

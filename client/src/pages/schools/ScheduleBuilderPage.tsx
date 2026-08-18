@@ -99,6 +99,10 @@ export default function ScheduleBuilderPage() {
 
   const closeCsvImport = () => setCsvImport(null);
 
+  useEffect(() => {
+    if (csvImport) dismissTourPrompt(false);
+  }, [csvImport, dismissTourPrompt]);
+
   // File pick finishes after async read; listen on window so a remount-safe
   // handler opens the dialog on the currently mounted page.
   useEffect(() => {

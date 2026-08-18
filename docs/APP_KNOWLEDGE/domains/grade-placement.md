@@ -57,3 +57,4 @@ Sync: [`server/services/grade-placement-sync.ts`](../../../server/services/grade
 - Jest integration: `grade-placement-sync.test.ts`
 - Playwright: `grade-placement-auto-place`, `grade-placement-parent-card`
 - Seed: `POST /api/test/setup-grade-placement-scenario`
+- Edit-class preview (`text-placement-preview`) only renders when `watchAutoPlace && placementPreview?.summaryLabel`. The switch is disabled until location, session, and grades hydrate. E2E must wait for the switch to be **enabled**, then click only if `data-state` is not `checked`.

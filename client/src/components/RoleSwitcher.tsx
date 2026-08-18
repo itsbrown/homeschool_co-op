@@ -73,7 +73,7 @@ export default function RoleSwitcher() {
   const isCurrentSchool = (schoolId: number | null) => schoolId === currentRoleData.schoolId;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" data-testid="role-switcher">
       <span className="text-sm text-muted-foreground">School:</span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

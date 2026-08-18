@@ -326,7 +326,7 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
 
   return (
     <StaffGuideProvider>
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50" data-testid="shell-educator">
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
         <EducatorSidebar />
       </div>

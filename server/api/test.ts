@@ -28,6 +28,7 @@ import {
   type Class,
   type Payment,
   type InsertScheduledPayment,
+  educatorClassAssignments,
 } from '@shared/schema';
 
 const router = Router();
@@ -4913,6 +4914,187 @@ router.post('/setup-grade-placement-scenario', async (req: Request, res: Respons
     console.error('❌ setup-grade-placement-scenario:', error);
     res.status(500).json({
       error: 'Failed to setup grade placement scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * POST /api/test/setup-additive-nav-scenario
+ * Personas for parent+staff additive nav (Phase 1): parentOnly, parentMentor,
+ * parentMentorStaffActive (active_role Mentor), educatorOnly.
+ */
+router.post('/setup-additive-nav-scenario', async (req: Request, res: Response) => {
+  try {
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    const bcrypt = await import('bcryptjs');
+    const password = 'TestPassword123!';
+    const db = await getDb();
+
+    const admin = await testDb.createTestUser({
+      email: `nav_admin_${uniqueId}@test.com`,
+      username: `navadmin_${uniqueId}`,
+      name: 'Nav Test Admin',
+      role: 'schoolAdmin',
+    });
+    await storage.updateUser(admin.id, { password: await bcrypt.hash(password, 10) });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Nav School ${uniqueId}`,
+      registrationCode: `NAV${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    const createPersona = async (opts: {
+      prefix: string;
+      name: string;
+      legacyRole: string;
+      roles: { role: string; isPrimary?: boolean }[];
+      activeRole: string;
+    }) => {
+      const email = `${opts.prefix}_${uniqueId}@test.com`;
+      const user = await testDb.createTestUser({
+        email,
+        username: `${opts.prefix}_${uniqueId}`,
+        name: opts.name,
+        role: opts.legacyRole as any,
+        schoolId: school.id,
+      });
+      await storage.updateUser(user.id, { password: await bcrypt.hash(password, 10) });
+      const inserted = await db
+        .insert(userRoles)
+        .values(
+          opts.roles.map((r, i) => ({
+            userId: user.id,
+            role: r.role,
+            schoolId: school.id,
+            isPrimary: r.isPrimary ?? i === 0,
+          })),
+        )
+        .returning();
+      const active = inserted.find((r) => r.role === opts.activeRole) ?? inserted[0];
+      await storage.updateUser(user.id, {
+        activeRole: active.role,
+        activeRoleId: active.id,
+      });
+      return { id: user.id, email, password, activeRole: active.role };
+    };
+
+    const creds = (p: { id: number; email: string; password: string; activeRole: string }) => ({
+      id: p.id,
+      email: p.email,
+      password: p.password,
+      activeRole: p.activeRole,
+    });
+
+    const parentOnly = await createPersona({
+      prefix: 'nav_parent',
+      name: 'Nav Parent Only',
+      legacyRole: 'parent',
+      roles: [{ role: 'parent', isPrimary: true }],
+      activeRole: 'parent',
+    });
+
+    const parentMentor = await createPersona({
+      prefix: 'nav_pm',
+      name: 'Nav Parent Mentor',
+      legacyRole: 'parent',
+      roles: [
+        { role: 'parent', isPrimary: true },
+        { role: 'Mentor', isPrimary: false },
+      ],
+      activeRole: 'parent',
+    });
+
+    const parentMentorStaffActive = await createPersona({
+      prefix: 'nav_pmstaff',
+      name: 'Nav Parent Mentor StaffActive',
+      legacyRole: 'parent',
+      roles: [
+        { role: 'parent', isPrimary: false },
+        { role: 'Mentor', isPrimary: true },
+      ],
+      activeRole: 'Mentor',
+    });
+
+    const educatorOnly = await createPersona({
+      prefix: 'nav_ed',
+      name: 'Nav Educator Only',
+      legacyRole: 'educator',
+      roles: [{ role: 'educator', isPrimary: true }],
+      activeRole: 'educator',
+    });
+
+    const cls = await testDb.createTestClass(school.id, educatorOnly.id, {
+      title: `Nav Class ${uniqueId}`,
+      category: 'Core',
+    });
+    await db.insert(educatorClassAssignments).values([
+      {
+        educatorId: parentMentor.id,
+        classId: cls.id,
+        schoolId: school.id,
+        isPrimary: true,
+        canStartSession: true,
+      },
+      {
+        educatorId: parentMentorStaffActive.id,
+        classId: cls.id,
+        schoolId: school.id,
+        isPrimary: true,
+        canStartSession: true,
+      },
+      {
+        educatorId: educatorOnly.id,
+        classId: cls.id,
+        schoolId: school.id,
+        isPrimary: true,
+        canStartSession: true,
+      },
+    ]);
+
+    let supabaseLinked = false;
+    if (req.body?.linkSupabaseAuth === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      const people = [parentOnly, parentMentor, parentMentorStaffActive, educatorOnly];
+      const results = await Promise.all(
+        people.map((p) =>
+          linkSeedUserToSupabase({
+            dbUserId: p.id,
+            email: p.email,
+            password: p.password,
+            role: p.activeRole,
+            schoolId: school.id,
+            displayName: p.email,
+          }),
+        ),
+      );
+      supabaseLinked = results.every(Boolean);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        supabaseLinked,
+        school: { id: school.id, name: school.name },
+        class: { id: cls.id, title: cls.title },
+        parentOnly: creds(parentOnly),
+        parentMentor: creds(parentMentor),
+        parentMentorStaffActive: creds(parentMentorStaffActive),
+        educatorOnly: creds(educatorOnly),
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-additive-nav-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup additive nav scenario',
       details: error instanceof Error ? error.message : String(error),
     });
   }

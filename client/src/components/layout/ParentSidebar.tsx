@@ -31,6 +31,7 @@ import {
   UserCheck,
   TrendingUp,
   ShoppingBag,
+  HelpCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -43,6 +44,7 @@ import {
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { useEffectivePermissions } from "@/hooks/useEffectivePermissions";
+import { formatJobsSubtitle, holdsParentAndTeaching, holdsSchoolAdmin } from "@/lib/user-jobs";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -62,10 +64,12 @@ interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
     icon: React.ReactNode;
     badge?: string;
     isSectionHeader?: boolean;
+    testId?: string;
     subItems?: {
       href: string;
       title: string;
       icon: React.ReactNode;
+      testId?: string;
     }[];
   }[];
   expandedSections: { [key: string]: boolean };
@@ -100,6 +104,7 @@ export function SidebarNav({ className, items, expandedSections, onToggleExpande
                     : "text-muted-foreground",
                   "justify-between"
                 )}
+                data-testid={item.testId ?? `nav-group-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
               >
                 <div className="flex items-center">
                   <div className="mr-2 h-5 w-5">{item.icon}</div>
@@ -123,6 +128,7 @@ export function SidebarNav({ className, items, expandedSections, onToggleExpande
                         ? "bg-accent text-accent-foreground"
                         : "text-muted-foreground",
                     )}
+                    data-testid={subItem.testId}
                   >
                     <div className="flex items-center">
                       <div className="mr-2 h-5 w-5">{subItem.icon}</div>
@@ -167,8 +173,8 @@ export default function ParentSidebar() {
   const { activeRole, availableRoles, hasRole } = useRole();
   
   const hasSuperAdminRole = hasRole('superadmin');
-  const hasEducatorRole = hasRole(['educator', 'teacher', 'mentor']);
-  const hasSchoolAdminRole = hasRole(['schoolAdmin', 'director']);
+  const showTeachingNav = holdsParentAndTeaching(availableRoles);
+  const hasSchoolAdminRole = holdsSchoolAdmin(availableRoles);
   const [isOpen, setIsOpen] = React.useState(false);
   const [location] = useLocation();
 
@@ -184,6 +190,8 @@ export default function ParentSidebar() {
   const isPaymentsRoute = location === '/payments' || location === '/payment-methods';
 
   const [expandedSections, setExpandedSections] = React.useState<{ [key: string]: boolean }>(() => ({
+    'Family': !isEducatorRoute,
+    'Teaching': isEducatorRoute,
     'Educator': isEducatorRoute,
     'School Admin': isSchoolAdminRoute,
     'Academics': isAcademicsRoute,
@@ -194,7 +202,9 @@ export default function ParentSidebar() {
 
   React.useEffect(() => {
     if (isEducatorRoute) {
-      setExpandedSections(prev => ({ ...prev, 'Educator': true }));
+      setExpandedSections(prev => ({ ...prev, Teaching: true, Educator: true }));
+    } else {
+      setExpandedSections(prev => ({ ...prev, Family: true }));
     }
     if (isSchoolAdminRoute) {
       setExpandedSections(prev => ({ ...prev, 'School Admin': true }));
@@ -261,12 +271,7 @@ export default function ParentSidebar() {
     await signOut();
   };
 
-  const navigationItems = [
-    {
-      href: "/dashboard",
-      title: "ASA Assistant",
-      icon: <Sparkles className="h-5 w-5" />,
-    },
+  const familyLeafItems = [
     {
       href: "/parent/home",
       title: "Dashboard",
@@ -306,19 +311,11 @@ export default function ParentSidebar() {
       href: "/payments",
       title: "Payments",
       icon: <DollarSign className="h-5 w-5" />,
-      isSectionHeader: true,
-      subItems: [
-        {
-          href: "/payments",
-          title: "Payments",
-          icon: <DollarSign className="h-5 w-5" />,
-        },
-        {
-          href: "/payment-methods",
-          title: "Payment Methods",
-          icon: <CreditCard className="h-5 w-5" />,
-        },
-      ],
+    },
+    {
+      href: "/payment-methods",
+      title: "Payment Methods",
+      icon: <CreditCard className="h-5 w-5" />,
     },
     {
       href: "/parent/documents",
@@ -329,54 +326,61 @@ export default function ParentSidebar() {
       href: "/parent/progress",
       title: "Progress",
       icon: <TrendingUp className="h-5 w-5" />,
-      description: "Multi-subject progress and reading"
     },
     {
       href: "/parent/assessments",
       title: "Reading Assessments",
       icon: <BookOpen className="h-5 w-5" />,
-      description: "View reading assessments and Lexile scores"
     },
-    ...(hasEducatorRole ? [
+  ];
+
+  const teachingSection = {
+    href: "/educator/dashboard",
+    title: "Teaching",
+    testId: "nav-group-teaching",
+    icon: <GraduationCap className="h-5 w-5" />,
+    isSectionHeader: true,
+    subItems: [
       {
         href: "/educator/dashboard",
-        title: "Educator",
-        icon: <GraduationCap className="h-5 w-5" />,
-        isSectionHeader: true,
-        subItems: [
-          {
-            href: "/educator/dashboard",
-            title: "Educator Dashboard",
-            icon: <Home className="h-5 w-5" />,
-          },
-          {
-            href: "/educator/my-classes",
-            title: "My Classes",
-            icon: <BookOpen className="h-5 w-5" />,
-          },
-          {
-            href: "/educator/students",
-            title: "My Students",
-            icon: <Users className="h-5 w-5" />,
-          },
-          {
-            href: "/educator/weekly-calendar",
-            title: "Schedule",
-            icon: <Calendar className="h-5 w-5" />,
-          },
-          {
-            href: "/educator/attendance",
-            title: "Attendance",
-            icon: <ClipboardList className="h-5 w-5" />,
-          },
-          {
-            href: "/educator/my-hours",
-            title: "My Hours",
-            icon: <Clock className="h-5 w-5" />,
-          },
-        ],
+        title: "Educator Dashboard",
+        icon: <Home className="h-5 w-5" />,
       },
-    ] : []),
+      {
+        href: "/educator/my-classes",
+        title: "My Classes",
+        icon: <BookOpen className="h-5 w-5" />,
+        testId: "nav-educator-my-classes",
+      },
+      {
+        href: "/educator/students",
+        title: "My Students",
+        icon: <Users className="h-5 w-5" />,
+      },
+      {
+        href: "/educator/weekly-calendar",
+        title: "Schedule",
+        icon: <Calendar className="h-5 w-5" />,
+      },
+      {
+        href: "/educator/attendance",
+        title: "Attendance",
+        icon: <ClipboardList className="h-5 w-5" />,
+      },
+      {
+        href: "/educator/my-hours",
+        title: "My Hours",
+        icon: <Clock className="h-5 w-5" />,
+      },
+      {
+        href: "/educator/staff-guide",
+        title: "Staff Guide",
+        icon: <HelpCircle className="h-5 w-5" />,
+      },
+    ],
+  };
+
+  const extrasAfterFamily = [
     ...(canManageClasses ? [
       {
         href: "/schools/schedule-builder",
@@ -444,7 +448,102 @@ export default function ParentSidebar() {
     }] : []),
   ];
 
-  const roleLabel = getRoleLabel(activeRole);
+  const navigationItems = showTeachingNav
+    ? [
+        {
+          href: "/dashboard",
+          title: "ASA Assistant",
+          icon: <Sparkles className="h-5 w-5" />,
+        },
+        {
+          href: "/parent/home",
+          title: "Family",
+          testId: "nav-group-family",
+          icon: <Home className="h-5 w-5" />,
+          isSectionHeader: true,
+          subItems: familyLeafItems,
+        },
+        teachingSection,
+        ...extrasAfterFamily,
+      ]
+    : [
+        {
+          href: "/dashboard",
+          title: "ASA Assistant",
+          icon: <Sparkles className="h-5 w-5" />,
+        },
+        {
+          href: "/parent/home",
+          title: "Dashboard",
+          icon: <Home className="h-5 w-5" />,
+        },
+        {
+          href: "/children",
+          title: "My Children",
+          icon: <Users className="h-5 w-5" />,
+        },
+        {
+          href: "/parent/emergency-contacts",
+          title: "Emergency Contacts",
+          icon: <ShieldAlert className="h-5 w-5" />,
+        },
+        {
+          href: "/parent/programs",
+          title: "Programs & Classes",
+          icon: <BookOpen className="h-5 w-5" />,
+        },
+        {
+          href: "/parent/supplies",
+          title: "Supply list",
+          icon: <ShoppingBag className="h-5 w-5" />,
+        },
+        {
+          href: "/schedule",
+          title: "Family Schedule",
+          icon: <Calendar className="h-5 w-5" />,
+        },
+        {
+          href: "/notifications",
+          title: "Notifications",
+          icon: <Bell className="h-5 w-5" />,
+        },
+        {
+          href: "/payments",
+          title: "Payments",
+          icon: <DollarSign className="h-5 w-5" />,
+          isSectionHeader: true,
+          subItems: [
+            {
+              href: "/payments",
+              title: "Payments",
+              icon: <DollarSign className="h-5 w-5" />,
+            },
+            {
+              href: "/payment-methods",
+              title: "Payment Methods",
+              icon: <CreditCard className="h-5 w-5" />,
+            },
+          ],
+        },
+        {
+          href: "/parent/documents",
+          title: "My Documents",
+          icon: <FolderOpen className="h-5 w-5" />,
+        },
+        {
+          href: "/parent/progress",
+          title: "Progress",
+          icon: <TrendingUp className="h-5 w-5" />,
+        },
+        {
+          href: "/parent/assessments",
+          title: "Reading Assessments",
+          icon: <BookOpen className="h-5 w-5" />,
+        },
+        ...extrasAfterFamily,
+      ];
+
+  const roleLabel = showTeachingNav ? formatJobsSubtitle(availableRoles) : getRoleLabel(activeRole);
 
   return (
     <>

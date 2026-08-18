@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
 import {
+  dismissScheduleBuilderTourIfVisible,
   dismissStaffGuideIfVisible,
   loginParent,
+  preventScheduleBuilderTour,
   preventStaffGuideModal,
 } from "./helpers/parentCheckoutHelpers";
 import { postSetupScheduleScenario } from "./helpers/testSeed";
@@ -31,6 +33,7 @@ test.describe("schedule template CSV import", () => {
     const skeletonId = seed.skeletons.seekersId;
 
     await preventStaffGuideModal(page);
+    await preventScheduleBuilderTour(page);
     await loginParent(page, seed.admin.email, seed.admin.password);
     await dismissStaffGuideIfVisible(page);
 
@@ -46,6 +49,7 @@ test.describe("schedule template CSV import", () => {
     await skeletonsApi;
 
     await expect(page.getByTestId(`schedule-template-card-${skeletonId}`)).toBeVisible({ timeout: 30_000 });
+    await dismissScheduleBuilderTourIfVisible(page);
     await expect(page.getByTestId(`schedule-csv-file-input-${skeletonId}`)).toBeAttached();
 
     // File input is always on the card (no expand required).
@@ -70,10 +74,17 @@ test.describe("schedule template CSV import", () => {
       { timeout: 30_000 },
     );
     await page.getByTestId("schedule-csv-confirm-import").click();
-    await importApi;
+    const importResponse = await importApi;
+    expect(importResponse.ok()).toBeTruthy();
 
     await expect(page.getByTestId("schedule-csv-import-success")).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId("schedule-csv-done").click();
+    await expect(page.getByTestId("schedule-csv-importing")).toHaveCount(0);
+    const done = page.getByTestId("schedule-csv-done");
+    await expect(done).toBeVisible({ timeout: 10_000 });
+    await expect(done).toBeEnabled({ timeout: 10_000 });
+    await done.scrollIntoViewIfNeeded();
+    // Success toast + dialog backdrop can intercept a normal click after import.
+    await done.click({ force: true, timeout: 15_000 });
 
     // Ensure expanded so imported block titles are visible
     const expand = page.getByTestId(`schedule-template-expand-${skeletonId}`);
