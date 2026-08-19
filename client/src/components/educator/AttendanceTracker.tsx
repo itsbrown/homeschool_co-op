@@ -1,19 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Users, Check, X, Clock, AlertCircle, UserCheck, Loader2, Save, MessageSquare } from 'lucide-react';
+import { Users, Check, X, Clock, AlertCircle, Loader2, MessageSquare } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -59,9 +51,8 @@ const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: typeof Chec
   excused: { label: 'Excused', icon: AlertCircle, color: 'text-blue-600', bgColor: 'bg-blue-100' },
 };
 
-export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: AttendanceTrackerProps) {
+export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrackerProps) {
   const { toast } = useToast();
-  const [selectedStudents, setSelectedStudents] = useState<Set<number>>(new Set());
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [currentStudent, setCurrentStudent] = useState<RosterStudent | null>(null);
   const [noteText, setNoteText] = useState('');
@@ -89,32 +80,40 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
         attendance: records,
       });
     },
-    onSuccess: () => {
-      toast({
-        title: 'Attendance saved',
-        description: 'Attendance records have been updated.',
-      });
+    onSuccess: (_data, records) => {
       queryClient.invalidateQueries({ queryKey: ['/api/educator/sessions', sessionId, 'roster'] });
       invalidateEducatorSessionQueries();
-      setPendingChanges(new Map());
-      setSelectedStudents(new Set());
+      setPendingChanges((prev) => {
+        const next = new Map(prev);
+        for (const record of records) next.delete(record.childId);
+        return next;
+      });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
-        title: 'Failed to save attendance',
-        description: error.message || 'Please try again.',
+        title: 'Attendance did not save',
+        description: error.message || 'Check the connection and tap again.',
         variant: 'destructive',
       });
     },
   });
 
-  const handleStatusChange = (childId: number, status: AttendanceStatus) => {
-    setPendingChanges(prev => {
-      const updated = new Map(prev);
-      const existing = updated.get(childId) || {};
-      updated.set(childId, { ...existing, status });
-      return updated;
+  const persistRecords = (records: { childId: number; status: AttendanceStatus; notes?: string }[]) => {
+    if (records.length === 0) return;
+    setPendingChanges((prev) => {
+      const next = new Map(prev);
+      for (const record of records) {
+        next.set(record.childId, { status: record.status, notes: record.notes });
+      }
+      return next;
     });
+    bulkAttendanceMutation.mutate(records);
+  };
+
+  const handleStatusChange = (childId: number, status: AttendanceStatus) => {
+    const student = roster?.find((s) => s.childId === childId);
+    const notes = pendingChanges.get(childId)?.notes ?? student?.notes;
+    persistRecords([{ childId, status, notes }]);
   };
 
   const handleNoteAdd = (student: RosterStudent) => {
@@ -126,49 +125,38 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
 
   const saveNote = () => {
     if (currentStudent) {
-      setPendingChanges(prev => {
-        const updated = new Map(prev);
-        const existing = updated.get(currentStudent.childId) || { status: currentStudent.status || 'present' };
-        updated.set(currentStudent.childId, { ...existing, notes: noteText });
-        return updated;
-      });
+      const status =
+        pendingChanges.get(currentStudent.childId)?.status ||
+        currentStudent.status ||
+        'present';
+      persistRecords([{ childId: currentStudent.childId, status, notes: noteText }]);
     }
     setNoteDialogOpen(false);
     setCurrentStudent(null);
     setNoteText('');
   };
 
-  const toggleSelectAll = () => {
+  const markAllAs = (status: AttendanceStatus) => {
     if (!roster) return;
-    if (selectedStudents.size === roster.length) {
-      setSelectedStudents(new Set());
-    } else {
-      setSelectedStudents(new Set(roster.map(s => s.childId)));
-    }
+    persistRecords(
+      roster.map((student) => ({
+        childId: student.childId,
+        status,
+        notes: pendingChanges.get(student.childId)?.notes ?? student.notes,
+      })),
+    );
   };
 
-  const markSelectedAs = (status: AttendanceStatus) => {
-    selectedStudents.forEach(childId => {
-      handleStatusChange(childId, status);
-    });
-  };
-
-  const saveAllChanges = () => {
-    if (pendingChanges.size === 0) {
-      toast({
-        title: 'No changes',
-        description: 'No attendance changes to save.',
-      });
-      return;
-    }
-
-    const records = Array.from(pendingChanges.entries()).map(([childId, data]) => ({
-      childId,
-      status: data.status,
-      notes: data.notes,
-    }));
-
-    bulkAttendanceMutation.mutate(records);
+  const markUnmarkedAs = (status: AttendanceStatus) => {
+    if (!roster) return;
+    const unmarked = roster.filter((s) => !(pendingChanges.get(s.childId)?.status || s.status));
+    persistRecords(
+      unmarked.map((student) => ({
+        childId: student.childId,
+        status,
+        notes: student.notes,
+      })),
+    );
   };
 
   const getEffectiveStatus = (student: RosterStudent): AttendanceStatus | undefined => {
@@ -230,7 +218,7 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
     <>
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
@@ -238,9 +226,15 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
               </CardTitle>
               <CardDescription>
                 {roster.length} student{roster.length !== 1 ? 's' : ''} enrolled
+                {bulkAttendanceMutation.isPending && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Saving
+                  </span>
+                )}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               {presentCount > 0 && (
                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                   {presentCount} present
@@ -256,77 +250,42 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
                   {lateCount} late
                 </Badge>
               )}
+              {unmarkedCount > 0 && (
+                <Badge
+                  variant="outline"
+                  className="bg-amber-50 text-amber-800 border-amber-200"
+                  data-testid="badge-unmarked-count"
+                >
+                  {unmarkedCount} unmarked
+                </Badge>
+              )}
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {isSessionActive && (
             <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="select-all"
-                  checked={selectedStudents.size === roster.length}
-                  onCheckedChange={toggleSelectAll}
-                  data-testid="checkbox-select-all"
-                />
-                <Label htmlFor="select-all" className="text-sm cursor-pointer">
-                  Select All
-                </Label>
-              </div>
-              
-              {selectedStudents.size > 0 && (
-                <>
-                  <span className="text-muted-foreground text-sm">|</span>
-                  <span className="text-sm text-muted-foreground">
-                    {selectedStudents.size} selected
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1 text-green-600 border-green-300 hover:bg-green-50"
-                    onClick={() => markSelectedAs('present')}
-                    data-testid="button-mark-present"
-                  >
-                    <Check className="h-3 w-3" />
-                    Present
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1 text-red-600 border-red-300 hover:bg-red-50"
-                    onClick={() => markSelectedAs('absent')}
-                    data-testid="button-mark-absent"
-                  >
-                    <X className="h-3 w-3" />
-                    Absent
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1 text-yellow-600 border-yellow-300 hover:bg-yellow-50"
-                    onClick={() => markSelectedAs('late')}
-                    data-testid="button-mark-late"
-                  >
-                    <Clock className="h-3 w-3" />
-                    Late
-                  </Button>
-                </>
-              )}
-
-              {pendingChanges.size > 0 && (
+              <Button
+                size="lg"
+                className="h-12 min-h-12 gap-1 bg-green-600 hover:bg-green-700"
+                onClick={() => markAllAs('present')}
+                disabled={bulkAttendanceMutation.isPending}
+                data-testid="button-mark-all-present"
+              >
+                <Check className="h-4 w-4" />
+                All present
+              </Button>
+              {unmarkedCount > 0 && (
                 <Button
-                  size="sm"
-                  className="ml-auto gap-2"
-                  onClick={saveAllChanges}
+                  size="lg"
+                  variant="outline"
+                  className="h-12 min-h-12 gap-1 text-red-700 border-red-300"
+                  onClick={() => markUnmarkedAs('absent')}
                   disabled={bulkAttendanceMutation.isPending}
-                  data-testid="button-save-attendance"
+                  data-testid="button-mark-rest-absent"
                 >
-                  {bulkAttendanceMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  Save Changes ({pendingChanges.size})
+                  <X className="h-4 w-4" />
+                  Mark rest absent
                 </Button>
               )}
             </div>
@@ -338,127 +297,104 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
               const effectiveNotes = getEffectiveNotes(student);
               const statusConfig = effectiveStatus ? STATUS_CONFIG[effectiveStatus] : null;
               const hasPendingChange = pendingChanges.has(student.childId);
-              const isSelected = selectedStudents.has(student.childId);
 
               return (
                 <div
                   key={student.childId}
-                  className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                    hasPendingChange ? 'border-blue-300 bg-blue-50/50' : 'border-gray-200'
-                  } ${isSelected ? 'bg-gray-50' : ''}`}
+                  className={`flex flex-col gap-3 p-3 rounded-lg border transition-colors ${
+                    !effectiveStatus
+                      ? 'border-amber-300 bg-amber-50/70'
+                      : hasPendingChange
+                        ? 'border-blue-300 bg-blue-50/50'
+                        : 'border-gray-200'
+                  }`}
                   data-testid={`attendance-row-${student.childId}`}
                 >
-                  {isSessionActive && (
-                    <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={(checked) => {
-                        setSelectedStudents(prev => {
-                          const updated = new Set(prev);
-                          if (checked) {
-                            updated.add(student.childId);
-                          } else {
-                            updated.delete(student.childId);
-                          }
-                          return updated;
-                        });
-                      }}
-                      data-testid={`checkbox-student-${student.childId}`}
-                    />
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium">
-                      {student.firstName} {student.lastName}
-                    </div>
-                    {student.gradeLevel && (
-                      <div className="text-xs text-muted-foreground">
-                        {student.gradeLevel}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">
+                        {student.firstName} {student.lastName}
                       </div>
-                    )}
-                    {student.checkInTime && (
-                      <div className="text-xs text-muted-foreground">
-                        Marked {new Date(student.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    )}
-                  </div>
-
-                  {effectiveNotes && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="text-muted-foreground">
-                          <MessageSquare className="h-4 w-4" />
+                      {student.gradeLevel && (
+                        <div className="text-xs text-muted-foreground">
+                          {student.gradeLevel}
                         </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-xs">{effectiveNotes}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
+                      )}
+                      {student.checkInTime && (
+                        <div className="text-xs text-muted-foreground">
+                          Marked {new Date(student.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
+                    </div>
 
-                  {isSessionActive ? (
-                    <div className="flex items-center gap-2">
-                      <Select
-                        value={effectiveStatus || ''}
-                        onValueChange={(value) => handleStatusChange(student.childId, value as AttendanceStatus)}
-                      >
-                        <SelectTrigger 
-                          className={`w-32 ${statusConfig ? statusConfig.bgColor : ''}`}
-                          data-testid={`select-status-${student.childId}`}
-                        >
-                          <SelectValue placeholder="Mark..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="present">
-                            <span className="flex items-center gap-2">
-                              <Check className="h-4 w-4 text-green-600" />
-                              Present
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="absent">
-                            <span className="flex items-center gap-2">
-                              <X className="h-4 w-4 text-red-600" />
-                              Absent
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="late">
-                            <span className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-yellow-600" />
-                              Late
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="excused">
-                            <span className="flex items-center gap-2">
-                              <AlertCircle className="h-4 w-4 text-blue-600" />
-                              Excused
-                            </span>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                    {effectiveNotes && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="text-muted-foreground">
+                            <MessageSquare className="h-4 w-4" />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">{effectiveNotes}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
 
+                    {!isSessionActive && (
+                      <div className="flex items-center gap-2">
+                        {statusConfig ? (
+                          <Badge 
+                            variant="outline" 
+                            className={`${statusConfig.bgColor} ${statusConfig.color} border-0`}
+                          >
+                            <statusConfig.icon className="h-3 w-3 mr-1" />
+                            {statusConfig.label}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            Not marked
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {isSessionActive && (
                       <Button
                         size="icon"
                         variant="ghost"
+                        className="h-11 w-11 min-h-11"
                         onClick={() => handleNoteAdd(student)}
                         data-testid={`button-note-${student.childId}`}
                       >
                         <MessageSquare className="h-4 w-4" />
                       </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      {statusConfig ? (
-                        <Badge 
-                          variant="outline" 
-                          className={`${statusConfig.bgColor} ${statusConfig.color} border-0`}
-                        >
-                          <statusConfig.icon className="h-3 w-3 mr-1" />
-                          {statusConfig.label}
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">
-                          Not marked
-                        </Badge>
-                      )}
+                    )}
+                  </div>
+
+                  {isSessionActive && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['present', 'late', 'absent'] as const).map((status) => {
+                        const config = STATUS_CONFIG[status];
+                        const selected = effectiveStatus === status;
+                        return (
+                          <Button
+                            key={status}
+                            type="button"
+                            variant={selected ? 'default' : 'outline'}
+                            className={`h-12 min-h-12 text-base ${selected ? config.bgColor + ' ' + config.color + ' border-transparent' : ''}`}
+                            style={{ fontSize: '16px' }}
+                            onClick={() => handleStatusChange(student.childId, status)}
+                            data-testid={
+                              status === 'present'
+                                ? `select-status-${student.childId}`
+                                : `button-status-${student.childId}-${status}`
+                            }
+                          >
+                            <config.icon className="h-4 w-4 mr-1" />
+                            {config.label}
+                          </Button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -467,8 +403,11 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
           </div>
 
           {unmarkedCount > 0 && isSessionActive && (
-            <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200 flex items-center gap-2 text-sm text-yellow-700">
-              <AlertCircle className="h-4 w-4" />
+            <div
+              className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200 flex items-center gap-2 text-sm text-yellow-800"
+              data-testid="banner-unmarked-kids"
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{unmarkedCount} student{unmarkedCount !== 1 ? 's' : ''} not yet marked</span>
             </div>
           )}
@@ -491,6 +430,7 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               className="mt-2"
+              style={{ fontSize: '16px' }}
               data-testid="input-attendance-note"
             />
           </div>

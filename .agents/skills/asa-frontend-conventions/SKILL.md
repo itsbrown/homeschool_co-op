@@ -128,6 +128,7 @@ const mutation = useMutation({
 - **Educator login looks empty / wrong classes** → post-login `/dashboard` for `educator` / `mentor` / `teacher` must redirect to `/educator/dashboard` (`GET /api/educator/dashboard` + assignments). Legacy `components/dashboards/EducatorDashboard.tsx` (`GET /api/educator/classes?email=`) is **admin/superAdmin only**. Do not extend it for mentors.
 - **Director Weekly Templates** → `/schools/schedule-builder` (also `/educator/templates` redirect). Mentors without school-admin permission may see `ForbiddenPage`.
 - **Educator cache looks stale after start/end session** → `invalidateQueries({ queryKey: ['/api/educator'] })` does not match `['/api/educator/dashboard']`. Use `invalidateEducatorSessionQueries()` in `client/src/lib/educator-queries.ts`.
+- **Dashboard “Today’s Classes” lists every assignment** → `GET /api/educator/dashboard` `todayClasses` must be weekday meetings (`classMeetsOnWeekday`). Empty schedule days are not today. One-tap Start uses `createAndStartEducatorSession()`.
 
 ## Best Practices
 

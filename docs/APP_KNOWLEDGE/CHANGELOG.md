@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-08-19 (Educator today / attendance honesty)
+
+- Dashboard **Today** is weekday meetings only (`classMeetsOnWeekday`); Start is one tap. Attendance saves on tap; unmarked kids stay highlighted; End Session stays on the session with present/absent counts.
+- Staff Guide matches the real loop (no Attendance tab, no volunteer-add fiction, QR is not the default start).
+- E2E: `educator-today-honesty`; Jest: `classMeetsOnWeekday` in `family-schedule.test.ts`.
+
 ## 2026-08-19 (Playwright: print + screen duplicate text)
 
 - `DimensionsMathPlacementCard` keeps a `hidden print:block` copy of placement steps plus the collapsible screen copy. Playwright `getByText` matches both (strict-mode fail even when one is `display:none`). Assert `dimensions-math-placement-howto-step-1`.

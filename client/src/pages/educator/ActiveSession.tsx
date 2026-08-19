@@ -26,6 +26,7 @@ import {
   EducatorErrorState 
 } from '@/components/educator/EducatorErrorBoundary';
 import { AttendanceTracker } from '@/components/educator/AttendanceTracker';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface ClassSession {
   id: number;
@@ -62,9 +63,15 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
   const [elapsedTime, setElapsedTime] = useState('0m');
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [endNotes, setEndNotes] = useState('');
+  const [markRemainingAbsent, setMarkRemainingAbsent] = useState(false);
 
   const { data: session, isLoading, error, refetch } = useQuery<ClassSession>({
     queryKey: ['/api/educator/sessions', sessionId],
+  });
+
+  const { data: roster = [] } = useQuery<Array<{ childId: number; attendance?: { status?: string } | null }>>({
+    queryKey: ['/api/educator/sessions', sessionId, 'roster'],
+    enabled: !!sessionId,
   });
 
   useEffect(() => {
@@ -81,15 +88,24 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
 
   const endSessionMutation = useMutation({
     mutationFn: async () => {
+      if (markRemainingAbsent) {
+        const unmarked = roster.filter((row) => !row.attendance?.status);
+        if (unmarked.length > 0) {
+          await apiRequest('POST', '/api/educator/attendance/bulk', {
+            sessionId,
+            attendance: unmarked.map((row) => ({ childId: row.childId, status: 'absent' })),
+          });
+        }
+      }
       return apiRequest('POST', `/api/educator/sessions/${sessionId}/end`, { notes: endNotes });
     },
     onSuccess: () => {
       toast({
         title: 'Session ended',
-        description: 'Your session has been completed successfully.',
+        description: 'Hours are logged. Review who was here, then go back when you are ready.',
       });
       invalidateEducatorSessionQueries();
-      navigate('/educator');
+      refetch();
     },
     onError: (error: any) => {
       console.error('[EducatorDashboard] End session error:', error);
@@ -146,6 +162,9 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
 
   const isInProgress = session.status === 'in_progress';
   const isCompleted = session.status === 'completed';
+  const unmarkedCount = roster.filter((row) => !row.attendance?.status).length;
+  const presentCount = roster.filter((row) => row.attendance?.status === 'present' || row.attendance?.status === 'late').length;
+  const absentCount = roster.filter((row) => row.attendance?.status === 'absent' || row.attendance?.status === 'excused').length;
 
   return (
     <div className="space-y-6">
@@ -216,7 +235,7 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
             <div className="flex gap-2">
               <Button 
                 onClick={() => setShowEndDialog(true)}
-                className="gap-2 bg-red-600 hover:bg-red-700"
+                className="gap-2 bg-red-600 hover:bg-red-700 h-12 min-h-12"
                 disabled={endSessionMutation.isPending}
                 data-testid="button-end-session"
               >
@@ -226,6 +245,26 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
             </div>
           )}
 
+          {isCompleted && (
+            <div
+              className="mt-4 p-4 rounded-lg border bg-blue-50 border-blue-200 text-blue-900"
+              data-testid="session-end-summary"
+            >
+              <p className="font-medium">
+                {presentCount} present / {absentCount} absent
+                {unmarkedCount > 0 ? ` / ${unmarkedCount} unmarked` : ''}
+              </p>
+              <p className="text-sm mt-1">Session complete. Hours are on My Hours.</p>
+              <Button
+                variant="outline"
+                className="mt-3 h-12 min-h-12"
+                onClick={() => navigate('/educator/dashboard')}
+                data-testid="button-back-to-dashboard"
+              >
+                Back to dashboard
+              </Button>
+            </div>
+          )}
           {isCompleted && session.notes && (
             <div className="mt-4 p-4 bg-muted rounded-lg">
               <h4 className="font-medium flex items-center gap-2 mb-2">
@@ -251,10 +290,24 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
           <AlertDialogHeader>
             <AlertDialogTitle>End Session</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to end this session? You can add notes about the session below.
+              {unmarkedCount > 0
+                ? `${unmarkedCount} student${unmarkedCount !== 1 ? 's are' : ' is'} still unmarked.`
+                : 'Hours will be logged when you end this session.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-4">
+          <div className="py-4 space-y-4">
+            {unmarkedCount > 0 && (
+              <label className="flex items-start gap-3 text-sm" htmlFor="mark-remaining-absent">
+                <Checkbox
+                  id="mark-remaining-absent"
+                  checked={markRemainingAbsent}
+                  onCheckedChange={(checked) => setMarkRemainingAbsent(checked === true)}
+                  data-testid="checkbox-mark-remaining-absent"
+                />
+                <span>Mark remaining unmarked students absent</span>
+              </label>
+            )}
+            <div>
             <Label htmlFor="session-notes">Session Notes (optional)</Label>
             <Textarea
               id="session-notes"
@@ -262,8 +315,10 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
               value={endNotes}
               onChange={(e) => setEndNotes(e.target.value)}
               className="mt-2"
+              style={{ fontSize: '16px' }}
               data-testid="input-session-notes"
             />
+            </div>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-end">Cancel</AlertDialogCancel>

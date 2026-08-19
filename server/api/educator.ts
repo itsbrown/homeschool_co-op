@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { InsertClassSession, ClassSession, EducatorClassAssignment, InsertAuditLog, InsertSessionAttendance, SessionAttendance } from "@shared/schema";
 import { classSessions, classes, locations } from "@shared/schema";
 import { formatScheduleString } from "../utils/schedule";
-import { extractFamilyScheduleTiming } from "../utils/family-schedule";
+import { extractFamilyScheduleTiming, classMeetsOnWeekday, minutesUntilStartTime } from "../utils/family-schedule";
 import { fileUploadService } from "../services/fileUploadService";
 import { getDb } from "../db";
 import { eq, isNull, and } from "drizzle-orm";
@@ -135,76 +135,102 @@ router.get('/dashboard', async (req, res) => {
     const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
     console.log('[EducatorDashboard] Found', assignments.length, 'class assignments');
 
-    // Get today's date for filtering sessions
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const weekdaySun0 = now.getDay();
+    const todayLocal = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
 
-    // Get all sessions and filter for today
     const allSessions = await storage.getClassSessionsByEducatorId(userId);
-    const todaySessions = allSessions.filter((s: ClassSession) => s.scheduledDate === today);
+    const todaySessions = allSessions.filter((s: ClassSession) => s.scheduledDate === todayLocal);
     console.log('[EducatorDashboard] Found', todaySessions.length, 'sessions for today');
 
-    // Get active session if any
     const activeSession = await storage.getActiveClassSession(userId);
 
-    // Get class details for assignments (these are "today's classes" for the educator)
-    let todayClasses = await Promise.all(
+    const toDashboardClass = async (params: {
+      assignmentId: number;
+      classId: number;
+      isPrimary: boolean;
+      canStartSession: boolean;
+      validFrom: string | null;
+      validTo: string | null;
+      schoolId: number;
+      classInfo: { title?: string | null; description?: string | null; schedule?: unknown; location?: string | null; capacity?: number | null } | null | undefined;
+    }) => {
+      const enrollmentCount = await storage.getEnrollmentCountForClass(params.classId);
+      const meetsToday = classMeetsOnWeekday(params.classInfo?.schedule, weekdaySun0);
+      const timing = extractFamilyScheduleTiming(params.classInfo?.schedule);
+      return {
+        assignmentId: params.assignmentId,
+        classId: params.classId,
+        isPrimary: params.isPrimary,
+        canStartSession: params.canStartSession,
+        validFrom: params.validFrom,
+        validTo: params.validTo,
+        className: params.classInfo?.title || 'Unknown Class',
+        classDescription: params.classInfo?.description,
+        classSchedule: formatScheduleString(params.classInfo?.schedule),
+        classLocation: params.classInfo?.location,
+        capacity: params.classInfo?.capacity,
+        enrollmentCount,
+        schoolId: params.schoolId,
+        meetsToday,
+        startTime: meetsToday ? timing.startTime : null,
+        endTime: meetsToday ? timing.endTime : null,
+        minutesUntilStart: meetsToday ? minutesUntilStartTime(timing.startTime, now) : null,
+      };
+    };
+
+    let assignedClasses = await Promise.all(
       assignments.map(async (assignment: EducatorClassAssignment) => {
         const classInfo = await storage.getClassById(assignment.classId);
-        const enrollmentCount = await storage.getEnrollmentCountForClass(assignment.classId);
-        return {
+        return toDashboardClass({
           assignmentId: assignment.id,
           classId: assignment.classId,
           isPrimary: assignment.isPrimary,
           canStartSession: assignment.canStartSession,
           validFrom: assignment.validFrom,
           validTo: assignment.validTo,
-          className: classInfo?.title || 'Unknown Class',
-          classDescription: classInfo?.description,
-          classSchedule: formatScheduleString(classInfo?.schedule),
-          classLocation: classInfo?.location,
-          capacity: classInfo?.capacity,
-          enrollmentCount,
-          schoolId: assignment.schoolId
-        };
+          schoolId: assignment.schoolId,
+          classInfo,
+        });
       })
     );
 
-    if (todayClasses.length === 0) {
+    if (assignedClasses.length === 0) {
       const educator = await storage.getUser(userId);
       if (educator) {
         const allClasses = await storage.getAllClasses();
         const instructorClasses = allClasses.filter(cls =>
           cls.instructorId === educator.id || cls.instructorName === educator.name
         );
-        todayClasses = await Promise.all(
-          instructorClasses.map(async (cls) => {
-            const enrollmentCount = await storage.getEnrollmentCountForClass(cls.id);
-            return {
+        assignedClasses = await Promise.all(
+          instructorClasses.map(async (cls) =>
+            toDashboardClass({
               assignmentId: cls.id,
               classId: cls.id,
               isPrimary: true,
               canStartSession: true,
-              validFrom: null as string | null,
-              validTo: null as string | null,
-              className: cls.title || 'Unknown Class',
-              classDescription: cls.description,
-              classSchedule: formatScheduleString(cls.schedule),
-              classLocation: cls.location,
-              capacity: cls.capacity,
-              enrollmentCount,
-              schoolId: cls.schoolId
-            };
-          })
+              validFrom: null,
+              validTo: null,
+              schoolId: cls.schoolId,
+              classInfo: cls,
+            })
+          )
         );
       }
     }
 
-    // Calculate completed and upcoming sessions for today
+    const todayClasses = assignedClasses.filter((c) => c.meetsToday);
+
     const completedToday = todaySessions.filter((s: ClassSession) => s.status === 'completed').length;
     const upcomingSessions = todaySessions.filter((s: ClassSession) => s.status === 'scheduled').length;
 
     res.json({
       todayClasses,
+      assignedClassCount: assignedClasses.length,
       activeSession: activeSession || null,
       upcomingSessions,
       completedToday

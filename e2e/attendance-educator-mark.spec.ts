@@ -61,10 +61,6 @@ test.describe("attendance educator mark", () => {
       seekersChild.firstName,
     );
 
-    await page.getByTestId("checkbox-select-all").click();
-    await expect(page.getByTestId("button-mark-present")).toBeVisible();
-    await page.getByTestId("button-mark-present").click();
-    await expect(page.getByTestId("button-save-attendance")).toBeVisible();
     const bulkApi = page.waitForResponse(
       (r) =>
         r.request().method() === "POST" &&
@@ -72,8 +68,9 @@ test.describe("attendance educator mark", () => {
         r.ok(),
       { timeout: 30_000 },
     );
-    await page.getByTestId("button-save-attendance").click();
+    await page.getByTestId("button-mark-all-present").click();
     await bulkApi;
+    await expect(page.getByTestId("badge-unmarked-count")).toHaveCount(0);
 
     const endApi = page.waitForResponse(
       (r) =>
@@ -85,8 +82,9 @@ test.describe("attendance educator mark", () => {
     await page.getByTestId("button-end-session").click();
     await page.getByTestId("button-confirm-end").click();
     await endApi;
-    await expect(page).toHaveURL(/\/educator(\/dashboard)?\/?$/, { timeout: 15_000 });
-    await expect(page.getByTestId("text-educator-dashboard-title")).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(/\/educator\/session\/\d+/, { timeout: 15_000 });
+    await expect(page.getByTestId("session-end-summary")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("session-end-summary")).toContainText("present");
     await expect(page.getByTestId("button-view-session")).toHaveCount(0);
 
     const token = await waitForSupabaseToken(page);

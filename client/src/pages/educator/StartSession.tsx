@@ -6,8 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
-import { invalidateEducatorSessionQueries } from '@/lib/educator-queries';
+import { invalidateEducatorSessionQueries, createAndStartEducatorSession } from '@/lib/educator-queries';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
   EducatorErrorBoundary, 
@@ -26,12 +25,6 @@ interface ClassInfo {
   volunteerWaiverId?: number;
 }
 
-interface CreatedSession {
-  id: number;
-  classId: number;
-  status: string;
-}
-
 interface AssignedEducator {
   id: number;
   educatorId: number;
@@ -39,19 +32,6 @@ interface AssignedEducator {
   educatorEmail: string;
   role: string;
   isPrimary: boolean;
-}
-
-function formatDateLocal(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatTimeLocal(date: Date): string {
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
 }
 
 function StartSessionContent({ classId }: { classId: number }) {
@@ -78,24 +58,7 @@ function StartSessionContent({ classId }: { classId: number }) {
   );
 
   const createAndStartMutation = useMutation({
-    mutationFn: async () => {
-      const now = new Date();
-      const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-      
-      const sessionData = {
-        classId,
-        scheduledDate: formatDateLocal(now),
-        scheduledStartTime: formatTimeLocal(now),
-        scheduledEndTime: formatTimeLocal(endTime),
-      };
-
-      const createResponse = await apiRequest('POST', '/api/educator/sessions', sessionData);
-      const createdSession: CreatedSession = await createResponse.json();
-      
-      await apiRequest('POST', `/api/educator/sessions/${createdSession.id}/start`);
-      
-      return createdSession;
-    },
+    mutationFn: () => createAndStartEducatorSession(classId),
     onSuccess: (session) => {
       toast({
         title: 'Session started',
@@ -194,8 +157,7 @@ function StartSessionContent({ classId }: { classId: number }) {
                 </p>
                 <ul className="mt-2 space-y-1 text-amber-700 dark:text-amber-300">
                   <li>• Record your check-in time for hour tracking</li>
-                  <li>• Allow you to take attendance</li>
-                  <li>• Access the daily lesson plan</li>
+                  <li>• Open the class roster so you can mark who is here</li>
                 </ul>
               </div>
             </div>
@@ -248,7 +210,7 @@ function StartSessionContent({ classId }: { classId: number }) {
             <Button
               onClick={handleStartSession}
               disabled={isStarting || createAndStartMutation.isPending}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+              className="flex-1 h-12 min-h-12 bg-emerald-600 hover:bg-emerald-700"
               data-testid="button-start-session"
             >
               {isStarting || createAndStartMutation.isPending ? (
