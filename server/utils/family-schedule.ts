@@ -143,3 +143,18 @@ export function extractFamilyScheduleTiming(
     scheduleLabel: typeof schedule.label === 'string' ? schedule.label : '',
   };
 }
+
+/** True when the class has a known weekday list and it includes `weekdaySun0` (0=Sun). Empty days = unknown, not today. */
+export function classMeetsOnWeekday(rawSchedule: unknown, weekdaySun0: number): boolean {
+  const { scheduleDays } = extractFamilyScheduleTiming(rawSchedule);
+  return scheduleDays.includes(weekdaySun0);
+}
+
+/** Minutes from `now` until HH:MM today. Negative = already started. */
+export function minutesUntilStartTime(startTimeHhMm: string, now: Date = new Date()): number | null {
+  const m = String(startTimeHhMm).match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const start = new Date(now);
+  start.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0);
+  return Math.round((start.getTime() - now.getTime()) / 60000);
+}

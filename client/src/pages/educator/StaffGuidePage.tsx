@@ -1,77 +1,57 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { QrCode, ClipboardCheck, UserPlus, LogOut as LogOutIcon, ArrowRight, BookOpen, ExternalLink } from "lucide-react";
+import { ClipboardCheck, LogOut as LogOutIcon, ArrowRight, BookOpen, ExternalLink, PlayCircle } from "lucide-react";
 import { useLocation } from "wouter";
 import { useStaffGuide } from "@/contexts/StaffGuideContext";
 
 const steps = [
   {
     number: 1,
-    title: "Check In",
-    icon: QrCode,
+    title: "Start class",
+    icon: PlayCircle,
     color: "bg-emerald-500",
     badgeColor: "bg-emerald-100 text-emerald-700",
     borderColor: "#10b981",
-    description: "Start your day by checking in at your assigned school location.",
-    href: "/educator/my-classes",
-    actionLabel: "Go to My Classes",
+    description: "Open Dashboard. Classes listed under Today are the ones that meet this weekday.",
+    href: "/educator/dashboard",
+    actionLabel: "Go to Dashboard",
     details: [
-      "Open your Dashboard and tap \"Start Session\" for your scheduled class.",
-      "If your school uses QR check-in, scan the QR code displayed at the front desk or classroom.",
-      "Your device may ask for location permission — allow it so your check-in location can be verified.",
-      "Once verified, your session status will show as \"Active\" and the session timer begins.",
+      "Tap Start on the class that is meeting now. That one tap creates the session and opens the roster.",
+      "My Classes still lists every assignment if you need to start a class that does not meet today.",
+      "QR clock-in is a separate school-admin path. It is not the default Start button.",
     ],
   },
   {
     number: 2,
-    title: "Take Attendance",
+    title: "Take attendance",
     icon: ClipboardCheck,
     color: "bg-blue-500",
     badgeColor: "bg-blue-100 text-blue-700",
     borderColor: "#3b82f6",
-    description: "Mark each student as present, absent, or tardy for the active session.",
-    href: "/educator/my-classes",
-    actionLabel: "Go to My Classes",
+    description: "Mark who is in the room on the active session screen. There is no Attendance tab.",
+    href: "/educator/dashboard",
+    actionLabel: "Go to Dashboard",
     details: [
-      "From your active session, tap the \"Attendance\" tab to see the student roster.",
-      "Tap each student's name to toggle their status: Present, Absent, or Tardy.",
-      "For tardy students, you can optionally record how many minutes late they arrived.",
-      "Attendance is saved automatically — you can update it at any time during the session.",
+      "The roster is on the session page. Tap Present, Late, or Absent for each child — it saves when you tap.",
+      "All present marks the whole room in one tap. Unmarked kids stay highlighted.",
+      "Assigned aides are listed when you start. Adding a walk-in volunteer during class is not available yet.",
     ],
   },
   {
     number: 3,
-    title: "Add Aide / Volunteer",
-    icon: UserPlus,
-    color: "bg-purple-500",
-    badgeColor: "bg-purple-100 text-purple-700",
-    borderColor: "#a855f7",
-    description: "Log any aides or volunteers assisting in your classroom for the session.",
-    href: "/educator/my-classes",
-    actionLabel: "Go to My Classes",
-    details: [
-      "In your active session, look for the \"Aides & Volunteers\" section.",
-      "Tap \"Add Aide\" or \"Add Volunteer\" and enter their name and role.",
-      "This record is attached to the session for administrative reporting.",
-      "You can remove an aide or volunteer if they leave early.",
-    ],
-  },
-  {
-    number: 4,
-    title: "Check Out",
+    title: "End session",
     icon: LogOutIcon,
     color: "bg-amber-500",
     badgeColor: "bg-amber-100 text-amber-700",
     borderColor: "#f59e0b",
-    description: "End your session when class is over to log your hours.",
+    description: "End the session when class is over so hours are logged.",
     href: "/educator/my-hours",
     actionLabel: "Go to My Hours",
     details: [
-      "When class ends, return to your active session and tap \"End Session.\"",
-      "Confirm the end time — it defaults to now, but you can adjust if needed.",
-      "Your total hours for this session are calculated automatically.",
-      "The session moves to your \"My Hours\" log for review and admin approval.",
+      "Tap End Session. If anyone is unmarked, you can mark the rest absent before you confirm.",
+      "Stay on the session to see present / absent counts, then go back to the dashboard.",
+      "The session appears on My Hours for review.",
     ],
   },
 ];
@@ -93,7 +73,7 @@ export default function StaffGuidePage() {
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Staff Guide</h1>
         </div>
         <p className="text-gray-600 text-base md:text-lg">
-          A quick walkthrough of your daily workflow — from check-in to check-out.
+          Phone in hand: start class, mark who is here, end when you are done.
         </p>
       </div>
 
@@ -101,7 +81,7 @@ export default function StaffGuidePage() {
         <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200 hidden md:block" />
 
         <div className="space-y-6">
-          {steps.map((step, index) => {
+          {steps.map((step) => {
             const Icon = step.icon;
             return (
               <div key={step.number} onClick={() => handleStepClick(step)} className="cursor-pointer">

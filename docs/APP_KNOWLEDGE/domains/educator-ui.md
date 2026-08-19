@@ -8,7 +8,7 @@ Legacy `client/src/components/dashboards/EducatorDashboard.tsx` (`GET /api/educa
 
 | Route | Purpose |
 |-------|---------|
-| `/educator/dashboard` | Today’s assignments + active session (`GET /api/educator/dashboard`) |
+| `/educator/dashboard` | Classes that **meet today** + one-tap Start (`GET /api/educator/dashboard`) |
 | `/educator/my-classes` | Assigned classes; start session |
 | `/educator/classes/:id` | Class details + Start Session CTA |
 | `/educator/classes/:id/start-session` | Create + start `class_sessions` |
@@ -41,7 +41,13 @@ Director Academics (when `showAcademics`): **Weekly Templates** → `/schools/sc
 
 ## Cache
 
-TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/api/educator'] })` does **not** prefix-match `['/api/educator/dashboard']`. After start / end / mark, call `invalidateEducatorSessionQueries()` in `client/src/lib/educator-queries.ts`.
+TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/api/educator'] })` does **not** prefix-match `['/api/educator/dashboard']`. After start / end / mark, call `invalidateEducatorSessionQueries()` in `client/src/lib/educator-queries.ts`. Start from the dashboard uses `createAndStartEducatorSession()` (same helper as Start Session).
+
+## Day-of honesty
+
+- Dashboard `todayClasses` is assignments whose `class.schedule` includes **today’s weekday** (`classMeetsOnWeekday` in `server/utils/family-schedule.ts`). Empty/unknown days are **not** treated as today. Full assignment list stays on My Classes.
+- Attendance saves on tap (`POST /api/educator/attendance/bulk`). There is no Attendance tab. Staff Guide must not claim auto-save-from-a-tab, volunteer add, or QR as the default start.
+- End Session stays on the session page with present/absent counts. Unmarked kids are highlighted; optional “mark remaining absent”.
 
 ## Tests
 
@@ -49,6 +55,7 @@ TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/ap
 |------|--------|
 | `server/tests/enrollments-by-class-id.test.ts` | Marketplace-only seats via `getEnrollmentsByClassId` |
 | `e2e/educator-landing-nav.spec.ts` | `/dashboard` → live dashboard, sidebar, redirects |
+| `e2e/educator-today-honesty.spec.ts` | Today weekday filter + one-tap Start + honest Staff Guide |
 | `e2e/educator-mentor-loop.spec.ts` | Classes, students, hours, notifications, settings |
 | `e2e/attendance-educator-mark.spec.ts` | Start → roster → mark present → end |
 | `e2e/educator-assessments-record.spec.ts` | Record tab `my-students` + save score |
@@ -68,7 +75,7 @@ Seeds: `POST /api/test/setup-schedule-builder-scenario` and `setup-progress-scen
 | My Hours “0 assigned classes” | Hours loop required `schedule.variants` | Use `extractFamilyScheduleTiming` (`days` + `startTime`/`endTime`) |
 | Record assessment types empty | `/api/assessments` only on unused `app-init.ts` | Mount on `server/index.ts` |
 | `/educator/attendance` 403 | Mounted school-admin attendance | Redirect to My Classes; mark on `/educator/session/:id` |
-| `teacher` → “Role Not Recognized” | DashboardRouter omitted teacher | Treat like educator/mentor |
+| Dashboard “today” lists every assignment | `todayClasses` was unfiltered | `classMeetsOnWeekday`; empty days ≠ today |
 
 ## Out of scope (still leftover)
 
