@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-08-19 (Dimensions Math placement card)
+
+- Parent household `/parent/supplies` and non-Macaroni class-details supplies show a collapsed **Before you buy Dimensions Math** card (Singapore Math placement tests URL). Hidden when every class attribution is Macaroni/Macaronis. Mixed households still see it. No email/in-app blast until this UI is live.
+- Helpers: `isMacaroniClassName` / `householdNeedsDimensionsMathPlacement` in `shared/supply-list.ts`. E2E: `e2e/parent-supply-list.spec.ts`.
+
 ## 2026-08-18 (E2E: CSV Done click + grade-placement preview)
 
 - `schedule-template-csv-import` hung on `schedule-csv-mapping-next` / `schedule-csv-done` because the first-visit **New to Weekly Templates?** Radix overlay (`schedule-tour-prompt`, 600ms after load) intercepts pointer events. Spec now seeds `schedule_builder_tour_seen` / session key; page dismisses the prompt when CSV import opens. After success, force-click `schedule-csv-done` (toast can still intercept). Do not use `networkidle`.

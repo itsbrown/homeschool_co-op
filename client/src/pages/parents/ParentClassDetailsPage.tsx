@@ -12,6 +12,8 @@ import {
   type ParentSupplyListResponse,
 } from "@/lib/parent-supply-list";
 import { StoreOutboundProductLink } from "@/components/store/StoreOutboundProductLink";
+import { DimensionsMathPlacementCard } from "@/components/parent/DimensionsMathPlacementCard";
+import { isMacaroniClassName } from "@shared/supply-list";
 import { 
   ArrowLeft, 
   CalendarIcon, 
@@ -495,7 +497,9 @@ function ClassSupplyListSection({ classId, classTitle }: { classId: number; clas
   if (rows.length === 0) return null;
 
   return (
-    <Card data-testid="class-supply-list">
+    <div className="space-y-4">
+      {!isMacaroniClassName(classTitle) && <DimensionsMathPlacementCard />}
+      <Card data-testid="class-supply-list">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <BookOpen className="h-5 w-5" />
@@ -550,5 +554,6 @@ function ClassSupplyListSection({ classId, classTitle }: { classId: number; clas
         ))}
       </CardContent>
     </Card>
+    </div>
   );
 }

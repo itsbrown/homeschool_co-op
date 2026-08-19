@@ -16,6 +16,8 @@ import {
   type ParentSupplyListResponse,
 } from "@/lib/parent-supply-list";
 import { StoreOutboundProductLink } from "@/components/store/StoreOutboundProductLink";
+import { DimensionsMathPlacementCard } from "@/components/parent/DimensionsMathPlacementCard";
+import { householdNeedsDimensionsMathPlacement } from "@shared/supply-list";
 
 type ViewMode = "shopping" | "child" | "class";
 
@@ -154,6 +156,7 @@ export default function ParentSupplyListPage() {
 
         {items.length > 0 && (
           <>
+            {householdNeedsDimensionsMathPlacement(items) && <DimensionsMathPlacementCard />}
             <Tabs
               value={view}
               onValueChange={(value) => setView(value as ViewMode)}
