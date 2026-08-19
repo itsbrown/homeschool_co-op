@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation, useParams } from 'wouter';
-import { Clock, StopCircle, FileText, Users, ArrowLeft, AlertCircle, CheckCircle2, BookOpen } from 'lucide-react';
+import { Clock, StopCircle, FileText, Users, ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,7 +18,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest, queryClient } from '@/lib/queryClient';
+import { apiRequest } from '@/lib/queryClient';
+import { invalidateEducatorSessionQueries } from '@/lib/educator-queries';
 import { 
   EducatorErrorBoundary, 
   EducatorLoadingState, 
@@ -40,14 +41,6 @@ interface ClassSession {
   dailyFlowEntryId?: number;
   notes?: string;
   className?: string;
-}
-
-interface DailyFlowEntry {
-  id: number;
-  title: string;
-  description?: string;
-  objectives?: string[];
-  materials?: string[];
 }
 
 function formatDuration(startTime: string): string {
@@ -74,11 +67,6 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
     queryKey: ['/api/educator/sessions', sessionId],
   });
 
-  const { data: dailyFlow } = useQuery<DailyFlowEntry | null>({
-    queryKey: ['/api/educator/daily-flow', session?.classId],
-    enabled: !!session?.classId,
-  });
-
   useEffect(() => {
     if (!session?.actualStartTime) return;
     
@@ -100,7 +88,7 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
         title: 'Session ended',
         description: 'Your session has been completed successfully.',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/educator'] });
+      invalidateEducatorSessionQueries();
       navigate('/educator');
     },
     onError: (error: any) => {
@@ -122,7 +110,7 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
         title: 'Session cancelled',
         description: 'The session has been cancelled.',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/educator'] });
+      invalidateEducatorSessionQueries();
       navigate('/educator');
     },
     onError: (error: any) => {
@@ -250,49 +238,10 @@ function ActiveSessionContent({ sessionId }: { sessionId: number }) {
         </CardContent>
       </Card>
 
-      {dailyFlow && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              Today's Lesson Plan
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <h3 className="font-medium mb-2">{dailyFlow.title}</h3>
-            {dailyFlow.description && (
-              <p className="text-sm text-muted-foreground mb-4">{dailyFlow.description}</p>
-            )}
-            
-            {dailyFlow.objectives && dailyFlow.objectives.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-sm font-medium mb-2">Learning Objectives</h4>
-                <ul className="list-disc list-inside space-y-1">
-                  {dailyFlow.objectives.map((objective, idx) => (
-                    <li key={idx} className="text-sm text-muted-foreground">{objective}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {dailyFlow.materials && dailyFlow.materials.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium mb-2">Materials Needed</h4>
-                <ul className="list-disc list-inside space-y-1">
-                  {dailyFlow.materials.map((material, idx) => (
-                    <li key={idx} className="text-sm text-muted-foreground">{material}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {(isInProgress || isCompleted) && (
         <AttendanceTracker 
           sessionId={sessionId} 
-          isSessionActive={true}
+          isSessionActive={isInProgress}
           schoolId={session.schoolId}
         />
       )}

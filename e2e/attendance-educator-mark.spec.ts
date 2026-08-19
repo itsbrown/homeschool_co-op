@@ -1,20 +1,12 @@
 import { test, expect } from "@playwright/test";
-import {
-  dismissStaffGuideIfVisible,
-  loginParent,
-  preventStaffGuideModal,
-} from "./helpers/parentCheckoutHelpers";
+import { loginEducatorFromSeed, educatorSupabaseLinked } from "./helpers/educatorAuth";
 import { postSetupScheduleScenario } from "./helpers/testSeed";
+import { waitForSupabaseToken, bearerAuthHeaders } from "./helpers/parentCheckoutHelpers";
 
-/**
- * Phase 2 smoke: seeded class session exists and attendance storage path responds.
- * Full ActiveSession UI mark flow depends on educator live-session UX; this asserts
- * the restored storage-backed APIs used by educator mark are reachable.
- */
-test.describe.configure({ mode: "serial", timeout: 90_000 });
+test.describe.configure({ mode: "serial", timeout: 120_000 });
 
-test.describe("attendance educator mark (API smoke)", () => {
-  test("seeded attendance session is readable via school-admin sessions list", async ({
+test.describe("attendance educator mark", () => {
+  test("start session, roster marketplace enrollment, mark present, end", async ({
     page,
     request,
   }) => {
@@ -25,32 +17,89 @@ test.describe("attendance educator mark (API smoke)", () => {
       !response.ok(),
       `seed failed (${response.status()}): ${json?.error ?? json?.details ?? "see server logs"}`,
     );
-    test.skip(
-      json.data?.supabaseLinked !== true,
-      "Supabase auth was not linked",
-    );
-    test.skip(!json?.data?.attendance?.sessionId, "seed missing attendance.sessionId");
+    test.skip(!json?.success || !json.data?.educator?.email, "seed returned no educator credentials");
+    test.skip(!educatorSupabaseLinked(json.data!), "Supabase auth was not linked");
 
-    const seed = json!.data!;
-    await preventStaffGuideModal(page);
-    await loginParent(page, seed.admin.email, seed.admin.password);
-    await dismissStaffGuideIfVisible(page);
+    const seed = json.data!;
+    const seekersId = seed.classes.seekers.id;
+    const seekersChild = seed.children.seekers;
 
-    await page.goto("/school-admin/attendance", { waitUntil: "domcontentloaded" });
-    const sessionsRes = await page.request.get(
-      `/api/school-admin/attendance/sessions?startDate=${seed.weekStart}&endDate=${seed.weekStart}`,
-      {
-        headers: {
-          Authorization: `Bearer ${await page.evaluate(() => localStorage.getItem("supabase_token"))}`,
-        },
-      },
+    await loginEducatorFromSeed(page, seed.educator.email, seed.educator.password);
+
+    await page.goto("/educator/my-classes", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId(`button-start-session-${seekersId}`)).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByTestId(`button-start-session-${seekersId}`).click();
+    await expect(page).toHaveURL(new RegExp(`/educator/classes/${seekersId}/start-session`), {
+      timeout: 15_000,
+    });
+
+    const createApi = page.waitForResponse(
+      (r) =>
+        r.request().method() === "POST" &&
+        r.url().endsWith("/api/educator/sessions") &&
+        r.ok(),
+      { timeout: 30_000 },
     );
-    expect(sessionsRes.ok()).toBeTruthy();
-    const body = await sessionsRes.json();
-    const sessions = body.sessions || body;
-    const ids = (Array.isArray(sessions) ? sessions : []).map(
-      (s: any) => s.id ?? s.sessionId,
+    const startApi = page.waitForResponse(
+      (r) =>
+        r.request().method() === "POST" &&
+        r.url().includes("/api/educator/sessions/") &&
+        r.url().includes("/start") &&
+        r.ok(),
+      { timeout: 30_000 },
     );
-    expect(ids).toContain(seed.attendance.sessionId);
+    await page.getByTestId("button-start-session").click();
+    await createApi;
+    await startApi;
+    await expect(page).toHaveURL(/\/educator\/session\/\d+/, { timeout: 15_000 });
+    await expect(page.getByTestId(`attendance-row-${seekersChild.id}`)).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId(`attendance-row-${seekersChild.id}`)).toContainText(
+      seekersChild.firstName,
+    );
+
+    await page.getByTestId("checkbox-select-all").click();
+    await expect(page.getByTestId("button-mark-present")).toBeVisible();
+    await page.getByTestId("button-mark-present").click();
+    await expect(page.getByTestId("button-save-attendance")).toBeVisible();
+    const bulkApi = page.waitForResponse(
+      (r) =>
+        r.request().method() === "POST" &&
+        r.url().includes("/api/educator/attendance/bulk") &&
+        r.ok(),
+      { timeout: 30_000 },
+    );
+    await page.getByTestId("button-save-attendance").click();
+    await bulkApi;
+
+    const endApi = page.waitForResponse(
+      (r) =>
+        r.request().method() === "POST" &&
+        r.url().includes("/end") &&
+        r.ok(),
+      { timeout: 30_000 },
+    );
+    await page.getByTestId("button-end-session").click();
+    await page.getByTestId("button-confirm-end").click();
+    await endApi;
+    await expect(page).toHaveURL(/\/educator(\/dashboard)?\/?$/, { timeout: 15_000 });
+    await expect(page.getByTestId("text-educator-dashboard-title")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("button-view-session")).toHaveCount(0);
+
+    const token = await waitForSupabaseToken(page);
+    const sessionMatch = page.url().match(/\/educator\/session\/(\d+)/);
+    // After end we left the session URL; use the just-ended session from history if needed.
+    const liveRoster = await page.request.get(
+      `/api/educator/classes/${seekersId}/students`,
+      { headers: bearerAuthHeaders(token) },
+    );
+    expect(liveRoster.ok()).toBeTruthy();
+    const studentsBody = await liveRoster.json();
+    const studentIds = (studentsBody.students || []).map((s: { id: number }) => s.id);
+    expect(studentIds).toContain(seekersChild.id);
+    void sessionMatch;
   });
 });

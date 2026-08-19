@@ -1099,6 +1099,15 @@ export class DatabaseStorage implements IStorage {
     ).length;
   }
 
+  async getEnrollmentsByClassId(classId: number): Promise<ProgramEnrollment[]> {
+    const db = await getDb();
+    return db.select().from(programEnrollments)
+      .where(or(
+        eq(programEnrollments.classId, classId),
+        eq(programEnrollments.marketplaceClassId, classId)
+      ));
+  }
+
   async createProgramEnrollment(enrollment: InsertProgramEnrollment): Promise<ProgramEnrollment> {
     const db = await getDb();
     const [newEnrollment] = await db

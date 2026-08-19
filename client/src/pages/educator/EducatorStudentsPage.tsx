@@ -214,7 +214,7 @@ export default function EducatorStudentsPage() {
         </CardHeader>
         <CardContent>
           {filteredStudents.length > 0 ? (
-            <div className="rounded-md border">
+            <div className="rounded-md border" data-testid="students-table">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -230,7 +230,7 @@ export default function EducatorStudentsPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredStudents.map((student: any) => (
-                    <TableRow key={student.id}>
+                      <TableRow key={`${student.id}-${student.classId || 'row'}`} data-testid={`student-row-${student.id}`}>
                       <TableCell className="font-medium">
                         <div className="font-semibold">
                           {student.firstName} {student.lastName}
@@ -288,11 +288,14 @@ export default function EducatorStudentsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={
-                          student.status === 'enrolled' ? 'default' :
-                          student.status === 'pending' ? 'secondary' : 'outline'
-                        }>
-                          {student.status || 'enrolled'}
+                        <Badge
+                          variant={
+                            student.enrollmentStatus === 'enrolled' ? 'default' :
+                            student.enrollmentStatus === 'pending_admin_approval' ? 'secondary' : 'outline'
+                          }
+                          data-testid="text-enrollment-status"
+                        >
+                          {student.enrollmentStatus || 'enrolled'}
                         </Badge>
                       </TableCell>
                       <TableCell>

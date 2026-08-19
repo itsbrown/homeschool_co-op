@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, PlayCircle, Shield, HelpCircle, ChevronDown, ClipboardList, LayoutTemplate, CalendarDays, UserCheck } from "lucide-react";
+import { LogOut, Menu, User, Bell, Home, BookOpen, Calendar, Clock, Users, Settings, GraduationCap, Shield, HelpCircle, ChevronDown, ClipboardList, LayoutTemplate, UserCheck } from "lucide-react";
 import StaffGuideModal from "@/components/StaffGuideModal";
 import { StaffGuideProvider } from "@/contexts/StaffGuideContext";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,11 @@ const educatorNavigationItems = [
     href: "/educator/students",
     title: "My Students",
     icon: Users,
+  },
+  {
+    href: "/educator/assessments",
+    title: "Assessments",
+    icon: ClipboardList,
   },
   {
     href: "/educator/weekly-calendar",
@@ -69,12 +74,10 @@ const educatorNavigationItems = [
   },
 ];
 
-// Director Academics nav items — shown in a collapsible section when hasRole('director') is true
+// Director Academics — admin tools (not the mentor day-of loop)
 const directorAcademicsItems = [
-  { href: "/educator/templates", title: "Weekly Templates", icon: LayoutTemplate },
-  { href: "/educator/week-plans", title: "Week Planner", icon: CalendarDays },
-  { href: "/educator/assessments", title: "Assessments", icon: ClipboardList },
-  { href: "/educator/attendance", title: "Attendance", icon: UserCheck },
+  { href: "/schools/schedule-builder", title: "Weekly Templates", icon: LayoutTemplate },
+  { href: "/school-admin/attendance", title: "Attendance", icon: UserCheck },
 ];
 
 function EducatorSidebar() {
@@ -269,11 +272,14 @@ function EducatorSidebar() {
 export default function EducatorAppShell({ children }: EducatorAppShellProps) {
   const { user, signOut, isAuthenticated } = useAuth();
   const { activeRole, hasRole } = useRole();
+  const { showAdminNavGroups, can } = useEffectivePermissions();
   const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userSchool, setUserSchool] = useState<any>(null);
   
   const hasSuperAdminRole = hasRole('superadmin');
+  const isDirector = activeRole === 'director' || showAdminNavGroups;
+  const showAcademics = isDirector || can('canManageClasses');
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['/api/notifications'],
@@ -382,6 +388,27 @@ export default function EducatorAppShell({ children }: EducatorAppShellProps) {
                                   {unreadNotifications > 9 ? '9+' : unreadNotifications}
                                 </Badge>
                               )}
+                            </Link>
+                          </SheetClose>
+                        );
+                      })}
+                      {showAcademics && directorAcademicsItems.map((item) => {
+                        const Icon = item.icon;
+                        const isActive = location === item.href || location.startsWith(item.href + '/');
+                        return (
+                          <SheetClose asChild key={item.href}>
+                            <Link
+                              href={item.href}
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-3 text-base font-medium transition-colors",
+                                isActive
+                                  ? "bg-emerald-600 text-white"
+                                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                              )}
+                              data-testid={`nav-mobile-${item.href.split('/').pop()}`}
+                            >
+                              <Icon className="h-5 w-5" />
+                              <span className="flex-1">{item.title}</span>
                             </Link>
                           </SheetClose>
                         );

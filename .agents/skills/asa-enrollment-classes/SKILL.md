@@ -249,6 +249,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - **Orphaned scheduled payments** → enrollment deleted but `scheduled_payments` remain → filter orphaned records from admin views (see `asa-database-patterns`)
 - **Using `classData?.price` instead of `enrollment.totalCost` for balance updates** → `enrollment.programId` is not a reliable class ID (legacy field, not always populated), so `storage.getClassById(enrollment.programId)` often returns `null`, making `totalCost = 0` → `remainingBalance = 0` (wrong, understates balance). Always use `enrollment.totalCost` directly — it is the authoritative financial field set at enrollment creation.
 - **Educator student list shows graduated/cancelled students** → enrollment query missing status filter → always restrict to `status IN ('enrolled', 'pending_admin_approval')`; never include `completed`, `cancelled`, or `withdrawn`
+- **Empty educator roster / bulk attendance in production** → `getEnrollmentsByClassId` used memStorage and/or `classId` only. Marketplace seats set `marketplaceClassId` → `classes.id`. Use Postgres `or(classId, marketplaceClassId)` via `dbStorage`; CombinedStorage must not return mem-only success when DB is up.
 
 ## Best Practices
 
@@ -282,6 +283,8 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - `server/lib/prorate-calculator.ts` — proration date math
 - `server/utils/cart-pricing.ts` — pricing calculations for enrollments
 - `shared/schema.ts` — `programEnrollments`, `schoolClassEnrollments`, `schoolClasses`, `classes` tables
+- `server/dbStorage.ts` — `getEnrollmentsByClassId` (`classId` OR `marketplaceClassId`)
+- `docs/APP_KNOWLEDGE/domains/educator-ui.md` — mentor roster + session loop
 - `docs/APP_KNOWLEDGE/domains/supply-lists.md` — household supply lists from class/session items
 - `server/lib/import-supply-list-csv.ts` — admin CSV import (affiliate reuse/create by school+ASIN; PA-API optional)
 - `client/src/pages/schools/SessionsManagementPage.tsx` — session config + fill summary

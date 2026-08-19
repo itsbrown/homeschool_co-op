@@ -4,14 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/SupabaseProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   User, 
-  Bell, 
-  Mail,
   Phone,
   Save,
   Loader2
@@ -35,7 +32,6 @@ export default function EducatorSettingsPage() {
   const [lastName, setLastName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
-  const [emailNotifications, setEmailNotifications] = useState(true);
 
   const { data: profile, isLoading } = useQuery<ProfileData>({
     queryKey: ["/api/users/profile"],
@@ -194,37 +190,6 @@ export default function EducatorSettingsPage() {
               </>
             )}
           </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            Notification Preferences
-          </CardTitle>
-          <CardDescription>
-            Choose how you'd like to be notified about important updates
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="email-notifications" className="flex items-center gap-2">
-                <Mail className="h-4 w-4" />
-                Email Notifications
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Receive email updates about classes and announcements
-              </p>
-            </div>
-            <Switch
-              id="email-notifications"
-              checked={emailNotifications}
-              onCheckedChange={setEmailNotifications}
-              data-testid="switch-email-notifications"
-            />
-          </div>
         </CardContent>
       </Card>
     </div>

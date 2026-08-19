@@ -50,7 +50,10 @@ test.describe("parent household supply list", () => {
       "https://www.singaporemath.com/pages/placement-tests",
     );
     await page.getByTestId("dimensions-math-placement-howto").click();
-    await expect(page.getByText(/Start lower than you think/i)).toBeVisible();
+    await expect(page.getByTestId("dimensions-math-placement-howto-step-1")).toBeVisible();
+    await expect(page.getByTestId("dimensions-math-placement-howto-step-1")).toHaveText(
+      /Start lower than you think/i,
+    );
     await expect(page.getByText(/Water bottle ×2/i)).toBeVisible();
     await expect(page.getByText(/Glue sticks ×2/i)).toBeVisible();
     await expect(page.getByText(/Maya/i).first()).toBeVisible();

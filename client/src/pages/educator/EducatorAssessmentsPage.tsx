@@ -22,7 +22,6 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import EducatorAppShell from '@/components/layout/EducatorAppShell';
 import { 
   EducatorLoadingState, 
   EducatorEmptyState 
@@ -65,6 +64,7 @@ interface Child {
   id: number;
   firstName: string;
   lastName: string;
+  birthdate?: string;
   dateOfBirth?: string;
 }
 
@@ -144,10 +144,11 @@ export default function EducatorAssessmentsPage() {
     enabled: !!assessmentForm.assessmentTypeId,
   });
 
-  const { data: children = [], isLoading: childrenLoading } = useQuery<Child[]>({
-    queryKey: ['/api/educator/students'],
+  const { data: studentsResponse, isLoading: childrenLoading } = useQuery<{ students: Child[] }>({
+    queryKey: ['/api/educator/my-students'],
     enabled: !!user?.email,
   });
+  const children = studentsResponse?.students ?? [];
 
   const { data: recentAssessments = [], isLoading: assessmentsLoading } = useQuery<StudentAssessment[]>({
     queryKey: ['/api/assessments/students'],
@@ -203,15 +204,21 @@ export default function EducatorAssessmentsPage() {
       (assessmentForm.scoreNumeric != null && assessmentForm.scoreNumeric !== ''
         ? String(assessmentForm.scoreNumeric)
         : '');
-    const data = {
+    const data: Record<string, unknown> = {
       childId: parseInt(assessmentForm.childId),
       assessmentTypeId: parseInt(assessmentForm.assessmentTypeId),
-      curriculumBookId: assessmentForm.curriculumBookId ? parseInt(assessmentForm.curriculumBookId) : null,
-      lesson: assessmentForm.lessonNumber ? parseInt(assessmentForm.lessonNumber) : null,
       score: score || '0',
-      assessmentDate: new Date(assessmentForm.assessmentDate).toISOString(),
-      notes: assessmentForm.notes || null,
+      assessmentDate: assessmentForm.assessmentDate,
     };
+    if (assessmentForm.curriculumBookId) {
+      data.curriculumBookId = parseInt(assessmentForm.curriculumBookId);
+    }
+    if (assessmentForm.lessonNumber) {
+      data.lesson = parseInt(assessmentForm.lessonNumber);
+    }
+    if (assessmentForm.notes) {
+      data.notes = assessmentForm.notes;
+    }
     createAssessmentMutation.mutate(data);
   };
 

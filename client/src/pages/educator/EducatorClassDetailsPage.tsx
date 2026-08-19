@@ -19,7 +19,8 @@ import {
   User,
   Download,
   Phone,
-  AlertCircle
+  AlertCircle,
+  PlayCircle
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -123,7 +124,7 @@ export default function EducatorClassDetailsPage() {
         <div className="text-center">
           <h2 className="text-2xl font-semibold text-gray-900">Class Not Found</h2>
           <p className="text-gray-600 mt-2">The class you're looking for doesn't exist or you don't have access to it.</p>
-          <Link href="/educator/classes">
+          <Link href="/educator/my-classes">
             <Button className="mt-4">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to My Classes
@@ -147,7 +148,7 @@ export default function EducatorClassDetailsPage() {
     <div className="container mx-auto p-6">
       {/* Header */}
       <div className="mb-6">
-        <Link href="/educator/classes">
+        <Link href="/educator/my-classes">
           <Button variant="outline" size="sm" className="mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to My Classes
@@ -174,9 +175,17 @@ export default function EducatorClassDetailsPage() {
               )}
             </div>
           </div>
-          <Badge className={getStatusColor(classData.status)}>
-            {classData.status?.charAt(0).toUpperCase() + classData.status?.slice(1)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className={getStatusColor(classData.status)}>
+              {classData.status?.charAt(0).toUpperCase() + classData.status?.slice(1)}
+            </Badge>
+            <Link href={`/educator/classes/${classId}/start-session`}>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" data-testid={`button-start-session-${classId}`}>
+                <PlayCircle className="h-4 w-4 mr-2" />
+                Start Session
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 

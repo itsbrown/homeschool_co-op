@@ -125,6 +125,9 @@ const mutation = useMutation({
 - **API calls return 401 unexpectedly** → used bare `fetch()` without auth headers → use `apiRequest` or the default TanStack Query fetcher
 - **Hardcoded cultural/religious content in templates** → used specific subjects like "Arabic Language Arts" or "Islamic Studies" as sample data → always use neutral examples like "Math 101", "Science Basics"
 - **iOS Safari auto-zooms on input focus** → input `fontSize` is below 16px → add `style={{ fontSize: '16px' }}` to date/select inputs
+- **Educator login looks empty / wrong classes** → post-login `/dashboard` for `educator` / `mentor` / `teacher` must redirect to `/educator/dashboard` (`GET /api/educator/dashboard` + assignments). Legacy `components/dashboards/EducatorDashboard.tsx` (`GET /api/educator/classes?email=`) is **admin/superAdmin only**. Do not extend it for mentors.
+- **Director Weekly Templates** → `/schools/schedule-builder` (also `/educator/templates` redirect). Mentors without school-admin permission may see `ForbiddenPage`.
+- **Educator cache looks stale after start/end session** → `invalidateQueries({ queryKey: ['/api/educator'] })` does not match `['/api/educator/dashboard']`. Use `invalidateEducatorSessionQueries()` in `client/src/lib/educator-queries.ts`.
 
 ## Best Practices
 

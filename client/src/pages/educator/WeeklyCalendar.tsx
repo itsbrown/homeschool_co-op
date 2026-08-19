@@ -713,7 +713,7 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
             </Button>
             <Button 
               variant="outline" 
-              onClick={() => navigate('/educator/classes')}
+              onClick={() => navigate('/educator/my-classes')}
               data-testid="button-view-classes"
             >
               View All Classes

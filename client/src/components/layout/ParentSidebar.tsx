@@ -363,8 +363,8 @@ export default function ParentSidebar() {
         icon: <Calendar className="h-5 w-5" />,
       },
       {
-        href: "/educator/attendance",
-        title: "Attendance",
+        href: "/educator/assessments",
+        title: "Assessments",
         icon: <ClipboardList className="h-5 w-5" />,
       },
       {

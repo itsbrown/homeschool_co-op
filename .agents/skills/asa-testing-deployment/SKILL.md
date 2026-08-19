@@ -57,7 +57,7 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - Test against the running dev server on port 5000
 - Application may have existing data — don't assume empty state
 - Generate unique values (e.g., `nanoid`) for test data to avoid conflicts
-- Include `data-testid` attributes on key interactive elements for reliable selectors
+- Include `data-testid` attributes on key interactive elements for reliable selectors. Do not `getByText` a string that also exists in a `hidden print:block` duplicate — Playwright still matches it (strict mode).
 - **Command index:** [`docs/E2E_COMMANDS.md`](../../docs/E2E_COMMANDS.md) — single catalog of npm scripts, per-spec commands, env, and seeds
 
 ### Adding a new E2E spec (documentation checklist)
@@ -76,7 +76,7 @@ When you create or extend `e2e/**/*.spec.ts`:
 
 **Example (public forms):** [`e2e/public-custom-forms.spec.ts`](../../e2e/public-custom-forms.spec.ts) — `npm run test:e2e -- e2e/public-custom-forms.spec.ts`; seed `setup-public-form-scenario`; runbook [`public-mentor-application-form.md`](../../docs/APP_KNOWLEDGE/runbooks/public-mentor-application-form.md).
 
-**Example (schedule builder):** seed `POST /api/test/setup-schedule-builder-scenario` via `postSetupScheduleScenario` — used by `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`. Domain: [`schedule-and-lesson-planning.md`](../../docs/APP_KNOWLEDGE/domains/schedule-and-lesson-planning.md).
+**Example (schedule builder):** seed `POST /api/test/setup-schedule-builder-scenario` via `postSetupScheduleScenario` — used by `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-landing-nav`, `educator-mentor-loop`, `attendance-educator-mark`. Domain: [`schedule-and-lesson-planning.md`](../../docs/APP_KNOWLEDGE/domains/schedule-and-lesson-planning.md) + [`educator-ui.md`](../../docs/APP_KNOWLEDGE/domains/educator-ui.md).
 
 ### What to Test with Playwright
 - Frontend features and multi-page flows
@@ -95,6 +95,7 @@ When you create or extend `e2e/**/*.spec.ts`:
 - Supabase auth is used — tests may need to handle login flows
 - Google OAuth and other third-party providers cannot be automated via Playwright (providers block it)
 - For admin/role-specific features: use DB queries to set user roles before testing (e.g., `UPDATE users SET ...`)
+- Educator specs: `loginEducatorFromSeed` + `educatorSupabaseLinked` in `e2e/helpers/educatorAuth.ts`. Skip when the seed did not link Supabase. Do not require `E2E_EDUCATOR_EMAIL`.
 
 ### API Testing
 - Can test API routes directly in Playwright tests (fetch/POST)
@@ -276,6 +277,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - **Server changes not visible** → workflow not restarted after code changes → restart "Start application" and verify clean startup
 - **Tests fail with "element not found"** → test assumes empty database state → generate unique test data with `nanoid` instead
 - **Playwright click hangs 120s after success UI** → first-visit `schedule-tour-prompt` overlay intercepts `schedule-csv-*` clicks (or a switch never hydrates) → seed `schedule_builder_tour_seen` / `schedule_builder_tour_prompt_session` before load; wait for enabled/visible; click Radix switches only if `data-state` is not already `checked`; `click({ force: true })` when a toast sits on the target. Do **not** `waitForLoadState("networkidle")` (this app keeps polling).
+- **Playwright `getByText` strict-mode 2 matches** → print + screen copies of the same string (`hidden print:block` stays in the DOM) → unique `data-testid` on the interactive copy (Dimensions how-to: `dimensions-math-placement-howto-step-1`)
 - **Frontend env var undefined** → missing `VITE_` prefix → rename to `VITE_MY_VAR` and access via `import.meta.env.VITE_MY_VAR`
 - **Schema change not applied** → wrote raw SQL migration file → use `npm run db:push` (Drizzle handles it)
 - **`The server does not support SSL connections`** in dev → a `pg`/`postgres.js` client was opened with hardcoded `ssl: { rejectUnauthorized: false }` or `ssl: 'require'`. Replit dev uses Helium, which does not accept SSL handshakes. Replace the hardcoded option with `getDbSslConfig()` (for `pg`) or `getPostgresJsSslOption()` (for `postgres.js`) from `server/lib/database-url.ts` so SSL is enabled only when `NODE_ENV === 'production'`.

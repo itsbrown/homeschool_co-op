@@ -81,7 +81,7 @@ Steps: templates → class bind → blocks/CSV → Week Planner → New Week →
 |----|----------|
 | `POST /api/test/setup-schedule-builder-scenario` | Admin/educator/parent, Seekers+Yankee classes (+ `schedule` jsonb + educator assignment), skeletons/`classId`, published+draft weeks, completion, attendance, optional Supabase link |
 | Jest | `schedule-builder-mount`, `schedule-builder-seed`, `schedule-builder-api` (incl. week-plan CSV import), `progress-scheduled-lessons`, `school-admin-academics-kpi`, `school-admin-attendance`, `schedule-day-index` |
-| Playwright | `schedule-builder-publish`, `schedule-template-csv-import`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `educator-weekly-schedule-plans` |
+| Playwright | `schedule-builder-publish`, `schedule-template-csv-import`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `educator-weekly-schedule-plans`, plus mentor loop specs in [educator-ui.md](./educator-ui.md) |
 
 Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: [student-progress-assessments.md](./student-progress-assessments.md).
 

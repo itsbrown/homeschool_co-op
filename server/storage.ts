@@ -2256,7 +2256,9 @@ export class MemStorage implements IStorage {
   async getEnrollmentsByClassId(classId: number): Promise<any[]> {
     // Read from programEnrollmentsStore (the canonical source for all enrollments)
     const enrollments = Array.from(this.programEnrollmentsStore.values())
-      .filter(enrollment => enrollment.classId === classId);
+      .filter(enrollment =>
+        enrollment.classId === classId || enrollment.marketplaceClassId === classId
+      );
     console.log(`📝 ENROLLMENT QUERY: Class ${classId} has ${enrollments.length} enrollments from programEnrollmentsStore`);
     return enrollments;
   }
@@ -6158,6 +6160,12 @@ export class MemStorage implements IStorage {
 
     async getEnrollmentsByClassId(classId: number): Promise<any[]> {
       try {
+        if (this.dbStorage && typeof this.dbStorage.getEnrollmentsByClassId === 'function') {
+          return await this.dbStorage.getEnrollmentsByClassId(classId);
+        }
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error('Database storage is required in production environment');
+        }
         console.log('💾 DB storage unavailable, using memStorage fallback for getEnrollmentsByClassId');
         return await this.memStorage.getEnrollmentsByClassId(classId);
       } catch (error) {

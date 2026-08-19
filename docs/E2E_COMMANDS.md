@@ -142,9 +142,12 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/school-admin-academics-kpi.spec.ts`](../e2e/school-admin-academics-kpi.spec.ts) | `npm run test:e2e -- e2e/school-admin-academics-kpi.spec.ts` | Attendance → Lesson plans tab: completion % + attendance KPI | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/schedule-template-csv-import.spec.ts`](../e2e/schedule-template-csv-import.spec.ts) | `npm run test:e2e -- e2e/schedule-template-csv-import.spec.ts` | Weekly Templates: CSV map → preview → confirm import + block titles. Suppress `schedule-tour-prompt`; force-click `schedule-csv-done` after success. | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/educator-weekly-schedule-plans.spec.ts`](../e2e/educator-weekly-schedule-plans.spec.ts) | `npm run test:e2e -- e2e/educator-weekly-schedule-plans.spec.ts` | Educator Schedule: published plan overlay + detail sheet + print | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/educator-landing-nav.spec.ts`](../e2e/educator-landing-nav.spec.ts) | `npm run test:e2e -- e2e/educator-landing-nav.spec.ts` | Mentor `/dashboard` → `/educator/dashboard`, sidebar, class/attendance/templates redirects | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/educator-mentor-loop.spec.ts`](../e2e/educator-mentor-loop.spec.ts) | `npm run test:e2e -- e2e/educator-mentor-loop.spec.ts` | My Classes, students, hours, notifications send/history, settings profile | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/educator-assessments-record.spec.ts`](../e2e/educator-assessments-record.spec.ts) | `npm run test:e2e -- e2e/educator-assessments-record.spec.ts` | Assessments record tab `my-students` + save score + progress tab | `setup-progress-scenario` (`linkSupabaseAuth`) |
 | [`e2e/grade-placement-auto-place.spec.ts`](../e2e/grade-placement-auto-place.spec.ts) | `npm run test:e2e -- e2e/grade-placement-auto-place.spec.ts` | Auto-place roster badge + eligibility preview. Wait for switch enabled; click only if not already `checked`. | `setup-grade-placement-scenario` (`linkSupabaseAuth`) |
 | [`e2e/grade-placement-parent-card.spec.ts`](../e2e/grade-placement-parent-card.spec.ts) | `npm run test:e2e -- e2e/grade-placement-parent-card.spec.ts` | Parent/admin child card shows placed class title | `setup-grade-placement-scenario` (`linkSupabaseAuth`) |
-| [`e2e/attendance-educator-mark.spec.ts`](../e2e/attendance-educator-mark.spec.ts) | `npm run test:e2e -- e2e/attendance-educator-mark.spec.ts` | Attendance sessions list includes seeded class session | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/attendance-educator-mark.spec.ts`](../e2e/attendance-educator-mark.spec.ts) | `npm run test:e2e -- e2e/attendance-educator-mark.spec.ts` | Start session → marketplace roster → mark present → end | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/attendance-qr-clock-in.spec.ts`](../e2e/attendance-qr-clock-in.spec.ts) | `npm run test:e2e -- e2e/attendance-qr-clock-in.spec.ts` | Generate QR → `GET /api/public/session-by-qr/:token` | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 
 **Supabase:** Real project required (`isRealSupabaseConfigured()` or `supabaseLinked === true`).
@@ -170,7 +173,7 @@ Requires `E2E_PARENT_EMAIL` / `E2E_PARENT_PASSWORD` (and real Supabase). Run via
 | [`e2e/authenticated/dashboard.spec.ts`](../e2e/authenticated/dashboard.spec.ts) | `npm run test:e2e -- e2e/authenticated/dashboard.spec.ts` | Logged-in parent not sent to login |
 | [`e2e/authenticated/parent-profile-routes.spec.ts`](../e2e/authenticated/parent-profile-routes.spec.ts) | `npm run test:e2e -- e2e/authenticated/parent-profile-routes.spec.ts` | Parent routes + critical GET APIs 2xx |
 | [`e2e/authenticated/parent-progress-hub.spec.ts`](../e2e/authenticated/parent-progress-hub.spec.ts) | `npm run test:e2e -- e2e/authenticated/parent-progress-hub.spec.ts` | `/parent/progress` hub |
-| [`e2e/authenticated/educator-progress-tab.spec.ts`](../e2e/authenticated/educator-progress-tab.spec.ts) | `npm run test:e2e -- e2e/authenticated/educator-progress-tab.spec.ts` | Educator progress tab (`E2E_EDUCATOR_EMAIL`) |
+| [`e2e/authenticated/educator-progress-tab.spec.ts`](../e2e/authenticated/educator-progress-tab.spec.ts) | `npm run test:e2e -- e2e/authenticated/educator-progress-tab.spec.ts` | Skipped — superseded by `educator-assessments-record.spec.ts` |
 
 ---
 
@@ -190,8 +193,8 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `POST /api/test/ensure-technical-support-schema` | `help-issue-submission.spec.ts` |
 | `GET /api/test/technical-support-issue/:id` | `help-issue-submission.spec.ts` (persistence verify) |
 | `POST /api/test/setup-credit-lookup-scenario` | `credit-management-parent-lookup` |
-| `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard` |
-| `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-weekly-schedule-plans`, `attendance-educator-mark`, `attendance-qr-clock-in` |
+| `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard`, `educator-assessments-record` |
+| `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-weekly-schedule-plans`, `educator-landing-nav`, `educator-mentor-loop`, `attendance-educator-mark`, `attendance-qr-clock-in` |
 | `POST /api/test/setup-grade-placement-scenario` | `grade-placement-auto-place`, `grade-placement-parent-card` |
 | `POST /api/test/setup-additive-nav-scenario` | `additive-nav.spec.ts` |
 | `POST /api/test/ensure-public-store-schema` | `public-store.spec.ts` |
