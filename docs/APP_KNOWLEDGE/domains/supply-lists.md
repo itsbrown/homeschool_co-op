@@ -58,7 +58,7 @@ CSV import maps Google Sheets columns (skips title rows until a **Supply Item** 
 
 - Unit: [`shared/__tests__/supply-list.test.ts`](../../../shared/__tests__/supply-list.test.ts), [`shared/__tests__/supply-list-csv.test.ts`](../../../shared/__tests__/supply-list-csv.test.ts)
 - API: [`server/tests/integration/supply-lists-api.test.ts`](../../../server/tests/integration/supply-lists-api.test.ts)
-- E2E: `e2e/school-admin-supply-list.spec.ts`, `e2e/parent-supply-list.spec.ts` — seed `POST /api/test/setup-supply-list-scenario`
+- E2E: `e2e/school-admin-supply-list.spec.ts`, `e2e/parent-supply-list.spec.ts` — seed `POST /api/test/setup-supply-list-scenario`. Dimensions how-to is rendered twice (print copy + collapsible); assert `dimensions-math-placement-howto-step-1`, not `getByText(/Start lower than you think/i)`.
 
 ## Key files
 
