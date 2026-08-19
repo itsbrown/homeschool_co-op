@@ -52,6 +52,7 @@ CSV import maps Google Sheets columns (skips title rows until a **Supply Item** 
 - Parent sidebar + mobile menu: **Supply list** → `/parent/supplies` (shopping list / by child / by class)
 - Dashboard Overview card and Quick Action always visible (empty copy when no items)
 - Parent class details: class-only subset + link to household list
+- **Dimensions Math placement:** collapsed **Before you buy Dimensions Math** card on the household list when any class attribution is **not** Macaroni/Macaronis (mixed households still see it). Same card on non-Macaroni class-details supplies. Primary CTA opens Singapore Math placement tests. Do **not** fake a supply row or put this copy in class descriptions. Notification blast waits until this UI is live.
 
 ## Tests
 
@@ -61,7 +62,8 @@ CSV import maps Google Sheets columns (skips title rows until a **Supply Item** 
 
 ## Key files
 
-- `shared/supply-list.ts` — merge math
+- `shared/supply-list.ts` — merge math; Macaroni exclusion for Dimensions Math placement
+- `client/src/components/parent/DimensionsMathPlacementCard.tsx` — parent how-to card
 - `shared/supply-list-csv.ts` — Sheets CSV parse / qty+unit split
 - `server/lib/supply-lists.ts` — data access
 - `server/lib/import-supply-list-csv.ts` — PA-API + affiliate reuse/create then `replaceSupplyItems`

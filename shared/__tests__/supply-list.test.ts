@@ -1,6 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   allSupplyItemIdsChecked,
+  householdNeedsDimensionsMathPlacement,
+  isMacaroniClassName,
   mergeSupplyNeeds,
   supplyMergeKey,
   type SupplyNeed,
@@ -191,5 +193,42 @@ describe("allSupplyItemIdsChecked", () => {
     expect(allSupplyItemIdsChecked([1, 2], [1, 2])).toBe(true);
     expect(allSupplyItemIdsChecked([1, 2], [1])).toBe(false);
     expect(allSupplyItemIdsChecked([], [1])).toBe(false);
+  });
+});
+
+describe("isMacaroniClassName", () => {
+  it("matches Macaroni / Macaronis in campus titles", () => {
+    expect(isMacaroniClassName("Macaronis | Brighton | F2026")).toBe(true);
+    expect(isMacaroniClassName("Macaroni")).toBe(true);
+    expect(isMacaroniClassName("Yankee Doodle | Brighton | F2026")).toBe(false);
+    expect(isMacaroniClassName("Trailblazers")).toBe(false);
+  });
+});
+
+describe("householdNeedsDimensionsMathPlacement", () => {
+  it("is true when any class attribution is not Macaroni", () => {
+    expect(
+      householdNeedsDimensionsMathPlacement([
+        {
+          for: [
+            { ownerType: "class", ownerName: "Macaronis | Brighton | F2026" },
+            { ownerType: "class", ownerName: "Yankee Doodle | Brighton | F2026" },
+          ],
+        },
+      ]),
+    ).toBe(true);
+  });
+
+  it("is false for Macaroni-only classes and session-only rows", () => {
+    expect(
+      householdNeedsDimensionsMathPlacement([
+        { for: [{ ownerType: "class", ownerName: "Macaronis | Greece | F2026" }] },
+      ]),
+    ).toBe(false);
+    expect(
+      householdNeedsDimensionsMathPlacement([
+        { for: [{ ownerType: "session", ownerName: "Fall 2026" }] },
+      ]),
+    ).toBe(false);
   });
 });

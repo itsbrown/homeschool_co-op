@@ -159,3 +159,19 @@ export function mergeSupplyNeeds(
   });
   return rows;
 }
+
+export const DIMENSIONS_MATH_PLACEMENT_TESTS_URL =
+  "https://www.singaporemath.com/pages/placement-tests";
+
+/** Macaroni / Macaronis class titles — no Dimensions Math placement. */
+export function isMacaroniClassName(name: string): boolean {
+  return /\bmacaronis?\b/i.test(name);
+}
+
+export function householdNeedsDimensionsMathPlacement(
+  items: Array<{ for: Array<{ ownerType: string; ownerName: string }> }>,
+): boolean {
+  return items.some((item) =>
+    item.for.some((entry) => entry.ownerType === "class" && !isMacaroniClassName(entry.ownerName)),
+  );
+}
