@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-08-19 (Playwright: print + screen duplicate text)
+
+- `DimensionsMathPlacementCard` keeps a `hidden print:block` copy of placement steps plus the collapsible screen copy. Playwright `getByText` matches both (strict-mode fail even when one is `display:none`). Assert `dimensions-math-placement-howto-step-1`.
+- Pitfall recorded in [ci-and-testing.md](domains/ci-and-testing.md) and [supply-lists.md](domains/supply-lists.md).
+
 ## 2026-08-19 (Educator mentor loop)
 
 - Two assigned classes: attendance stays per session; My Students unions enrollment rows (same child can appear twice). See [educator-ui.md](domains/educator-ui.md).

@@ -25,7 +25,7 @@ const PLACEMENT_STEPS = [
   },
 ] as const;
 
-function PlacementSteps() {
+function PlacementSteps({ firstStepTestId }: { firstStepTestId?: string }) {
   return (
     <ol className="space-y-3 text-sm">
       {PLACEMENT_STEPS.map((step, index) => (
@@ -37,7 +37,12 @@ function PlacementSteps() {
             {index + 1}
           </span>
           <div>
-            <p className="font-medium">{step.title}</p>
+            <p
+              className="font-medium"
+              data-testid={index === 0 ? firstStepTestId : undefined}
+            >
+              {step.title}
+            </p>
             <p className="text-muted-foreground mt-0.5">{step.body}</p>
           </div>
         </li>
@@ -94,7 +99,7 @@ export function DimensionsMathPlacementCard() {
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-1 pb-1">
-            <PlacementSteps />
+            <PlacementSteps firstStepTestId="dimensions-math-placement-howto-step-1" />
           </CollapsibleContent>
         </Collapsible>
       </CardContent>
