@@ -154,7 +154,6 @@ const ClassPaymentPlans = lazy(() => import("@/pages/ClassPaymentPlans"));
 const SessionEnrollmentPage = lazy(() => import("@/pages/SessionEnrollmentPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
-const EducatorClassesPage = lazy(() => import('./pages/educator/EducatorClassesPage'));
 const EducatorClassDetailsPage = lazy(() => import('./pages/educator/EducatorClassDetailsPage'));
 const EducatorStudentsPage = lazy(() => import('./pages/educator/EducatorStudentsPage'));
 const EducatorStudentDetailPage = lazy(() => import('./pages/educator/EducatorStudentDetailPage'));
@@ -348,14 +347,10 @@ function DashboardRouter() {
     );
   }
 
-  // For educator, mentor - route to EducatorDashboard with EducatorAppShell
-  if (['educator', 'mentor'].includes(activeRole)) {
-    console.log(`🎯 Routing ${activeRole} to EducatorDashboard with EducatorAppShell`);
-    return (
-      <EducatorAppShell key={`dashboard-${activeRole}`}>
-        <EducatorDashboard />
-      </EducatorAppShell>
-    );
+  // Mentors land on the live /educator/dashboard (not the legacy email-query dashboard).
+  if (['educator', 'mentor', 'teacher'].includes(activeRole)) {
+    console.log(`🎯 Routing ${activeRole} to /educator/dashboard`);
+    return <Redirect to="/educator/dashboard" />;
   }
 
   // For super admin, admin - route to EducatorDashboard with AppShell and AI tools
@@ -720,10 +715,11 @@ function Router() {
       <Route path="/educator/sessions/:id/attendance" component={() => <EducatorShellWrapper><ActiveSessionPage /></EducatorShellWrapper>} />
       <Route path="/educator/weekly-calendar" component={() => <EducatorShellWrapper><WeeklyCalendarPage /></EducatorShellWrapper>} />
       <Route path="/educator/my-hours" component={() => <EducatorShellWrapper><MyHoursPage /></EducatorShellWrapper>} />
-      <Route path="/educator/attendance" component={() => <EducatorShellWrapper><AttendanceManagementPage /></EducatorShellWrapper>} />
-      <Route path="/educator/classes" component={() => <EducatorShellWrapper><EducatorClassesPage /></EducatorShellWrapper>} />
-      <Route path="/educator/classes/:id" component={() => <EducatorShellWrapper><EducatorClassDetailsPage /></EducatorShellWrapper>} />
+      <Route path="/educator/attendance" component={() => <Redirect to="/educator/my-classes" />} />
+      <Route path="/educator/templates" component={() => <Redirect to="/schools/schedule-builder" />} />
       <Route path="/educator/classes/:id/start-session" component={() => <EducatorShellWrapper><StartSessionPage /></EducatorShellWrapper>} />
+      <Route path="/educator/classes/:id" component={() => <EducatorShellWrapper><EducatorClassDetailsPage /></EducatorShellWrapper>} />
+      <Route path="/educator/classes" component={() => <Redirect to="/educator/my-classes" />} />
       <Route path="/educator/students" component={() => <EducatorShellWrapper><EducatorStudentsPage /></EducatorShellWrapper>} />
       <Route path="/educator/students/:id" component={() => <EducatorShellWrapper><EducatorStudentDetailPage /></EducatorShellWrapper>} />
       <Route path="/educator/schedule" component={() => <Redirect to="/educator/weekly-calendar" />} />

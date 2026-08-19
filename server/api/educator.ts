@@ -80,6 +80,47 @@ async function loadClassDisplayFields(classId: number): Promise<{
   };
 }
 
+const EDUCATOR_ROSTER_STATUSES = new Set(['enrolled', 'pending_admin_approval']);
+
+function isEducatorRosterStatus(status: string | null | undefined): boolean {
+  return !!status && EDUCATOR_ROSTER_STATUSES.has(status);
+}
+
+async function educatorIsInstructorOfClass(
+  userId: number,
+  classId: number,
+): Promise<{ isInstructor: boolean; classInfo: Awaited<ReturnType<typeof storage.getClassById>> }> {
+  const classInfo = await storage.getClassById(classId);
+  const educator = await storage.getUser(userId);
+  const isInstructor = !!(
+    educator &&
+    classInfo &&
+    (classInfo.instructorId === educator.id || classInfo.instructorName === educator.name)
+  );
+  return { isInstructor, classInfo };
+}
+
+async function resolveSessionStartAccess(userId: number, classId: number): Promise<{
+  allowed: boolean;
+  schoolId: number | null;
+  code: 'NOT_ASSIGNED' | 'NO_SESSION_PERMISSION' | null;
+}> {
+  const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+  const assignment = assignments.find((a: EducatorClassAssignment) => a.classId === classId);
+  if (assignment) {
+    return {
+      allowed: !!assignment.canStartSession,
+      schoolId: assignment.schoolId,
+      code: assignment.canStartSession ? null : 'NO_SESSION_PERMISSION',
+    };
+  }
+  const { isInstructor, classInfo } = await educatorIsInstructorOfClass(userId, classId);
+  if (isInstructor && classInfo) {
+    return { allowed: true, schoolId: classInfo.schoolId ?? null, code: null };
+  }
+  return { allowed: false, schoolId: null, code: 'NOT_ASSIGNED' };
+}
+
 // GET /api/educator/dashboard - Get educator dashboard data
 router.get('/dashboard', async (req, res) => {
   try {
@@ -106,7 +147,7 @@ router.get('/dashboard', async (req, res) => {
     const activeSession = await storage.getActiveClassSession(userId);
 
     // Get class details for assignments (these are "today's classes" for the educator)
-    const todayClasses = await Promise.all(
+    let todayClasses = await Promise.all(
       assignments.map(async (assignment: EducatorClassAssignment) => {
         const classInfo = await storage.getClassById(assignment.classId);
         const enrollmentCount = await storage.getEnrollmentCountForClass(assignment.classId);
@@ -127,6 +168,36 @@ router.get('/dashboard', async (req, res) => {
         };
       })
     );
+
+    if (todayClasses.length === 0) {
+      const educator = await storage.getUser(userId);
+      if (educator) {
+        const allClasses = await storage.getAllClasses();
+        const instructorClasses = allClasses.filter(cls =>
+          cls.instructorId === educator.id || cls.instructorName === educator.name
+        );
+        todayClasses = await Promise.all(
+          instructorClasses.map(async (cls) => {
+            const enrollmentCount = await storage.getEnrollmentCountForClass(cls.id);
+            return {
+              assignmentId: cls.id,
+              classId: cls.id,
+              isPrimary: true,
+              canStartSession: true,
+              validFrom: null as string | null,
+              validTo: null as string | null,
+              className: cls.title || 'Unknown Class',
+              classDescription: cls.description,
+              classSchedule: formatScheduleString(cls.schedule),
+              classLocation: cls.location,
+              capacity: cls.capacity,
+              enrollmentCount,
+              schoolId: cls.schoolId
+            };
+          })
+        );
+      }
+    }
 
     // Calculate completed and upcoming sessions for today
     const completedToday = todaySessions.filter((s: ClassSession) => s.status === 'completed').length;
@@ -601,14 +672,9 @@ router.get('/classes/:id/students', async (req, res) => {
       }
     }
 
-    // Get enrolled students from program_enrollments
     const allChildren = await storage.getAllChildren();
-    const allEnrollments = await storage.getAllEnrollments();
-    
-    const classEnrollments = allEnrollments.filter((enrollment: any) =>
-      enrollment.classType === 'marketplace' &&
-      enrollment.marketplaceClassId === classId
-    );
+    const classEnrollments = (await storage.getEnrollmentsByClassId(classId))
+      .filter((enrollment) => isEducatorRosterStatus(enrollment.status));
 
     const students = await Promise.all(
       classEnrollments.map(async (enrollment: any) => {
@@ -789,29 +855,21 @@ router.post('/sessions', async (req, res) => {
 
     const validatedData = createSessionSchema.parse(req.body);
 
-    // Verify educator is assigned to this class
-    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
-    const assignment = assignments.find((a: EducatorClassAssignment) => a.classId === validatedData.classId);
-
-    if (!assignment) {
-      console.log('[EducatorDashboard] User not assigned to class:', validatedData.classId);
-      return res.status(403).json({ 
-        error: 'You are not assigned to this class',
-        code: 'NOT_ASSIGNED'
-      });
+    const access = await resolveSessionStartAccess(userId, validatedData.classId);
+    if (!access.allowed) {
+      const message = access.code === 'NO_SESSION_PERMISSION'
+        ? 'You do not have permission to start sessions for this class'
+        : 'You are not assigned to this class';
+      console.log('[EducatorDashboard] Session create denied:', access.code, validatedData.classId);
+      return res.status(403).json({ error: message, code: access.code });
     }
-
-    if (!assignment.canStartSession) {
-      console.log('[EducatorDashboard] User cannot start sessions for class:', validatedData.classId);
-      return res.status(403).json({ 
-        error: 'You do not have permission to start sessions for this class',
-        code: 'NO_SESSION_PERMISSION'
-      });
+    if (!access.schoolId) {
+      return res.status(400).json({ error: 'Class is missing school context' });
     }
 
     const sessionData: InsertClassSession = {
       classId: validatedData.classId,
-      schoolId: assignment.schoolId,
+      schoolId: access.schoolId,
       educatorId: userId,
       scheduledDate: validatedData.scheduledDate,
       scheduledStartTime: validatedData.scheduledStartTime,
@@ -2022,12 +2080,6 @@ router.get('/my-hours', async (req, res) => {
     
     // Get educator's class assignments
     const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
-    
-    // Day name to number mapping (Sunday = 0)
-    const dayNameToNumber: Record<string, number> = {
-      'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
-      'thursday': 4, 'friday': 5, 'saturday': 6
-    };
 
     for (const assignment of assignments) {
       // Check if assignment is valid for the date range
@@ -2043,58 +2095,34 @@ router.get('/my-hours', async (req, res) => {
       if (classStart && classStart > end) continue;
       if (classEnd && classEnd < start) continue;
 
-      // Parse variants to get schedule and calculate hours
-      // Variants are stored in the schedule JSON column
-      const schedule = classInfo.schedule as any;
-      const variants = schedule?.variants as any[];
-      if (!variants || !Array.isArray(variants)) continue;
+      const timing = extractFamilyScheduleTiming(classInfo.schedule);
+      if (timing.scheduleDays.length === 0) continue;
+
+      const duration = parseTimeToMinutes(timing.endTime) - parseTimeToMinutes(timing.startTime);
+      if (duration <= 0) continue;
 
       let classMinutes = 0;
       const classDays: string[] = [];
+      const rangeStart = new Date(start + 'T12:00:00');
+      const rangeEnd = new Date(end + 'T12:00:00');
+      const sunDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-      for (const variant of variants) {
-        const days = variant.days || [];
-        const startTime = variant.startTime;
-        const endTime = variant.endTime;
-
-        if (!startTime || !endTime) continue;
-
-        // Calculate duration for this variant
-        const variantStart = parseTimeToMinutes(startTime);
-        const variantEnd = parseTimeToMinutes(endTime);
-        const duration = variantEnd - variantStart;
-        
-        // Skip invalid/zero durations
-        if (duration <= 0) continue;
-
-        // Count how many times each day appears in the date range
-        const rangeStart = new Date(start + 'T12:00:00');
-        const rangeEnd = new Date(end + 'T12:00:00');
-
-        for (const dayName of days) {
-          const dayNum = dayNameToNumber[dayName.toLowerCase()];
-          if (dayNum === undefined) continue;
-
-          classDays.push(dayName);
-
-          // Count occurrences of this day in the range
-          let current = new Date(rangeStart);
-          while (current <= rangeEnd) {
-            if (current.getDay() === dayNum) {
-              // Check if this date is within class start/end dates
-              const currentStr = current.toISOString().split('T')[0];
-              const inClassRange = (!classStart || currentStr >= classStart) && 
-                                   (!classEnd || currentStr <= classEnd);
-              const inAssignmentRange = (!assignment.validFrom || currentStr >= assignment.validFrom) &&
-                                        (!assignment.validTo || currentStr <= assignment.validTo);
-              
-              if (inClassRange && inAssignmentRange) {
-                classMinutes += duration;
-                expectedScheduledMinutes += duration;
-              }
+      for (const dayNum of timing.scheduleDays) {
+        classDays.push(sunDayNames[dayNum] || String(dayNum));
+        let current = new Date(rangeStart);
+        while (current <= rangeEnd) {
+          if (current.getDay() === dayNum) {
+            const currentStr = current.toISOString().split('T')[0];
+            const inClassRange = (!classStart || currentStr >= classStart) &&
+                                 (!classEnd || currentStr <= classEnd);
+            const inAssignmentRange = (!assignment.validFrom || currentStr >= assignment.validFrom) &&
+                                      (!assignment.validTo || currentStr <= assignment.validTo);
+            if (inClassRange && inAssignmentRange) {
+              classMinutes += duration;
+              expectedScheduledMinutes += duration;
             }
-            current.setDate(current.getDate() + 1);
           }
+          current.setDate(current.getDate() + 1);
         }
       }
 
@@ -2272,7 +2300,7 @@ router.get('/sessions/:sessionId/roster', async (req, res) => {
 
     // Get enrollments for this class
     const enrollments = await storage.getEnrollmentsByClassId(session.classId);
-    const activeEnrollments = enrollments.filter(e => e.status === 'enrolled');
+    const activeEnrollments = enrollments.filter(e => isEducatorRosterStatus(e.status));
 
     // Get existing attendance for this session
     const existingAttendance = await storage.getAttendanceBySessionId(sessionId);
@@ -2338,7 +2366,7 @@ router.post('/attendance', async (req, res) => {
 
     // Verify child is enrolled in the class
     const enrollments = await storage.getEnrollmentsByClassId(session.classId);
-    const childEnrolled = enrollments.some(e => e.childId === childId && e.status === 'enrolled');
+    const childEnrolled = enrollments.some(e => e.childId === childId && isEducatorRosterStatus(e.status));
     if (!childEnrolled) {
       return res.status(400).json({ error: 'Child is not enrolled in this class' });
     }
@@ -2671,7 +2699,7 @@ router.get('/children/:childId/attendance', async (req, res) => {
     let isTeachingChild = false;
     for (const classId of classIds) {
       const enrollments = await storage.getEnrollmentsByClassId(classId);
-      if (enrollments.some(e => e.childId === childId && e.status === 'enrolled')) {
+      if (enrollments.some(e => e.childId === childId && isEducatorRosterStatus(e.status))) {
         isTeachingChild = true;
         break;
       }
@@ -3111,8 +3139,8 @@ router.get('/notification-data', async (req, res) => {
       const classesWithCounts = await Promise.all(
         assignedClasses.map(async (cls) => {
           const enrollments = await storage.getEnrollmentsByClassId(cls.id);
-          const activeEnrollments = enrollments.filter((e: any) => 
-            e.status === 'enrolled' || e.status === 'active' || e.status === 'confirmed'
+          const activeEnrollments = enrollments.filter((e: any) =>
+            isEducatorRosterStatus(e.status)
           );
           
           // Get unique parent emails
@@ -3129,7 +3157,7 @@ router.get('/notification-data', async (req, res) => {
           return {
             id: cls.id,
             title: cls.title,
-            schedule: cls.schedule || 'Not scheduled',
+            schedule: formatScheduleString(cls.schedule) || 'Not scheduled',
             studentCount: activeEnrollments.length,
             parentCount: parentEmails.size
           };
@@ -3141,7 +3169,7 @@ router.get('/notification-data', async (req, res) => {
       for (const cls of assignedClasses) {
         const enrollments = await storage.getEnrollmentsByClassId(cls.id);
         for (const enrollment of enrollments) {
-          if (enrollment.childId && (enrollment.status === 'enrolled' || enrollment.status === 'active' || enrollment.status === 'confirmed')) {
+          if (enrollment.childId && isEducatorRosterStatus(enrollment.status)) {
             const child = await storage.getChildById(enrollment.childId);
             if (child?.parentEmail) {
               allParentEmails.add(child.parentEmail);
@@ -3161,8 +3189,8 @@ router.get('/notification-data', async (req, res) => {
         if (!classInfo) return null;
 
         const enrollments = await storage.getEnrollmentsByClassId(assignment.classId);
-        const activeEnrollments = enrollments.filter((e: any) => 
-          e.status === 'enrolled' || e.status === 'active' || e.status === 'confirmed'
+        const activeEnrollments = enrollments.filter((e: any) =>
+          isEducatorRosterStatus(e.status)
         );
 
         // Get unique parent emails for this class
@@ -3179,7 +3207,7 @@ router.get('/notification-data', async (req, res) => {
         return {
           id: assignment.classId,
           title: classInfo.title,
-          schedule: classInfo.schedule || 'Not scheduled',
+          schedule: formatScheduleString(classInfo.schedule) || 'Not scheduled',
           studentCount: activeEnrollments.length,
           parentCount: parentEmails.size
         };
@@ -3193,7 +3221,7 @@ router.get('/notification-data', async (req, res) => {
     for (const assignment of assignments) {
       const enrollments = await storage.getEnrollmentsByClassId(assignment.classId);
       for (const enrollment of enrollments) {
-        if (enrollment.childId && (enrollment.status === 'enrolled' || enrollment.status === 'active' || enrollment.status === 'confirmed')) {
+        if (enrollment.childId && isEducatorRosterStatus(enrollment.status)) {
           const child = await storage.getChildById(enrollment.childId);
           if (child?.parentEmail) {
             allParentEmails.add(child.parentEmail);
@@ -3256,8 +3284,8 @@ router.post('/notifications/send', async (req, res) => {
 
     for (const classId of targetClassIds) {
       const enrollments = await storage.getEnrollmentsByClassId(classId);
-      const activeEnrollments = enrollments.filter((e: any) => 
-        e.status === 'enrolled' || e.status === 'active' || e.status === 'confirmed'
+      const activeEnrollments = enrollments.filter((e: any) =>
+        isEducatorRosterStatus(e.status)
       );
 
       for (const enrollment of activeEnrollments) {

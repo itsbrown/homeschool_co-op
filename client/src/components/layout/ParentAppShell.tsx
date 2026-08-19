@@ -50,7 +50,7 @@ const educatorMobileItems = [
   { href: "/educator/my-classes", title: "My Classes", icon: BookOpen, testId: "nav-educator-my-classes" },
   { href: "/educator/students", title: "My Students", icon: Users },
   { href: "/educator/weekly-calendar", title: "Schedule", icon: Calendar },
-  { href: "/educator/attendance", title: "Attendance", icon: ClipboardList },
+  { href: "/educator/assessments", title: "Assessments", icon: ClipboardList },
   { href: "/educator/my-hours", title: "My Hours", icon: Clock },
   { href: "/educator/staff-guide", title: "Staff Guide", icon: HelpCircle },
 ];

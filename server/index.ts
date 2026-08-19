@@ -34,6 +34,10 @@ import userRolesRouter from "./api/user-roles";
 import meRouter from "./api/me";
 import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import cartRouter from "./api/cart";
+import assessmentsRouter from "./api/assessments";
+import lexileRouter from "./api/lexile";
+import lexileAiRouter from "./api/lexile-ai";
+import assessmentUploadRouter from "./api/assessment-upload";
 import progressRouter from "./api/progress";
 import progressInsightsRouter from "./api/progress-insights";
 import progressAnalyticsRouter from "./api/progress-analytics";
@@ -235,6 +239,10 @@ app.use("/api/admin/users", adminPaymentMethodsRouter);
 // Must be registered on the Express app — otherwise /api/cart/* falls through to Vite
 // and returns HTML, which breaks checkout with "Unexpected token '<'" JSON errors.
 app.use("/api/cart", cartRouter);
+app.use("/api/assessments", assessmentsRouter);
+app.use("/api/lexile", lexileRouter);
+app.use("/api/lexile", lexileAiRouter);
+app.use("/api/assessment-upload", assessmentUploadRouter);
 app.use("/api/progress", progressRouter);
 app.use("/api/progress/insights", progressInsightsRouter);
 app.use("/api/progress/analytics", progressAnalyticsRouter);

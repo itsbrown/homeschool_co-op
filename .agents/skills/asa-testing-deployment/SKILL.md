@@ -76,7 +76,7 @@ When you create or extend `e2e/**/*.spec.ts`:
 
 **Example (public forms):** [`e2e/public-custom-forms.spec.ts`](../../e2e/public-custom-forms.spec.ts) — `npm run test:e2e -- e2e/public-custom-forms.spec.ts`; seed `setup-public-form-scenario`; runbook [`public-mentor-application-form.md`](../../docs/APP_KNOWLEDGE/runbooks/public-mentor-application-form.md).
 
-**Example (schedule builder):** seed `POST /api/test/setup-schedule-builder-scenario` via `postSetupScheduleScenario` — used by `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`. Domain: [`schedule-and-lesson-planning.md`](../../docs/APP_KNOWLEDGE/domains/schedule-and-lesson-planning.md).
+**Example (schedule builder):** seed `POST /api/test/setup-schedule-builder-scenario` via `postSetupScheduleScenario` — used by `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-landing-nav`, `educator-mentor-loop`, `attendance-educator-mark`. Domain: [`schedule-and-lesson-planning.md`](../../docs/APP_KNOWLEDGE/domains/schedule-and-lesson-planning.md) + [`educator-ui.md`](../../docs/APP_KNOWLEDGE/domains/educator-ui.md).
 
 ### What to Test with Playwright
 - Frontend features and multi-page flows
@@ -95,6 +95,7 @@ When you create or extend `e2e/**/*.spec.ts`:
 - Supabase auth is used — tests may need to handle login flows
 - Google OAuth and other third-party providers cannot be automated via Playwright (providers block it)
 - For admin/role-specific features: use DB queries to set user roles before testing (e.g., `UPDATE users SET ...`)
+- Educator specs: `loginEducatorFromSeed` + `educatorSupabaseLinked` in `e2e/helpers/educatorAuth.ts`. Skip when the seed did not link Supabase. Do not require `E2E_EDUCATOR_EMAIL`.
 
 ### API Testing
 - Can test API routes directly in Playwright tests (fetch/POST)

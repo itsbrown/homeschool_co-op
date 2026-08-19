@@ -17,7 +17,7 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 |------|-------|-------|
 | Parent | `/parent/progress` | Hub: **Charts** (reading/math API), overview, this session, AI summary |
 | Parent | `/parent/assessments` | Reading charts + Lexile history |
-| Educator | `/educator/assessments` | Tabs: record assessment, **Progress** (log form), Lexile |
+| Educator | `/educator/assessments` | Default mentor nav. Tabs: record assessment, **Progress** (log form), Lexile. See [educator-ui.md](./educator-ui.md). |
 | Educator | Student detail | Quick **Log progress** dialog |
 | School admin | `/school-admin/assessments` | Types/books + **Progress catalog** + **Sessions & reports** + **Progress insights** |
 | School admin | `/school-admin/analytics` | Engagement, cart abandonment, student progress (see [school-analytics.md](./school-analytics.md)) |

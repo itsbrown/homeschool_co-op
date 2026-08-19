@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { invalidateEducatorSessionQueries } from '@/lib/educator-queries';
 import { EducatorLoadingState, EducatorErrorState } from './EducatorErrorBoundary';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
@@ -94,6 +95,7 @@ export function AttendanceTracker({ sessionId, isSessionActive, schoolId }: Atte
         description: 'Attendance records have been updated.',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/educator/sessions', sessionId, 'roster'] });
+      invalidateEducatorSessionQueries();
       setPendingChanges(new Map());
       setSelectedStudents(new Set());
     },

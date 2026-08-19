@@ -58,17 +58,8 @@ export default function EducatorNotificationsPage() {
     enabled: !!user?.email,
   });
 
-  // Query key factory for notification history
-  const notificationHistoryKey = (email: string) => ['/api/educator/notifications/history', { email }];
-
-  // Get recent notifications sent by this educator
   const { data: notificationHistory } = useQuery<NotificationHistoryItem[]>({
-    queryKey: notificationHistoryKey(user?.email || ''),
-    queryFn: async () => {
-      const response = await fetch(`/api/educator/notifications/history?email=${encodeURIComponent(user?.email || '')}`);
-      if (!response.ok) throw new Error('Failed to fetch notification history');
-      return response.json();
-    },
+    queryKey: [`/api/educator/notifications/history?email=${encodeURIComponent(user?.email || '')}`],
     enabled: !!user?.email,
   });
 
@@ -86,7 +77,9 @@ export default function EducatorNotificationsPage() {
       setSubject("");
       setSelectedClasses([]);
       setSendToAll(false);
-      queryClient.invalidateQueries({ queryKey: notificationHistoryKey(user?.email || '') });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/educator/notifications/history?email=${encodeURIComponent(user?.email || '')}`],
+      });
     },
     onError: (error) => {
       toast({
@@ -166,7 +159,7 @@ export default function EducatorNotificationsPage() {
             <MessageSquare className="h-4 w-4 mr-2" />
             Compose Message
           </TabsTrigger>
-          <TabsTrigger value="history">
+          <TabsTrigger value="history" data-testid="tab-notification-history">
             <Clock className="h-4 w-4 mr-2" />
             Message History
           </TabsTrigger>
@@ -192,6 +185,7 @@ export default function EducatorNotificationsPage() {
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                   placeholder="Enter message subject..."
+                  data-testid="input-notification-subject"
                 />
               </div>
 
@@ -204,6 +198,7 @@ export default function EducatorNotificationsPage() {
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="Enter your message to parents..."
                   rows={6}
+                  data-testid="input-notification-message"
                 />
               </div>
 
@@ -221,7 +216,7 @@ export default function EducatorNotificationsPage() {
                 {!sendToAll && educatorData?.classes && (
                   <div className="space-y-3">
                     <Label>Select specific classes:</Label>
-                    <div className="grid gap-3">
+                  <div className="grid gap-3" data-testid="notifications-class-list">
                       {educatorData.classes.map((classItem: any) => (
                         <div key={classItem.id} className="flex items-center space-x-3 p-3 border rounded-lg">
                           <input
@@ -230,6 +225,7 @@ export default function EducatorNotificationsPage() {
                             checked={selectedClasses.includes(classItem.id.toString())}
                             onChange={(e) => handleClassSelection(classItem.id.toString(), e.target.checked)}
                             className="rounded border-gray-300"
+                            data-testid={`checkbox-notify-class-${classItem.id}`}
                           />
                           <div className="flex-1">
                             <Label htmlFor={`class-${classItem.id}`} className="font-medium">
@@ -264,6 +260,7 @@ export default function EducatorNotificationsPage() {
                 onClick={handleSendNotification}
                 disabled={sendNotificationMutation.isPending || !subject.trim() || !message.trim()}
                 className="w-full"
+                data-testid="button-send-notification"
               >
                 {sendNotificationMutation.isPending ? (
                   <>
@@ -294,7 +291,7 @@ export default function EducatorNotificationsPage() {
             </CardHeader>
             <CardContent>
               {notificationHistory && notificationHistory.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-4" data-testid="notifications-history">
                   {notificationHistory.map((notification: any) => (
                     <div key={notification.id} className="border rounded-lg p-4">
                       <div className="flex justify-between items-start mb-2">

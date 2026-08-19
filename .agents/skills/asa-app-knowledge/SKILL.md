@@ -36,6 +36,7 @@ description: >-
 | Credits | `asa-credit-system` |
 | Auth, API tenancy | `asa-auth-patterns` |
 | Form Builder, public forms, mentor app | `domains/custom-forms-public-access.md` |
+| Educator / mentor `/educator/*` | `domains/educator-ui.md` |
 
 ## Maintenance workflow
 

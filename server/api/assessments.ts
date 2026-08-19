@@ -355,6 +355,21 @@ router.post('/students', supabaseAuth, requireSchoolContext, async (req: Request
     }
     
     const { schoolId: _, recordedBy: __, ...clientData } = req.body;
+
+    const optionalNullKeys = [
+      'curriculumBookId',
+      'lesson',
+      'notes',
+      'sessionId',
+      'locationId',
+      'lexileScore',
+    ] as const;
+    for (const key of optionalNullKeys) {
+      if (clientData[key] == null) delete clientData[key];
+    }
+    if (clientData.assessmentDate) {
+      clientData.assessmentDate = new Date(clientData.assessmentDate);
+    }
     
     // Auto-calculate Lexile score from grade-level score if not provided
     let lexileScore = clientData.lexileScore;

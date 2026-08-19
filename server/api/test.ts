@@ -29,6 +29,7 @@ import {
   type Payment,
   type InsertScheduledPayment,
   educatorClassAssignments,
+  assessmentTypes,
 } from '@shared/schema';
 
 const router = Router();
@@ -4217,6 +4218,52 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
       schoolId: school.id,
     });
 
+    const progressClass = await testDb.createTestClass(school.id, {
+      title: `Progress Class ${uniqueId}`,
+      description: 'E2E progress class',
+      price: 10000,
+      status: 'upcoming',
+      instructorId: educator.id,
+    });
+    await storage.createEducatorClassAssignment({
+      educatorId: educator.id,
+      classId: progressClass.id,
+      schoolId: school.id,
+      isPrimary: true,
+      canStartSession: true,
+    });
+    await db.insert(programEnrollments).values({
+      classType: 'marketplace',
+      parentId: parent.id,
+      parentEmail,
+      schoolId: school.id,
+      status: 'enrolled',
+      paymentPlan: 'full_payment',
+      paymentSystemVersion: 'v2_stripe',
+      paymentStatus: 'completed',
+      totalCost: 10000,
+      totalPaid: 10000,
+      remainingBalance: 0,
+      depositRequired: 0,
+      enrollmentDate: new Date(),
+      childId: child.id,
+      marketplaceClassId: progressClass.id,
+      childName: `${child.firstName} ${child.lastName}`,
+      className: progressClass.title,
+    });
+
+    const [readingType] = await db
+      .insert(assessmentTypes)
+      .values({
+        schoolId: school.id,
+        name: `Progress Assessment ${uniqueId}`,
+        category: 'reading',
+        scoreFormat: 'numeric',
+        isActive: true,
+        sortOrder: 0,
+      })
+      .returning();
+
     let educatorSupabaseLinked = false;
     let parentSupabaseLinked = false;
     if (req.body?.linkSupabaseAuth === true) {
@@ -4276,6 +4323,8 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
           lastName: child.lastName,
           gradeLevel: child.gradeLevel,
         },
+        class: { id: progressClass.id, title: progressClass.title },
+        assessmentType: { id: readingType.id, name: readingType.name },
         schoolYear,
         quarter,
       },

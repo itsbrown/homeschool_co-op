@@ -1,5 +1,13 @@
 # App knowledge changelog
 
+## 2026-08-19 (Educator mentor loop)
+
+- Two assigned classes: attendance stays per session; My Students unions enrollment rows (same child can appear twice). See [educator-ui.md](domains/educator-ui.md).
+- Login `educator` / `mentor` / `teacher` → `/educator/dashboard`. Redirects: `/educator/classes` and `/educator/attendance` → My Classes; `/educator/templates` → `/schools/schedule-builder`. Assessments in default mentor nav.
+- Postgres `getEnrollmentsByClassId` matches `classId` **or** `marketplaceClassId`. Session start has instructor fallback. Cache helper `invalidateEducatorSessionQueries()`.
+- Mounted `/api/assessments` (+ lexile, assessment-upload) on canonical `server/index.ts` (was only unused `app-init.ts`). My Hours assigned classes use `extractFamilyScheduleTiming` so `{ days, startTime, endTime }` marketplace schedules count.
+- Domain: [educator-ui.md](domains/educator-ui.md). Playwright: `educator-landing-nav`, `educator-mentor-loop`, `attendance-educator-mark`, `educator-assessments-record`. Jest: `enrollments-by-class-id`.
+
 ## 2026-08-19 (Dimensions Math placement card)
 
 - Parent household `/parent/supplies` and non-Macaroni class-details supplies show a collapsed **Before you buy Dimensions Math** card (Singapore Math placement tests URL). Hidden when every class attribution is Macaroni/Macaronis. Mixed households still see it. No email/in-app blast until this UI is live.
