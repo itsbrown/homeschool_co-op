@@ -12,8 +12,13 @@ import {
   type ParentSupplyListResponse,
 } from "@/lib/parent-supply-list";
 import { StoreOutboundProductLink } from "@/components/store/StoreOutboundProductLink";
-import { DimensionsMathPlacementCard } from "@/components/parent/DimensionsMathPlacementCard";
-import { isMacaroniClassName } from "@shared/supply-list";
+import { DimensionsMathBooksSection } from "@/components/parent/DimensionsMathBooksSection";
+import { SupplyItemBadges } from "@/components/parent/SupplyItemBadges";
+import {
+  isMacaroniClassName,
+  needsDimensionsMathPlacementTest,
+  partitionDimensionsMathRows,
+} from "@shared/supply-list";
 import { 
   ArrowLeft, 
   CalendarIcon, 
@@ -487,6 +492,52 @@ function ClassRosterSection({ classId }: { classId: string | undefined }) {
   );
 }
 
+function ClassSupplyRow({
+  row,
+  classId,
+  storeSlug,
+}: {
+  row: ParentSupplyListResponse["items"][number];
+  classId: number;
+  storeSlug: string | null;
+}) {
+  const action = supplyListProductAction(row.product, storeSlug);
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-medium">
+            {row.name}
+            {row.quantity > 1 ? ` ×${row.quantity}` : ""}
+          </p>
+          <SupplyItemBadges name={row.name} required={row.required} />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {row.for
+            .filter((entry) => entry.ownerId === classId)
+            .map((entry) => entry.childName)
+            .join(", ")}
+        </p>
+      </div>
+      {action?.kind === "outbound" ? (
+        <StoreOutboundProductLink
+          url={action.cta.href}
+          variant="outline"
+          testId={
+            action.cta.kind === "amazon"
+              ? `supply-buy-amazon-${action.productId}`
+              : `supply-view-product-${action.productId}`
+          }
+        />
+      ) : action?.kind === "shop" ? (
+        <Button asChild variant="outline" data-testid={`supply-view-shop-${action.productId}`}>
+          <Link href={action.href}>View in shop</Link>
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 function ClassSupplyListSection({ classId, classTitle }: { classId: number; classTitle: string }) {
   const { data } = useQuery<ParentSupplyListResponse>({
     queryKey: PARENT_SUPPLY_LIST_QUERY_KEY,
@@ -496,10 +547,11 @@ function ClassSupplyListSection({ classId, classTitle }: { classId: number; clas
   );
   if (rows.length === 0) return null;
 
+  const { math, other } = partitionDimensionsMathRows(rows);
+  const storeSlug = data?.storeSlug ?? null;
+
   return (
-    <div className="space-y-4">
-      {!isMacaroniClassName(classTitle) && <DimensionsMathPlacementCard />}
-      <Card data-testid="class-supply-list">
+    <Card data-testid="class-supply-list">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <BookOpen className="h-5 w-5" />
@@ -513,47 +565,24 @@ function ClassSupplyListSection({ classId, classTitle }: { classId: number; clas
           .
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {rows.map((row) => (
-          <div key={row.mergeKey} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <p className="font-medium">
-                {row.name}
-                {row.quantity > 1 ? ` ×${row.quantity}` : ""}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {row.for
-                  .filter((entry) => entry.ownerId === classId)
-                  .map((entry) => entry.childName)
-                  .join(", ")}
-              </p>
+      <CardContent className="space-y-4">
+        {math.length > 0 && (
+          <DimensionsMathBooksSection
+            bookCount={math.length}
+            needsPlacement={math.some((row) => needsDimensionsMathPlacementTest(row.name))}
+            showPlacementCard={!isMacaroniClassName(classTitle)}
+          >
+            <div className="space-y-3">
+              {math.map((row) => (
+                <ClassSupplyRow key={row.mergeKey} row={row} classId={classId} storeSlug={storeSlug} />
+              ))}
             </div>
-            {(() => {
-              const action = supplyListProductAction(row.product, data?.storeSlug ?? null);
-              if (!action) return null;
-              if (action.kind === "outbound") {
-                const testId =
-                  action.cta.kind === "amazon"
-                    ? `supply-buy-amazon-${action.productId}`
-                    : `supply-view-product-${action.productId}`;
-                return (
-                  <StoreOutboundProductLink
-                    url={action.cta.href}
-                    variant="outline"
-                    testId={testId}
-                  />
-                );
-              }
-              return (
-                <Button asChild variant="outline" data-testid={`supply-view-shop-${action.productId}`}>
-                  <Link href={action.href}>View in shop</Link>
-                </Button>
-              );
-            })()}
-          </div>
+          </DimensionsMathBooksSection>
+        )}
+        {other.map((row) => (
+          <ClassSupplyRow key={row.mergeKey} row={row} classId={classId} storeSlug={storeSlug} />
         ))}
       </CardContent>
     </Card>
-    </div>
   );
 }

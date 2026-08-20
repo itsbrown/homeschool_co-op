@@ -98,7 +98,7 @@ export function DimensionsMathPlacementCard() {
               <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", open && "rotate-180")} />
             </Button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="pt-1 pb-1">
+          <CollapsibleContent className="pt-1 pb-1" data-testid="dimensions-math-placement-howto-steps">
             <PlacementSteps firstStepTestId="dimensions-math-placement-howto-step-1" />
           </CollapsibleContent>
         </Collapsible>

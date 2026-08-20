@@ -44,16 +44,23 @@ test.describe("parent household supply list", () => {
     await expect(page).toHaveURL(/\/parent\/supplies/, { timeout: 15_000 });
 
     await expect(page.getByTestId("parent-supply-list")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("dimensions-math-placement")).toBeVisible();
-    await expect(page.getByTestId("dimensions-math-placement-link")).toHaveAttribute(
+    const mathBooks = page.getByTestId("dimensions-math-books");
+    await expect(mathBooks).toBeVisible();
+    await expect(mathBooks.getByTestId("dimensions-math-placement")).toBeVisible();
+    await expect(mathBooks.getByTestId("dimensions-math-placement-link")).toHaveAttribute(
       "href",
       "https://www.singaporemath.com/pages/placement-tests",
     );
-    await page.getByTestId("dimensions-math-placement-howto").click();
-    await expect(page.getByTestId("dimensions-math-placement-howto-step-1")).toBeVisible();
-    await expect(page.getByTestId("dimensions-math-placement-howto-step-1")).toHaveText(
+    await mathBooks.getByTestId("dimensions-math-placement-howto").click();
+    await expect(mathBooks.getByTestId("dimensions-math-placement-howto-steps")).toBeVisible();
+    await expect(mathBooks.getByTestId("dimensions-math-placement-howto-step-1")).toHaveText(
       /Start lower than you think/i,
     );
+    await expect(mathBooks.getByText(/Dimensions Math Textbook 2A/i)).toBeVisible();
+    await expect(mathBooks.getByTestId("supply-badge-placement-test")).toHaveCount(1);
+    await expect(mathBooks.getByText(/Dimensions Math Textbook KA/i)).toBeVisible();
+    await expect(mathBooks.getByText(/Water bottle/i)).toHaveCount(0);
+    await expect(mathBooks.getByText(/Glue sticks/i)).toHaveCount(0);
     await expect(page.getByText(/Water bottle ×2/i)).toBeVisible();
     await expect(page.getByText(/Glue sticks ×2/i)).toBeVisible();
     await expect(page.getByText(/Maya/i).first()).toBeVisible();
@@ -75,7 +82,11 @@ test.describe("parent household supply list", () => {
 
     await page.goto(`/parent/classes/${seed.classA.id}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("class-supply-list")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("dimensions-math-placement")).toBeVisible();
+    const classMath = page.getByTestId("class-supply-list").getByTestId("dimensions-math-books");
+    await expect(classMath).toBeVisible();
+    await expect(classMath.getByText(/Dimensions Math Textbook 2A/i)).toBeVisible();
+    await expect(classMath.getByTestId("supply-badge-placement-test")).toBeVisible();
+    await expect(page.getByTestId("class-supply-list").getByTestId("dimensions-math-placement")).toBeVisible();
     await expect(page.getByTestId("class-supply-list").getByText(/Tissues/i)).toBeVisible();
     await expect(page.getByTestId("class-supply-list").getByText(/Water bottle/i)).toHaveCount(0);
   });
@@ -112,5 +123,6 @@ test.describe("parent household supply list", () => {
     await expect(page.getByTestId("parent-supply-list-empty")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/No supplies yet/i)).toBeVisible();
     await expect(page.getByTestId("dimensions-math-placement")).toHaveCount(0);
+    await expect(page.getByTestId("dimensions-math-books")).toHaveCount(0);
   });
 });

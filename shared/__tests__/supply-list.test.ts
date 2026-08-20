@@ -2,8 +2,11 @@ import { describe, expect, it } from "@jest/globals";
 import {
   allSupplyItemIdsChecked,
   householdNeedsDimensionsMathPlacement,
+  isDimensionsMathSupplyName,
   isMacaroniClassName,
   mergeSupplyNeeds,
+  needsDimensionsMathPlacementTest,
+  partitionDimensionsMathRows,
   supplyMergeKey,
   type SupplyNeed,
 } from "../supply-list";
@@ -230,5 +233,41 @@ describe("householdNeedsDimensionsMathPlacement", () => {
         { for: [{ ownerType: "session", ownerName: "Fall 2026" }] },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("isDimensionsMathSupplyName", () => {
+  it("matches Dimensions Math textbook/workbook names", () => {
+    expect(isDimensionsMathSupplyName("Dimensions Math Textbook 2A")).toBe(true);
+    expect(isDimensionsMathSupplyName("KA Dimensions Math textbook and workbook")).toBe(true);
+    expect(isDimensionsMathSupplyName("Water bottle")).toBe(false);
+  });
+});
+
+describe("needsDimensionsMathPlacementTest", () => {
+  it("is true for 1A–5B only", () => {
+    expect(needsDimensionsMathPlacementTest("Dimensions Math Textbook 2A")).toBe(true);
+    expect(needsDimensionsMathPlacementTest("Dimensions Math Workbook 5B")).toBe(true);
+    expect(needsDimensionsMathPlacementTest("Dimensions Math Textbook 1A")).toBe(true);
+  });
+
+  it("is false for KA / Pre-K / 6–8 and non-math items", () => {
+    expect(needsDimensionsMathPlacementTest("Dimensions Math Textbook KA")).toBe(false);
+    expect(needsDimensionsMathPlacementTest("Pre-K Dimensions Math textbook")).toBe(false);
+    expect(needsDimensionsMathPlacementTest("Dimensions Math Textbook 6A")).toBe(false);
+    expect(needsDimensionsMathPlacementTest("Dimensions Math Textbook 8B")).toBe(false);
+    expect(needsDimensionsMathPlacementTest("Water bottle")).toBe(false);
+  });
+});
+
+describe("partitionDimensionsMathRows", () => {
+  it("splits math books from other supplies", () => {
+    const { math, other } = partitionDimensionsMathRows([
+      { name: "Water bottle" },
+      { name: "Dimensions Math Textbook 2A" },
+      { name: "Glue sticks" },
+    ]);
+    expect(math.map((r) => r.name)).toEqual(["Dimensions Math Textbook 2A"]);
+    expect(other.map((r) => r.name)).toEqual(["Water bottle", "Glue sticks"]);
   });
 });

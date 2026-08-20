@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-08-19 (Dimensions Math books collapsible)
+
+- Parent supply list nests Dimensions Math textbook/workbook rows under **Dimensions Math books** (default open). Placement how-to card lives inside that section. Red **Placement test** badge on 1A–5B names only.
+- Seed: Trailblazers 2A (badge) + KA (no badge). E2E: `e2e/parent-supply-list.spec.ts`. Helpers: `isDimensionsMathSupplyName` / `needsDimensionsMathPlacementTest`.
+
 ## 2026-08-19 (Educator today / attendance honesty)
 
 - Dashboard **Today** is weekday meetings only (`classMeetsOnWeekday`); Start is one tap. Attendance saves on tap; unmarked kids stay highlighted; End Session stays on the session with present/absent counts.

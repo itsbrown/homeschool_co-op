@@ -175,3 +175,31 @@ export function householdNeedsDimensionsMathPlacement(
     item.for.some((entry) => entry.ownerType === "class" && !isMacaroniClassName(entry.ownerName)),
   );
 }
+
+export function isDimensionsMathSupplyName(name: string): boolean {
+  return /dimensions\s+math/i.test(name);
+}
+
+const EARLY_CHILDHOOD_LEVEL = /\b(?:pre[-\s]?k(?:a|b)?|pka|pkb|pk|ka|kb)\b/i;
+const SECONDARY_LEVEL = /\b[6-8][ab]\b/i;
+const ELEMENTARY_LEVEL = /\b[1-5][ab]\b/i;
+
+/** Dimensions Math 1A–5B only. KA / Pre-K / 6A–8B do not get a placement-test badge. */
+export function needsDimensionsMathPlacementTest(name: string): boolean {
+  if (!isDimensionsMathSupplyName(name)) return false;
+  if (EARLY_CHILDHOOD_LEVEL.test(name) || SECONDARY_LEVEL.test(name)) return false;
+  return ELEMENTARY_LEVEL.test(name);
+}
+
+export function partitionDimensionsMathRows<T extends { name: string }>(rows: T[]): {
+  math: T[];
+  other: T[];
+} {
+  const math: T[] = [];
+  const other: T[] = [];
+  for (const row of rows) {
+    if (isDimensionsMathSupplyName(row.name)) math.push(row);
+    else other.push(row);
+  }
+  return { math, other };
+}
