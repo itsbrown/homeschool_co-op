@@ -60,6 +60,16 @@ test.describe("attendance educator mark", () => {
     await expect(page.getByTestId(`attendance-row-${seekersChild.id}`)).toContainText(
       seekersChild.firstName,
     );
+    await expect(page.getByTestId(`badge-allergy-${seekersChild.id}`)).toBeVisible();
+    await expect(page.getByTestId(`badge-medical-${seekersChild.id}`)).toBeVisible();
+    await page.getByTestId(`button-student-safety-${seekersChild.id}`).click();
+    await expect(page.getByTestId("student-safety-sheet")).toBeVisible();
+    await expect(page.getByTestId("student-safety-sheet")).toContainText(/Peanuts/i);
+    await expect(page.getByTestId("student-safety-sheet")).toContainText(/EpiPen/i);
+    await expect(page.getByTestId("student-safety-emergency-name")).toHaveText(/Pat Contact/i);
+    await expect(page.getByTestId("student-safety-emergency-phone")).toBeVisible();
+    await page.getByRole("button", { name: "Close" }).click();
+    await expect(page.getByTestId("student-safety-sheet")).toHaveCount(0);
 
     const bulkApi = page.waitForResponse(
       (r) =>

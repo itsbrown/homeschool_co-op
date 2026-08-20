@@ -23,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { invalidateEducatorSessionQueries } from '@/lib/educator-queries';
 import { EducatorLoadingState, EducatorErrorState } from './EducatorErrorBoundary';
+import { StudentSafetyBadges, StudentSafetySheet, type StudentSafetyProfile } from './StudentSafetySheet';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
@@ -36,6 +37,16 @@ interface RosterStudent {
   checkInTime?: string;
   checkOutTime?: string;
   notes?: string;
+  allergies: string | null;
+  medicalInfo: string | null;
+  specialNeeds: string | null;
+  hasAllergyAlert: boolean;
+  hasMedicalAlert: boolean;
+  hasSpecialNeedsAlert: boolean;
+  parentPhone: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  emergencyContactRelationship: string | null;
 }
 
 interface AttendanceTrackerProps {
@@ -56,6 +67,7 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [currentStudent, setCurrentStudent] = useState<RosterStudent | null>(null);
   const [noteText, setNoteText] = useState('');
+  const [safetyStudent, setSafetyStudent] = useState<StudentSafetyProfile | null>(null);
   const [pendingChanges, setPendingChanges] = useState<Map<number, { status: AttendanceStatus; notes?: string }>>(new Map());
 
   const { data: roster, isLoading, error, refetch } = useQuery<RosterStudent[]>({
@@ -70,6 +82,16 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
       checkInTime: item.attendance?.checkInTime,
       checkOutTime: item.attendance?.checkOutTime,
       notes: item.attendance?.notes,
+      allergies: item.allergies ?? null,
+      medicalInfo: item.medicalInfo ?? null,
+      specialNeeds: item.specialNeeds ?? null,
+      hasAllergyAlert: Boolean(item.hasAllergyAlert),
+      hasMedicalAlert: Boolean(item.hasMedicalAlert),
+      hasSpecialNeedsAlert: Boolean(item.hasSpecialNeedsAlert),
+      parentPhone: item.parentPhone ?? null,
+      emergencyContactName: item.emergencyContactName ?? null,
+      emergencyContactPhone: item.emergencyContactPhone ?? null,
+      emergencyContactRelationship: item.emergencyContactRelationship ?? null,
     })),
   });
 
@@ -325,6 +347,12 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
                           Marked {new Date(student.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       )}
+                      <div className="mt-2">
+                        <StudentSafetyBadges
+                          student={student}
+                          onOpen={() => setSafetyStudent(student)}
+                        />
+                      </div>
                     </div>
 
                     {effectiveNotes && (
@@ -444,6 +472,13 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <StudentSafetySheet
+        student={safetyStudent}
+        open={safetyStudent !== null}
+        onOpenChange={(open) => {
+          if (!open) setSafetyStudent(null);
+        }}
+      />
     </>
   );
 }

@@ -102,7 +102,7 @@ const mutation = useMutation({
 
 - `SelectItem` must always have a `value` prop — omitting it throws a runtime error
 - Stock images only in contained cards/thumbnails — never as full-width section backgrounds (readability issues)
-- Educator pages use `data-testid` attributes on interactive elements (e.g., `data-testid="button-mobile-menu"`)
+- Educator pages use `data-testid` attributes on interactive elements (e.g., `data-testid="button-mobile-menu"`). Day-of student safety: `badge-allergy-{childId}`, `button-student-safety-{childId}`, `student-safety-sheet`.
 
 ## Context Providers
 

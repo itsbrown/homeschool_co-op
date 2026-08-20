@@ -4390,7 +4390,14 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
       role: 'parent',
       schoolId: school.id,
     });
-    await storage.updateUser(parent.id, { password: await bcrypt.hash(password, 10) });
+    await storage.updateUser(parent.id, {
+      password: await bcrypt.hash(password, 10),
+      phone: '5855550100',
+      emergencyContactFirstName: 'Pat',
+      emergencyContactLastName: 'Contact',
+      emergencyContactPhone: '5855550199',
+      emergencyContactRelationship: 'Grandparent',
+    });
 
     const db = await getDb();
     await db.insert(userRoles).values([
@@ -4440,6 +4447,8 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
       birthdate: '2018-01-15',
       gradeLevel: '1st',
       schoolId: school.id,
+      allergies: 'Peanuts',
+      medicalInfo: 'Uses an EpiPen',
     });
     const childYankee = await storage.createChild({
       parentId: parent.id,
@@ -4670,7 +4679,13 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
           yankee: { id: yankee.id, title: yankee.title },
         },
         children: {
-          seekers: { id: childSeekers.id, firstName: childSeekers.firstName, lastName: childSeekers.lastName },
+          seekers: {
+            id: childSeekers.id,
+            firstName: childSeekers.firstName,
+            lastName: childSeekers.lastName,
+            allergies: 'Peanuts',
+            medicalInfo: 'Uses an EpiPen',
+          },
           yankee: { id: childYankee.id, firstName: childYankee.firstName, lastName: childYankee.lastName },
         },
         enrollments: { seekersId: enrollSeekers.id, yankeeId: enrollYankee.id },
