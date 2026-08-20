@@ -38,6 +38,7 @@ Director Academics (when `showAcademics`): **Weekly Templates** → `/schools/sc
 - Active roster statuses: `enrolled` + `pending_admin_approval` (`isEducatorRosterStatus` in `server/api/educator.ts`). Same rule as supply lists.
 - Session start: assignment `canStartSession`, else instructorId/name fallback (`resolveSessionStartAccess`).
 - **Two (or more) assigned classes:** day-of attendance is **per session/class** and does not merge. My Students / assessments / notification targeting **union** enrollments across assignments (one row per enrollment; same child in two classes appears twice on My Students). Notification parent counts unique emails. `canManageStudents` staff see a location list instead of assignment rosters.
+- **Safety on roster:** session roster, class students, and My Students include allergies / medical / special needs plus emergency contact. Priority: parent user emergency fields → `emergency_contacts` → `children.emergencyContact`. Blank and “none” / “n/a” do not show Allergy/Medical badges. Helper: `shared/educator-student-safety.ts`. Day-of UI: `StudentSafetySheet` (Info does not mark attendance).
 
 ## Cache
 
@@ -45,7 +46,7 @@ TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/ap
 
 ## Day-of honesty
 
-- Dashboard `todayClasses` is assignments whose `class.schedule` includes **today’s weekday** (`classMeetsOnWeekday` in `server/utils/family-schedule.ts`). Empty/unknown days are **not** treated as today. Full assignment list stays on My Classes.
+- Dashboard `todayClasses` is **assigned** classes whose `class.schedule` includes **today’s weekday** (`classMeetsOnWeekday`). Empty/unknown days are **not** treated as today. Full assignment list stays on My Classes. E2E seed assigns Seekers (Mon/Wed) and Yankee (Tue/Thu).
 - Attendance saves on tap (`POST /api/educator/attendance/bulk`). There is no Attendance tab. Staff Guide must not claim auto-save-from-a-tab, volunteer add, or QR as the default start.
 - End Session stays on the session page with present/absent counts. Unmarked kids are highlighted; optional “mark remaining absent”.
 
@@ -57,7 +58,7 @@ TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/ap
 | `e2e/educator-landing-nav.spec.ts` | `/dashboard` → live dashboard, sidebar, redirects |
 | `e2e/educator-today-honesty.spec.ts` | Today weekday filter + one-tap Start + honest Staff Guide |
 | `e2e/educator-mentor-loop.spec.ts` | Classes, students, hours, notifications, settings |
-| `e2e/attendance-educator-mark.spec.ts` | Start → roster → mark present → end |
+| `e2e/attendance-educator-mark.spec.ts` | Start → roster → allergy/medical Info sheet → mark present → end |
 | `e2e/educator-assessments-record.spec.ts` | Record tab `my-students` + save score |
 | `e2e/educator-weekly-schedule-plans.spec.ts` | Published plan overlay |
 | `e2e/quarterly-progress-report-wizard.spec.ts` | NY IHIP wizard |
@@ -69,6 +70,7 @@ Seeds: `POST /api/test/setup-schedule-builder-scenario` and `setup-progress-scen
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Empty live roster / bulk attendance | `getEnrollmentsByClassId` mem-only or `classId` only | Postgres `or(classId, marketplaceClassId)` |
+| Roster has names but no allergy flag | `GET .../roster` was name-only; “none” allergies are not alerts | `loadEducatorStudentSafetyByChildId`; `isSafetyAlertText` |
 | Record assessment empty | `GET /api/educator/students` (needs `?email=`) | `GET /api/educator/my-students` → `{ students }` |
 | Start session 403 with instructor named on class | Assignment-only gate | `resolveSessionStartAccess` instructor fallback |
 | Dashboard / hours stale after session | Invalidated `['/api/educator']` | `invalidateEducatorSessionQueries()` |
@@ -90,4 +92,5 @@ Volunteer check-in on Start Session (assigned aides are read-only). Email blast 
 | API | `server/api/educator.ts` |
 | Storage | `server/dbStorage.ts` `getEnrollmentsByClassId` |
 | Query helper | `client/src/lib/educator-queries.ts` |
+| Safety | `shared/educator-student-safety.ts`, `server/lib/educator-student-safety.ts`, `StudentSafetySheet.tsx` |
 | Attendance UI | `AttendanceTracker.tsx`, `ActiveSession.tsx`, `StartSession.tsx` |

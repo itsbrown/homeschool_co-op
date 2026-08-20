@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/utils";
+import { StudentSafetyBadges, StudentSafetySheet, type StudentSafetyProfile } from "@/components/educator/StudentSafetySheet";
 
 function calculateAge(birthdate: string): number {
   const today = new Date();
@@ -36,6 +37,7 @@ export default function EducatorStudentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterClass, setFilterClass] = useState<string>("all");
   const [filterGrade, setFilterGrade] = useState<string>("all");
+  const [safetyStudent, setSafetyStudent] = useState<StudentSafetyProfile | null>(null);
 
   // Get educator's assigned classes using authenticated endpoint
   const { data: classesData, isLoading: classesLoading } = useQuery<any[]>({
@@ -235,6 +237,33 @@ export default function EducatorStudentsPage() {
                         <div className="font-semibold">
                           {student.firstName} {student.lastName}
                         </div>
+                        <div className="mt-2">
+                          <StudentSafetyBadges
+                            student={{
+                              childId: student.id,
+                              hasAllergyAlert: Boolean(student.hasAllergyAlert),
+                              hasMedicalAlert: Boolean(student.hasMedicalAlert),
+                              hasSpecialNeedsAlert: Boolean(student.hasSpecialNeedsAlert),
+                            }}
+                            onOpen={() =>
+                              setSafetyStudent({
+                                childId: student.id,
+                                firstName: student.firstName,
+                                lastName: student.lastName,
+                                allergies: student.allergies ?? null,
+                                medicalInfo: student.medicalInfo ?? null,
+                                specialNeeds: student.specialNeeds ?? null,
+                                hasAllergyAlert: Boolean(student.hasAllergyAlert),
+                                hasMedicalAlert: Boolean(student.hasMedicalAlert),
+                                hasSpecialNeedsAlert: Boolean(student.hasSpecialNeedsAlert),
+                                parentPhone: student.parentPhone ?? null,
+                                emergencyContactName: student.emergencyContactName ?? null,
+                                emergencyContactPhone: student.emergencyContactPhone ?? null,
+                                emergencyContactRelationship: student.emergencyContactRelationship ?? null,
+                              })
+                            }
+                          />
+                        </div>
                       </TableCell>
                       <TableCell>
                         {student.birthdate ? (
@@ -344,6 +373,13 @@ export default function EducatorStudentsPage() {
           )}
         </CardContent>
       </Card>
+      <StudentSafetySheet
+        student={safetyStudent}
+        open={safetyStudent !== null}
+        onOpenChange={(open) => {
+          if (!open) setSafetyStudent(null);
+        }}
+      />
     </div>
   );
 }

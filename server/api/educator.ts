@@ -13,6 +13,7 @@ import {
   skeletonDayToEducatorDay,
   skeletonSlotMatchesClassMeeting,
 } from "@shared/schedule-day-index";
+import { loadEducatorStudentSafetyByChildId } from "../lib/educator-student-safety";
 
 const router = express.Router();
 
@@ -422,13 +423,22 @@ router.get('/my-students', async (req, res) => {
               classId: null, // Location-based view doesn't have class context
               className: locationName, // Show location name in class column
               enrollmentDate: schoolStudent.enrollmentDate || child.createdAt,
-              enrollmentStatus: schoolStudent.status || 'active'
+              enrollmentStatus: schoolStudent.status || 'active',
+              child,
             };
           })
         );
 
+        const locationSafety = await loadEducatorStudentSafetyByChildId(
+          storage,
+          studentsWithDetails.map((row) => row?.child),
+        );
+
         // Filter out null entries (children not found)
-        const validStudents = studentsWithDetails.filter(Boolean);
+        const validStudents = studentsWithDetails.filter(Boolean).map((row) => {
+          const { child, ...student } = row!;
+          return { ...student, ...locationSafety.get(child.id) };
+        });
 
         console.log(`📊 [EducatorDashboard] Found ${validStudents.length} students at user's permitted locations`);
         
@@ -480,6 +490,11 @@ router.get('/my-students', async (req, res) => {
       activeEnrollmentStatuses.includes(enrollment.status)
     );
 
+    const classChildren = allEnrollments
+      .map((enrollment: any) => allChildren.find((c) => c.id === enrollment.childId))
+      .filter(Boolean);
+    const classSafety = await loadEducatorStudentSafetyByChildId(storage, classChildren);
+
     const studentsWithClasses = allEnrollments.map((enrollment: any) => {
       const child = allChildren.find(c => c.id === enrollment.childId);
       const classInfo = assignedClasses.find(c => c.id === enrollment.marketplaceClassId);
@@ -495,7 +510,8 @@ router.get('/my-students', async (req, res) => {
           classId: enrollment.marketplaceClassId,
           className: classInfo ? classInfo.title : 'Unknown Class',
           enrollmentDate: enrollment.enrollmentDate,
-          enrollmentStatus: enrollment.status
+          enrollmentStatus: enrollment.status,
+          ...classSafety.get(child.id),
         };
       }
       return null;
@@ -702,37 +718,15 @@ router.get('/classes/:id/students', async (req, res) => {
     const classEnrollments = (await storage.getEnrollmentsByClassId(classId))
       .filter((enrollment) => isEducatorRosterStatus(enrollment.status));
 
-    const students = await Promise.all(
-      classEnrollments.map(async (enrollment: any) => {
+    const rosterChildren = classEnrollments
+      .map((enrollment: { childId: number }) => allChildren.find((c) => c.id === enrollment.childId))
+      .filter(Boolean);
+    const classStudentSafety = await loadEducatorStudentSafetyByChildId(storage, rosterChildren);
+
+    const students = classEnrollments.map((enrollment: any) => {
         const child = allChildren.find(c => c.id === enrollment.childId);
         if (!child) return null;
-
-        let parentPhone = null;
-        let emergencyContactName = null;
-        let emergencyContactPhone = null;
-        let emergencyContactRelationship = null;
-
-        if (child.parentId) {
-          const parent = await storage.getUser(child.parentId);
-          if (parent) {
-            parentPhone = parent.phone || null;
-            emergencyContactName = [parent.emergencyContactFirstName, parent.emergencyContactLastName].filter(Boolean).join(' ') || null;
-            emergencyContactPhone = parent.emergencyContactPhone || null;
-            emergencyContactRelationship = parent.emergencyContactRelationship || null;
-          }
-
-          const emergencyContacts = await storage.getEmergencyContactsByUserId(child.parentId);
-          if (emergencyContacts.length > 0 && !emergencyContactName) {
-            const ec = emergencyContacts[0];
-            emergencyContactName = `${ec.firstName} ${ec.lastName}`;
-            emergencyContactPhone = ec.phoneNumber;
-            emergencyContactRelationship = ec.relationship;
-          }
-        }
-
-        if (!emergencyContactName && child.emergencyContact) {
-          emergencyContactName = child.emergencyContact;
-        }
+        const safety = classStudentSafety.get(child.id);
 
         return {
           id: child.id,
@@ -741,15 +735,20 @@ router.get('/classes/:id/students', async (req, res) => {
           gradeLevel: child.gradeLevel,
           birthdate: child.birthdate,
           parentEmail: child.parentEmail,
-          parentPhone,
-          emergencyContactName,
-          emergencyContactPhone,
-          emergencyContactRelationship,
+          parentPhone: safety?.parentPhone ?? null,
+          emergencyContactName: safety?.emergencyContactName ?? null,
+          emergencyContactPhone: safety?.emergencyContactPhone ?? null,
+          emergencyContactRelationship: safety?.emergencyContactRelationship ?? null,
+          allergies: safety?.allergies ?? null,
+          medicalInfo: safety?.medicalInfo ?? null,
+          specialNeeds: safety?.specialNeeds ?? null,
+          hasAllergyAlert: safety?.hasAllergyAlert ?? false,
+          hasMedicalAlert: safety?.hasMedicalAlert ?? false,
+          hasSpecialNeedsAlert: safety?.hasSpecialNeedsAlert ?? false,
           enrollmentDate: enrollment.enrollmentDate,
           enrollmentStatus: enrollment.status
         };
-      })
-    );
+      });
 
     const filteredStudents = students.filter(Boolean);
 
@@ -2333,15 +2332,21 @@ router.get('/sessions/:sessionId/roster', async (req, res) => {
     const attendanceMap = new Map(existingAttendance.map(a => [a.childId, a]));
 
     // Build roster with attendance status
-    const roster = await Promise.all(
-      activeEnrollments.map(async (enrollment) => {
-        const child = await storage.getChildById(enrollment.childId);
+    const children = await Promise.all(
+      activeEnrollments.map((enrollment) => storage.getChildById(enrollment.childId)),
+    );
+    const rosterSafety = await loadEducatorStudentSafetyByChildId(storage, children);
+
+    const roster = activeEnrollments.map((enrollment, index) => {
+        const child = children[index];
         const attendance = attendanceMap.get(enrollment.childId);
+        const safety = rosterSafety.get(enrollment.childId);
         return {
           childId: enrollment.childId,
           childName: child ? `${child.firstName} ${child.lastName}` : 'Unknown',
           childFirstName: child?.firstName,
           childLastName: child?.lastName,
+          gradeLevel: child?.gradeLevel,
           enrollmentId: enrollment.id,
           attendance: attendance ? {
             id: attendance.id,
@@ -2349,10 +2354,19 @@ router.get('/sessions/:sessionId/roster', async (req, res) => {
             checkInTime: attendance.checkInTime,
             checkOutTime: attendance.checkOutTime,
             notes: attendance.notes
-          } : null
+          } : null,
+          allergies: safety?.allergies ?? null,
+          medicalInfo: safety?.medicalInfo ?? null,
+          specialNeeds: safety?.specialNeeds ?? null,
+          hasAllergyAlert: safety?.hasAllergyAlert ?? false,
+          hasMedicalAlert: safety?.hasMedicalAlert ?? false,
+          hasSpecialNeedsAlert: safety?.hasSpecialNeedsAlert ?? false,
+          parentPhone: safety?.parentPhone ?? null,
+          emergencyContactName: safety?.emergencyContactName ?? null,
+          emergencyContactPhone: safety?.emergencyContactPhone ?? null,
+          emergencyContactRelationship: safety?.emergencyContactRelationship ?? null,
         };
-      })
-    );
+      });
 
     console.log(`[Attendance] Roster for session ${sessionId}: ${roster.length} students`);
     res.json(roster);

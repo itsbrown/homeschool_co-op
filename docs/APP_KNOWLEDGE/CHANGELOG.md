@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-08-19 (Educator student safety on roster)
+
+- Session roster, class students, and My Students return allergies / medical / special needs plus emergency contact (parent user fields first, then `emergency_contacts`, then `children.emergencyContact`). “None” / “n/a” do not badge.
+- Day-of: Allergy/Medical badges + Info sheet on `AttendanceTracker` (does not mark attendance). Same sheet on My Students.
+- Helper: `shared/educator-student-safety.ts`. Playwright: `attendance-educator-mark` (Peanuts / EpiPen / Pat Contact). Jest: `shared/__tests__/educator-student-safety.test.ts`.
+
 ## 2026-08-19 (Dimensions Math books collapsible)
 
 - Parent supply list nests Dimensions Math textbook/workbook rows under **Dimensions Math books** (default open). Placement how-to card lives inside that section. Red **Placement test** badge on 1A–5B names only.
@@ -7,7 +13,7 @@
 
 ## 2026-08-19 (Educator today / attendance honesty)
 
-- Dashboard **Today** is weekday meetings only (`classMeetsOnWeekday`); Start is one tap. Attendance saves on tap; unmarked kids stay highlighted; End Session stays on the session with present/absent counts.
+- Dashboard **Today** is assignment-filtered weekday meetings. `setup-schedule-builder-scenario` assigns Seekers **and** Yankee so Tue/Thu honesty E2E is not an empty today list.
 - Staff Guide matches the real loop (no Attendance tab, no volunteer-add fiction, QR is not the default start).
 - E2E: `educator-today-honesty`; Jest: `classMeetsOnWeekday` in `family-schedule.test.ts`.
 
