@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, User, Calendar, GraduationCap, Mail, Phone, MapPin, Heart, AlertTriangle, BookOpen, X, Clock, Users, UserPlus, Trash2 } from "lucide-react";
+import { ArrowLeft, User, Calendar, GraduationCap, Mail, Phone, MapPin, Heart, AlertTriangle, BookOpen, X, Clock, Users, UserPlus, Trash2, Pencil } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +13,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import ParentAppShell from '@/components/layout/ParentAppShell';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, parseApiErrorMessage } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { useRoleAwareLayout } from '@/hooks/use-role-aware-layout';
+import { Textarea } from "@/components/ui/textarea";
+import { allergiesToFormValue } from "@shared/child-profile-patch";
 
 // Layout-agnostic content component for child profile
 // Can be wrapped with appropriate layout by parent components
@@ -78,9 +80,9 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
         age: calculateAge(studentData.birthdate),
         school: studentData.school || "American Seekers Academy",
         interests: studentData.interests || [],
-        allergies: studentData.allergies || "None specified",
-        medicalInfo: studentData.medicalInfo || studentData.medicalNotes || "No medical notes",
-        specialNeeds: studentData.specialNeeds || "None specified",
+        allergies: allergiesToFormValue(studentData.allergies),
+        medicalInfo: studentData.medicalInfo || studentData.medicalNotes || "",
+        specialNeeds: studentData.specialNeeds || "",
         parentEmail: studentData.parentEmail,
         parentPhone: studentData.parentPhone,
         emergencyContact: studentData.emergencyContact,
@@ -191,7 +193,7 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
     <>
       <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-4 sm:mb-6">
+        <div className="flex items-center justify-between gap-4 mb-4 sm:mb-6">
           <Button
             variant="ghost" 
             size="sm" 
@@ -202,6 +204,28 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
             <span className="hidden sm:inline">Back to {activeRole === 'schoolAdmin' ? 'Students' : 'Children'}</span>
             <span className="sm:hidden">Back</span>
           </Button>
+          {activeRole === 'parent' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setLocation(`/children/${id}/edit`)}
+              data-testid="button-edit-child-profile"
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit Profile
+            </Button>
+          )}
+          {activeRole === 'schoolAdmin' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setLocation(`/schools/students/${id}/edit`)}
+              data-testid="button-edit-student-profile"
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit Student
+            </Button>
+          )}
         </div>
 
         {/* Profile Header */}
@@ -333,28 +357,13 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
           </TabsContent>
 
           <TabsContent value="health" className="space-y-4 sm:space-y-6">
-            <Card>
-              <CardHeader className="p-4 sm:p-6">
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Health & Safety Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6 pt-0">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Allergies</label>
-                  <p className="font-medium">{child.allergies || "None reported"}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Medical Information</label>
-                  <p className="font-medium">{child.medicalInfo || "No medical conditions reported"}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Special Needs</label>
-                  <p className="font-medium">{child.specialNeeds || "None specified"}</p>
-                </div>
-              </CardContent>
-            </Card>
+            <HealthSafetyCard
+              childId={id}
+              activeRole={activeRole}
+              allergies={child.allergies}
+              medicalInfo={child.medicalInfo}
+              specialNeeds={child.specialNeeds}
+            />
 
             <Card>
               <CardHeader>
@@ -696,6 +705,176 @@ export function ChildProfileContent({ activeRole }: ChildProfileContentProps) {
         }}
       />
     </>
+  );
+}
+
+function HealthSafetyCard({
+  childId,
+  activeRole,
+  allergies,
+  medicalInfo,
+  specialNeeds,
+}: {
+  childId: string | undefined;
+  activeRole: string;
+  allergies: string;
+  medicalInfo: string;
+  specialNeeds: string;
+}) {
+  const { toast } = useToast();
+  const canEdit = activeRole === "parent" || activeRole === "schoolAdmin";
+  const [editing, setEditing] = useState(false);
+  const [allergiesDraft, setAllergiesDraft] = useState(allergies);
+  const [medicalDraft, setMedicalDraft] = useState(medicalInfo);
+  const [specialNeedsDraft, setSpecialNeedsDraft] = useState(specialNeeds);
+
+  const saveHealthMutation = useMutation({
+    mutationFn: async () => {
+      if (!childId) throw new Error("Missing student id");
+      const payload = {
+        allergies: allergiesDraft,
+        medicalInfo: medicalDraft,
+        medicalNotes: medicalDraft,
+        specialNeeds: specialNeedsDraft,
+      };
+      if (activeRole === "schoolAdmin") {
+        return apiRequest("PUT", `/api/school-admin/students/${childId}`, payload);
+      }
+      return apiRequest("PATCH", `/api/children/${childId}`, payload);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Health information saved",
+        description: "Allergies and medical notes were updated.",
+      });
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: [`/api/parent/children/${childId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/children"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/children/${childId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/students", childId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/school-admin/students/${childId}`] });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Could not save allergies",
+        description: parseApiErrorMessage(error, "Please try again."),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const startEditing = () => {
+    setAllergiesDraft(allergies);
+    setMedicalDraft(medicalInfo);
+    setSpecialNeedsDraft(specialNeeds);
+    setEditing(true);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" />
+            Health & Safety Information
+          </CardTitle>
+          {canEdit && !editing && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={startEditing}
+              data-testid="button-edit-health"
+            >
+              <Pencil className="h-4 w-4 mr-1" />
+              Add / Edit
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6 pt-0">
+        {editing ? (
+          <>
+            <div>
+              <label className="text-sm font-medium" htmlFor="child-allergies">
+                Allergies
+              </label>
+              <Textarea
+                id="child-allergies"
+                value={allergiesDraft}
+                onChange={(e) => setAllergiesDraft(e.target.value)}
+                placeholder="Peanuts, bee stings, dairy…"
+                className="mt-1"
+                style={{ fontSize: "16px" }}
+                data-testid="textarea-child-allergies"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium" htmlFor="child-medical">
+                Medical Information
+              </label>
+              <Textarea
+                id="child-medical"
+                value={medicalDraft}
+                onChange={(e) => setMedicalDraft(e.target.value)}
+                placeholder="Conditions, medications, or notes for staff"
+                className="mt-1"
+                style={{ fontSize: "16px" }}
+                data-testid="textarea-child-medical"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium" htmlFor="child-special-needs">
+                Special Needs
+              </label>
+              <Textarea
+                id="child-special-needs"
+                value={specialNeedsDraft}
+                onChange={(e) => setSpecialNeedsDraft(e.target.value)}
+                placeholder="Accommodations or IEP notes"
+                className="mt-1"
+                style={{ fontSize: "16px" }}
+                data-testid="textarea-child-special-needs"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditing(false)}
+                disabled={saveHealthMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => saveHealthMutation.mutate()}
+                disabled={saveHealthMutation.isPending}
+                data-testid="button-save-health"
+              >
+                {saveHealthMutation.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Allergies</label>
+              <p className="font-medium" data-testid="text-child-allergies">
+                {allergies || "None reported"}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Medical Information</label>
+              <p className="font-medium">{medicalInfo || "No medical conditions reported"}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Special Needs</label>
+              <p className="font-medium">{specialNeeds || "None specified"}</p>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

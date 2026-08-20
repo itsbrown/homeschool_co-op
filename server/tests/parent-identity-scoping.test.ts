@@ -3,6 +3,7 @@ import {
   normalizeEmailForLookup,
   emailsMatch,
   enrollmentMatchesParent,
+  childMatchesParent,
 } from '@shared/parent-identity';
 import {
   resolveParentDbUser,
@@ -37,6 +38,15 @@ describe('parent-identity helpers', () => {
     ).toBe(true);
     expect(
       enrollmentMatchesParent({ parentId: 99, parentEmail: 'other@test.com' }, 5, 'parent@test.com'),
+    ).toBe(false);
+  });
+
+  it('childMatchesParent uses parent_id when parent_email is blank', () => {
+    expect(
+      childMatchesParent({ parentId: 12, parentEmail: null }, 12, 'parent@test.com'),
+    ).toBe(true);
+    expect(
+      childMatchesParent({ parentId: 12, parentEmail: null }, 99, 'parent@test.com'),
     ).toBe(false);
   });
 });

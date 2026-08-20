@@ -3,6 +3,8 @@ import { storage } from "../storage";
 import { jwtCheck } from "../middleware/auth0-auth";
 import { syncChildLocationToParent } from "../services/locationSyncService";
 import { resolveChildRegisteredLocation } from "../lib/parent-registered-location";
+import { childMatchesParent } from "@shared/parent-identity";
+import { buildChildProfilePatch } from "@shared/child-profile-patch";
 
 const router = Router();
 
@@ -212,12 +214,13 @@ router.patch("/:id", jwtCheck, isParent, async (req: Request, res: Response) => 
       return res.status(404).json({ message: "Child not found" });
     }
     const parent = await storage.getUserByEmail(userEmail);
-    if (existingChild.parentEmail !== userEmail && existingChild.parentId !== parent?.id) {
+    const dbUserId = (req as any).auth?.dbUserId ?? parent?.id ?? null;
+    if (!childMatchesParent(existingChild, dbUserId, userEmail)) {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    // Update the child using the storage system
-    const updatedChild = await storage.updateChild(childId, updateData);
+    const patch = buildChildProfilePatch(updateData);
+    const updatedChild = await storage.updateChild(childId, patch as any);
     
     if (!updatedChild) {
       return res.status(404).json({ message: "Child not found" });

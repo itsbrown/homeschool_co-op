@@ -8,6 +8,8 @@ import ChildRegistrationForm from "@/components/registration/ChildRegistrationFo
 import type { Child } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { toDateInputValue } from "@shared/grade-levels";
+import { allergiesToFormValue } from "@shared/child-profile-patch";
 
 export default function ChildProfileEditPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -87,21 +89,26 @@ export default function ChildProfileEditPage() {
     );
   }
 
+  const childRecord =
+    childData && typeof childData === "object" && "child" in childData && !(childData as Child).firstName
+      ? ((childData as { child: Child }).child)
+      : childData;
+
   // Convert the child data to the format expected by ChildRegistrationForm
   const defaultValues = {
-    firstName: childData?.firstName || "",
-    lastName: childData?.lastName || "",
-    birthdate: childData?.birthdate || "",
-    gradeLevel: childData?.gradeLevel || "",
-    gender: childData?.gender || "",
-    school: childData?.school || "",
-    interests: Array.isArray(childData?.interests) ? childData.interests : [],
-    learningStyle: childData?.learningStyle || "",
-    specialNeeds: childData?.specialNeeds || "",
-    allergies: childData?.allergies || "",
-    emergencyContact: childData?.emergencyContact || "",
-    additionalLanguages: childData?.additionalLanguages || "",
-    notes: childData?.notes || "",
+    firstName: childRecord?.firstName || "",
+    lastName: childRecord?.lastName || "",
+    birthdate: toDateInputValue(childRecord?.birthdate) || "",
+    gradeLevel: childRecord?.gradeLevel || "",
+    gender: childRecord?.gender || "",
+    school: childRecord?.school || "",
+    interests: Array.isArray(childRecord?.interests) ? childRecord.interests : [],
+    learningStyle: childRecord?.learningStyle || "",
+    specialNeeds: childRecord?.specialNeeds || "",
+    allergies: allergiesToFormValue(childRecord?.allergies),
+    emergencyContact: childRecord?.emergencyContact || "",
+    additionalLanguages: childRecord?.additionalLanguages || "",
+    notes: childRecord?.notes || "",
   };
 
 

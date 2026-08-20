@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-08-20 (Parent allergy add on Student Profile)
+
+- Health & Safety on `/children/:id` was read-only (dashboard **View Profile**). **Add / Edit** now saves allergies. Edit Profile no longer requires Gender (signup leaves it empty). `PATCH /api/children/:id` matches on `parent_id` or email, and coerces allergy arrays to text (`shared/child-profile-patch.ts`). School-admin PUT students now persists `allergies`.
+
 ## 2026-08-19 (Educator student safety on roster)
 
 - Session roster, class students, and My Students return allergies / medical / special needs plus emergency contact (parent user fields first, then `emergency_contacts`, then `children.emergencyContact`). “None” / “n/a” do not badge.

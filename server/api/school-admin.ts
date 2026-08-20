@@ -35,6 +35,7 @@ import {
   deriveCapabilitiesFromLabels,
 } from '../lib/user-profile-capabilities';
 import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
+import { normalizeAllergiesInput } from '@shared/child-profile-patch';
 
 // Rate limiter for permission updates - prevent bulk abuse
 const permissionUpdateLimiter = rateLimit({
@@ -3973,6 +3974,9 @@ router.put('/students/:id', supabaseAuth, async (req: any, res) => {
     }
     if (updateData.specialNeeds != null) {
       patch.specialNeeds = String(updateData.specialNeeds);
+    }
+    if (updateData.allergies != null) {
+      patch.allergies = normalizeAllergiesInput(updateData.allergies);
     }
 
     const updatedStudent = await storage.updateChild(studentId, patch as any);

@@ -22,3 +22,12 @@ export function enrollmentMatchesParent(
   if (parentUserId != null && enrollment.parentId === parentUserId) return true;
   return emailsMatch(enrollment.parentEmail, sessionEmail);
 }
+
+/** Same link rules as enrollments: `children.parent_id` or denormalized `parent_email`. */
+export function childMatchesParent(
+  child: { parentId?: number | null; parentEmail?: string | null },
+  parentUserId: number | null | undefined,
+  sessionEmail: string | null | undefined,
+): boolean {
+  return enrollmentMatchesParent(child, parentUserId, sessionEmail);
+}

@@ -34,6 +34,7 @@ interface StudentData {
   emergencyPhone?: string;
   medicalNotes?: string;
   specialNeeds?: string;
+  allergies?: string;
 }
 
 interface SchoolData {
@@ -153,6 +154,7 @@ export default function StudentRegistrationPage() {
         emergencyPhone: formData.get('emergencyPhone'),
         medicalNotes: formData.get('medicalNotes'),
         specialNeeds: formData.get('specialNeeds'),
+        allergies: formData.get('allergies'),
         sendInvitation: sendInvitation,
         ...(isEditMode && formData.get('secondaryParentEmail')
           ? { secondaryParentEmail: formData.get('secondaryParentEmail') }
@@ -394,6 +396,18 @@ export default function StudentRegistrationPage() {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Additional Information</h3>
                 <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="allergies">Allergies</Label>
+                    <Textarea
+                      id="allergies"
+                      name="allergies"
+                      placeholder="Peanuts, bee stings, dairy…"
+                      rows={2}
+                      defaultValue={studentData?.allergies || ""}
+                      style={{ fontSize: "16px" }}
+                      data-testid="textarea-student-allergies"
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="medicalNotes">Medical Notes</Label>
                     <Textarea
