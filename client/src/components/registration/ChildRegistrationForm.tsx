@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { allergiesToFormValue } from "@shared/child-profile-patch";
 
 // Define the validation schema for child registration
 const formSchema = z.object({
@@ -36,7 +37,7 @@ const formSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   birthdate: z.string().min(1, "Birthdate is required"),
   gradeLevel: z.string().min(1, "Grade level is required"),
-  gender: z.string().min(1, "Gender is required"),
+  gender: z.string().optional(),
   school: z.string().optional(),
   interests: z.array(z.string()).optional(),
   learningStyle: z.string().optional(),
@@ -158,7 +159,13 @@ export default function ChildRegistrationForm({
 
       const method = childId ? "PATCH" : "POST";
 
-      const response = await apiRequest(method, endpoint, data);
+      const payload = {
+        ...data,
+        gender: data.gender?.trim() ? data.gender.trim() : null,
+        allergies: allergiesToFormValue(data.allergies),
+      };
+
+      const response = await apiRequest(method, endpoint, payload);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -307,8 +314,8 @@ export default function ChildRegistrationForm({
                 name="gender"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Gender*</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <FormLabel>Gender (optional)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select gender" />
@@ -460,9 +467,16 @@ export default function ChildRegistrationForm({
                         <Textarea
                           placeholder="Any allergies or medical concerns we should be aware of"
                           className="resize-none"
-                          {...field}
+                          value={allergiesToFormValue(field.value)}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          style={{ fontSize: "16px" }}
+                          data-testid="textarea-allergies"
                         />
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />

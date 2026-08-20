@@ -116,6 +116,7 @@ const mutation = useMutation({
 ## Common Pitfalls
 
 - **Paginated endpoint causes `.map is not a function`** → typed query as `any[]` against an endpoint that returns `{ items: [], total: N }` — when data loads, the object replaces the `[]` default and `.map` fails → type as the full response shape and derive the array: `const { data } = useQuery<{ items: any[] }>({...}); const list = data?.items ?? [];`
+- **Child profile Health tab looked read-only / Update did nothing** → `/children/:id` Health & Safety had no editor; Edit Profile required Gender even though school-code signup leaves it optional. Use **Add / Edit** on Health & Safety, or Edit Profile (gender optional). Allergies are `text`, not a chip list.
 - **Copied custom `queryFn` + bare `fetch()` from StaffInvitePage** → `StaffInvitePage.tsx` contains a pre-existing pattern violation; it bypasses token refresh, error tracking, and the `X-Active-Role` header → always use the default fetcher; never define a custom `queryFn`
 - **Toast import error** → imported `useToast` from Shadcn UI directory → import from `@/hooks/use-toast` instead
 - **Form silently won't submit** → validation fails on fields without visible error display → log `form.formState.errors` to find the failing field

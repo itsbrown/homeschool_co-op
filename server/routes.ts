@@ -10,6 +10,8 @@ import { getDb } from "./db";
 import { eq } from "drizzle-orm";
 import { supabaseAuth } from "./middleware/supabase-auth";
 import { extractFamilyScheduleTiming } from "./utils/family-schedule";
+import { childMatchesParent } from "@shared/parent-identity";
+import { buildChildProfilePatch } from "@shared/child-profile-patch";
 
 // Type for authenticated requests with our auth structure
 interface AuthenticatedRequest extends Request {
@@ -2364,13 +2366,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Child not found" });
       }
 
-      if (existingChild.parentEmail !== req.user.email) {
+      const userEmail = req.user.email;
+      const dbUserId = req.auth?.dbUserId ?? req.user?.dbUser?.id ?? null;
+      let parentId = typeof dbUserId === "number" ? dbUserId : null;
+      if (parentId == null && userEmail) {
+        const parent = await storage.getUserByEmail(userEmail);
+        parentId = parent?.id ?? null;
+      }
+      if (!childMatchesParent(existingChild, parentId, userEmail)) {
         console.log(`❌ Access denied - child belongs to different parent`);
         return res.status(403).json({ message: "You can only update your own children" });
       }
 
-      // Update the child using the storage system
-      const updatedChild = await storage.updateChild(childId, updateData);
+      const patch = buildChildProfilePatch(updateData);
+      const updatedChild = await storage.updateChild(childId, patch as any);
 
       if (!updatedChild) {
         return res.status(404).json({ message: "Child not found" });
@@ -2987,8 +2996,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`📝 School admin updating child ${childId} with data:`, JSON.stringify(updateData, null, 2));
 
-      // Update the child using the storage system
-      const updatedChild = await storage.updateChild(childId, updateData);
+      const patch = buildChildProfilePatch(updateData);
+      const updatedChild = await storage.updateChild(childId, patch as any);
 
       if (!updatedChild) {
         return res.status(404).json({ message: "Child not found" });

@@ -33,6 +33,7 @@ How child grade/age relate to classes and enrollment **today**.
 | Parent catalog filter | `client/src/components/registration/ProgramList.tsx` | `program.gradeLevels.includes(filter)` — browse filter only |
 | Parent profile (admin) | `client/src/pages/schools/ParentProfilePage.tsx` | Child cards: grade + birthdate; class titles on **Enrollments** tab via `enrollment.className` |
 | Parent children | `client/src/pages/ChildrenPage.tsx` | Grade on card; class title from `/api/children/:id/enrollments` |
+| Parent student profile | `client/src/pages/children/ChildProfilePage.tsx` | Health & Safety **Add / Edit** saves allergies via `PATCH /api/children/:id` (parents) or `PUT /api/school-admin/students/:id` (admins) |
 | School admin Students | `client/src/pages/schools/StudentsPage.tsx` | Classes column from `GET /api/school-admin/students` → `classes[]` (current seats via `buildCurrentClassesByChildId`) |
 | Edit / register student | `client/src/pages/schools/StudentRegistrationPage.tsx` | Grade options from `GRADE_LEVEL_OPTIONS` (labels); auto from DOB (age − 5); invalidate students queries after save |
 
@@ -44,11 +45,13 @@ How child grade/age relate to classes and enrollment **today**.
 | Grade “didn't save” after Update | `staleTime: Infinity` + no query invalidation on students list | `invalidateQueries(['/api/school-admin/students'])` after PUT |
 | DOB date input blank | ISO datetime in `birthdate` | `toDateInputValue()` → `YYYY-MM-DD` |
 | Parent Profile trash “Delete Child” fails | `DELETE /api/school-admin/children/:id` — **400** if any `program_enrollments`; historically **500** when deleting `children` before `school_students` (no CASCADE) | Use `deleteSchoolAdminChild` (school_students first). E2E: `e2e/parent-profile-delete-child.spec.ts` (`withDeletableChild`) |
+| Parent cannot add allergies on Student Profile | Health tab was display-only; Edit Profile (`ChildRegistrationForm`) required **Gender** though signup does not collect it; `PATCH /api/children/:id` used strict `parentEmail ===` (fails when email is null/case-mismatched and the child is linked by `parent_id`). Allergies column is **text** — arrays in the body 500 the update | Health tab **Add / Edit**; gender optional on edit; `childMatchesParent` + `buildChildProfilePatch` coerce arrays to `"Peanuts, Shellfish"` |
 
 ## Key files
 
 - `shared/schema.ts` — `children`, `classes`, `programEnrollments`
 - `shared/grade-levels.ts` — normalize, age−5 helpers, `GRADE_LEVEL_OPTIONS`
+- `shared/child-profile-patch.ts` — allergy text coerce + child update whitelist
 - `server/lib/delete-school-admin-child.ts` — school-admin hard delete (FK-safe order)
 - `server/api/classes.ts` — enroll (no grade check)
 - `server/api/school-admin.ts` — `GET/PUT /students/:id`, `GET /classes/:id/roster`
