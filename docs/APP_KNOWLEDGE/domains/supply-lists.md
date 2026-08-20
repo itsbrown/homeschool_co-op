@@ -52,18 +52,20 @@ CSV import maps Google Sheets columns (skips title rows until a **Supply Item** 
 - Parent sidebar + mobile menu: **Supply list** → `/parent/supplies` (shopping list / by child / by class)
 - Dashboard Overview card and Quick Action always visible (empty copy when no items)
 - Parent class details: class-only subset + link to household list
-- **Dimensions Math placement:** collapsed **Before you buy Dimensions Math** card on the household list when any class attribution is **not** Macaroni/Macaronis (mixed households still see it). Same card on non-Macaroni class-details supplies. Primary CTA opens Singapore Math placement tests. Do **not** fake a supply row or put this copy in class descriptions. Notification blast waits until this UI is live.
+- **Dimensions Math:** textbook/workbook rows nest under a default-open **Dimensions Math books** collapsible (household list and class details). **Before you buy Dimensions Math** sits inside that section when any class attribution is not Macaroni/Macaronis. Red **Placement test** badge on 1A–5B names only (not KA / Pre-K / 6–8). Do **not** fake a supply row or put this copy in class descriptions.
 
 ## Tests
 
 - Unit: [`shared/__tests__/supply-list.test.ts`](../../../shared/__tests__/supply-list.test.ts), [`shared/__tests__/supply-list-csv.test.ts`](../../../shared/__tests__/supply-list-csv.test.ts)
 - API: [`server/tests/integration/supply-lists-api.test.ts`](../../../server/tests/integration/supply-lists-api.test.ts)
-- E2E: `e2e/school-admin-supply-list.spec.ts`, `e2e/parent-supply-list.spec.ts` — seed `POST /api/test/setup-supply-list-scenario`. Dimensions how-to is rendered twice (print copy + collapsible); assert `dimensions-math-placement-howto-step-1`, not `getByText(/Start lower than you think/i)`.
+- E2E: `e2e/school-admin-supply-list.spec.ts`, `e2e/parent-supply-list.spec.ts` — seed `POST /api/test/setup-supply-list-scenario` (Trailblazers includes Dimensions Math 2A + KA). How-to steps: assert `dimensions-math-placement-howto-steps` / `howto-step-1`, not page-wide `getByText(/Start lower than you think/i)`.
 
 ## Key files
 
-- `shared/supply-list.ts` — merge math; Macaroni exclusion for Dimensions Math placement
+- `shared/supply-list.ts` — merge math; Macaroni exclusion; Dimensions Math name / 1A–5B placement-test helpers
 - `client/src/components/parent/DimensionsMathPlacementCard.tsx` — parent how-to card
+- `client/src/components/parent/DimensionsMathBooksSection.tsx` — books collapsible
+- `client/src/components/parent/SupplyItemBadges.tsx` — Required/Optional + Placement test
 - `shared/supply-list-csv.ts` — Sheets CSV parse / qty+unit split
 - `server/lib/supply-lists.ts` — data access
 - `server/lib/import-supply-list-csv.ts` — PA-API + affiliate reuse/create then `replaceSupplyItems`

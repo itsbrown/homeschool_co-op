@@ -156,6 +156,18 @@ export async function seedSupplyListScenario(
       required: true,
       storeProductId: store.affiliateProduct.id,
     },
+    {
+      name: "Dimensions Math Textbook 2A",
+      quantity: 1,
+      scope: "student",
+      required: true,
+    },
+    {
+      name: "Dimensions Math Textbook KA",
+      quantity: 1,
+      scope: "student",
+      required: false,
+    },
   ]);
   const classBItems = await replaceSupplyItems(store.school.id, "class", classB.id, [
     {

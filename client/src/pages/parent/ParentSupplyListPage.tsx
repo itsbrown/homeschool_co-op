@@ -5,7 +5,6 @@ import { Loader2, Printer, ShoppingBag } from "lucide-react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -16,8 +15,13 @@ import {
   type ParentSupplyListResponse,
 } from "@/lib/parent-supply-list";
 import { StoreOutboundProductLink } from "@/components/store/StoreOutboundProductLink";
-import { DimensionsMathPlacementCard } from "@/components/parent/DimensionsMathPlacementCard";
-import { householdNeedsDimensionsMathPlacement } from "@shared/supply-list";
+import { DimensionsMathBooksSection } from "@/components/parent/DimensionsMathBooksSection";
+import { SupplyItemBadges } from "@/components/parent/SupplyItemBadges";
+import {
+  householdNeedsDimensionsMathPlacement,
+  needsDimensionsMathPlacementTest,
+  partitionDimensionsMathRows,
+} from "@shared/supply-list";
 
 type ViewMode = "shopping" | "child" | "class";
 
@@ -49,6 +53,51 @@ function SupplyBuyActions({
     <Button asChild variant="outline" className="min-h-11" data-testid={`supply-view-shop-${action.productId}`}>
       <Link href={action.href}>View in shop</Link>
     </Button>
+  );
+}
+
+function SupplyRow({
+  groupKey,
+  row,
+  storeSlug,
+  onCheck,
+}: {
+  groupKey: string;
+  row: ParentSupplyListResponse["items"][number];
+  storeSlug: string | null;
+  onCheck: (supplyItemIds: number[], checked: boolean) => void;
+}) {
+  return (
+    <li
+      key={`${groupKey}-${row.mergeKey}`}
+      className="flex flex-col sm:flex-row sm:items-start gap-3 border-b pb-4 last:border-0 last:pb-0"
+      data-testid={`supply-row-${row.mergeKey}`}
+    >
+      <div className="flex items-start gap-3 flex-1 min-w-0">
+        <Checkbox
+          className="mt-1 h-5 w-5 print:hidden"
+          checked={row.checked}
+          onCheckedChange={(checked) => onCheck(row.supplyItemIds, checked === true)}
+          aria-label={`Got ${row.name}`}
+          data-testid={`supply-check-${row.mergeKey}`}
+        />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">
+              {row.name}
+              {row.quantity > 1 ? ` ×${row.quantity}` : ""}
+              {row.unit ? ` ${row.unit}` : ""}
+            </span>
+            <SupplyItemBadges name={row.name} required={row.required} />
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">{attributionLabel(row)}</p>
+          {row.notes && <p className="text-sm text-muted-foreground mt-1">{row.notes}</p>}
+        </div>
+      </div>
+      <div className="print:hidden sm:shrink-0">
+        <SupplyBuyActions row={row} storeSlug={storeSlug} />
+      </div>
+    </li>
   );
 }
 
@@ -156,7 +205,6 @@ export default function ParentSupplyListPage() {
 
         {items.length > 0 && (
           <>
-            {householdNeedsDimensionsMathPlacement(items) && <DimensionsMathPlacementCard />}
             <Tabs
               value={view}
               onValueChange={(value) => setView(value as ViewMode)}
@@ -183,52 +231,49 @@ export default function ParentSupplyListPage() {
                       <CardTitle>{group.title}</CardTitle>
                     </CardHeader>
                   )}
-                  <CardContent className={view === "shopping" ? "pt-6" : undefined}>
-                    <ul className="space-y-4">
-                      {group.rows.map((row) => (
-                        <li
-                          key={`${group.key}-${row.mergeKey}`}
-                          className="flex flex-col sm:flex-row sm:items-start gap-3 border-b pb-4 last:border-0 last:pb-0"
-                          data-testid={`supply-row-${row.mergeKey}`}
-                        >
-                          <div className="flex items-start gap-3 flex-1 min-w-0">
-                            <Checkbox
-                              className="mt-1 h-5 w-5 print:hidden"
-                              checked={row.checked}
-                              onCheckedChange={(checked) =>
-                                checkMutation.mutate({
-                                  supplyItemIds: row.supplyItemIds,
-                                  checked: checked === true,
-                                })
-                              }
-                              aria-label={`Got ${row.name}`}
-                              data-testid={`supply-check-${row.mergeKey}`}
-                            />
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-medium">
-                                  {row.name}
-                                  {row.quantity > 1 ? ` ×${row.quantity}` : ""}
-                                  {row.unit ? ` ${row.unit}` : ""}
-                                </span>
-                                <Badge variant={row.required ? "default" : "secondary"}>
-                                  {row.required ? "Required" : "Optional"}
-                                </Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground mt-1">
-                                {attributionLabel(row)}
-                              </p>
-                              {row.notes && (
-                                <p className="text-sm text-muted-foreground mt-1">{row.notes}</p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="print:hidden sm:shrink-0">
-                            <SupplyBuyActions row={row} storeSlug={data?.storeSlug ?? null} />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                  <CardContent className={view === "shopping" ? "pt-6 space-y-4" : "space-y-4"}>
+                    {(() => {
+                      const { math, other } = partitionDimensionsMathRows(group.rows);
+                      const showPlacementCard = householdNeedsDimensionsMathPlacement(math);
+                      const onCheck = (supplyItemIds: number[], checked: boolean) =>
+                        checkMutation.mutate({ supplyItemIds, checked });
+                      return (
+                        <>
+                          {math.length > 0 && (
+                            <DimensionsMathBooksSection
+                              bookCount={math.length}
+                              needsPlacement={math.some((row) => needsDimensionsMathPlacementTest(row.name))}
+                              showPlacementCard={showPlacementCard}
+                            >
+                              <ul className="space-y-4">
+                                {math.map((row) => (
+                                  <SupplyRow
+                                    key={`${group.key}-${row.mergeKey}`}
+                                    groupKey={group.key}
+                                    row={row}
+                                    storeSlug={data?.storeSlug ?? null}
+                                    onCheck={onCheck}
+                                  />
+                                ))}
+                              </ul>
+                            </DimensionsMathBooksSection>
+                          )}
+                          {other.length > 0 && (
+                            <ul className="space-y-4">
+                              {other.map((row) => (
+                                <SupplyRow
+                                  key={`${group.key}-${row.mergeKey}`}
+                                  groupKey={group.key}
+                                  row={row}
+                                  storeSlug={data?.storeSlug ?? null}
+                                  onCheck={onCheck}
+                                />
+                              ))}
+                            </ul>
+                          )}
+                        </>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               ))}
