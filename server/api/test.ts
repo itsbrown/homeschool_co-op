@@ -4438,6 +4438,13 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
       isPrimary: true,
       canStartSession: true,
     });
+    await storage.createEducatorClassAssignment({
+      educatorId: educator.id,
+      classId: yankee.id,
+      schoolId: school.id,
+      isPrimary: false,
+      canStartSession: true,
+    });
 
     const childSeekers = await storage.createChild({
       parentId: parent.id,

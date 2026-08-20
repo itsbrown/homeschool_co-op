@@ -13,7 +13,7 @@
 
 ## 2026-08-19 (Educator today / attendance honesty)
 
-- Dashboard **Today** is weekday meetings only (`classMeetsOnWeekday`); Start is one tap. Attendance saves on tap; unmarked kids stay highlighted; End Session stays on the session with present/absent counts.
+- Dashboard **Today** is assignment-filtered weekday meetings. `setup-schedule-builder-scenario` assigns Seekers **and** Yankee so Tue/Thu honesty E2E is not an empty today list.
 - Staff Guide matches the real loop (no Attendance tab, no volunteer-add fiction, QR is not the default start).
 - E2E: `educator-today-honesty`; Jest: `classMeetsOnWeekday` in `family-schedule.test.ts`.
 

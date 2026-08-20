@@ -46,7 +46,7 @@ TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/ap
 
 ## Day-of honesty
 
-- Dashboard `todayClasses` is assignments whose `class.schedule` includes **today’s weekday** (`classMeetsOnWeekday` in `server/utils/family-schedule.ts`). Empty/unknown days are **not** treated as today. Full assignment list stays on My Classes.
+- Dashboard `todayClasses` is **assigned** classes whose `class.schedule` includes **today’s weekday** (`classMeetsOnWeekday`). Empty/unknown days are **not** treated as today. Full assignment list stays on My Classes. E2E seed assigns Seekers (Mon/Wed) and Yankee (Tue/Thu).
 - Attendance saves on tap (`POST /api/educator/attendance/bulk`). There is no Attendance tab. Staff Guide must not claim auto-save-from-a-tab, volunteer add, or QR as the default start.
 - End Session stays on the session page with present/absent counts. Unmarked kids are highlighted; optional “mark remaining absent”.
 
