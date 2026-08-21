@@ -25,7 +25,10 @@ import { getDb } from '../db';
 import { ensureSchoolRegistrationCode } from '../lib/school-registration-code';
 import {
   buildAvailableLabelOptions,
+  fallbackRoleAfterStaffRemoval,
   getLabelRowsForUserAtSchool,
+  normalizeLabelKey,
+  pickStaffRoleRecord,
   resolvePrimaryLabelForList,
   resolveStaffMemberFromParam,
   type UserLabelRow,
@@ -70,6 +73,7 @@ import {
   users,
   schools,
   userRoles,
+  schoolStaff,
   userLocations,
   locations,
   classSessions,
@@ -373,6 +377,11 @@ function transformStaffToFrontend(schoolStaff: any, user: any, classes: any[] = 
 // Staff-type system roles that can be assigned to classes and view rosters
 const STAFF_TYPE_ROLES = ['educator', 'teacher', 'schoolAdmin', 'mentor', 'aide'];
 
+async function staffRoleNamesForSchool(schoolId: number): Promise<string[]> {
+  const customPositions = await storage.getStaffPositionsBySchoolId(schoolId);
+  return [...STAFF_TYPE_ROLES, ...customPositions.map((p) => p.title)];
+}
+
 // Transform user_roles-based staff data to frontend format
 // userLocationId from user_locations table is the source of truth for location assignments
 // staffRecord from school_staff is used for department enrichment only
@@ -442,7 +451,8 @@ async function buildStaffMemberResponseForUser(
     .select()
     .from(userRoles)
     .where(and(eq(userRoles.userId, user.id), eq(userRoles.schoolId, schoolId)));
-  const roleRecord = roleRecords[0];
+  const staffRoleNames = await staffRoleNamesForSchool(schoolId);
+  const roleRecord = pickStaffRoleRecord(roleRecords, { staffRoleNames });
 
   const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
   const staffRecord = schoolStaffRecords.find((s) => s.userId === user.id);
@@ -2217,23 +2227,18 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
     }
 
     const db = await getDb();
-    let roleRecord = resolved.roleRecord
-      ? (
-          await db
-            .select()
-            .from(userRoles)
-            .where(eq(userRoles.id, resolved.roleRecord!.roleId))
-            .limit(1)
-        )[0]
-      : (
-          await db
-            .select()
-            .from(userRoles)
-            .where(
-              and(eq(userRoles.userId, resolved.userId), eq(userRoles.schoolId, schoolId)),
-            )
-            .limit(1)
-        )[0];
+    const staffRoleNames = await staffRoleNamesForSchool(schoolId);
+    const allRoleRecords = await db
+      .select()
+      .from(userRoles)
+      .where(
+        and(eq(userRoles.userId, resolved.userId), eq(userRoles.schoolId, schoolId)),
+      );
+    const submittedRole = typeof req.body.role === 'string' ? req.body.role : undefined;
+    const roleRecord = pickStaffRoleRecord(allRoleRecords, {
+      preferredRole: submittedRole,
+      staffRoleNames,
+    });
 
     if (!roleRecord) {
       return res.status(404).json({ message: "Staff role not found for this school" });
@@ -2386,6 +2391,13 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
       staff: updatedStaff 
     });
   } catch (error) {
+    const code = (error as { code?: string } | null)?.code;
+    if (code === '23505') {
+      console.error("Error updating staff member (unique role):", error);
+      return res.status(409).json({
+        message: "This person already has that staff role. Parent and mentor roles are stored separately — the parent role was left unchanged.",
+      });
+    }
     console.error("Error updating staff member:", error);
     res.status(500).json({ message: "Error updating staff member" });
   }
@@ -2408,27 +2420,57 @@ router.delete("/staff/:id", supabaseAuth, async (req: any, res) => {
     }
 
     const db = await getDb();
+    const staffRoleNames = await staffRoleNamesForSchool(schoolId);
     const roleRecords = await db
       .select()
       .from(userRoles)
       .where(
         and(eq(userRoles.userId, resolved.userId), eq(userRoles.schoolId, schoolId)),
       );
-    const roleRecord = resolved.roleRecord
-      ? roleRecords.find((r) => r.id === resolved.roleRecord!.roleId) ?? roleRecords[0]
-      : roleRecords[0];
+    const roleRecord = pickStaffRoleRecord(roleRecords, { staffRoleNames });
 
     if (!roleRecord) {
       return res.status(404).json({ message: "Staff role not found for this school" });
+    }
+    if (normalizeLabelKey(roleRecord.role) === 'parent') {
+      return res.status(400).json({
+        message: "This person has no staff role to remove (they may only be a parent).",
+      });
     }
 
     const roleId = roleRecord.id;
     const user = resolved.user;
     const staffName = user?.name || 'Unknown';
+    const fallback = fallbackRoleAfterStaffRemoval(roleRecords, roleId);
 
     console.log(`🗑️ Removing staff role ${roleId} for user ${resolved.userId}`);
 
-    await db.delete(userRoles).where(eq(userRoles.id, roleId));
+    await db.transaction(async (tx) => {
+      if (user.activeRoleId === roleId) {
+        await tx
+          .update(users)
+          .set({
+            activeRoleId: fallback?.id ?? null,
+            activeRole: fallback?.role ?? null,
+          })
+          .where(eq(users.id, resolved.userId));
+      }
+
+      const staffRows = await tx
+        .select({ id: schoolStaff.id })
+        .from(schoolStaff)
+        .where(
+          and(eq(schoolStaff.userId, resolved.userId), eq(schoolStaff.schoolId, schoolId)),
+        );
+      for (const row of staffRows) {
+        await tx
+          .update(schoolStaff)
+          .set({ isActive: false, endDate: new Date(), updatedAt: new Date() })
+          .where(eq(schoolStaff.id, row.id));
+      }
+
+      await tx.delete(userRoles).where(eq(userRoles.id, roleId));
+    });
     
     console.log(`✅ Successfully removed staff role from ${staffName}`);
 

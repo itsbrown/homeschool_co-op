@@ -98,6 +98,8 @@ Seeds: `POST /api/test/setup-schedule-builder-scenario` and `setup-progress-scen
 | Parent locked out after staff invite | Accept used `updateUserById` to set a new password | Existing Auth: verify current password; never reset it |
 | Accept: “existing user but the account could not be found” | `createUser` said email exists; `listUsers` pagination missed them | Sign in with the current password to get the Auth user id; do not scan `listUsers` |
 | Staff **Save Changes** does nothing | `form.reset(GET payload)` put `classIds` as strings into `z.array(z.number())`; that field has no `FormMessage` | Reset only name/email/phone/role/location; toast on invalid; `apiRequest` needs `.json()`. Status is derived (invite pending / active), not a PUT field. Staff class lookups must use `getClassesBySchoolId`, not `getAllClasses`. |
+| Staff save 500 “Error updating staff member” | First `user_roles` row is often `parent`; PUT renamed it to Mentor | `pickStaffRoleRecord` — update the staff row, leave parent |
+| Staff remove 500 `users_active_role_id_fkey` | DELETE deleted the Mentor `user_roles` row while `users.active_role_id` still pointed at it | Re-point/null `active_role_id`, then delete |
 
 ## Out of scope (still leftover)
 

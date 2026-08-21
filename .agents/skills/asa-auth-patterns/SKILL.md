@@ -181,6 +181,8 @@ if (!isAssigned) {
 | 403 `REGISTRATION_REQUIRED` | Unregistered user tried OAuth | User needs school registration link first |
 | 403 `REGISTRATION_REQUIRED` (DB unavailable) | `getDb()` threw during `getUserByEmail` — DB timeout, not a missing user | Check DB connectivity; distinguish from unregistered-user case by checking server logs for DB errors |
 | 403 on school admin routes even with correct role | `requireAdmin` used — allows `'school-admin'` (hyphen) not `'schoolAdmin'` (camelCase) | Replace `requireAdmin` with `requireRole(['schoolAdmin', 'admin', 'superAdmin'])` |
+| Staff edit 500 “Error updating staff member” | First `user_roles` row is often `parent`; PUT renamed it to Mentor | `pickStaffRoleRecord` — update the staff row, leave parent |
+| Staff remove 500 `users_active_role_id_fkey` | `DELETE /school-admin/staff/:id` deleted the Mentor `user_roles` row while `users.active_role_id` still pointed at it | Clear/re-point `active_role_id` (fallback to remaining parent role, or null) then delete |
 | 400 "Missing context" on write endpoints | `req.userId` used — never set by any middleware | Replace `req.userId` with `req.user?.id` |
 | "User not found" | Used Supabase UUID instead of DB integer ID | Use `authData.dbUserId` not `authData.userId` |
 | Role switcher not showing | Only one role at current school | Check `user_roles` entries for that school |
