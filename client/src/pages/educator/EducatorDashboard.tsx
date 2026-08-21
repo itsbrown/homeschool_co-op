@@ -203,11 +203,11 @@ function DashboardContent() {
         <CardContent>
           {!dashboardData?.todayClasses || dashboardData.todayClasses.length === 0 ? (
             <EducatorEmptyState
-              title={assignedCount > 0 ? 'Nothing meets today' : 'No Classes Today'}
+              title={assignedCount > 0 ? 'Nothing meets today' : 'No class assigned yet'}
               description={
                 assignedCount > 0
                   ? 'None of your assigned classes meet on this weekday. Open My Classes to start a session anyway.'
-                  : "You don't have any classes scheduled for today. Check your full class list for upcoming sessions."
+                  : "Your director hasn’t assigned a class yet. Check back after they add you to a class."
               }
               action={
                 <Button 

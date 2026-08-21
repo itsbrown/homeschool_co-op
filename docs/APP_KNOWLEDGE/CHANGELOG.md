@@ -1,5 +1,17 @@
 # App knowledge changelog
 
+## 2026-08-20 (Mentor invite E2E: Vite JSX + Neon)
+
+- Staff pending Copy + Resend must not be two siblings inside one `{cond && ( … )}` — Vite esbuild fails and Playwright seed POSTs `socket hang up`.
+- Worktree E2E needs `.env` symlink; leftover Neon `asa_test` in the login shell is ignored for Railway `.env` (`apply-local-env`). Do not reuse a server that booted on the disabled Neon endpoint.
+- Prod: apply `server/migrations/259-staff-invitations.sql` before or with deploy (runbook table). Boot ensure is idempotent; never `db:push`.
+
+## 2026-08-20 (Mentor invite → first login)
+
+- Staff → Invite writes `staff_invitations` (the table `/accept-educator-invitation` already read). Accept creates/updates the Supabase password and auto-signs in to `/educator/dashboard`.
+- Invite honors campus + class (`educator_class_assignments`). Copy-link `invitePath` when email fails. Additive SQL: `server/migrations/259-staff-invitations.sql`.
+- Playwright: `e2e/educator-invite-login.spec.ts` — `npm run test:e2e -- e2e/educator-invite-login.spec.ts` (seed `setup-educator-invite-scenario`). Jest: `shared/__tests__/staff-invitations.test.ts`.
+
 ## 2026-08-20 (Parent allergy add on Student Profile)
 
 - Health & Safety on `/children/:id` was read-only (dashboard **View Profile**). **Add / Edit** now saves allergies. Edit Profile no longer requires Gender (signup leaves it empty). `PATCH /api/children/:id` matches on `parent_id` or email, and coerces allergy arrays to text (`shared/child-profile-patch.ts`). School-admin PUT students now persists `allergies`.

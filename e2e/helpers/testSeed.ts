@@ -393,6 +393,41 @@ export async function postSetupScheduleScenario(
   return { response, json };
 }
 
+export type SetupEducatorInviteScenarioResponse = {
+  success: boolean;
+  data?: {
+    adminSupabaseLinked?: boolean;
+    supabaseLinked?: boolean;
+    school: { id: number; name: string };
+    admin: { id: number; email: string; password: string };
+    location: { id: number; name: string };
+    class: { id: number; title: string };
+    invitee: { email: string; firstName: string; lastName: string; password: string };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupEducatorInviteScenario(
+  request: APIRequestContext,
+  body: { linkSupabaseAuth?: boolean; linkSupabaseAuthAdmin?: boolean } = {},
+): Promise<{ response: APIResponse; json: SetupEducatorInviteScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-educator-invite-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupEducatorInviteScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupEducatorInviteScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export async function postSeedUpcomingScheduledPayment(
   request: APIRequestContext,
   body: { enrollmentId: number; amountCents?: number; paymentPlan?: string },

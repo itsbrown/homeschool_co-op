@@ -821,31 +821,51 @@ export async function sendStaffInvitationEmail(
   role: string, 
   department: string, 
   token: string, 
-  message?: string
+  message?: string,
+  extras?: {
+    schoolName?: string;
+    className?: string;
+    campusName?: string;
+    expiresAt?: Date;
+  }
 ): Promise<boolean> {
   try {
     const inviteUrl = `${process.env.APP_URL || 'https://accounts.americanseekersacademy.com'}/accept-educator-invitation?token=${token}`;
+    const schoolName = extras?.schoolName || 'American Seekers Academy';
+    const expiryLabel = extras?.expiresAt
+      ? extras.expiresAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+      : 'in 7 days';
+    const classLine = extras?.className
+      ? `<p>You'll start with <strong>${extras.className}</strong>${extras.campusName ? ` at ${extras.campusName}` : ''}.</p>`
+      : extras?.campusName
+        ? `<p>Campus: <strong>${extras.campusName}</strong></p>`
+        : '';
+    const classText = extras?.className
+      ? `You'll start with ${extras.className}${extras.campusName ? ` at ${extras.campusName}` : ''}.\n`
+      : extras?.campusName
+        ? `Campus: ${extras.campusName}\n`
+        : '';
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background-color: #059669; padding: 24px; text-align: center;">
-          <h1 style="color: white; margin: 0;">Staff Invitation</h1>
-          <p style="color: #A7F3D0; margin: 8px 0 0 0;">American Seekers Academy</p>
+          <h1 style="color: white; margin: 0;">You're invited</h1>
+          <p style="color: #A7F3D0; margin: 8px 0 0 0;">${schoolName}</p>
         </div>
 
         <div style="padding: 24px;">
           <h2 style="color: #1F2937;">Hello ${firstName},</h2>
 
-          <p>You have been invited to join our team at American Seekers Academy as a <strong>${role}</strong> in the <strong>${department}</strong> department.</p>
-
+          <p>You've been invited to join <strong>${schoolName}</strong> as a <strong>${role}</strong>.</p>
+          ${classLine}
           ${message ? `<div style="background-color: #F3F4F6; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6B7280;"><p style="margin: 0; font-style: italic;">${message}</p></div>` : ''}
 
-          <p>To accept this invitation and create your account, please click the button below:</p>
+          <p>Set your password to join:</p>
 
           <div style="text-align: center; margin: 30px 0;">
             <a href="${inviteUrl}" 
                style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-               Accept Invitation
+               Accept invitation
             </a>
           </div>
 
@@ -853,14 +873,10 @@ export async function sendStaffInvitationEmail(
           <p style="word-break: break-all; color: #666; font-size: 14px;">${inviteUrl}</p>
 
           <div style="background-color: #FEF3C7; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F59E0B;">
-            <p style="margin: 0; color: #92400E;"><strong>Note:</strong> This invitation will expire in 7 days for security reasons.</p>
+            <p style="margin: 0; color: #92400E;"><strong>Note:</strong> This invitation expires ${expiryLabel}.</p>
           </div>
 
-          <p>We look forward to having you join our team!</p>
-
-          <p style="font-size: 14px; color: #6B7280;">
-            If you have any questions or need assistance, please contact us at support@americanseekersacademy.com
-          </p>
+          <p>We look forward to having you on the team.</p>
         </div>
       </div>
     `;
@@ -868,19 +884,14 @@ export async function sendStaffInvitationEmail(
     const textContent = `
 Hello ${firstName},
 
-You have been invited to join our team at American Seekers Academy as a ${role} in the ${department} department.
-
-${message ? `Message from the administrator:\n${message}\n\n` : ''}To accept this invitation and create your account, please visit this link:
+You've been invited to join ${schoolName} as a ${role}.
+${classText}${message ? `Message from the director:\n${message}\n\n` : ''}Set your password here:
 ${inviteUrl}
 
-Note: This invitation will expire in 7 days for security reasons.
-
-We look forward to having you join our team!
-
-If you have any questions or need assistance, please contact us at support@americanseekersacademy.com
+This invitation expires ${expiryLabel}.
     `;
 
-    return await sendEmail(email, `${firstName} ${lastName}`, `Staff Invitation - Join ${department} at American Seekers Academy`, htmlContent, textContent, 'staff_invitation');
+    return await sendEmail(email, `${firstName} ${lastName}`, `Join ${schoolName} as ${role}`, htmlContent, textContent, 'staff_invitation');
   } catch (error) {
     console.error('❌ Error sending staff invitation email:', error);
     return false;

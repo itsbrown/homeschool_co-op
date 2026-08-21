@@ -28,6 +28,8 @@ npm run test:e2e -- e2e/public-custom-forms.spec.ts
 
 **Local env:** Copy [`.env.e2e.example`](../.env.e2e.example) → `.env.e2e` (gitignored). Loaded by [`scripts/run-playwright.mjs`](../scripts/run-playwright.mjs) without overriding shell exports.
 
+**Worktree:** symlink `.env` and `.env.e2e` from the main clone. A leftover login-shell `DATABASE_URL` to retired Neon `asa_test` is ignored in favor of `.env` (`server/lib/apply-local-env.ts`). If seeds still 500 with `The endpoint has been disabled`, free port 5000 so Playwright does not reuse a server that booted on Neon.
+
 **Port 5000:** If tests fail with HTML instead of JSON from `/api/test/*`, free the port and avoid a stale server:
 
 ```bash
@@ -150,6 +152,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/grade-placement-parent-card.spec.ts`](../e2e/grade-placement-parent-card.spec.ts) | `npm run test:e2e -- e2e/grade-placement-parent-card.spec.ts` | Parent/admin child card shows placed class title | `setup-grade-placement-scenario` (`linkSupabaseAuth`) |
 | [`e2e/attendance-educator-mark.spec.ts`](../e2e/attendance-educator-mark.spec.ts) | `npm run test:e2e -- e2e/attendance-educator-mark.spec.ts` | Start session → marketplace roster → allergy/medical Info sheet → mark present → end | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/attendance-qr-clock-in.spec.ts`](../e2e/attendance-qr-clock-in.spec.ts) | `npm run test:e2e -- e2e/attendance-qr-clock-in.spec.ts` | Generate QR → `GET /api/public/session-by-qr/:token` | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/educator-invite-login.spec.ts`](../e2e/educator-invite-login.spec.ts) | `npm run test:e2e -- e2e/educator-invite-login.spec.ts` | Staff Invite → accept password → auto-land `/educator/dashboard` with assigned class | `setup-educator-invite-scenario` (`linkSupabaseAuth`) |
 
 **Supabase:** Real project required (`isRealSupabaseConfigured()` or `supabaseLinked === true`).
 
@@ -196,6 +199,7 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `POST /api/test/setup-credit-lookup-scenario` | `credit-management-parent-lookup` |
 | `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard`, `educator-assessments-record` |
 | `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-weekly-schedule-plans`, `educator-landing-nav`, `educator-mentor-loop`, `educator-today-honesty`, `attendance-educator-mark`, `attendance-qr-clock-in` |
+| `POST /api/test/setup-educator-invite-scenario` | `educator-invite-login` |
 | `POST /api/test/setup-grade-placement-scenario` | `grade-placement-auto-place`, `grade-placement-parent-card` |
 | `POST /api/test/setup-additive-nav-scenario` | `additive-nav.spec.ts` |
 | `POST /api/test/ensure-public-store-schema` | `public-store.spec.ts` |

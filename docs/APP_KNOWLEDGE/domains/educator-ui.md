@@ -20,6 +20,18 @@ Legacy `client/src/components/dashboards/EducatorDashboard.tsx` (`GET /api/educa
 | `/educator/notifications` | In-app parent notices |
 | `/educator/settings` | Profile (first/last/phone) |
 
+## Staff invite → first login
+
+School-admin **Staff → Invite** (`/schools/staff/invite`) writes **`staff_invitations`** (not `role_invitations`). The email and copy-link URL are `/accept-educator-invitation?token=…`, which validates/accepts that table.
+
+On accept the mentor sets a password, the API creates/updates the Supabase Auth user with that password, activates `school_staff`, and the page **signs them in** to `/educator/dashboard` (no second `/login` hop). `user_roles.role` keeps the Staff Positions title (`Mentor`); `staff_invitations.role` is the mapped enum (`teacher`).
+
+Invite `classId` creates `educator_class_assignments` plus `classes.instructorId` so Today is not empty. Campus filters the class list. Directors get `invitePath` to copy when email fails.
+
+E2E: `e2e/educator-invite-login.spec.ts` — seed `POST /api/test/setup-educator-invite-scenario`.
+
+**Deploy:** additive [`server/migrations/259-staff-invitations.sql`](../../../server/migrations/259-staff-invitations.sql) before or with the release (never `db:push`). Boot `ensureStaffInvitationsSchema` applies the same file; treat a non-fatal ensure log as “run 259 by hand.” See [merge-replit-prod.md](../runbooks/merge-replit-prod.md).
+
 ## Redirects (dead URLs)
 
 | From | To |
@@ -60,6 +72,7 @@ TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/ap
 | `e2e/educator-mentor-loop.spec.ts` | Classes, students, hours, notifications, settings |
 | `e2e/attendance-educator-mark.spec.ts` | Start → roster → allergy/medical Info sheet → mark present → end |
 | `e2e/educator-assessments-record.spec.ts` | Record tab `my-students` + save score |
+| `e2e/educator-invite-login.spec.ts` | Staff invite → accept password → auto `/educator/dashboard` |
 | `e2e/educator-weekly-schedule-plans.spec.ts` | Published plan overlay |
 | `e2e/quarterly-progress-report-wizard.spec.ts` | NY IHIP wizard |
 
@@ -78,6 +91,8 @@ Seeds: `POST /api/test/setup-schedule-builder-scenario` and `setup-progress-scen
 | Record assessment types empty | `/api/assessments` only on unused `app-init.ts` | Mount on `server/index.ts` |
 | `/educator/attendance` 403 | Mounted school-admin attendance | Redirect to My Classes; mark on `/educator/session/:id` |
 | Dashboard “today” lists every assignment | `todayClasses` was unfiltered | `classMeetsOnWeekday`; empty days ≠ today |
+| Invite email “invalid token” | Invite wrote `role_invitations`; accept reads `staff_invitations` | `POST /staff/invite` → `createStaffInvitation`; accept page stays on staff-invitations |
+| Invite E2E `socket hang up` on seed | Vite failed to parse Staff pending menu (two items in one `{cond && (}` ) and/or Playwright reused a server on disabled Neon | Separate menu items (or a fragment); worktree `.env` symlink; do not reuse a Neon-booted `:5000` |
 
 ## Out of scope (still leftover)
 
@@ -93,4 +108,5 @@ Volunteer check-in on Start Session (assigned aides are read-only). Email blast 
 | Storage | `server/dbStorage.ts` `getEnrollmentsByClassId` |
 | Query helper | `client/src/lib/educator-queries.ts` |
 | Safety | `shared/educator-student-safety.ts`, `server/lib/educator-student-safety.ts`, `StudentSafetySheet.tsx` |
+| Staff invite | `server/lib/staff-invitations.ts`, `shared/staff-invitations.ts`, `StaffInvitePage.tsx`, `AcceptEducatorInvitationPage.tsx` |
 | Attendance UI | `AttendanceTracker.tsx`, `ActiveSession.tsx`, `StartSession.tsx` |
