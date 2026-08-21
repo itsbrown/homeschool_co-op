@@ -29,6 +29,7 @@ interface CalendarEvent {
   color: string;
   isAllDay: boolean;
   location: string | null;
+  locationId: number | null;
   schoolId: number;
 }
 
@@ -41,6 +42,7 @@ const eventFormSchema = z.object({
   color: z.string().optional(),
   isAllDay: z.boolean().default(false),
   location: z.string().optional(),
+  locationId: z.string().optional(),
 });
 
 type EventFormValues = z.infer<typeof eventFormSchema>;
@@ -136,6 +138,12 @@ const generateICSFile = (event: CalendarEvent) => {
     return str.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
   };
 
+  const allDayExclusiveEnd = (() => {
+    const d = new Date(event.endDate);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString();
+  })();
+
   const icsContent = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -149,7 +157,7 @@ const generateICSFile = (event: CalendarEvent) => {
       ? `DTSTART;VALUE=DATE:${formatICSDate(event.startDate, true)}`
       : `DTSTART:${formatICSDate(event.startDate, false)}`,
     event.isAllDay
-      ? `DTEND;VALUE=DATE:${formatICSDate(event.endDate, true)}`
+      ? `DTEND;VALUE=DATE:${formatICSDate(allDayExclusiveEnd, true)}`
       : `DTEND:${formatICSDate(event.endDate, false)}`,
     `SUMMARY:${escapeICS(event.title)}`,
     event.description ? `DESCRIPTION:${escapeICS(event.description)}` : '',
@@ -178,17 +186,13 @@ export default function CalendarPage() {
   const startDate = startOfMonth(currentMonth);
   const endDate = endOfMonth(currentMonth);
 
+  const rangeUrl = `/api/calendar-events/range?start=${encodeURIComponent(startDate.toISOString())}&end=${encodeURIComponent(endDate.toISOString())}`;
   const { data: events, isLoading } = useQuery<CalendarEvent[]>({
-    queryKey: ['/api/calendar-events/range', startDate.toISOString(), endDate.toISOString()],
-    queryFn: async () => {
-      const response = await fetch(`/api/calendar-events/range?start=${startDate.toISOString()}&end=${endDate.toISOString()}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('supabase_token')}`,
-        },
-      });
-      if (!response.ok) throw new Error('Failed to fetch events');
-      return response.json();
-    },
+    queryKey: [rangeUrl],
+  });
+
+  const { data: campuses = [] } = useQuery<Array<{ id: number; name: string }>>({
+    queryKey: ['/api/locations'],
   });
 
   const form = useForm<EventFormValues>({
@@ -201,15 +205,20 @@ export default function CalendarPage() {
       eventType: 'meeting',
       isAllDay: false,
       location: '',
+      locationId: 'all',
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (values: EventFormValues) => {
-      return apiRequest('POST', '/api/calendar-events', values);
+      return apiRequest('POST', '/api/calendar-events', {
+        ...values,
+        locationId: values.locationId === 'all' ? null : values.locationId,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'], refetchType: 'all' });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0] || '').startsWith('/api/calendar-events/range') });
       setIsDialogOpen(false);
       form.reset();
       toast({ title: 'Event created' });
@@ -221,10 +230,14 @@ export default function CalendarPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...values }: EventFormValues & { id: number }) => {
-      return apiRequest('PATCH', `/api/calendar-events/${id}`, values);
+      return apiRequest('PATCH', `/api/calendar-events/${id}`, {
+        ...values,
+        locationId: values.locationId === 'all' ? null : values.locationId,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'], refetchType: 'all' });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0] || '').startsWith('/api/calendar-events/range') });
       setIsDialogOpen(false);
       setSelectedEvent(null);
       form.reset();
@@ -241,6 +254,7 @@ export default function CalendarPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calendar-events/range'], refetchType: 'all' });
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0] || '').startsWith('/api/calendar-events/range') });
       setIsViewDialogOpen(false);
       setSelectedEvent(null);
       toast({ title: 'Event deleted' });
@@ -279,6 +293,7 @@ export default function CalendarPage() {
       eventType: selectedEvent.eventType,
       isAllDay: selectedEvent.isAllDay,
       location: selectedEvent.location || '',
+      locationId: selectedEvent.locationId ? String(selectedEvent.locationId) : 'all',
     });
     setIsDialogOpen(true);
   };
@@ -441,10 +456,36 @@ export default function CalendarPage() {
                 </div>
                 <FormField
                   control={form.control}
+                  name="locationId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Campus</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || 'all'}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-event-campus">
+                            <SelectValue placeholder="All campuses" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="all">All campuses</SelectItem>
+                          {campuses.map((loc) => (
+                            <SelectItem key={loc.id} value={String(loc.id)}>
+                              {loc.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Leave as all campuses unless this is a site-specific closure.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="location"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Location (Optional)</FormLabel>
+                      <FormLabel>Venue (Optional)</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="Event location" data-testid="input-event-location" />
                       </FormControl>

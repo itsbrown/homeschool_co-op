@@ -1,51 +1,30 @@
-import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { 
-  Calendar as CalendarIcon, 
-  ChevronLeft, 
-  ChevronRight,
-  List,
-  Grid3X3,
-  User,
-  Clock,
-  Calendar,
-  MapPin,
-  Users
-} from "lucide-react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameMonth, isSameDay, parseISO } from "date-fns";
-
+import { useMemo, useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, List, Grid3X3, Clock, MapPin, User, Download } from "lucide-react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  addMonths,
+  subMonths,
+  isSameMonth,
+  isSameDay,
+  parseISO,
+} from "date-fns";
+import { Link, useLocation } from "wouter";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import ParentWeekPlanGrid, { getMondayWeekStart } from "@/components/schedule/ParentWeekPlanGrid";
+
+type HubView = "month" | "week" | "list";
 
 interface ScheduleEvent {
   id: string;
@@ -54,636 +33,435 @@ interface ScheduleEvent {
   startTime: string;
   endTime: string;
   location: string;
-  type: 'class' | 'program' | 'field-trip' | 'event';
+  type: "class";
   childId: string;
   childName: string;
   color: string;
   description?: string;
   programName?: string;
   instructorName?: string;
-  schedule?: string;
 }
 
-interface FamilyScheduleProps {
-  childId?: string; // Optional child ID to filter events for a specific child
+interface SchoolEvent {
+  id: number;
+  title: string;
+  description: string | null;
+  startDate: string;
+  endDate: string;
+  eventType: string;
+  color: string | null;
+  isAllDay: boolean;
+  location: string | null;
+  locationId: number | null;
 }
 
-export default function FamilySchedule({ childId }: FamilyScheduleProps) {
+interface WeekPlanBlock {
+  title?: string | null;
+  dayOfWeek?: number;
+  isCompleted?: boolean;
+}
+
+interface ChildWeekEntry {
+  childId: number;
+  childName: string;
+  classTitle: string;
+  blocks?: WeekPlanBlock[];
+  skeletonBlocks?: Array<{ dayOfWeek: number; defaultTitle?: string | null }>;
+}
+
+function formatTime(timeString: string) {
+  if (!timeString) return "";
+  const [hours, minutes] = timeString.split(":").map(Number);
+  const period = hours >= 12 ? "PM" : "AM";
+  const hour12 = hours % 12 || 12;
+  return `${hour12}:${minutes.toString().padStart(2, "0")} ${period}`;
+}
+
+function viewFromSearch(): HubView {
+  const params = new URLSearchParams(window.location.search);
+  const v = params.get("view");
+  if (v === "week" || v === "list" || v === "month") return v;
+  return "month";
+}
+
+export default function FamilySchedule() {
+  const [location, setLocation] = useLocation();
+  const { toast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [childFilter, setChildFilter] = useState<string>(childId || "all");
-  const [eventTypeFilter, setEventTypeFilter] = useState("all");
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
-  const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
-  const [selectedDayEvents, setSelectedDayEvents] = useState<{ date: Date; events: ScheduleEvent[] } | null>(null);
-  
-  // Get event data from API
-  const scheduleUrl = React.useMemo(() => {
-    const params = new URLSearchParams();
-    if (childFilter !== "all") params.append("childId", childFilter);
-    if (eventTypeFilter !== "all") params.append("type", eventTypeFilter);
-    return `/api/schedule${params.toString() ? `?${params.toString()}` : ''}`;
-  }, [childFilter, eventTypeFilter]);
+  const [childFilter, setChildFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<HubView>(viewFromSearch);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
-  const { data: events = [], isLoading } = useQuery<ScheduleEvent[]>({
+  useEffect(() => {
+    setViewMode(viewFromSearch());
+  }, [location]);
+
+  const scheduleUrl =
+    childFilter !== "all" ? `/api/schedule?childId=${encodeURIComponent(childFilter)}` : "/api/schedule";
+  const { data: classEvents = [], isLoading: loadingClasses } = useQuery<ScheduleEvent[]>({
     queryKey: [scheduleUrl],
   });
-  
-  // Get children data for the filter
+
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const eventsUrl = `/api/calendar-events/parent/events?start=${encodeURIComponent(monthStart.toISOString())}&end=${encodeURIComponent(monthEnd.toISOString())}`;
+  const { data: schoolEvents = [] } = useQuery<SchoolEvent[]>({
+    queryKey: [eventsUrl],
+  });
+
   const { data: children = [] } = useQuery({
     queryKey: ["/api/parent/children"],
     select: (raw: unknown) => normalizeParentChildrenResponse(raw),
   });
-  
-  // Calendar navigation functions
-  const goToPreviousMonth = () => setCurrentDate(subMonths(currentDate, 1));
-  const goToNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
-  const goToToday = () => {
-    setCurrentDate(new Date());
-    setSelectedDate(new Date());
-  };
-  
-  // Generate days for the current month view
-  const daysInMonth = React.useMemo(() => {
-    const start = startOfMonth(currentDate);
-    const end = endOfMonth(currentDate);
-    return eachDayOfInterval({ start, end });
-  }, [currentDate]);
-  
-  // Filter events for a specific day
-  const getEventsForDay = (day: Date) => {
-    if (!events) return [];
-    return events.filter((event: ScheduleEvent) => isSameDay(parseISO(event.date), day));
-  };
-  
-  // Get all events for the selected date
-  const selectedDateEvents = React.useMemo(() => {
-    if (!selectedDate || !events) return [];
-    
-    return events.filter((event: ScheduleEvent) => 
-      isSameDay(parseISO(event.date), selectedDate)
-    );
-  }, [selectedDate, events]);
-  
-  // Get color for event type
-  const getEventColor = (type: string) => {
-    switch (type) {
-      case 'class':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'program':
-        return 'bg-green-100 text-green-800 border-green-300';
-      case 'field-trip':
-        return 'bg-purple-100 text-purple-800 border-purple-300';
-      case 'event':
-        return 'bg-amber-100 text-amber-800 border-amber-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
+
+  const selectedWeekStart = selectedDay ? getMondayWeekStart(selectedDay) : getMondayWeekStart(currentDate);
+  const weekPlansUrl = `/api/schedule-builder/parent/my-week-plans?weekStart=${encodeURIComponent(selectedWeekStart)}`;
+  const { data: weekPlans } = useQuery<{ children: ChildWeekEntry[] }>({
+    queryKey: [weekPlansUrl],
+    enabled: Boolean(selectedDay) || viewMode === "week",
+  });
+
+  const daysInMonth = useMemo(
+    () => eachDayOfInterval({ start: monthStart, end: monthEnd }),
+    [monthStart, monthEnd],
+  );
+
+  const classEventsForDay = (day: Date) =>
+    classEvents.filter((event) => isSameDay(parseISO(event.date), day));
+
+  const schoolEventsForDay = (day: Date) =>
+    schoolEvents.filter((event) => {
+      const start = new Date(event.startDate);
+      const end = new Date(event.endDate);
+      return isSameDay(start, day) || (start <= day && end >= day);
+    });
+
+  const monthHasAnything = classEvents.some((e) => isSameMonth(parseISO(e.date), currentDate)) || schoolEvents.length > 0;
+
+  const listRows = useMemo(() => {
+    const rows: Array<{ key: string; date: Date; title: string; subtitle: string; kind: "class" | "school" }> = [];
+    for (const ev of classEvents) {
+      rows.push({
+        key: ev.id,
+        date: parseISO(ev.date),
+        title: ev.title,
+        subtitle: `${ev.childName} · ${formatTime(ev.startTime)}–${formatTime(ev.endTime)}`,
+        kind: "class",
+      });
+    }
+    for (const ev of schoolEvents) {
+      rows.push({
+        key: `school-${ev.id}`,
+        date: new Date(ev.startDate),
+        title: ev.title,
+        subtitle: ev.isAllDay ? "All day" : format(new Date(ev.startDate), "h:mm a"),
+        kind: "school",
+      });
+    }
+    return rows.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [classEvents, schoolEvents]);
+
+  const subscribeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/calendar/feed-token", {});
+      return res.json() as Promise<{ token: string }>;
+    },
+    onSuccess: async ({ token }) => {
+      const httpUrl = `${window.location.origin}/api/calendar/feed/${token}`;
+      const webcalUrl = httpUrl.replace(/^https:/, "webcal:").replace(/^http:/, "webcal:");
+      try {
+        await navigator.clipboard.writeText(webcalUrl);
+      } catch {
+        // clipboard optional in some browsers / e2e
+      }
+      toast({
+        title: "Subscribe URL ready",
+        description: "Copied a webcal link when clipboard is available. Use Subscribe again to re-download.",
+      });
+      const icsRes = await fetch(httpUrl);
+      const blob = await icsRes.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = "asa-family-calendar.ics";
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+    },
+    onError: () => {
+      toast({ title: "Could not create calendar feed", variant: "destructive" });
+    },
+  });
+
+  const setView = (next: HubView) => {
+    setViewMode(next);
+    const path = next === "month" ? "/schedule" : `/schedule?view=${next}`;
+    if (location !== path && !location.startsWith("/schedule")) {
+      setLocation(path);
+    } else {
+      window.history.replaceState(null, "", path);
+      setLocation(path);
     }
   };
-  
-  // Format time (e.g., "9:00 AM")
-  const formatTime = (timeString: string) => {
-    const [hours, minutes] = timeString.split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hour12 = hours % 12 || 12;
-    return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
-  };
-  
-  // Group events by date for list view
-  const groupedEvents = React.useMemo(() => {
-    if (!events) return {};
-    
-    return events.reduce((acc: Record<string, ScheduleEvent[]>, event: ScheduleEvent) => {
-      const dateKey = event.date;
-      if (!acc[dateKey]) {
-        acc[dateKey] = [];
+
+  const dayClassEvents = selectedDay ? classEventsForDay(selectedDay) : [];
+  const daySchoolEvents = selectedDay ? schoolEventsForDay(selectedDay) : [];
+  const dayLessonTitles = (weekPlans?.children || []).flatMap((entry) => {
+    const fromBlocks = (entry.blocks || []).flatMap((b) => {
+      const skel = (entry.skeletonBlocks || []).find((s: any) => s.id === (b as any).skeletonBlockId);
+      if (skel && skel.dayOfWeek === (selectedDay?.getDay() ?? -1)) {
+        return [b.title].filter(Boolean) as string[];
       }
-      acc[dateKey].push(event);
-      return acc;
-    }, {});
-  }, [events]);
-  
-  // Sort dates for list view
-  const sortedDates = React.useMemo(() => {
-    if (!groupedEvents) return [];
-    return Object.keys(groupedEvents).sort((a, b) => 
-      new Date(a).getTime() - new Date(b).getTime()
-    );
-  }, [groupedEvents]);
-  
+      return [];
+    });
+    const fromSkeleton = (entry.skeletonBlocks || [])
+      .filter((b) => b.dayOfWeek === (selectedDay?.getDay() ?? -1))
+      .map((b) => b.defaultTitle)
+      .filter(Boolean) as string[];
+    const titles = fromBlocks.length ? fromBlocks : fromSkeleton;
+    return titles.map((title) => ({ childName: entry.childName, classTitle: entry.classTitle, title }));
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Family Schedule</h2>
-          <p className="text-muted-foreground">
-            Track your children's classes, programs, and events
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn(viewMode === 'calendar' && "bg-muted")}
-            onClick={() => setViewMode('calendar')}
-          >
-            <Grid3X3 className="mr-2 h-4 w-4" />
+          <h1 className="text-2xl font-bold" data-testid="family-calendar-heading">
             Calendar
-          </Button>
+          </h1>
+          <p className="text-muted-foreground">Class days and school events for your family</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            className={cn(viewMode === 'list' && "bg-muted")}
-            onClick={() => setViewMode('list')}
+            onClick={() => subscribeMutation.mutate()}
+            disabled={subscribeMutation.isPending}
+            data-testid="button-subscribe-calendar"
           >
-            <List className="mr-2 h-4 w-4" />
-            List
+            <Download className="mr-2 h-4 w-4" />
+            Subscribe
           </Button>
+          <div className="flex rounded-md border">
+            <Button
+              variant={viewMode === "month" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none rounded-l-md"
+              onClick={() => setView("month")}
+              data-testid="button-view-month"
+            >
+              <Grid3X3 className="mr-2 h-4 w-4" />
+              Month
+            </Button>
+            <Button
+              variant={viewMode === "week" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none"
+              onClick={() => setView("week")}
+              data-testid="button-view-week"
+            >
+              Week
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none rounded-r-md"
+              onClick={() => setView("list")}
+              data-testid="button-view-list"
+            >
+              <List className="mr-2 h-4 w-4" />
+              List
+            </Button>
+          </div>
         </div>
       </div>
-      
-      <div className="flex flex-col md:flex-row gap-4 mb-4">
-        <div className="w-full md:w-auto flex-1">
-          <Select
-            value={childFilter}
-            onValueChange={setChildFilter}
-          >
-            <SelectTrigger className="w-full">
+
+      {viewMode !== "week" && (
+        <div className="w-full md:w-64">
+          <Select value={childFilter} onValueChange={setChildFilter}>
+            <SelectTrigger data-testid="select-child-filter">
               <SelectValue placeholder="Filter by child" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Children</SelectItem>
-              {Array.isArray(children) && children.map((child: any) => (
-                <SelectItem key={child.id} value={child.id.toString()}>
-                  {child.firstName} {child.lastName}
-                </SelectItem>
-              ))}
+              {Array.isArray(children) &&
+                (children as Array<{ id: number; firstName: string; lastName: string }>).map((child) => (
+                  <SelectItem key={child.id} value={child.id.toString()}>
+                    {child.firstName} {child.lastName}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
-        
-        <div className="w-full md:w-auto flex-1">
-          <Select
-            value={eventTypeFilter}
-            onValueChange={setEventTypeFilter}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Filter by event type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Event Types</SelectItem>
-              <SelectItem value="class">Classes</SelectItem>
-              <SelectItem value="program">Programs</SelectItem>
-              <SelectItem value="field-trip">Field Trips</SelectItem>
-              <SelectItem value="event">Special Events</SelectItem>
-            </SelectContent>
-          </Select>
+      )}
+
+      {viewMode === "week" ? (
+        <ParentWeekPlanGrid compact />
+      ) : viewMode === "list" ? (
+        <div className="space-y-3" data-testid="family-calendar-list">
+          {listRows.length === 0 ? (
+            <Card>
+              <CardContent className="py-10 text-center text-muted-foreground">
+                No class days this month.{" "}
+                <Link href="/parent/programs" className="underline">
+                  Browse programs
+                </Link>
+              </CardContent>
+            </Card>
+          ) : (
+            listRows.map((row) => (
+              <Card key={row.key} data-testid={`list-row-${row.kind}`}>
+                <CardContent className="py-3 flex justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{row.title}</p>
+                    <p className="text-sm text-muted-foreground">{row.subtitle}</p>
+                  </div>
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">
+                    {format(row.date, "EEE, MMM d")}
+                  </span>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
-      </div>
-      
-      {viewMode === 'calendar' ? (
-        <Card className="border">
+      ) : (
+        <Card>
           <CardHeader className="pb-4">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>{format(currentDate, 'MMMM yyyy')}</CardTitle>
-                  <CardDescription>
-                    {isLoading ? "Loading events..." : events?.length || 0} scheduled activities
-                  </CardDescription>
-                </div>
-                
-                <div className="flex items-center gap-1">
-                  <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={goToToday}>
-                    Today
-                  </Button>
-                  <Button variant="outline" size="icon" onClick={goToNextMonth}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle data-testid="text-current-month">{format(currentDate, "MMMM yyyy")}</CardTitle>
+                <CardDescription>
+                  {loadingClasses ? "Loading…" : monthHasAnything ? "Class days and school events" : "No class days this month"}
+                </CardDescription>
               </div>
-              
-              {/* Color Legend */}
-              <div className="flex flex-wrap items-center gap-4 text-sm">
-                <span className="text-muted-foreground font-medium">Legend:</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-2 rounded-sm bg-blue-400"></div>
-                  <span>Classes</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-2 rounded-sm bg-green-400"></div>
-                  <span>Programs</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-2 rounded-sm bg-purple-400"></div>
-                  <span>Field Trips</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-2 rounded-sm bg-amber-400"></div>
-                  <span>Events</span>
-                </div>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" onClick={() => setCurrentDate(subMonths(currentDate, 1))} data-testid="button-prev-month">
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())} data-testid="button-today">
+                  Today
+                </Button>
+                <Button variant="outline" size="icon" onClick={() => setCurrentDate(addMonths(currentDate, 1))} data-testid="button-next-month">
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-7 gap-1 mb-2">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                 <div key={day} className="text-center text-sm font-medium py-1">
                   {day}
                 </div>
               ))}
             </div>
-            
-            <div className="grid grid-cols-7 gap-1">
-              {/* Empty cells for days before the first day of the month */}
+            <div className="grid grid-cols-7 gap-1" data-testid="family-calendar-month-grid">
               {Array.from({ length: daysInMonth[0].getDay() }).map((_, i) => (
-                <div
-                  key={`empty-start-${i}`}
-                  className="aspect-square p-1 rounded-md text-muted-foreground"
-                />
+                <div key={`empty-${i}`} className="aspect-square p-1" />
               ))}
-              
-              {/* Days of the month */}
               {daysInMonth.map((day) => {
-                const dayEvents = getEventsForDay(day);
+                const dayClasses = classEventsForDay(day);
+                const daySchools = schoolEventsForDay(day);
                 const isToday = isSameDay(day, new Date());
-                const isSelected = selectedDate && isSameDay(day, selectedDate);
-                const isCurrentMonth = isSameMonth(day, currentDate);
-                
                 return (
-                  <div
-                    key={day.toString()}
+                  <button
+                    type="button"
+                    key={day.toISOString()}
                     className={cn(
-                      "aspect-square p-1 rounded-md border border-transparent hover:border-border cursor-pointer",
-                      !isCurrentMonth && "opacity-50",
-                      isSelected && "border-primary",
-                      isToday && "bg-muted"
+                      "min-h-[88px] p-1 rounded-md border text-left align-top",
+                      isToday && "ring-2 ring-primary",
+                      !isSameMonth(day, currentDate) && "opacity-50",
                     )}
-                    onClick={() => {
-                      if (dayEvents.length > 0) {
-                        setSelectedDayEvents({ date: day, events: dayEvents });
-                      }
-                      setSelectedDate(day);
-                    }}
+                    data-testid={`calendar-day-${format(day, "yyyy-MM-dd")}`}
+                    onClick={() => setSelectedDay(day)}
                   >
-                    <div className="w-full h-full flex flex-col">
-                      <div className={cn(
-                        "text-right text-sm p-1",
-                        isToday && "font-bold text-primary"
-                      )}>
-                        {format(day, 'd')}
-                      </div>
-                      
-                      <div className="flex-grow overflow-hidden">
-                        {dayEvents.slice(0, 3).map((event: ScheduleEvent, i) => (
-                          <TooltipProvider key={event.id}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedEvent(event);
-                                  }}
-                                  className={cn(
-                                    "h-1.5 w-full mb-1 rounded-sm cursor-pointer hover:opacity-80 transition-opacity",
-                                    event.type === 'class' ? 'bg-blue-400' : 
-                                    event.type === 'program' ? 'bg-green-400' : 
-                                    event.type === 'field-trip' ? 'bg-purple-400' : 
-                                    'bg-amber-400'
-                                  )}
-                                />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <div className="text-xs">
-                                  <p className="font-bold">{event.title}</p>
-                                  <p>{formatTime(event.startTime)} - {formatTime(event.endTime)}</p>
-                                  <p>{event.childName}</p>
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ))}
-                        
-                        {dayEvents.length > 3 && (
-                          <div className="text-xs text-center text-muted-foreground">
-                            +{dayEvents.length - 3} more
-                          </div>
-                        )}
-                      </div>
+                    <div className="text-xs mb-1">{format(day, "d")}</div>
+                    <div className="space-y-0.5">
+                      {dayClasses.slice(0, 2).map((ev) => (
+                        <div
+                          key={ev.id}
+                          className="text-[10px] truncate rounded px-1 bg-blue-100 text-blue-800"
+                          data-testid="class-chip"
+                        >
+                          {ev.title}
+                        </div>
+                      ))}
+                      {daySchools.slice(0, 1).map((ev) => (
+                        <div
+                          key={ev.id}
+                          className="text-[10px] truncate rounded px-1 bg-red-100 text-red-800"
+                          data-testid="school-event-chip"
+                        >
+                          {ev.title}
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
-              
-              {/* Empty cells for days after the last day of the month */}
-              {Array.from({ length: 6 - daysInMonth[daysInMonth.length - 1].getDay() }).map((_, i) => (
-                <div
-                  key={`empty-end-${i}`}
-                  className="aspect-square p-1 rounded-md text-muted-foreground"
-                />
-              ))}
             </div>
-          </CardContent>
-          
-          {selectedDate && (
-            <CardFooter className="flex-col items-start pt-0">
-              <div className="w-full border-t pt-4">
-                <h3 className="font-medium mb-2">
-                  Events for {format(selectedDate, 'MMMM d, yyyy')}
-                </h3>
-                
-                {selectedDateEvents.length === 0 ? (
-                  <div className="text-center py-4 text-muted-foreground">
-                    <Calendar className="h-10 w-10 mx-auto mb-2" />
-                    <p>No events scheduled for this day</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {selectedDateEvents.map((event: ScheduleEvent) => (
-                      <div key={event.id} className="flex items-start gap-3 p-3 rounded-lg border">
-                        <div className={cn(
-                          "w-1.5 self-stretch rounded-full",
-                          event.type === 'class' ? 'bg-blue-400' : 
-                          event.type === 'program' ? 'bg-green-400' : 
-                          event.type === 'field-trip' ? 'bg-purple-400' : 
-                          'bg-amber-400'
-                        )} />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium truncate">{event.title}</h4>
-                          <div className="flex flex-col gap-1 mt-1">
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                              <Clock className="h-3.5 w-3.5" />
-                              <span>{formatTime(event.startTime)} - {formatTime(event.endTime)}</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                              <MapPin className="h-3.5 w-3.5" />
-                              <span>{event.location}</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                              <User className="h-3.5 w-3.5" />
-                              <span>{event.childName}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <Badge className={getEventColor(event.type)}>
-                          {event.type === 'class' ? 'Class' : 
-                           event.type === 'program' ? 'Program' : 
-                           event.type === 'field-trip' ? 'Field Trip' : 
-                           'Event'}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CardFooter>
-          )}
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Upcoming Events</CardTitle>
-            <CardDescription>
-              All scheduled activities for your family
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-                <p>Loading events...</p>
-              </div>
-            ) : Object.keys(groupedEvents).length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-                <p>No events scheduled</p>
-                <p className="text-sm mt-1">Browse programs to find activities for your children</p>
-              </div>
-            ) : (
-              <div className="space-y-8">
-                {sortedDates.map((dateKey) => (
-                  <div key={dateKey} className="border-b pb-6 last:border-0 last:pb-0">
-                    <h3 className="font-medium text-lg mb-4">
-                      {format(parseISO(dateKey), 'EEEE, MMMM d, yyyy')}
-                    </h3>
-                    <div className="space-y-3">
-                      {groupedEvents[dateKey]
-                        .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                        .map((event: ScheduleEvent) => (
-                          <div key={event.id} className="flex items-start gap-3 p-3 rounded-lg border">
-                            <div className={cn(
-                              "w-1.5 self-stretch rounded-full",
-                              event.type === 'class' ? 'bg-blue-400' : 
-                              event.type === 'program' ? 'bg-green-400' : 
-                              event.type === 'field-trip' ? 'bg-purple-400' : 
-                              'bg-amber-400'
-                            )} />
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-medium">{event.title}</h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 mt-2">
-                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                  <Clock className="h-3.5 w-3.5 flex-shrink-0" />
-                                  <span>{formatTime(event.startTime)} - {formatTime(event.endTime)}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                                  <span className="truncate">{event.location}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                  <User className="h-3.5 w-3.5 flex-shrink-0" />
-                                  <span>{event.childName}</span>
-                                </div>
-                                {event.instructorName && (
-                                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                    <Users className="h-3.5 w-3.5 flex-shrink-0" />
-                                    <span>{event.instructorName}</span>
-                                  </div>
-                                )}
-                              </div>
-                              {event.description && (
-                                <p className="text-sm text-muted-foreground mt-2">
-                                  {event.description}
-                                </p>
-                              )}
-                            </div>
-                            <Badge className={getEventColor(event.type)}>
-                              {event.type === 'class' ? 'Class' : 
-                               event.type === 'program' ? 'Program' : 
-                               event.type === 'field-trip' ? 'Field Trip' : 
-                               'Event'}
-                            </Badge>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {!loadingClasses && !monthHasAnything && (
+              <p className="text-sm text-muted-foreground text-center mt-4">
+                No class days this month.{" "}
+                <Link href="/parent/programs" className="underline">
+                  Browse programs
+                </Link>
+              </p>
             )}
           </CardContent>
         </Card>
       )}
-      
-      {/* Event Details Dialog */}
-      <Dialog open={!!selectedEvent} onOpenChange={(open) => !open && setSelectedEvent(null)}>
-        <DialogContent className="sm:max-w-md">
+
+      <Dialog open={Boolean(selectedDay)} onOpenChange={(open) => !open && setSelectedDay(null)}>
+        <DialogContent data-testid="family-day-sheet">
           <DialogHeader>
-            <DialogTitle>{selectedEvent?.title}</DialogTitle>
-            <DialogDescription>
-              {selectedEvent && format(parseISO(selectedEvent.date), 'EEEE, MMMM d, yyyy')}
-            </DialogDescription>
+            <DialogTitle>{selectedDay ? format(selectedDay, "EEEE, MMMM d") : "Day"}</DialogTitle>
           </DialogHeader>
-          
-          {selectedEvent && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Badge className={getEventColor(selectedEvent.type)}>
-                  {selectedEvent.type === 'class' ? 'Class' : 
-                   selectedEvent.type === 'program' ? 'Program' : 
-                   selectedEvent.type === 'field-trip' ? 'Field Trip' : 
-                   'Event'}
+          <div className="space-y-4">
+            {dayClassEvents.length === 0 && daySchoolEvents.length === 0 && (
+              <p className="text-sm text-muted-foreground">No class days on this date.</p>
+            )}
+            {dayClassEvents.map((ev) => (
+              <div key={ev.id} className="border rounded-md p-3 space-y-1" data-testid="day-sheet-class">
+                <p className="font-medium">{ev.title}</p>
+                <p className="text-sm flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  {formatTime(ev.startTime)} – {formatTime(ev.endTime)}
+                </p>
+                <p className="text-sm flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {ev.location}
+                </p>
+                <p className="text-sm flex items-center gap-1">
+                  <User className="h-3.5 w-3.5" />
+                  {ev.childName}
+                  {ev.instructorName ? ` · ${ev.instructorName}` : ""}
+                </p>
+              </div>
+            ))}
+            {daySchoolEvents.map((ev) => (
+              <div key={ev.id} className="border rounded-md p-3" data-testid="day-sheet-school-event">
+                <Badge variant="outline" className="mb-1">
+                  {ev.eventType}
                 </Badge>
+                <p className="font-medium">{ev.title}</p>
               </div>
-              
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="font-medium">Time</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatTime(selectedEvent.startTime)} - {formatTime(selectedEvent.endTime)}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="font-medium">Location</p>
-                    <p className="text-sm text-muted-foreground">{selectedEvent.location}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <User className="h-5 w-5 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="font-medium">Student</p>
-                    <p className="text-sm text-muted-foreground">{selectedEvent.childName}</p>
-                  </div>
-                </div>
-                
-                {selectedEvent.instructorName && (
-                  <div className="flex items-start gap-3">
-                    <Users className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">Instructor</p>
-                      <p className="text-sm text-muted-foreground">{selectedEvent.instructorName}</p>
-                    </div>
-                  </div>
-                )}
-                
-                {selectedEvent.description && (
-                  <div className="flex items-start gap-3">
-                    <CalendarIcon className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">Description</p>
-                      <p className="text-sm text-muted-foreground">{selectedEvent.description}</p>
-                    </div>
-                  </div>
-                )}
-                
-                {selectedEvent.schedule && (
-                  <div className="flex items-start gap-3">
-                    <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">Schedule</p>
-                      <p className="text-sm text-muted-foreground">{selectedEvent.schedule}</p>
-                    </div>
-                  </div>
-                )}
+            ))}
+            {dayLessonTitles.length > 0 && (
+              <div data-testid="day-sheet-lessons">
+                <p className="text-sm font-medium mb-1">This day’s lessons</p>
+                <ul className="text-sm space-y-1">
+                  {dayLessonTitles.map((row, i) => (
+                    <li key={`${row.title}-${i}`}>
+                      {row.title}{" "}
+                      <span className="text-muted-foreground">
+                        ({row.childName} · {row.classTitle})
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-      
-      {/* Daily Events Dialog */}
-      <Dialog open={!!selectedDayEvents} onOpenChange={(open) => !open && setSelectedDayEvents(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedDayEvents && format(selectedDayEvents.date, 'EEEE, MMMM d, yyyy')}
-            </DialogTitle>
-            <DialogDescription>
-              {selectedDayEvents && `${selectedDayEvents.events.length} event${selectedDayEvents.events.length !== 1 ? 's' : ''} scheduled`}
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedDayEvents && (
-            <div className="space-y-3">
-              {selectedDayEvents.events
-                .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                .map((event) => (
-                  <Card key={event.id} className="overflow-hidden">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold">{event.title}</h3>
-                            <Badge variant="outline" className={getEventColor(event.type)}>
-                              {event.type === 'class' ? 'Class' : 
-                               event.type === 'program' ? 'Program' : 
-                               event.type === 'field-trip' ? 'Field Trip' : 
-                               'Event'}
-                            </Badge>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4" />
-                              <span>{formatTime(event.startTime)} - {formatTime(event.endTime)}</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4" />
-                              <span>{event.location}</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4" />
-                              <span>{event.childName}</span>
-                            </div>
-                            
-                            {event.instructorName && (
-                              <div className="flex items-center gap-2">
-                                <Users className="h-4 w-4" />
-                                <span>{event.instructorName}</span>
-                              </div>
-                            )}
-                          </div>
-                          
-                          {event.description && (
-                            <p className="text-sm text-muted-foreground pt-2">
-                              {event.description}
-                            </p>
-                          )}
-                          
-                          {event.schedule && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
-                              <Calendar className="h-4 w-4" />
-                              <span>{event.schedule}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-            </div>
-          )}
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

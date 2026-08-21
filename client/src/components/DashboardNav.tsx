@@ -67,7 +67,7 @@ export function DashboardNav() {
     },
     {
       title: "Calendar",
-      href: "/calendar",
+      href: "/schedule",
       icon: Calendar,
       show: true,
     },

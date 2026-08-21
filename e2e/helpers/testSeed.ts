@@ -345,6 +345,13 @@ export type SetupScheduleBuilderScenarioResponse = {
     admin: { id: number; email: string; password: string };
     educator: { id: number; email: string; password: string };
     parent: { id: number; email: string; password: string };
+    parentB?: { id: number; email: string; password: string };
+    parentBSupabaseLinked?: boolean;
+    locations?: {
+      brighton: { id: number; name: string };
+      greece: { id: number; name: string };
+    };
+    holiday?: { id: number; title: string };
     classes: {
       seekers: { id: number; title: string };
       yankee: { id: number; title: string };

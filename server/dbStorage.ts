@@ -1757,18 +1757,57 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(events.startDate));
   }
 
-  async createEvent(event: InsertEvent): Promise<Event> {
+  async createEvent(event: InsertEvent & { organizerId: number }): Promise<Event> {
     const db = await getDb();
     const [newEvent] = await db
       .insert(events)
       .values({
         ...event,
+        isAllDay: event.isAllDay ?? false,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .returning();
     return newEvent;
   }
+
+  async updateEvent(id: number, event: Partial<InsertEvent>): Promise<Event | undefined> {
+    const db = await getDb();
+    const [updated] = await db
+      .update(events)
+      .set({
+        ...event,
+        updatedAt: new Date(),
+      })
+      .where(eq(events.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteEvent(id: number): Promise<boolean> {
+    const db = await getDb();
+    const removed = await db.delete(events).where(eq(events.id, id)).returning({ id: events.id });
+    return removed.length > 0;
+  }
+
+  async getUserByCalendarFeedToken(token: string): Promise<User | undefined> {
+    const db = await getDb();
+    const [user] = await db.select().from(users).where(eq(users.calendarFeedToken, token)).limit(1);
+    return user;
+  }
+
+  async setUserCalendarFeedToken(userId: number, token: string): Promise<User | undefined> {
+    const db = await getDb();
+    const [user] = await db
+      .update(users)
+      .set({ calendarFeedToken: token, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  getEventsForSchoolsAndDateRange = eventsRangeDb.getEventsForSchoolsAndDateRange;
+
 
   // Marketplace Item methods
   async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {

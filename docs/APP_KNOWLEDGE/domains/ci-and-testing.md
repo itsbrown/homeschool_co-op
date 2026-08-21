@@ -49,12 +49,15 @@ Production-path prerequisites: Postgres + `node scripts/ci-db-push.mjs`. See `se
 | Topic | Detail |
 |-------|--------|
 | Full command index | [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md) |
+| Seed/login helper | [`e2e/helpers/requireLinkedSeed.ts`](../../../e2e/helpers/requireLinkedSeed.ts) — fail if seed/Supabase missing |
+| Cursor rule | `.cursor/rules/e2e-seed-gate.mdc` |
+| Local DB | `.env` `DATABASE_URL` = Railway **clone** (dev). Never `.env.prod` / `with-prod-env.mjs` for Playwright |
 | CI workflow | `.github/workflows/e2e.yml` — `CI=true npm run test:e2e` |
 | Config | `playwright.config.ts` — `webServer: npm run dev`, port 5000, `PLAYWRIGHT_WEB_SERVER=true` |
 | Public forms lane | [`e2e/public-custom-forms.spec.ts`](../../e2e/public-custom-forms.spec.ts); domain doc [`custom-forms-public-access.md`](custom-forms-public-access.md) |
 | Replit | Chromium OS libs missing — use GitHub Actions ([runbook](../runbooks/replit-e2e-playwright.md)) |
 
-**Adding a spec:** catalog row in `E2E_COMMANDS.md` + CHANGELOG; see “Maintaining this index” in `E2E_COMMANDS.md`.
+**Adding a spec:** catalog row in `E2E_COMMANDS.md` + CHANGELOG; seed/login specs use `requireLinkedSeed` and must be run (skip ≠ pass).
 
 ## Agent knowledge maintenance
 
@@ -64,7 +67,7 @@ The **Knowledge update** footer at the end of agent replies is a **session summa
 |---------------|--------|
 | Durable facts, pitfalls, commands | `docs/APP_KNOWLEDGE/domains/*.md`, runbooks, [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md) |
 | Dated session log | [`CHANGELOG.md`](../CHANGELOG.md) |
-| Agent guardrails | `.cursor/rules/app-knowledge.mdc`, `.agents/skills/asa-*` |
+| Agent guardrails | `.cursor/rules/app-knowledge.mdc`, `.cursor/rules/e2e-seed-gate.mdc`, `.agents/skills/asa-*` |
 
 Future Cursor sessions read **files + rules**, not past chat footers. If the footer lists “Updated: CHANGELOG” but no file diff exists, nothing was saved.
 
@@ -88,6 +91,8 @@ Protocol: `~/.cursor/skills/maintain-app-knowledge/SKILL.md` (Step 2 = edit file
 | 49m Tests job, 180 failures | Full `test:server` in CI | Scoped to production-path + client only |
 | Jest hang | Open handles | `--forceExit` in CI production-path step |
 | E2E seed returns HTML / no data | Port 5000 reused by server without `/api/test` | `node scripts/free-port-5000.mjs` or `CI=true` for fresh `webServer` |
+| Playwright report green but skipped | `test.skip` on missing `supabaseLinked` | `requireLinkedSeed`; symlink `.env` + `.env.e2e` in worktrees |
+| E2E against live Stripe/prod | Loaded `.env.prod` | Use `.env` (Railway clone) + `.env.e2e` only |
 | Playwright `getByText` strict-mode: 2 matches | Print + screen copies of the same string (`hidden print:block` stays in the DOM; locators still match it) | Unique `data-testid` on the interactive copy |
 | E2E all skipped; HTML Skipped filter empty | `beforeAll` `test.skip` after seed 500 (`getDb` / no Postgres); report counts skips but lists no rows | Worktree needs `.env` (symlink from main clone). Do not inject localhost `asa_test` in `playwright.config.ts` `webServer` env — it overrides `.env`. Check server log for `setup-*-scenario` 500 |
 | Seed `socket hang up` / Vite `Expected ")" but found "onClick"` | Two JSX siblings inside one `{cond && ( … )}` (Staff pending Copy + Resend) | One element per condition, or wrap in `<>…</>` |
@@ -98,6 +103,8 @@ Protocol: `~/.cursor/skills/maintain-app-knowledge/SKILL.md` (Step 2 = edit file
 ## Key files
 
 - [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md) — Playwright command + spec catalog
+- [`e2e/helpers/requireLinkedSeed.ts`](../../../e2e/helpers/requireLinkedSeed.ts)
+- `.cursor/rules/e2e-seed-gate.mdc`
 - `.github/workflows/tests.yml`
 - `.github/workflows/e2e.yml`
 - `jest.integration.config.cjs`, `jest.config.cjs`, `jest.payments.config.cjs`

@@ -137,7 +137,6 @@ const LegacyStaffProfileRedirect = lazy(() =>
 );
 const AdminProfilePage = lazy(() => import("./pages/schools/AdminProfilePage"));
 const ClassesPage = lazy(() => import("./pages/ClassesPage"));
-const CalendarPage = lazy(() => import("./pages/CalendarPage"));
 const ProgramsBrowseRedirect = lazy(() => import("@/pages/ProgramsBrowseRedirect"));
 const EnrollmentAssistantPage = lazy(() => import("@/pages/EnrollmentAssistantPage"));
 const AIInsightsDashboard = lazy(() => import("@/pages/AIInsightsDashboard"));
@@ -194,6 +193,10 @@ const Redirect = ({ to }: { to: string }) => {
   const [, setLocation] = useLocation();
 
   React.useEffect(() => {
+    if (to.includes("?")) {
+      window.location.replace(to);
+      return;
+    }
     setLocation(to);
   }, [to, setLocation]);
 
@@ -222,7 +225,6 @@ const SchoolClassesUploadPage = lazy(() => import("./pages/schools/SchoolClasses
 const SessionsManagementPage = lazy(() => import("./pages/schools/SessionsManagementPage"));
 const ScheduleBuilderPage = lazy(() => import("./pages/schools/ScheduleBuilderPage"));
 const WeekPlannerPage = lazy(() => import("./pages/schools/WeekPlannerPage"));
-const WeeklySchedulePage = lazy(() => import("./pages/parent/WeeklySchedulePage"));
 const SchoolClassDetailsPage = lazy(() => import("./pages/schools/SchoolClassDetailsPage"));
 const ClassRosterPage = lazy(() => import("./pages/schools/ClassRosterPage"));
 const StaffPage = lazy(() => import("./pages/schools/StaffPage"));
@@ -704,7 +706,7 @@ function Router() {
       <Route path="/parent/documents/:id" component={DocumentDetailPage} />
       <Route path="/parent/assessments" component={MyAssessmentsPage} />
       <Route path="/parent/progress" component={ParentProgressPage} />
-      <Route path="/parent/weekly-schedule" component={WeeklySchedulePage} />
+      <Route path="/parent/weekly-schedule" component={() => <Redirect to="/schedule?view=week" />} />
       <Route path="/parent/supplies" component={ParentSupplyListPage} />
 
       {/* Educator routes - use ParentAppShell when activeRole is 'parent', EducatorAppShell otherwise */}
@@ -738,7 +740,7 @@ function Router() {
       <Route path="/children/:id" component={ChildProfilePage} />
       <Route path="/children/:id/edit" component={ChildProfileEditPage} />
       <Route path="/children/:id/enrollments" component={ChildEnrollmentsPage} />
-      <Route path="/calendar" component={CalendarPage} />
+      <Route path="/calendar" component={() => <Redirect to="/schedule" />} />
       <Route path="/schedule" component={SchedulePage} />
       <Route path="/payments" component={PaymentsPage} />
       <Route path="/payment-methods" component={PaymentMethodsPage} />

@@ -1,0 +1,16 @@
+---
+description: Seed/login Playwright is a gate — skip is not a pass; never test against production
+alwaysApply: true
+---
+
+# Playwright seed/login gate (ASA)
+
+When a plan or task **adds, changes, or is gated by** `e2e/*.spec.ts` that seeds a user and logs in (`linkSupabaseAuth`, `supabaseLinked`):
+
+1. **Run** `npm run test:e2e -- e2e/<file>.spec.ts` before calling the work done. Jest-only is not enough.
+2. Report **passed / failed / skipped** separately. **`skipped > 0` on those files is not a pass.**
+3. New specs must call `requireLinkedSeed` from [`e2e/helpers/requireLinkedSeed.ts`](e2e/helpers/requireLinkedSeed.ts). Do **not** `test.skip` on missing `supabaseLinked` (Playwright exit 0 treats skip as green).
+4. Worktrees do not get gitignored env files. Symlink `.env` and `.env.e2e` from the main checkout before `test:e2e`.
+5. **Dev only.** Playwright + `/api/test/*` use `.env` (Railway **clone** `DATABASE_URL`) + `.env.e2e` (test Stripe / Supabase keys). Never `.env.prod`, never `with-prod-env.mjs`, never live Stripe secret keys. Optional local escape hatch: `E2E_ALLOW_SKIP=1` (ignored when `CI=true`).
+
+Smoke and public-form specs without login may still run without real Supabase. See [`docs/E2E_COMMANDS.md`](docs/E2E_COMMANDS.md) and skill `asa-testing-deployment`.
