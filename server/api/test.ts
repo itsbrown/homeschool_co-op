@@ -4,6 +4,7 @@ import { storage } from '../storage';
 import { nanoid } from 'nanoid';
 import { processOneScheduledPayment, recoverOneScheduledPayment } from '../services/auto-pay-scheduler';
 import { handleScheduledPaymentFailed } from '../services/auto-pay-webhook-helpers';
+import { ensureFamilyCalendarSchema } from '../lib/ensure-family-calendar-schema';
 import { getDb } from '../db';
 import { eq, sql } from 'drizzle-orm';
 import {
@@ -4345,6 +4346,7 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
  */
 router.post('/setup-schedule-builder-scenario', async (req: Request, res: Response) => {
   try {
+    await ensureFamilyCalendarSchema();
     const testDb = new TestDatabase();
     const uniqueId = nanoid(8);
     const bcrypt = await import('bcryptjs');
@@ -4632,9 +4634,97 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
       recordedBy: educator.id,
     });
 
+    const locBrighton = await testDb.createTestLocation(school.id, {
+      name: `Brighton ${uniqueId}`,
+    });
+    const locGreece = await testDb.createTestLocation(school.id, {
+      name: `Greece ${uniqueId}`,
+    });
+    await storage.updateUser(parent.id, { locationId: locBrighton.id });
+    await db.insert(schoolStudents).values([
+      {
+        schoolId: school.id,
+        locationId: locBrighton.id,
+        childId: childSeekers.id,
+        grade: childSeekers.gradeLevel || '1st',
+        status: 'active',
+        enrollmentDate: new Date(),
+      },
+      {
+        schoolId: school.id,
+        locationId: locBrighton.id,
+        childId: childYankee.id,
+        grade: childYankee.gradeLevel || '3rd',
+        status: 'active',
+        enrollmentDate: new Date(),
+      },
+    ]);
+
+    await ensureFamilyCalendarSchema();
+    const holidayStart = new Date();
+    holidayStart.setHours(12, 0, 0, 0);
+    const holiday = await storage.createEvent({
+      title: `Winter Break ${uniqueId}`,
+      description: 'All-campus holiday',
+      startDate: holidayStart,
+      endDate: holidayStart,
+      eventType: 'holiday',
+      isAllDay: true,
+      schoolId: school.id,
+      locationId: null,
+      organizerId: admin.id,
+      color: '#EF4444',
+    });
+
+    const parentBEmail = `sched_parentb_${uniqueId}@test.com`;
+    const parentB = await testDb.createTestUser({
+      email: parentBEmail,
+      username: `schedparentb_${uniqueId}`,
+      name: 'Schedule Campus B Parent',
+      role: 'parent',
+      schoolId: school.id,
+    });
+    await storage.updateUser(parentB.id, {
+      password: await bcrypt.hash(password, 10),
+      locationId: locGreece.id,
+    });
+    await db.insert(userRoles).values({
+      userId: parentB.id,
+      role: 'parent',
+      schoolId: school.id,
+      isPrimary: true,
+    });
+    const childCampusB = await storage.createChild({
+      parentId: parentB.id,
+      parentEmail: parentBEmail,
+      firstName: 'Greece',
+      lastName: `Kid${uniqueId}`,
+      birthdate: '2017-05-01',
+      gradeLevel: '2nd',
+      schoolId: school.id,
+    });
+    await db.insert(schoolStudents).values({
+      schoolId: school.id,
+      locationId: locGreece.id,
+      childId: childCampusB.id,
+      grade: '2nd',
+      status: 'active',
+      enrollmentDate: new Date(),
+    });
+    await db.insert(programEnrollments).values({
+      ...enrollmentBase,
+      parentId: parentB.id,
+      parentEmail: parentBEmail,
+      childId: childCampusB.id,
+      marketplaceClassId: seekers.id,
+      childName: `${childCampusB.firstName} ${childCampusB.lastName}`,
+      className: seekers.title,
+    });
+
     let adminSupabaseLinked = false;
     let educatorSupabaseLinked = false;
     let parentSupabaseLinked = false;
+    let parentBSupabaseLinked = false;
     if (req.body?.linkSupabaseAuth === true) {
       const supabaseUrl = process.env.SUPABASE_URL;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -4667,20 +4757,36 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
         schoolId: school.id,
         displayName: parent.name || 'Schedule Test Parent',
       });
+      parentBSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: parentB.id,
+        email: parentBEmail,
+        password,
+        role: 'parent',
+        schoolId: school.id,
+        displayName: parentB.name || 'Schedule Campus B Parent',
+      });
     }
 
     res.json({
       success: true,
       data: {
-        supabaseLinked: adminSupabaseLinked && educatorSupabaseLinked && parentSupabaseLinked,
+        supabaseLinked:
+          adminSupabaseLinked && educatorSupabaseLinked && parentSupabaseLinked && parentBSupabaseLinked,
         adminSupabaseLinked,
         educatorSupabaseLinked,
         parentSupabaseLinked,
+        parentBSupabaseLinked,
         weekStart: monday,
         school: { id: school.id, name: school.name, registrationCode: school.registrationCode },
         admin: { id: admin.id, email: admin.email, password },
         educator: { id: educator.id, email: educatorEmail, password },
         parent: { id: parent.id, email: parentEmail, password },
+        parentB: { id: parentB.id, email: parentBEmail, password },
+        locations: {
+          brighton: { id: locBrighton.id, name: locBrighton.name },
+          greece: { id: locGreece.id, name: locGreece.name },
+        },
+        holiday: { id: holiday.id, title: holiday.title },
         classes: {
           seekers: { id: seekers.id, title: seekers.title },
           yankee: { id: yankee.id, title: yankee.title },

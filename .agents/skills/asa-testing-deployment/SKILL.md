@@ -48,6 +48,7 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - **Debug queries**: Use the SQL execution tool, not raw `psql`
 - **Never run destructive SQL** (DROP, DELETE, UPDATE) without explicit user approval
 - **Connection string**: Resolve through `getNormalizedDatabaseUrl()` in `server/lib/database-url.ts` (it just normalizes `process.env.DATABASE_URL` so passwords with reserved characters parse cleanly). `DATABASE_URL` is the single source of truth in every environment — Replit injects it in dev (managed Helium) and the Reserved VM injects it in production. The legacy `PGHOST` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` / `PGPORT` fallback and the `NEON_DATABASE_URL` dev fallback have been removed.
+- **Local Cursor `npm run dev`:** Do not export `DATABASE_URL` from the login shell. `.env` fills it when unset. A leftover Neon `asa_test` export is ignored (`server/lib/apply-local-env.ts`). CI / Replit / `with-prod-env.mjs` keep their URL.
 - **SSL config**: Helium speaks plain TCP (no SSL); production uses managed SSL Postgres. Never hardcode `ssl: { rejectUnauthorized: false }` or `ssl: 'require'` on a new client — go through `getDbSslConfig()` / `getPostgresJsSslOption()` from `server/lib/database-url.ts`. See the `asa-database-patterns` skill for the copy-paste snippet.
 
 ## Testing Patterns
@@ -57,8 +58,24 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 - Test against the running dev server on port 5000
 - Application may have existing data — don't assume empty state
 - Generate unique values (e.g., `nanoid`) for test data to avoid conflicts
-- Include `data-testid` attributes on key interactive elements for reliable selectors. Do not `getByText` a string that also exists in a `hidden print:block` duplicate — Playwright still matches it (strict mode).
+- Include `data-testid` attributes on key interactive elements for reliable selectors
 - **Command index:** [`docs/E2E_COMMANDS.md`](../../docs/E2E_COMMANDS.md) — single catalog of npm scripts, per-spec commands, env, and seeds
+
+### Seed/login E2E is a product gate
+
+Specs that call `/api/test/setup-*-scenario` with `linkSupabaseAuth` and then log in are **not optional**. Playwright `test.skip` on missing `supabaseLinked` exits **0** — that is not a pass.
+
+- **New seed/login specs** must use [`e2e/helpers/requireLinkedSeed.ts`](../../e2e/helpers/requireLinkedSeed.ts). Throw (fail) if the seed HTTP fails or `supabaseLinked !== true`.
+- **After writing the spec, run it:** `npm run test:e2e -- e2e/<file>.spec.ts`. Report passed / failed / **skipped**. If skipped, the work is not done (fix `.env` / `.env.e2e`, or say blocked).
+- **Dev only.** `DATABASE_URL` comes from `.env` (Railway **clone**, not live prod Postgres). Playwright also loads `.env.e2e` (test Stripe / Supabase keys). **Never** `.env.prod` or `with-prod-env.mjs`.
+- Worktrees do not copy gitignored env files — symlink `.env` and `.env.e2e` from the main checkout.
+- Laptop without keys: `E2E_ALLOW_SKIP=1` (ignored when `CI=true`). Do not use this to green a feature gate.
+- Smoke / public-form specs with no login may still run without real Supabase.
+
+```ts
+const { response, json } = await postSetupScheduleScenario(request, { linkSupabaseAuth: true });
+const seed = requireLinkedSeed(response, json);
+```
 
 ### Adding a new E2E spec (documentation checklist)
 
@@ -69,14 +86,15 @@ When you create or extend `e2e/**/*.spec.ts`:
    - Run command: `npm run test:e2e -- e2e/<file>.spec.ts`
    - One-line coverage + prerequisites (`DATABASE_URL`, Supabase, Stripe, etc.)
    - `POST /api/test/...` seed helper if used (`e2e/helpers/testSeed.ts`)
-2. Link from [`docs/APP_KNOWLEDGE/domains/ci-and-testing.md`](../../docs/APP_KNOWLEDGE/domains/ci-and-testing.md) only when introducing a new lane worth calling out in CI docs.
-3. Link from a feature runbook under `docs/APP_KNOWLEDGE/runbooks/` when the spec is the verification step for that workflow.
-4. Dated bullet in `docs/APP_KNOWLEDGE/CHANGELOG.md`.
-5. Optional `package.json` script only for suites run very frequently; prefer the `-- e2e/file.spec.ts` form.
+2. For seed/login specs: `requireLinkedSeed` (not `test.skip` on `supabaseLinked`). Run the spec before finishing.
+3. Link from [`docs/APP_KNOWLEDGE/domains/ci-and-testing.md`](../../docs/APP_KNOWLEDGE/domains/ci-and-testing.md) only when introducing a new lane worth calling out in CI docs.
+4. Link from a feature runbook under `docs/APP_KNOWLEDGE/runbooks/` when the spec is the verification step for that workflow.
+5. Dated bullet in `docs/APP_KNOWLEDGE/CHANGELOG.md`.
+6. Optional `package.json` script only for suites run very frequently; prefer the `-- e2e/file.spec.ts` form.
 
 **Example (public forms):** [`e2e/public-custom-forms.spec.ts`](../../e2e/public-custom-forms.spec.ts) — `npm run test:e2e -- e2e/public-custom-forms.spec.ts`; seed `setup-public-form-scenario`; runbook [`public-mentor-application-form.md`](../../docs/APP_KNOWLEDGE/runbooks/public-mentor-application-form.md).
 
-**Example (schedule builder):** seed `POST /api/test/setup-schedule-builder-scenario` via `postSetupScheduleScenario` — used by `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-landing-nav`, `educator-mentor-loop`, `educator-today-honesty`, `attendance-educator-mark`. Domain: [`schedule-and-lesson-planning.md`](../../docs/APP_KNOWLEDGE/domains/schedule-and-lesson-planning.md) + [`educator-ui.md`](../../docs/APP_KNOWLEDGE/domains/educator-ui.md).
+**Example (schedule builder):** seed `POST /api/test/setup-schedule-builder-scenario` via `postSetupScheduleScenario` — used by `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-landing-nav`, `educator-mentor-loop`, `attendance-educator-mark`. Domain: [`schedule-and-lesson-planning.md`](../../docs/APP_KNOWLEDGE/domains/schedule-and-lesson-planning.md) + [`educator-ui.md`](../../docs/APP_KNOWLEDGE/domains/educator-ui.md).
 
 ### What to Test with Playwright
 - Frontend features and multi-page flows
@@ -95,7 +113,6 @@ When you create or extend `e2e/**/*.spec.ts`:
 - Supabase auth is used — tests may need to handle login flows
 - Google OAuth and other third-party providers cannot be automated via Playwright (providers block it)
 - For admin/role-specific features: use DB queries to set user roles before testing (e.g., `UPDATE users SET ...`)
-- Educator specs: `loginEducatorFromSeed` + `educatorSupabaseLinked` in `e2e/helpers/educatorAuth.ts`. Skip when the seed did not link Supabase. Do not require `E2E_EDUCATOR_EMAIL`.
 
 ### API Testing
 - Can test API routes directly in Playwright tests (fetch/POST)
@@ -275,9 +292,9 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - **App not starting** → used "Start App" workflow instead of "Start application" → switch to "Start application" (`npm run dev`)
 - **Frontend can't reach API** → port conflict or wrong binding → ensure only Express+Vite uses port 5000
 - **Server changes not visible** → workflow not restarted after code changes → restart "Start application" and verify clean startup
+- **Playwright “passed” but skipped** → `test.skip` on missing `supabaseLinked` (exit 0) → use `requireLinkedSeed`; symlink `.env` + `.env.e2e` in worktrees; do not treat skip as a pass
+- **E2E wrote to production money path** → loaded `.env.prod` / `with-prod-env.mjs` → use `.env` (Railway clone) + `.env.e2e` only
 - **Tests fail with "element not found"** → test assumes empty database state → generate unique test data with `nanoid` instead
-- **Playwright click hangs 120s after success UI** → first-visit `schedule-tour-prompt` overlay intercepts `schedule-csv-*` clicks (or a switch never hydrates) → seed `schedule_builder_tour_seen` / `schedule_builder_tour_prompt_session` before load; wait for enabled/visible; click Radix switches only if `data-state` is not already `checked`; `click({ force: true })` when a toast sits on the target. Do **not** `waitForLoadState("networkidle")` (this app keeps polling).
-- **Playwright `getByText` strict-mode 2 matches** → print + screen copies of the same string (`hidden print:block` stays in the DOM) → unique `data-testid` on the interactive copy (Dimensions how-to: `dimensions-math-placement-howto-step-1`)
 - **Frontend env var undefined** → missing `VITE_` prefix → rename to `VITE_MY_VAR` and access via `import.meta.env.VITE_MY_VAR`
 - **Schema change not applied** → wrote raw SQL migration file → use `npm run db:push` (Drizzle handles it)
 - **`The server does not support SSL connections`** in dev → a `pg`/`postgres.js` client was opened with hardcoded `ssl: { rejectUnauthorized: false }` or `ssl: 'require'`. Replit dev uses Helium, which does not accept SSL handshakes. Replace the hardcoded option with `getDbSslConfig()` (for `pg`) or `getPostgresJsSslOption()` (for `postgres.js`) from `server/lib/database-url.ts` so SSL is enabled only when `NODE_ENV === 'production'`.
@@ -290,6 +307,8 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - Always use the "Start application" workflow (`npm run dev`)
 - Always restart workflows after server-side changes and verify they start cleanly
 - Always generate unique test data (nanoid) to avoid conflicts with existing records
+- Always use `requireLinkedSeed` for new seed/login Playwright specs and run those files before finishing
+- Always point local E2E at `.env` (Railway clone) + `.env.e2e` — never `.env.prod`
 - Always check workflow logs when debugging server issues
 - Always use `npm run db:push` for schema changes — never write raw SQL migrations
 - Always prefix frontend env vars with `VITE_`
@@ -305,7 +324,8 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - Don't edit `vite.config.ts` or `drizzle.config.ts` without cause; `server/vite.ts` may only change for `/api/*` SPA-skip safety
 - Don't edit `package.json` scripts without user approval
 - Don't write Playwright tests that assume empty database state
-- Don't use `page.waitForLoadState("networkidle")` to stabilize UI — TanStack Query polling never goes idle; wait for the specific testid or API response instead
+- Don't `test.skip` on missing `supabaseLinked` in new seed/login specs — that is a green run, not a gate
+- Don't run Playwright or `/api/test/*` with `.env.prod` or `with-prod-env.mjs`
 - Don't expose or log secrets/API keys in code
 - Don't use raw `psql` for database debugging — use the SQL execution tool
 - Don't remove the `Cache-Control: no-cache` middleware from `server/index.ts` — post-deployment chunk-load failures will break all frontend routes for users with cached browsers
@@ -321,6 +341,8 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - `server/vite.ts` — Vite + static SPA; must skip `/api/*` (not forbidden for that fix)
 - `vite.config.ts` — Vite configuration with aliases (do not edit)
 - `drizzle.config.ts` — Drizzle ORM config (do not edit)
-- `shared/schema.ts` — database schema definitions
+- `e2e/helpers/requireLinkedSeed.ts` — fail (not skip) when seed/Supabase link is missing
+- `docs/E2E_COMMANDS.md` — Playwright command + spec catalog
+- `.cursor/rules/e2e-seed-gate.mdc` — always-on seed/login gate
 - `client/src/lib/queryClient.ts` — API client configuration
 - `replit.md` — project documentation and architecture notes

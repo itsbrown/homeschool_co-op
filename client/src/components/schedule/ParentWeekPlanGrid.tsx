@@ -5,12 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, CalendarDays, CheckCircle2, Loader2, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-function getMondayWeekStart(from: Date = new Date()): string {
+export function getMondayWeekStart(from: Date = new Date()): string {
   const d = new Date(from);
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
@@ -361,19 +360,12 @@ function ChildWeekSection({ entry }: { entry: ChildWeekEntry }) {
   );
 }
 
-export default function WeeklySchedulePage() {
+export default function ParentWeekPlanGrid({ compact = false }: { compact?: boolean }) {
   const [weekStart, setWeekStart] = useState(() => getMondayWeekStart());
 
+  const weekPlansUrl = `/api/schedule-builder/parent/my-week-plans?weekStart=${encodeURIComponent(weekStart)}`;
   const { data, isLoading } = useQuery<MyWeekPlansResponse>({
-    queryKey: ["/api/schedule-builder/parent/my-week-plans", weekStart],
-    queryFn: async () => {
-      // Use apiRequest so Supabase Bearer token is sent (E2E / SPA have no cookie session).
-      const res = await apiRequest(
-        "GET",
-        `/api/schedule-builder/parent/my-week-plans?weekStart=${encodeURIComponent(weekStart)}`,
-      );
-      return res.json();
-    },
+    queryKey: [weekPlansUrl],
   });
 
   const handlePrint = () => {
@@ -394,7 +386,8 @@ export default function WeeklySchedulePage() {
   const children = data?.children || [];
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto weekly-schedule-page">
+    <div className={compact ? "weekly-schedule-page" : "p-4 md:p-6 lg:p-8 max-w-7xl mx-auto weekly-schedule-page"}>
+      {!compact && (
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 no-print">
         <h1 className="text-2xl md:text-3xl font-bold text-slate-800 flex items-center gap-2">
           <CalendarDays className="h-7 w-7 text-blue-600" />
@@ -413,6 +406,7 @@ export default function WeeklySchedulePage() {
           </Button>
         </div>
       </div>
+      )}
 
       <div className="flex items-center justify-between gap-3 mb-6 no-print">
         <Button
@@ -427,15 +421,29 @@ export default function WeeklySchedulePage() {
         <div className="text-sm font-medium text-slate-700">
           Week of {formatWeekDate(weekStart)}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setWeekStart((w) => shiftWeekStart(w, 1))}
-          className="gap-1"
-        >
-          Next
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {compact && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrint}
+              className="gap-1.5"
+              data-testid="weekly-schedule-print"
+            >
+              <Printer className="h-4 w-4" />
+              <span className="hidden sm:inline">Print / Save as PDF</span>
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setWeekStart((w) => shiftWeekStart(w, 1))}
+            className="gap-1"
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="schedule-print-root" data-testid="schedule-print-root">

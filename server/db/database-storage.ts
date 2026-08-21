@@ -129,12 +129,44 @@ export class DatabaseStorage implements IStorage {
       .limit(5);
   }
   
-  async createEvent(insertEvent: InsertEvent): Promise<Event> {
+  async createEvent(insertEvent: InsertEvent & { organizerId: number }): Promise<Event> {
     const [event] = await db
       .insert(events)
-      .values(insertEvent)
+      .values({
+        ...insertEvent,
+        isAllDay: insertEvent.isAllDay ?? false,
+        updatedAt: new Date(),
+      })
       .returning();
     return event;
+  }
+
+  async updateEvent(id: number, event: Partial<InsertEvent>): Promise<Event | undefined> {
+    const [updated] = await db
+      .update(events)
+      .set({ ...event, updatedAt: new Date() })
+      .where(eq(events.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteEvent(id: number): Promise<boolean> {
+    const removed = await db.delete(events).where(eq(events.id, id)).returning({ id: events.id });
+    return removed.length > 0;
+  }
+
+  async getUserByCalendarFeedToken(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.calendarFeedToken, token)).limit(1);
+    return user;
+  }
+
+  async setUserCalendarFeedToken(userId: number, token: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ calendarFeedToken: token, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
   }
   
   // Marketplace methods

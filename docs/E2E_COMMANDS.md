@@ -11,7 +11,7 @@ When you add or materially change a Playwright spec under `e2e/`:
 3. **Cross-link** from a domain doc or runbook when the spec documents a product lane (example: [`public-mentor-application-form.md`](APP_KNOWLEDGE/runbooks/public-mentor-application-form.md) → `e2e/public-custom-forms.spec.ts`).
 4. **CHANGELOG:** one dated bullet in [`docs/APP_KNOWLEDGE/CHANGELOG.md`](APP_KNOWLEDGE/CHANGELOG.md) with spec file + command.
 
-Agents: see `asa-testing-deployment` and `asa-app-knowledge` maintenance workflow.
+Agents: see `asa-testing-deployment` and `asa-app-knowledge` maintenance workflow. Seed/login specs: [`e2e/helpers/requireLinkedSeed.ts`](../e2e/helpers/requireLinkedSeed.ts) (skip ≠ pass).
 
 ## Quick start
 
@@ -26,7 +26,9 @@ npm run test:e2e
 npm run test:e2e -- e2e/public-custom-forms.spec.ts
 ```
 
-**Local env:** Copy [`.env.e2e.example`](../.env.e2e.example) → `.env.e2e` (gitignored). Loaded by [`scripts/run-playwright.mjs`](../scripts/run-playwright.mjs) without overriding shell exports.
+**Local env:** Copy [`.env.e2e.example`](../.env.e2e.example) → `.env.e2e` (gitignored). Loaded by [`scripts/run-playwright.mjs`](../scripts/run-playwright.mjs) without overriding shell exports. Postgres comes from **`.env`** (`DATABASE_URL` = Railway **dev clone**). Never load **`.env.prod`** or `with-prod-env.mjs` for Playwright. Worktrees: symlink `.env` and `.env.e2e` from the main checkout.
+
+**Seed/login gate:** New specs that `linkSupabaseAuth` must use `requireLinkedSeed`. Playwright `test.skip` on missing Supabase is a green run — that is not a pass. Report passed/failed/skipped; skipped on those files means not done. Laptop without keys: `E2E_ALLOW_SKIP=1` (ignored when `CI=true`).
 
 **Worktree:** symlink `.env` and `.env.e2e` from the main clone. A leftover login-shell `DATABASE_URL` to retired Neon `asa_test` is ignored in favor of `.env` (`server/lib/apply-local-env.ts`). If seeds still 500 with `The endpoint has been disabled`, free port 5000 so Playwright does not reuse a server that booted on Neon.
 
@@ -75,10 +77,11 @@ npm run test:e2e:headed -- e2e/school-code-registration.spec.ts
 | `E2E_PARENT_EMAIL`, `E2E_PARENT_PASSWORD` | `auth.setup.ts` + `e2e/authenticated/**` project |
 | `E2E_EDUCATOR_EMAIL` (+ password if added later) | `e2e/authenticated/educator-progress-tab.spec.ts` |
 | `E2E_TEST_API_TOKEN` | `X-Test-Token` header (default `test-secret-token`) |
-| `TESTING_STRIPE_SECRET_KEY`, `VITE_TESTING_STRIPE_PUBLIC_KEY` | Live Stripe test mode checkout specs |
+| `E2E_ALLOW_SKIP` | If `1` and not `CI`, `requireLinkedSeed` skips instead of failing (laptop without keys). Default: fail. |
+| `TESTING_STRIPE_SECRET_KEY`, `VITE_TESTING_STRIPE_PUBLIC_KEY` | Stripe **test** mode checkout specs |
 | `VITE_E2E_EXPOSE_CART` | Set `true` by Playwright webServer for membership cart hook |
 
-Placeholder Supabase keys in `playwright.config.ts` are enough for **smoke** and **public custom forms**. Specs that call `isRealSupabaseConfigured()` or need `supabaseLinked: true` **skip** without real keys.
+Placeholder Supabase keys in `playwright.config.ts` are enough for **smoke** and **public custom forms**. New seed/login specs must use `requireLinkedSeed` (fail if not linked). A skipped Playwright spec is not a pass.
 
 ---
 
@@ -139,7 +142,10 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 | [`e2e/school-analytics-cart-abandonment.spec.ts`](../e2e/school-analytics-cart-abandonment.spec.ts) | `npm run test:e2e -- e2e/school-analytics-cart-abandonment.spec.ts` | School Analytics → Cart Abandonment tab + funnel API | `setup-cart-scenario` (`linkSupabaseAuthAdmin`) |
 | [`e2e/parent-progress-charts.spec.ts`](../e2e/parent-progress-charts.spec.ts) | `npm run test:e2e -- e2e/parent-progress-charts.spec.ts` | Parent `/parent/progress` Charts tab + child analytics API | `setup-progress-scenario` (`linkSupabaseAuth`) |
 | [`e2e/schedule-builder-publish.spec.ts`](../e2e/schedule-builder-publish.spec.ts) | `npm run test:e2e -- e2e/schedule-builder-publish.spec.ts` | Admin Week Planner: edit draft block → publish | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
-| [`e2e/parent-weekly-schedule.spec.ts`](../e2e/parent-weekly-schedule.spec.ts) | `npm run test:e2e -- e2e/parent-weekly-schedule.spec.ts` | Parent `/parent/weekly-schedule` enrolled-class sections + print root | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/parent-weekly-schedule.spec.ts`](../e2e/parent-weekly-schedule.spec.ts) | `npm run test:e2e -- e2e/parent-weekly-schedule.spec.ts` | `/parent/weekly-schedule` redirects to `/schedule?view=week`; print root + two enrolled class sections | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/parent-family-calendar.spec.ts`](../e2e/parent-family-calendar.spec.ts) | `npm run test:e2e -- e2e/parent-family-calendar.spec.ts` | Parent Calendar hub: month/week/list, child filter, holiday overlay, day sheet, subscribe ICS, no Add Event | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/parent-calendar-redirects.spec.ts`](../e2e/parent-calendar-redirects.spec.ts) | `npm run test:e2e -- e2e/parent-calendar-redirects.spec.ts` | `/calendar` → `/schedule`; one Family Schedule nav; dashboard Schedule teaser | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
+| [`e2e/school-admin-calendar.spec.ts`](../e2e/school-admin-calendar.spec.ts) | `npm run test:e2e -- e2e/school-admin-calendar.spec.ts` | Admin `/schools/calendar` CRUD, campus isolation, parent/educator 403, unauth 401 | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/parent-progress-scheduled-lessons.spec.ts`](../e2e/parent-progress-scheduled-lessons.spec.ts) | `npm run test:e2e -- e2e/parent-progress-scheduled-lessons.spec.ts` | Parent progress “Scheduled lessons” + completion pills | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/school-admin-academics-kpi.spec.ts`](../e2e/school-admin-academics-kpi.spec.ts) | `npm run test:e2e -- e2e/school-admin-academics-kpi.spec.ts` | Attendance → Lesson plans tab: completion % + attendance KPI | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
 | [`e2e/schedule-template-csv-import.spec.ts`](../e2e/schedule-template-csv-import.spec.ts) | `npm run test:e2e -- e2e/schedule-template-csv-import.spec.ts` | Weekly Templates: CSV map → preview → confirm import + block titles. Suppress `schedule-tour-prompt`; force-click `schedule-csv-done` after success. | `setup-schedule-builder-scenario` (`linkSupabaseAuth`) |
@@ -198,7 +204,7 @@ Wrappers: [`e2e/helpers/testSeed.ts`](../e2e/helpers/testSeed.ts).
 | `GET /api/test/technical-support-issue/:id` | `help-issue-submission.spec.ts` (persistence verify) |
 | `POST /api/test/setup-credit-lookup-scenario` | `credit-management-parent-lookup` |
 | `POST /api/test/setup-progress-scenario` | `quarterly-progress-report-wizard`, `educator-assessments-record` |
-| `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-weekly-schedule-plans`, `educator-landing-nav`, `educator-mentor-loop`, `educator-today-honesty`, `attendance-educator-mark`, `attendance-qr-clock-in` |
+| `POST /api/test/setup-schedule-builder-scenario` | `schedule-builder-publish`, `parent-weekly-schedule`, `parent-family-calendar`, `parent-calendar-redirects`, `school-admin-calendar`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `schedule-template-csv-import`, `educator-weekly-schedule-plans`, `educator-landing-nav`, `educator-mentor-loop`, `educator-today-honesty`, `attendance-educator-mark`, `attendance-qr-clock-in` |
 | `POST /api/test/setup-educator-invite-scenario` | `educator-invite-login` |
 | `POST /api/test/setup-grade-placement-scenario` | `grade-placement-auto-place`, `grade-placement-parent-card` |
 | `POST /api/test/setup-additive-nav-scenario` | `additive-nav.spec.ts` |

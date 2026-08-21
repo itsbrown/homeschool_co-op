@@ -101,10 +101,10 @@ export function AdminShell({ children }: PropsWithChildren) {
           </div>
           <div className="space-y-1">
             <SidebarItem
-              href="/calendar"
+              href="/schools/calendar"
               title="Calendar"
               icon={<Calendar className="h-5 w-5" />}
-              isActive={location.startsWith("/calendar")}
+              isActive={location.startsWith("/schools/calendar")}
             />
             <SidebarItem
               href="/admin/analytics"

@@ -60,11 +60,6 @@ jest.mock('@/components/onboarding/OnboardingTour', () => ({
   default: () => null,
 }));
 
-jest.mock('@/components/calendar/ParentCalendarView', () => ({
-  __esModule: true,
-  default: () => null,
-}));
-
 jest.mock('@/hooks/useParentCredits', () => ({
   useParentCredits: () => ({
     totalAvailableCents: 0,

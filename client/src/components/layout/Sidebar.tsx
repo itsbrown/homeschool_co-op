@@ -311,13 +311,8 @@ const parentNavItems: {
     icon: BookOpen,
   },
   {
-    title: 'Weekly Schedule',
-    href: '/parent/weekly-schedule',
-    icon: CalendarDays,
-  },
-  {
-    title: 'Calendar',
-    href: '/calendar',
+    title: 'Family Schedule',
+    href: '/schedule',
     icon: Calendar,
   },
   {

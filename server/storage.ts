@@ -167,7 +167,11 @@ export interface IStorage {
   getEventsByOrganizer(organizerId: number): Promise<Event[]>;
   getUpcomingEvents(userId: number): Promise<Event[]>;
   getAllEvents(userId: number): Promise<Event[]>;
-  createEvent(event: InsertEvent): Promise<Event>;
+  createEvent(event: InsertEvent & { organizerId: number }): Promise<Event>;
+  updateEvent(id: number, event: Partial<InsertEvent>): Promise<Event | undefined>;
+  deleteEvent(id: number): Promise<boolean>;
+  getUserByCalendarFeedToken(token: string): Promise<User | undefined>;
+  setUserCalendarFeedToken(userId: number, token: string): Promise<User | undefined>;
 
   // Marketplace methods
   getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined>;
@@ -1030,7 +1034,8 @@ export class MemStorage implements IStorage {
       emergencyContactPhone: userData.emergencyContactPhone || null,
       emergencyContactRelationship: userData.emergencyContactRelationship || null,
       avatar: userData.avatar || null,
-      phone: userData.phone || null
+      phone: userData.phone || null,
+      calendarFeedToken: userData.calendarFeedToken ?? null,
     };
     this.usersStore.set(id, user);
     return user;
@@ -1329,12 +1334,41 @@ export class MemStorage implements IStorage {
       ...insertEvent, 
       id, 
       createdAt: now,
+      updatedAt: now,
       organizerId: insertEvent.organizerId,
       description: insertEvent.description || null,
-      location: insertEvent.location || null
+      location: insertEvent.location || null,
+      schoolId: insertEvent.schoolId ?? null,
+      locationId: insertEvent.locationId ?? null,
+      color: insertEvent.color ?? null,
+      isAllDay: insertEvent.isAllDay ?? false,
     };
     this.eventsStore.set(id, event);
     return event;
+  }
+
+  async updateEvent(id: number, update: Partial<InsertEvent>): Promise<Event | undefined> {
+    const existing = this.eventsStore.get(id);
+    if (!existing) return undefined;
+    const updated: Event = { ...existing, ...update, updatedAt: new Date() };
+    this.eventsStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteEvent(id: number): Promise<boolean> {
+    return this.eventsStore.delete(id);
+  }
+
+  async getUserByCalendarFeedToken(token: string): Promise<User | undefined> {
+    return Array.from(this.usersStore.values()).find((u) => u.calendarFeedToken === token);
+  }
+
+  async setUserCalendarFeedToken(userId: number, token: string): Promise<User | undefined> {
+    const user = this.usersStore.get(userId);
+    if (!user) return undefined;
+    const updated = { ...user, calendarFeedToken: token, updatedAt: new Date() };
+    this.usersStore.set(userId, updated);
+    return updated;
   }
 
   // Marketplace methods
@@ -5589,8 +5623,24 @@ export class MemStorage implements IStorage {
       return this.dbStorage.getAllEvents(userId);
     }
 
-    async createEvent(event: InsertEvent): Promise<Event> {
+    async createEvent(event: InsertEvent & { organizerId: number }): Promise<Event> {
       return this.dbStorage.createEvent(event);
+    }
+
+    async updateEvent(id: number, event: Partial<InsertEvent>): Promise<Event | undefined> {
+      return this.dbStorage.updateEvent(id, event);
+    }
+
+    async deleteEvent(id: number): Promise<boolean> {
+      return this.dbStorage.deleteEvent(id);
+    }
+
+    async getUserByCalendarFeedToken(token: string): Promise<User | undefined> {
+      return this.dbStorage.getUserByCalendarFeedToken(token);
+    }
+
+    async setUserCalendarFeedToken(userId: number, token: string): Promise<User | undefined> {
+      return this.dbStorage.setUserCalendarFeedToken(userId, token);
     }
 
     async getMarketplaceItem(id: number): Promise<MarketplaceItem | undefined> {

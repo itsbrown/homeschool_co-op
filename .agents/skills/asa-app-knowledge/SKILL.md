@@ -35,7 +35,7 @@ description: >-
 | Payments, Stripe, cart, prod balance audit | `domains/payments-and-billing.md` + `asa-payment-patterns` |
 | Credits | `asa-credit-system` |
 | Auth, API tenancy | `asa-auth-patterns` |
-| Form Builder, public forms, mentor app | `domains/custom-forms-public-access.md` |
+| Form Builder, public forms, mentor application | `domains/custom-forms-public-access.md` |
 | Educator / mentor `/educator/*` | `domains/educator-ui.md` |
 
 ## Maintenance workflow
@@ -43,7 +43,7 @@ description: >-
 1. Read hub + relevant domain doc and `asa-*` skill.
 2. Complete the task.
 3. Edit domain doc / skill if conventions changed.
-4. **New Playwright spec:** add testing links in [`docs/E2E_COMMANDS.md`](../../docs/E2E_COMMANDS.md) (catalog row: file path, `npm run test:e2e -- e2e/…`, prerequisites, seed endpoint); cross-link from runbook/domain doc when applicable.
+4. **New Playwright spec:** add testing links in [`docs/E2E_COMMANDS.md`](../../docs/E2E_COMMANDS.md) (catalog row: file path, `npm run test:e2e -- e2e/…`, prerequisites, seed endpoint); seed/login specs use `requireLinkedSeed` and must be **run** (skip ≠ pass). Cross-link from runbook/domain doc when applicable.
 5. Add a bullet to `docs/APP_KNOWLEDGE/CHANGELOG.md` (date + summary).
 6. End with **Knowledge update** (learned / updated / gaps).
 
@@ -76,4 +76,5 @@ description: >-
 - `docs/APP_KNOWLEDGE/domains/ci-and-testing.md` — CI gates
 - `docs/APP_KNOWLEDGE/runbooks/merge-replit-prod.md` — ship checklist
 - `.cursor/rules/app-knowledge.mdc` — always-on reminder in Cursor
+- `.cursor/rules/e2e-seed-gate.mdc` — seed/login Playwright fail-not-skip
 - `~/.cursor/skills/maintain-app-knowledge/SKILL.md` — personal maintenance protocol
