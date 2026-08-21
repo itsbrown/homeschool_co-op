@@ -6,9 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -31,7 +29,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, parseApiErrorMessage } from "@/lib/queryClient";
 import { formatClassSchedule } from "@/lib/utils";
 
 // Phone validation: optional, but if provided must be 10-digit or 11-digit starting with 1
@@ -46,19 +44,13 @@ const phoneSchema = z.string().optional().nullable().refine(
 
 const staffEditSchema = z.object({
   name: z.string().optional(),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  email: z.union([z.string().email("Invalid email address"), z.literal("")]).optional(),
   phone: phoneSchema,
   role: z.string().optional(),
-  locationId: z.any().optional().nullable(),
-  department: z.string().optional(),
-  subjects: z.array(z.string()).optional(),
-  status: z.string().optional(),
-  joinDate: z.string().optional(),
-  avatar: z.string().optional(),
-  classIds: z.array(z.number()).optional(),
+  locationId: z.union([z.string(), z.number()]).optional().nullable(),
 });
 
-type StaffFormValues = z.infer<typeof staffEditSchema> & { id?: number };
+type StaffFormValues = z.infer<typeof staffEditSchema>;
 
 interface StaffMember {
   id: number;
@@ -66,7 +58,7 @@ interface StaffMember {
   email: string;
   phone: string;
   role: string;
-  locationId: string | null;
+  locationId: string | number | null;
   department?: string;
   subjects: string[];
   status: string;
@@ -75,7 +67,8 @@ interface StaffMember {
   firstName?: string;
   lastName?: string;
   userId?: number;
-  classIds?: number[];
+  classIds?: number[] | string[];
+  hasPendingInvitation?: boolean;
 }
 
 interface StaffPosition {
@@ -120,98 +113,91 @@ export default function StaffEditPage() {
       phone: "",
       role: "",
       locationId: null,
-      department: "",
-      subjects: [],
-      status: "Active",
-      joinDate: "",
-      avatar: "",
-      classIds: [],
     },
   });
 
   // Fetch staff member data
-  const { data: staffMember, isLoading } = useQuery({
+  const { data: staffMember, isLoading } = useQuery<StaffMember>({
     queryKey: ['/api/school-admin/staff', id],
     enabled: !!id,
   });
 
   // Fetch staff positions
-  const { data: staffPositions = [] } = useQuery<StaffPosition[]>({
+  const { data: staffPositionsData } = useQuery<StaffPosition[]>({
     queryKey: ['/api/school-admin/staff-positions'],
   });
+  const staffPositions = Array.isArray(staffPositionsData) ? staffPositionsData : [];
 
   // Fetch all locations
-  const { data: locations = [] } = useQuery<Location[]>({
+  const { data: locationsData } = useQuery<Location[]>({
     queryKey: ['/api/locations']
   });
-
-  // Fetch all classes for selection
-  const { data: allClassesList = [] } = useQuery({
-    queryKey: ['/api/school-admin/classes-list']
-  });
+  const locations = Array.isArray(locationsData) ? locationsData : [];
 
   // Fetch assigned classes for this staff member
-  const { data: assignedClasses = [], isLoading: classesLoading } = useQuery<ClassItem[]>({
+  const { data: assignedClassesData, isLoading: classesLoading } = useQuery<ClassItem[]>({
     queryKey: ['/api/school-admin/staff', id, 'classes'],
     enabled: !!id,
   });
+  const assignedClasses = Array.isArray(assignedClassesData) ? assignedClassesData : [];
 
   // Fetch all available classes for assignment
-  const { data: allClassesData } = useQuery<ClassesResponse>({
+  const { data: allClassesData } = useQuery<ClassesResponse | ClassItem[]>({
     queryKey: ['/api/school-admin/classes']
   });
   
   // Extract items array from response (API returns { items: [], total, ... })
-  const allClasses = allClassesData?.items || [];
+  const allClasses = Array.isArray(allClassesData)
+    ? allClassesData
+    : Array.isArray(allClassesData?.items)
+      ? allClassesData.items
+      : [];
 
-  // Update form when data is loaded
+  // Update form when data is loaded — only schema fields. Dumping the GET payload
+  // used to include classIds as strings, which failed z.array(z.number()) with no
+  // visible FormMessage (classIds is not a field on this form).
   useEffect(() => {
     if (staffMember) {
-      form.reset(staffMember);
+      form.reset({
+        name: staffMember.name ?? "",
+        email: staffMember.email ?? "",
+        phone: staffMember.phone ?? "",
+        role: staffMember.role ?? "",
+        locationId: staffMember.locationId ?? null,
+      });
     }
   }, [staffMember, form]);
 
   // Update staff member mutation
   const updateStaffMutation = useMutation({
     mutationFn: async (data: StaffFormValues) => {
-      return await apiRequest("PUT", `/api/school-admin/staff/${id}`, data);
+      const res = await apiRequest("PUT", `/api/school-admin/staff/${id}`, {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        role: data.role,
+        locationId: data.locationId,
+      });
+      return res.json();
     },
-    onSuccess: (response: any) => {
-      const updatedStaff = response?.staff || response;
-      
-      if (!updatedStaff) {
-        console.error("No staff data in response:", response);
-        toast({
-          title: "Warning",
-          description: "Staff updated but response was incomplete",
-          variant: "destructive",
-        });
-        queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
-        navigate('/schools/staff');
-        return;
-      }
+    onSuccess: (response: { staff?: StaffMember }) => {
+      const updatedStaff = response?.staff;
       
       toast({
         title: "Success",
         description: "Staff member updated successfully",
       });
       
-      // Synchronously update the staff list cache
-      queryClient.setQueryData(['/api/school-admin/staff'], (oldData: any) => {
-        if (!Array.isArray(oldData)) return oldData;
-        return oldData.map((staff: any) => 
-          staff.id === updatedStaff.id ? updatedStaff : staff
-        );
-      });
-      // Also update the individual staff member cache
-      queryClient.setQueryData(['/api/school-admin/staff', id], updatedStaff);
-      // Navigate immediately - cache is already updated
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
+      if (updatedStaff) {
+        queryClient.setQueryData(['/api/school-admin/staff', id], updatedStaff);
+      }
       navigate('/schools/staff');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to update staff member",
+        description: parseApiErrorMessage(error, "Failed to update staff member"),
         variant: "destructive",
       });
     },
@@ -297,6 +283,14 @@ export default function StaffEditPage() {
     updateStaffMutation.mutate(data);
   };
 
+  const onInvalid = () => {
+    toast({
+      title: "Couldn't save",
+      description: "Check the highlighted fields and try again.",
+      variant: "destructive",
+    });
+  };
+
   const handleDelete = () => {
     if (confirm("Are you sure you want to remove this staff member? This action cannot be undone.")) {
       deleteStaffMutation.mutate();
@@ -355,7 +349,7 @@ export default function StaffEditPage() {
             </CardHeader>
             <CardContent>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Basic Information */}
                     <div className="space-y-4">
@@ -396,7 +390,11 @@ export default function StaffEditPage() {
                           <FormItem>
                             <FormLabel>Phone Number</FormLabel>
                             <FormControl>
-                              <Input {...field} placeholder="Enter phone number" />
+                              <Input
+                                {...field}
+                                value={field.value ?? ""}
+                                placeholder="Enter phone number"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -439,13 +437,17 @@ export default function StaffEditPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Location</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value?.toString() || ""}>
+                            <Select
+                              onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                              value={field.value != null && field.value !== "" ? String(field.value) : "none"}
+                            >
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select location" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                <SelectItem value="none">No campus</SelectItem>
                                 {locations.map((location) => (
                                   <SelectItem key={location.id} value={location.id.toString()}>
                                     {location.name}
@@ -458,29 +460,19 @@ export default function StaffEditPage() {
                         )}
                       />
 
-                      <FormField
-                        control={form.control}
-                        name="status"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Status</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="Active">Active</SelectItem>
-                                <SelectItem value="Inactive">Inactive</SelectItem>
-                                <SelectItem value="On Leave">On Leave</SelectItem>
-                                <SelectItem value="Pending">Pending</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <div className="space-y-2">
+                        <Label>Status</Label>
+                        <div className="pt-1">
+                          <Badge variant={staffMember?.status === "Pending" ? "secondary" : "default"}>
+                            {staffMember?.status || "Active"}
+                          </Badge>
+                          {staffMember?.hasPendingInvitation ? (
+                            <p className="text-sm text-muted-foreground mt-2">
+                              Pending until they accept the invitation.
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -511,6 +503,7 @@ export default function StaffEditPage() {
                       <Button
                         type="submit"
                         disabled={updateStaffMutation.isPending}
+                        data-testid="button-save-staff-changes"
                       >
                         {updateStaffMutation.isPending ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />

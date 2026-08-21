@@ -28,6 +28,8 @@ On accept, **new** emails get a Supabase Auth user with the password they chose.
 
 Invite `classId` is stored on the invitation and applied **on accept** (`educator_class_assignments`). `classes.instructorId` is set only when empty or already this mentor. Campus filters the class list. Directors get `invitePath` to copy when email fails.
 
+Staff edit **Save Changes** only persists name/email/phone/role/campus. Status is derived from pending invite / `isActive`. Class assignment is a separate control. Staff list and staff-edit class lookups use `getClassesBySchoolId` (not `getAllClasses`).
+
 E2E: `e2e/educator-invite-login.spec.ts` — seed `POST /api/test/setup-educator-invite-scenario`.
 
 **Deploy:** additive [`server/migrations/259-staff-invitations.sql`](../../../server/migrations/259-staff-invitations.sql) before or with the release (never `db:push`). Boot `ensureStaffInvitationsSchema` applies the same file; treat a non-fatal ensure log as “run 259 by hand.” See [merge-replit-prod.md](../runbooks/merge-replit-prod.md).
@@ -94,6 +96,8 @@ Seeds: `POST /api/test/setup-schedule-builder-scenario` and `setup-progress-scen
 | Invite email “invalid token” | Invite wrote `role_invitations`; accept reads `staff_invitations` | `POST /staff/invite` → `createStaffInvitation`; accept page stays on staff-invitations |
 | Invite E2E `socket hang up` on seed | Vite failed to parse Staff pending menu (two items in one `{cond && (}` ) and/or Playwright reused a server on disabled Neon | Separate menu items (or a fragment); worktree `.env` symlink; do not reuse a Neon-booted `:5000` |
 | Parent locked out after staff invite | Accept used `updateUserById` to set a new password | Existing Auth: verify current password; never reset it |
+| Accept: “existing user but the account could not be found” | `createUser` said email exists; `listUsers` pagination missed them | Sign in with the current password to get the Auth user id; do not scan `listUsers` |
+| Staff **Save Changes** does nothing | `form.reset(GET payload)` put `classIds` as strings into `z.array(z.number())`; that field has no `FormMessage` | Reset only name/email/phone/role/location; toast on invalid; `apiRequest` needs `.json()`. Status is derived (invite pending / active), not a PUT field. Staff class lookups must use `getClassesBySchoolId`, not `getAllClasses`. |
 
 ## Out of scope (still leftover)
 
@@ -110,4 +114,5 @@ Volunteer check-in on Start Session (assigned aides are read-only). Email blast 
 | Query helper | `client/src/lib/educator-queries.ts` |
 | Safety | `shared/educator-student-safety.ts`, `server/lib/educator-student-safety.ts`, `StudentSafetySheet.tsx` |
 | Staff invite | `server/lib/staff-invitations.ts`, `shared/staff-invitations.ts`, `StaffInvitePage.tsx`, `AcceptEducatorInvitationPage.tsx` |
+| Staff edit | `client/src/pages/schools/StaffEditPage.tsx`, `PUT /api/school-admin/staff/:id` |
 | Attendance UI | `AttendanceTracker.tsx`, `ActiveSession.tsx`, `StartSession.tsx` |

@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-08-21 (Staff edit Save Changes no-op)
+
+- School-admin Staff edit `Save Changes` silently failed when GET `classIds` were strings (`z.array(z.number())` with no field UI). Reset only editable fields; toast on invalid; parse `apiRequest` JSON. Status is derived, not saved. PUT/detail class lists use `getClassesBySchoolId`.
+- Staff list no longer scans every class (`getAllClasses`); pending-invite lookup is non-fatal. Invite accept for an existing Auth email signs in with the current password (no `listUsers` scan).
+
 ## 2026-08-20 (Mentor invite: do not hijack existing accounts)
 
 - Staff-invite accept must not `updateUserById` password for an email that already has Supabase Auth; existing users enter their current password. Do not rewrite `users.schoolId` for another school. Class assignment waits until accept and does not steal `instructorId`.

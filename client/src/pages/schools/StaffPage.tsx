@@ -59,6 +59,7 @@ export default function StaffPage() {
   // Fetch staff data from API
   const { data: staff = [], isLoading, error } = useQuery<StaffMember[]>({
     queryKey: ['/api/school-admin/staff'],
+    retry: 1,
   });
 
   // Ensure staff is treated as an array

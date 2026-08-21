@@ -417,12 +417,12 @@ async function buildStaffMemberResponseForUser(
   const user = await storage.getUser(userId);
   if (!user) return null;
 
-  const allClasses = await storage.getAllClasses();
-  const assignedClasses = allClasses.filter(
-    (cls) => cls.instructorId === user.id && cls.schoolId === schoolId,
+  const schoolClasses = await storage.getClassesBySchoolId(String(schoolId));
+  const assignedClasses = schoolClasses.filter(
+    (cls) => cls.instructorId === user.id,
   );
 
-    const pendingInvitationsMap = await getPendingStaffInvitationMapForSchool(schoolId);
+  const pendingInvitationsMap = await getPendingStaffInvitationMapForSchool(schoolId);
   const hasPendingInvitation =
     pendingInvitationsMap.get(user.email) ||
     pendingInvitationsMap.get(user.email.trim().toLowerCase()) ||
@@ -1771,12 +1771,15 @@ router.get("/staff", supabaseAuth, attachAccessScope, requirePermission('canMana
       }
     });
     
-    // Batch check for pending invitations
-    const pendingInvitationsMap = await getPendingStaffInvitationMapForSchool(schoolId);
+    // Batch check for pending invitations (do not fail the whole staff list)
+    let pendingInvitationsMap = new Map<string, boolean>();
+    try {
+      pendingInvitationsMap = await getPendingStaffInvitationMapForSchool(schoolId);
+    } catch (inviteErr) {
+      console.error("⚠️ Pending staff invitations lookup failed:", inviteErr);
+    }
 
-    // Get all classes for this school
-    const allClasses = await storage.getAllClasses();
-    const schoolClasses = allClasses.filter(c => c.schoolId === schoolId);
+    const schoolClasses = await storage.getClassesBySchoolId(String(schoolId));
 
     // Fetch school_staff records for enrichment (department only)
     const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
@@ -1794,13 +1797,18 @@ router.get("/staff", supabaseAuth, attachAccessScope, requirePermission('canMana
     
     // Build a map of userId -> locationId from user_locations
     const userLocationMap = new Map<number, number | null>();
-    for (const userId of userIds) {
-      const userLocations = await storage.getUserLocationsByUserId(userId);
-      // Filter to only locations belonging to this school
-      const schoolUserLocations = userLocations.filter(ul => schoolLocationIds.includes(ul.locationId));
-      // Use the first matching location (a user typically has one location per school)
-      userLocationMap.set(userId, schoolUserLocations.length > 0 ? schoolUserLocations[0].locationId : null);
-    }
+    const locationLists = await Promise.all(
+      userIds.map((userId) => storage.getUserLocationsByUserId(userId)),
+    );
+    userIds.forEach((userId, i) => {
+      const schoolUserLocations = locationLists[i].filter((ul) =>
+        schoolLocationIds.includes(ul.locationId),
+      );
+      userLocationMap.set(
+        userId,
+        schoolUserLocations.length > 0 ? schoolUserLocations[0].locationId : null,
+      );
+    });
 
     // Transform to frontend format - one entry per user role
     const staffWithDetails = staffTypeRoles.map((roleRecord: UserRole) => {
@@ -1914,9 +1922,9 @@ router.get("/staff/:id/classes", supabaseAuth, async (req: any, res) => {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
-    const allClasses = await storage.getAllClasses();
-    const assignedClasses = allClasses.filter(
-      (cls) => cls.instructorId === resolved.userId && cls.schoolId === schoolId,
+    const schoolClasses = await storage.getClassesBySchoolId(String(schoolId));
+    const assignedClasses = schoolClasses.filter(
+      (cls) => cls.instructorId === resolved.userId,
     );
 
     console.log(`✅ Found ${assignedClasses.length} classes for ${resolved.user!.name}`);
@@ -2340,14 +2348,22 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
     const updatedRoleRecord = updatedRoleRecords[0];
     
     // Get classes assigned to this staff member
-    const allClasses = await storage.getAllClasses();
-    const assignedClasses = allClasses.filter(cls => 
-      cls.instructorId === updatedUser!.id && cls.schoolId === schoolId
+    const schoolClasses = await storage.getClassesBySchoolId(String(schoolId));
+    const assignedClasses = schoolClasses.filter(
+      (cls) => cls.instructorId === updatedUser!.id,
     );
 
     // Check if user has a pending invitation
-    const pendingInvitationsMap = await getPendingStaffInvitationMapForSchool(schoolId);
-    const hasPendingInvitation = pendingInvitationsMap.get(updatedUser!.email) || false;
+    let hasPendingInvitation = false;
+    try {
+      const pendingInvitationsMap = await getPendingStaffInvitationMapForSchool(schoolId);
+      hasPendingInvitation =
+        pendingInvitationsMap.get(updatedUser!.email) ||
+        pendingInvitationsMap.get(String(updatedUser!.email).trim().toLowerCase()) ||
+        false;
+    } catch (inviteErr) {
+      console.error("⚠️ Pending staff invitations lookup failed on update:", inviteErr);
+    }
 
     // Fetch school_staff record for enrichment (department only)
     const schoolStaffRecordsForUpdate = await storage.getSchoolStaffBySchoolId(schoolId);

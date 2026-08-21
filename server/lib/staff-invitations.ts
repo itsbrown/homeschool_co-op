@@ -17,7 +17,7 @@ import {
 } from "@shared/staff-invitations";
 import { getActiveEducatorAssignmentForClass } from "./educator-class-assignments-db";
 import { ensureStaffInvitationsSchema } from "./ensure-staff-invitations-schema";
-import { findAuthUserByEmail } from "./supabase-admin-auth";
+import { getSupabaseAdminClient } from "./supabase-admin-auth";
 
 export { mapPositionToRole };
 
@@ -204,9 +204,13 @@ type AcceptResult =
 const EXISTING_ACCOUNT_PASSWORD_MESSAGE =
   "This email already has an account. Enter the password you use to sign in.";
 
-async function verifyExistingAuthPassword(email: string, password: string): Promise<boolean> {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const anon = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+/** Same host order as getSupabaseAdminClient so create + sign-in hit one Auth project. */
+async function signInExistingAuthUser(
+  email: string,
+  password: string,
+): Promise<string | null> {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const anon = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   if (!url || !anon) {
     throw new Error("Server configuration error - unable to create account");
   }
@@ -214,8 +218,9 @@ async function verifyExistingAuthPassword(email: string, password: string): Prom
   const client = createClient(url, anon, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  const { error } = await client.auth.signInWithPassword({ email, password });
-  return !error;
+  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  if (error || !data.user?.id) return null;
+  return data.user.id;
 }
 
 export async function ensureSupabaseAuthUser(params: {
@@ -225,16 +230,10 @@ export async function ensureSupabaseAuthUser(params: {
   lastName: string;
   role: string;
 }): Promise<{ supabaseUserId: string; created: boolean }> {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) {
     throw new Error("Server configuration error - unable to create account");
   }
-
-  const { createClient } = await import("@supabase/supabase-js");
-  const supabaseAdmin = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
 
   const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
     email: params.email,
@@ -260,16 +259,11 @@ export async function ensureSupabaseAuthUser(params: {
     throw new Error(createErr?.message || "Failed to create account");
   }
 
-  const existing = await findAuthUserByEmail(params.email);
-  if (!existing?.id) {
-    throw new Error("Supabase reported existing user but the account could not be found");
+  const signedInId = await signInExistingAuthUser(params.email, params.password);
+  if (signedInId) {
+    return { supabaseUserId: signedInId, created: false };
   }
-
-  const passwordMatches = await verifyExistingAuthPassword(params.email, params.password);
-  if (!passwordMatches) {
-    throw new Error(EXISTING_ACCOUNT_PASSWORD_MESSAGE);
-  }
-  return { supabaseUserId: existing.id, created: false };
+  throw new Error(EXISTING_ACCOUNT_PASSWORD_MESSAGE);
 }
 
 export async function acceptStaffInvitation(params: {
