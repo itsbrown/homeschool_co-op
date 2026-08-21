@@ -424,6 +424,12 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   }
   server.listen(listenOpts, async () => {
     console.log(`serving on port ${port}`);
+    try {
+      const { ensureStaffInvitationsSchema } = await import("./lib/ensure-staff-invitations-schema");
+      await ensureStaffInvitationsSchema();
+    } catch (err) {
+      console.error("⚠️ ensureStaffInvitationsSchema failed (non-fatal):", err);
+    }
 
     // Background jobs should run only in local development or explicit singleton worker mode.
     if (shouldRunBackgroundJobs(currentEnv)) {

@@ -46,6 +46,7 @@ Both SQL files are idempotent (`IF NOT EXISTS`). **Never** `db:push` on shared/p
 - [ ] School admin: Location Management — list/create campus on **registration school**
 - [ ] Associate existing parent to school (no 500)
 - [ ] Admin `users.school_id` misaligned still lists/creates locations on admin school
+- [ ] Staff → Invite: send (or copy link) → `/accept-educator-invitation?token=` → set password → `/educator/dashboard` (no second login). Confirm `staff_invitations` exists (`259-staff-invitations.sql` or boot ensure).
 
 **Data fixes (if legacy misalignment)**
 
@@ -65,12 +66,14 @@ Apply **additive** SQL only when columns/tables are missing:
 | `server/migrations/f001-phase1-schema.sql` | F001 session / `family_payment_plans` / enrollment columns |
 | `server/migrations/258-supply-lists.sql` | Family supply lists (`supply_items`, `parent_supply_checks`) |
 | `server/migrations/255-store-affiliate-products.sql` | Public store Amazon affiliate columns on `store_products` — apply **before or with** deploy; Drizzle selects `product_kind` / `affiliate_url` / `asin` / `affiliate_metadata` for all merch |
+| `server/migrations/259-staff-invitations.sql` | Staff Invite → accept (`staff_invitations` + `position` / `invited_by`). Apply **before or with** deploy. Boot `ensureStaffInvitationsSchema` is idempotent; if it logs non-fatal failure, run this SQL. Never `db:push`. |
 
 Verify with read-only checks or `scripts/verify-f001-schema.mjs` against a **non-prod** mirror when possible.
 
 ## 4. Post-deploy
 
 - [ ] Repeat smoke test on prod (registration + one location create)
+- [ ] Staff invite smoke: copy-link accept → signed-in `/educator/dashboard`
 - [ ] Monitor admin error notifications for 401/500 on `/api/locations` or register paths
 - [ ] Note changes in [CHANGELOG.md](../CHANGELOG.md)
 

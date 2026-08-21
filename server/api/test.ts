@@ -5171,4 +5171,115 @@ router.post('/setup-additive-nav-scenario', async (req: Request, res: Response) 
   }
 });
 
+/**
+ * POST /api/test/setup-educator-invite-scenario
+ * School admin + campus + class + Mentor position for Staff → Invite E2E.
+ */
+router.post('/setup-educator-invite-scenario', async (req: Request, res: Response) => {
+  try {
+    const { ensureStaffInvitationsSchema } = await import('../lib/ensure-staff-invitations-schema');
+    await ensureStaffInvitationsSchema();
+
+    const testDb = new TestDatabase();
+    const uniqueId = nanoid(8);
+    const bcrypt = await import('bcryptjs');
+    const password = 'TestPassword123!';
+
+    const admin = await testDb.createTestUser({
+      email: `invite_admin_${uniqueId}@test.com`,
+      username: `inviteadmin_${uniqueId}`,
+      name: 'Invite Test Admin',
+      firstName: 'Invite',
+      lastName: 'Admin',
+      role: 'schoolAdmin',
+    });
+    await storage.updateUser(admin.id, { password: await bcrypt.hash(password, 10) });
+
+    const school = await testDb.createTestSchool(admin.id, {
+      name: `Invite School ${uniqueId}`,
+      registrationCode: `INV${uniqueId.toUpperCase()}`,
+    });
+    await storage.updateUser(admin.id, { schoolId: school.id });
+
+    await dbInsertUserRole(admin.id, school.id);
+
+    const campus = await testDb.createTestLocation(school.id, {
+      name: `Invite Campus ${uniqueId}`,
+    });
+
+    const cls = await testDb.createTestClass(school.id, {
+      title: `Seekers Invite ${uniqueId}`,
+      description: 'E2E invite class',
+      price: 10000,
+      status: 'upcoming',
+      locationId: campus.id,
+      schedule: {
+        days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+        startTime: '09:00',
+        endTime: '10:00',
+      },
+    });
+
+    await storage.createStaffPosition({
+      title: 'Mentor',
+      description: 'Classroom mentor',
+      isDefault: true,
+      schoolId: school.id,
+    });
+
+    let adminSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuth === true || req.body?.linkSupabaseAuthAdmin === true) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceKey) {
+        return res.status(400).json({
+          error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+        });
+      }
+      adminSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: admin.id,
+        email: admin.email,
+        password,
+        role: 'schoolAdmin',
+        schoolId: school.id,
+        displayName: admin.name || 'Invite Test Admin',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        adminSupabaseLinked,
+        supabaseLinked: adminSupabaseLinked,
+        school: { id: school.id, name: school.name },
+        admin: { id: admin.id, email: admin.email, password },
+        location: { id: campus.id, name: campus.name },
+        class: { id: cls.id, title: cls.title },
+        invitee: {
+          email: `invite_mentor_${uniqueId}@test.com`,
+          firstName: 'Jordan',
+          lastName: `Mentor${uniqueId}`,
+          password: 'InvitePass123!',
+        },
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-educator-invite-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup educator invite scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+async function dbInsertUserRole(userId: number, schoolId: number) {
+  const db = await getDb();
+  await db.insert(userRoles).values({
+    userId,
+    role: 'schoolAdmin',
+    schoolId,
+    isPrimary: true,
+  });
+}
+
 export default router;

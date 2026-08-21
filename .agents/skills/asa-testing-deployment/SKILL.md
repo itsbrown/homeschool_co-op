@@ -311,6 +311,10 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - Don't remove the `Cache-Control: no-cache` middleware from `server/index.ts` — post-deployment chunk-load failures will break all frontend routes for users with cached browsers
 - Don't treat "feature X is broken" reports at face value after a deployment — rule out stale-cache chunk errors first
 - Don't deploy as Autoscale — background schedulers and WebSocket connections will silently die between requests
+- Don't leave two JSX siblings inside one `{cond && ( … )}` — Vite esbuild fails and Playwright `/api/test/*` POSTs `socket hang up`
+- Don't run worktree E2E without a `.env` symlink; leftover Neon `asa_test` in the shell is disabled — `apply-local-env` yields to the file URL
+- Don't leave two JSX siblings inside one `{cond && ( … )}` — Vite esbuild fails and Playwright `/api/test/*` POSTs `socket hang up`
+- Don't run worktree E2E without a `.env` symlink; leftover Neon `asa_test` in the shell is disabled — `apply-local-env` yields to the file URL
 
 ## Key Files
 - `server/index.ts` — Express server entry point; port binding; `Cache-Control` middleware for production

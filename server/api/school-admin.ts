@@ -36,6 +36,18 @@ import {
 } from '../lib/user-profile-capabilities';
 import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
 import { normalizeAllergiesInput } from '@shared/child-profile-patch';
+import {
+  createPendingStaffInvitation,
+  getPendingStaffInvitationForEmail,
+  getPendingStaffInvitationMapForSchool,
+  parseOptionalClassId,
+  parseOptionalLocationId,
+  refreshPendingStaffInvitation,
+  staffInviteUrl,
+  unusedLocalPassword,
+  mapPositionToRole as mapStaffPositionToRole,
+} from '../lib/staff-invitations';
+import { canAdoptUserSchoolId, staffInvitePath } from '@shared/staff-invitations';
 
 // Rate limiter for permission updates - prevent bulk abuse
 const permissionUpdateLimiter = rateLimit({
@@ -326,27 +338,8 @@ If you have any questions, please contact us at support@americanseekersacademy.c
   }
 }
 
-// Generate a random token for invitations
-function generateInvitationToken(): string {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-}
-
-// Helper function to map position/role to database schema role enum
-// Maps: "Support Staff"/"Aide"/"Volunteer" -> "staff", "Mentor" -> "teacher", "Administrator" -> "administrator"
 function mapPositionToRole(position: string): "teacher" | "administrator" | "staff" | "other" {
-  const positionLower = position.toLowerCase();
-  
-  if (positionLower.includes('teacher') || positionLower.includes('mentor') || positionLower.includes('instructor')) {
-    return 'teacher';
-  }
-  if (positionLower.includes('admin')) {
-    return 'administrator';
-  }
-  if (positionLower.includes('support') || positionLower.includes('aide') || positionLower.includes('volunteer')) {
-    return 'staff';
-  }
-  
-  return 'other';
+  return mapStaffPositionToRole(position);
 }
 
 // Helper function to transform database school_staff + user to frontend format (legacy - kept for compatibility)
@@ -429,10 +422,11 @@ async function buildStaffMemberResponseForUser(
     (cls) => cls.instructorId === user.id && cls.schoolId === schoolId,
   );
 
-  const pendingInvitationsMap = await storage.getPendingRoleInvitationsByEmails([
-    user.email,
-  ]);
-  const hasPendingInvitation = pendingInvitationsMap.get(user.email) || false;
+    const pendingInvitationsMap = await getPendingStaffInvitationMapForSchool(schoolId);
+  const hasPendingInvitation =
+    pendingInvitationsMap.get(user.email) ||
+    pendingInvitationsMap.get(user.email.trim().toLowerCase()) ||
+    false;
 
   const schoolLocations = await storage.getLocationsBySchoolId(schoolId);
   const schoolLocationIds = schoolLocations.map((loc) => loc.id);
@@ -1505,162 +1499,165 @@ router.post("/classes/:id/sync-grade-placements", supabaseAuth, async (req: any,
   }
 });
 
-// Staff invitations now use database storage via roleInvitations table
-
-// Invite staff member (POST endpoint)
+// Invite staff member. Writes staff_invitations (the table the accept page reads).
 router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
-  console.log("📧 Staff invitation request received:", req.body);
-
   try {
-    console.log("🔍 Step 1: Extracting schoolId from database [FIX:v3.0]");
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
-    console.log("✅ Step 1 complete: schoolId from DB =", schoolId);
 
     const { email, firstName, lastName, role, locationId, classId, message } = req.body;
 
     if (!email || !firstName || !lastName || !role) {
-      console.log("❌ Missing required fields:", { email, firstName, lastName, role });
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const department = role; // Use role as department for compatibility
-
-    console.log("🔍 Step 2: Checking for existing staff");
-    const existingStaff = await storage.getSchoolStaffBySchoolId(schoolId);
-    const staffEmails = await Promise.all(
-      existingStaff.map(async (staff) => {
-        const user = await storage.getUser(staff.userId);
-        return user?.email;
-      })
-    );
-    console.log("✅ Step 2 complete: Found", existingStaff.length, "existing staff");
-    
-    if (staffEmails.includes(email)) {
-      console.log("❌ Staff member already exists:", email);
-      return res.status(400).json({ message: "Staff member with this email already exists" });
+    const parsedLocationId = parseOptionalLocationId(locationId);
+    const parsedClassId = parseOptionalClassId(classId);
+    const pendingInvite = await getPendingStaffInvitationForEmail(schoolId, email);
+    if (pendingInvite) {
+      const existingUser = await storage.getUserByEmail(email);
+      return res.status(409).json({
+        message: `${firstName} already has a pending invite — Resend from Staff.`,
+        code: "PENDING_INVITE",
+        canResend: true,
+        staffUserId: existingUser?.id ?? null,
+        invitePath: staffInvitePath(pendingInvite.token),
+        inviteUrl: staffInviteUrl(pendingInvite.token),
+        expiresAt: pendingInvite.expiresAt,
+      });
     }
 
-    console.log("🔍 Step 3: Checking if user exists");
-    const existingUsers = await storage.getAllUsers();
-    let user = existingUsers.find(u => u.email === email);
-    
+    const existingStaff = await storage.getSchoolStaffBySchoolId(schoolId);
+    for (const staff of existingStaff) {
+      const staffUser = await storage.getUser(staff.userId);
+      if (staffUser?.email?.toLowerCase() === String(email).trim().toLowerCase()) {
+        if (staff.isActive) {
+          return res.status(409).json({
+            message: `${firstName} is already on staff`,
+            code: "ALREADY_STAFF",
+            staffUserId: staffUser.id,
+          });
+        }
+        break;
+      }
+    }
+
+    let user = await storage.getUserByEmail(email);
     if (!user) {
-      console.log("📝 Creating new user for:", email);
       user = await storage.createUser({
-        email,
-        username: email,
-        password: "temp_password",
-        name: `${firstName} ${lastName}`,
+        email: String(email).trim(),
+        username: String(email).trim(),
+        password: unusedLocalPassword(),
+        name: `${firstName} ${lastName}`.trim(),
+        firstName: String(firstName).trim(),
+        lastName: String(lastName).trim(),
         phone: "",
-        role: "teacher"
+        role: "teacher",
+        schoolId,
+        isActive: true,
       });
+    } else {
+      const patch: {
+        firstName: string;
+        lastName: string;
+        name: string;
+        schoolId?: number;
+      } = {
+        firstName: String(firstName).trim(),
+        lastName: String(lastName).trim(),
+        name: `${firstName} ${lastName}`.trim(),
+      };
+      if (canAdoptUserSchoolId(user.schoolId, schoolId)) {
+        patch.schoolId = schoolId;
+      }
+      await storage.updateUser(user.id, patch);
+      user = (await storage.getUser(user.id)) ?? user;
     }
 
     if (!user) {
       throw new Error("Failed to create user");
     }
-    console.log("✅ Step 3 complete: User ID =", user.id);
 
-    // DUAL-WRITE: Create both school_staff (for backward compatibility) and user_roles (new source of truth)
-    
-    // Step 4a: Create school_staff record (legacy - for backward compatibility)
-    console.log("🔍 Step 4a: Creating school_staff record (legacy)");
-    const staffRecord = await storage.createSchoolStaff({
-      schoolId,
-      userId: user.id,
-      role: mapPositionToRole(role),
-      position: role,
-      department,
-      startDate: new Date(),
-      endDate: null,
-      isActive: false,
-      locationId: locationId || null
-    });
-    console.log("✅ Step 4a complete: school_staff ID =", staffRecord?.id);
-    
-    // Step 4b: Create user_roles entry (new source of truth)
-    console.log("🔍 Step 4b: Creating user_roles entry for staff");
+    const schoolStaffRecords = await storage.getSchoolStaffBySchoolId(schoolId);
+    let staffRecord = schoolStaffRecords.find((s) => s.userId === user!.id);
+    if (!staffRecord) {
+      staffRecord = await storage.createSchoolStaff({
+        schoolId,
+        userId: user.id,
+        role: mapPositionToRole(role),
+        position: role,
+        department: role,
+        startDate: new Date(),
+        endDate: null,
+        isActive: false,
+        locationId: parsedLocationId,
+      });
+    }
+
     const db = await getDb();
-    
-    // Check if user_roles entry already exists for this user/school/role combo
     const existingUserRoles = await db
       .select()
       .from(userRoles)
       .where(eq(userRoles.userId, user.id));
-    
+
     const existingRoleForSchool = existingUserRoles.find(
-      (r: { schoolId: number | null; role: string }) => r.schoolId === schoolId && r.role === role
+      (r: { schoolId: number | null; role: string }) => r.schoolId === schoolId && r.role === role,
     );
-    
+
     let userRoleId: number;
     if (existingRoleForSchool) {
       userRoleId = existingRoleForSchool.id;
-      console.log("✅ User already has this role at school, using existing user_role ID:", userRoleId);
     } else {
-      // Create new user_roles entry for this staff member
       const [newUserRole] = await db
         .insert(userRoles)
         .values({
           userId: user.id,
-          role: role, // Use the exact position/role (educator, teacher, schoolAdmin, or custom like "Mentor")
-          schoolId: schoolId,
-          isPrimary: existingUserRoles.length === 0 // First role becomes primary
+          role,
+          schoolId,
+          isPrimary: existingUserRoles.length === 0,
         })
         .returning();
       userRoleId = newUserRole.id;
-      console.log("✅ Step 4b complete: user_roles entry ID =", userRoleId);
     }
 
-    console.log("🔍 Step 5: Generating invitation token");
-    const invitationToken = generateInvitationToken();
-    console.log("✅ Step 5 complete: Token generated");
-    
-    console.log("🔍 Step 6: Creating role invitation record");
-    const mappedRole = mapPositionToRole(role);
-    const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
-    
-    try {
-      const roleInvitation = await storage.createRoleInvitation({
-        email,
-        role: userRole,
-        invitedBy: 1,
-        schoolId,
-        token: invitationToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        isActive: true
-      });
-      console.log("✅ Step 6 complete: Role invitation created");
-    } catch (roleInviteError) {
-      console.error("❌ Error creating role invitation (non-critical):", roleInviteError);
-      // Continue even if role invitation fails - this is optional
-    }
+    const invitation = await createPendingStaffInvitation({
+      email: String(email).trim(),
+      firstName: String(firstName).trim(),
+      lastName: String(lastName).trim(),
+      position: role,
+      schoolId,
+      locationId: parsedLocationId,
+      classId: parsedClassId,
+      message: message ? String(message) : null,
+      invitedBy: typeof req.user?.id === "number" ? req.user.id : null,
+    });
 
-    console.log("🔍 Step 7: Transforming staff to frontend format using user_roles");
-    // Create a role record object to pass to transformer
     const roleRecord = existingRoleForSchool || {
       id: userRoleId,
       userId: user.id,
-      role: role,
-      schoolId: schoolId,
-      isPrimary: false
+      role,
+      schoolId,
+      isPrimary: false,
     };
-    // Pass staffRecord for department/locationId enrichment
-    const responseStaff = transformUserRoleStaffToFrontend(roleRecord as UserRole, user, [], true, staffRecord);
-    console.log("✅ Step 7 complete");
+    const responseStaff = transformUserRoleStaffToFrontend(
+      roleRecord as UserRole,
+      user,
+      [],
+      true,
+      staffRecord,
+    );
 
-    // Step 7b: Default user_locations row when invite includes a campus (permissions start closed)
-    if (locationId) {
+    if (parsedLocationId) {
       try {
         const existingUl = await storage.getUserLocationsByUserId(user.id);
         const alreadyAssigned = existingUl.some(
-          (ul) => ul.locationId === Number(locationId) && ul.isActive,
+          (ul) => ul.locationId === parsedLocationId && ul.isActive,
         );
         if (!alreadyAssigned) {
           await storage.createUserLocation({
             userId: user.id,
-            locationId: Number(locationId),
-            accessLevel: 'view',
+            locationId: parsedLocationId,
+            accessLevel: "view",
             canViewReports: false,
             canManageStaff: false,
             canManageClasses: false,
@@ -1669,32 +1666,58 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
             canViewParentContacts: false,
             isActive: true,
           });
-          console.log(`✅ Created user_locations for invited user ${user.id} at location ${locationId}`);
         }
       } catch (locationError) {
-        console.error(`⚠️ Failed to create user_locations on invite for ${user.id}:`, locationError);
+        console.error(`Failed to create user_locations on invite for ${user.id}:`, locationError);
       }
     }
-    
-    console.log("🔍 Step 8: Sending invitation email (fire-and-forget)");
-    sendStaffInvitationEmail(email, firstName, lastName, role, department, invitationToken, message)
-      .catch(err => console.error('[Email fire-and-forget] sendStaffInvitationEmail failed:', err));
-    console.log("✅ Step 8 complete: Invitation email dispatched");
 
-    console.log("✅ Staff member invited successfully:", { id: userRoleId, email });
-    res.json({ 
-      success: true, 
-      message: "Staff member invited successfully and invitation email dispatched",
-      staff: responseStaff,
-      emailSent: true
+    const school = await storage.getSchool(schoolId);
+    let className: string | undefined;
+    let campusName: string | undefined;
+    if (parsedClassId) {
+      const cls = await storage.getClassById(parsedClassId);
+      className = cls?.title;
+    }
+    if (parsedLocationId) {
+      const loc = await storage.getLocationById(parsedLocationId);
+      campusName = loc?.name;
+    }
+
+    const emailSent = await sendStaffInvitationEmail(
+      String(email).trim(),
+      String(firstName).trim(),
+      String(lastName).trim(),
+      role,
+      role,
+      invitation.token,
+      message,
+      {
+        schoolName: school?.name,
+        className,
+        campusName,
+        expiresAt: invitation.expiresAt,
+      },
+    );
+
+    const invitePath = staffInvitePath(invitation.token);
+    const inviteUrl = staffInviteUrl(invitation.token);
+    res.json({
+      success: true,
+      message: emailSent
+        ? `Invitation sent to ${firstName} ${lastName}`
+        : `Invitation created for ${firstName} ${lastName}. Copy the link if they do not see the email.`,
+      staff: { ...responseStaff, inviteUrl, invitePath, expiresAt: invitation.expiresAt },
+      emailSent,
+      inviteUrl,
+      invitePath,
+      expiresAt: invitation.expiresAt,
     });
   } catch (error) {
-    console.error("❌ Error inviting staff member:", error);
-    console.error("❌ Error stack:", error instanceof Error ? error.stack : 'No stack trace');
-    res.status(500).json({ 
-      message: "Error inviting staff member", 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
+    console.error("Error inviting staff member:", error);
+    res.status(500).json({
+      message: "Error inviting staff member",
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 });
@@ -1749,8 +1772,7 @@ router.get("/staff", supabaseAuth, attachAccessScope, requirePermission('canMana
     });
     
     // Batch check for pending invitations
-    const pendingInvitationsMap = await storage.getPendingRoleInvitationsByEmails(validEmails);
-    console.log(`✅ Checked ${validEmails.length} emails for pending invitations, found ${pendingInvitationsMap.size} pending`);
+    const pendingInvitationsMap = await getPendingStaffInvitationMapForSchool(schoolId);
 
     // Get all classes for this school
     const allClasses = await storage.getAllClasses();
@@ -1794,7 +1816,10 @@ router.get("/staff", supabaseAuth, attachAccessScope, requirePermission('canMana
       );
       
       // Check if this user has a pending invitation
-      const hasPendingInvitation = pendingInvitationsMap.get(user.email) || false;
+    const hasPendingInvitation =
+      pendingInvitationsMap.get(user.email) ||
+      pendingInvitationsMap.get(String(user.email).trim().toLowerCase()) ||
+      false;
       
       // Get school_staff record for department enrichment
       const staffRecord = staffRecordMap.get(roleRecord.userId);
@@ -2005,52 +2030,85 @@ router.post("/staff/:id/resend-invite", supabaseAuth, async (req: any, res) => {
       return res.status(404).json({ message: "Staff member not found" });
     }
     const user = resolved.user;
+    const position = resolved.roleRecord?.role || "Mentor";
 
-    // Check if invitation exists
-    const allInvitations = await storage.getRoleInvitations();
-    const existingInvitation = allInvitations.find((inv: any) => 
-      inv.email === user.email && inv.schoolId === schoolId
-    );
-
-    // Check if user has a pending invitation - if not, they're already active
-    if (!existingInvitation) {
-      return res.status(400).json({ message: "Staff member is already active - no pending invitation to resend" });
+    let invitation = await getPendingStaffInvitationForEmail(schoolId, user.email);
+    if (!invitation) {
+      invitation = await createPendingStaffInvitation({
+        email: user.email,
+        firstName: user.firstName || user.name?.split(" ")[0] || "",
+        lastName: user.lastName || user.name?.split(" ").slice(1).join(" ") || "",
+        position,
+        schoolId,
+        locationId: null,
+        classId: null,
+        message: null,
+        invitedBy: typeof req.user?.id === "number" ? req.user.id : null,
+      });
+    } else {
+      invitation = await refreshPendingStaffInvitation(invitation);
     }
 
-    let invitationToken: string;
-
-    // REUSE existing token - only reset expiration and active status
-    invitationToken = existingInvitation.token;
-    console.log(`📧 Reusing existing token for ${user.email} (resend keeps same link valid)`);
-    await storage.updateRoleInvitation(existingInvitation.id, {
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      isActive: true,
-      usedAt: null
-    });
-
-    // Resend the invitation email
-    const firstName = user.firstName || user.name?.split(' ')[0] || '';
-    const lastName = user.lastName || user.name?.split(' ').slice(1).join(' ') || '';
-    const message = `Your invitation to join our school staff has been resent. Please check your email for details.`;
-
-    sendStaffInvitationEmail(
+    const firstName = user.firstName || user.name?.split(" ")[0] || "";
+    const lastName = user.lastName || user.name?.split(" ").slice(1).join(" ") || "";
+    const school = await storage.getSchool(schoolId);
+    const emailSent = await sendStaffInvitationEmail(
       user.email,
       firstName,
       lastName,
-      roleRecord.role,
-      '',
-      invitationToken,
-      message
-    ).catch(err => console.error('[Email fire-and-forget] sendStaffInvitationEmail (resend) failed:', err));
+      position,
+      position,
+      invitation.token,
+      "Your invitation to join our school staff has been resent.",
+      { schoolName: school?.name, expiresAt: invitation.expiresAt },
+    );
 
-    res.json({ 
-      message: "Invitation resent successfully",
-      staffId: roleId,
-      email: user.email 
+    const invitePath = staffInvitePath(invitation.token);
+    const inviteUrl = staffInviteUrl(invitation.token);
+    res.json({
+      message: emailSent ? "Invitation resent successfully" : "Invitation link refreshed. Copy the link if they do not see the email.",
+      staffId: user.id,
+      email: user.email,
+      emailSent,
+      inviteUrl,
+      invitePath,
+      expiresAt: invitation.expiresAt,
     });
   } catch (error) {
     console.error("Error resending staff invite:", error);
     res.status(500).json({ message: "Error resending staff invite" });
+  }
+});
+
+router.get("/staff/:id/invite-link", supabaseAuth, async (req: any, res) => {
+  try {
+    const schoolId = await getSchoolIdFromRequest(req, res);
+    if (schoolId === null) return;
+
+    const paramId = parseInt(req.params.id, 10);
+    if (isNaN(paramId)) {
+      return res.status(400).json({ message: "Invalid staff ID format" });
+    }
+
+    const resolved = await resolveStaffMemberFromParam(paramId, schoolId);
+    if (!resolved?.user) {
+      return res.status(404).json({ message: "Staff member not found" });
+    }
+
+    const invitation = await getPendingStaffInvitationForEmail(schoolId, resolved.user.email);
+    if (!invitation) {
+      return res.status(404).json({ message: "No pending invitation to copy" });
+    }
+
+    res.json({
+      inviteUrl: staffInviteUrl(invitation.token),
+      invitePath: staffInvitePath(invitation.token),
+      expiresAt: invitation.expiresAt,
+      email: resolved.user.email,
+    });
+  } catch (error) {
+    console.error("Error fetching staff invite link:", error);
+    res.status(500).json({ message: "Error fetching invite link" });
   }
 });
 
@@ -2078,67 +2136,46 @@ router.post("/staff/resend-all-invites", supabaseAuth, async (req: any, res: any
     // Resend invites to all pending staff members
     for (const staffRecord of pendingStaff) {
       try {
-        // Get user details
         const user = await storage.getUser(staffRecord.userId);
         if (!user) {
-          console.warn(`User not found for staff ${staffRecord.id}`);
           failureCount++;
           continue;
         }
 
-        // Check if invitation exists
-        const allInvitations = await storage.getRoleInvitations();
-        const existingInvitation = allInvitations.find((inv: any) => 
-          inv.email === user.email && inv.schoolId === staffRecord.schoolId
-        );
-
-        const mappedRole = staffRecord.role;
-        const userRole = mappedRole === 'administrator' ? 'admin' : mappedRole === 'teacher' ? 'teacher' : 'teacher';
-
-        let invitationToken: string;
-
-        if (existingInvitation) {
-          // REUSE existing token - only reset expiration and active status
-          // This keeps previously sent email links valid
-          invitationToken = existingInvitation.token;
-          console.log(`📧 [Bulk] Reusing existing token for ${user.email} (resend keeps same link valid)`);
-          await storage.updateRoleInvitation(existingInvitation.id, {
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            isActive: true,
-            usedAt: null // Reset used status so invitation can be accepted again
+        const position = staffRecord.position || staffRecord.role || "Mentor";
+        let invitation = await getPendingStaffInvitationForEmail(schoolId, user.email);
+        if (!invitation) {
+          invitation = await createPendingStaffInvitation({
+            email: user.email,
+            firstName: user.firstName || user.name?.split(" ")[0] || "",
+            lastName: user.lastName || user.name?.split(" ").slice(1).join(" ") || "",
+            position,
+            schoolId,
+            locationId: staffRecord.locationId ?? null,
+            classId: null,
+            message: null,
+            invitedBy: typeof req.user?.id === "number" ? req.user.id : null,
           });
         } else {
-          // Only generate new token if no invitation exists
-          invitationToken = generateInvitationToken();
-          console.log(`📧 [Bulk] Creating new invitation for ${user.email}`);
-          await storage.createRoleInvitation({
-            email: user.email,
-            role: userRole,
-            invitedBy: 1,
-            schoolId: staffRecord.schoolId,
-            token: invitationToken,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            isActive: true
-          });
+          invitation = await refreshPendingStaffInvitation(invitation);
         }
 
-        // Send invitation email
-        const firstName = user.name.split(' ')[0] || '';
-        const lastName = user.name.split(' ').slice(1).join(' ') || '';
-        const message = `Your invitation to join our school staff has been resent. Please check your email for details.`;
-
-        sendStaffInvitationEmail(
+        const firstName = user.firstName || user.name.split(" ")[0] || "";
+        const lastName = user.lastName || user.name.split(" ").slice(1).join(" ") || "";
+        const school = await storage.getSchool(schoolId);
+        await sendStaffInvitationEmail(
           user.email,
           firstName,
           lastName,
-          staffRecord.position || staffRecord.role,
-          staffRecord.department || '',
-          invitationToken,
-          message
-        ).catch(err => console.error('[Email fire-and-forget] bulk resend sendStaffInvitationEmail failed:', err));
+          position,
+          position,
+          invitation.token,
+          "Your invitation to join our school staff has been resent.",
+          { schoolName: school?.name, expiresAt: invitation.expiresAt },
+        );
         successCount++;
       } catch (emailError) {
-        console.error(`Error resending invitation:`, emailError);
+        console.error("Error resending invitation:", emailError);
         failureCount++;
       }
     }
@@ -2309,7 +2346,7 @@ router.put("/staff/:id", supabaseAuth, async (req: any, res) => {
     );
 
     // Check if user has a pending invitation
-    const pendingInvitationsMap = await storage.getPendingRoleInvitationsByEmails([updatedUser!.email]);
+    const pendingInvitationsMap = await getPendingStaffInvitationMapForSchool(schoolId);
     const hasPendingInvitation = pendingInvitationsMap.get(updatedUser!.email) || false;
 
     // Fetch school_staff record for enrichment (department only)

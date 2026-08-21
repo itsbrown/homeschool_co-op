@@ -5,54 +5,69 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { XCircle } from "lucide-react";
+import { Eye, EyeOff, XCircle } from "lucide-react";
+import { useAuth } from "@/components/SupabaseProvider";
+
+type InvitationWelcome = {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+  position?: string;
+  schoolName?: string;
+  className?: string | null;
+  campusName?: string | null;
+};
 
 export default function AcceptEducatorInvitationPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { signIn } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isValidating, setIsValidating] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [invitationData, setInvitationData] = useState<any>(null);
+  const [invitationData, setInvitationData] = useState<InvitationWelcome | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordMismatch, setPasswordMismatch] = useState(false);
 
-  // Get invitation token from URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    
-    if (token) {
-      // Validate invitation token using public staff-invitations endpoint (no auth required)
-      // Staff invitations are stored in staff_invitations table (not role_invitations)
-      fetch(`/api/public/staff-invitations/validate?token=${token}`)
-        .then(response => response.json())
-        .then(data => {
-          setIsValidating(false);
-          if (data.valid) {
-            setInvitationData(data.invitation);
-          } else {
-            setValidationError(data.message || "This invitation link is invalid or has expired.");
-          }
-        })
-        .catch(error => {
-          console.error('Error validating invitation:', error);
-          setIsValidating(false);
-          setValidationError("Failed to validate invitation. Please try again.");
-        });
-    } else {
+    const token = urlParams.get("token");
+
+    if (!token) {
       setIsValidating(false);
-      setValidationError("No invitation token provided in the URL.");
+      setValidationError("This invitation link is missing. Ask your director to resend from Staff.");
+      return;
     }
+
+    fetch(`/api/public/staff-invitations/validate?token=${encodeURIComponent(token)}`)
+      .then((response) => response.json())
+      .then((data) => {
+        setIsValidating(false);
+        if (data.valid) {
+          setInvitationData(data.invitation);
+        } else {
+          setValidationError(
+            data.message || "This invitation link is invalid or has expired. Ask your director to resend from Staff.",
+          );
+        }
+      })
+      .catch(() => {
+        setIsValidating(false);
+        setValidationError("Failed to validate invitation. Please try again.");
+      });
   }, []);
 
   const handleAcceptInvitation = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (password !== confirmPassword) {
+      setPasswordMismatch(true);
       toast({
-        title: "Password Mismatch",
-        description: "Passwords do not match.",
+        title: "Passwords do not match",
+        description: "Enter the same password in both fields.",
         variant: "destructive",
       });
       return;
@@ -60,8 +75,8 @@ export default function AcceptEducatorInvitationPage() {
 
     if (password.length < 6) {
       toast({
-        title: "Password Too Short",
-        description: "Password must be at least 6 characters long.",
+        title: "Password too short",
+        description: "Use at least 6 characters.",
         variant: "destructive",
       });
       return;
@@ -70,42 +85,41 @@ export default function AcceptEducatorInvitationPage() {
     setIsLoading(true);
 
     try {
-      const token = new URLSearchParams(window.location.search).get('token');
-      
-      // Accept the invitation using public staff-invitations endpoint (no auth required)
-      // This creates the Supabase auth account and local database user with the provided password
-      const response = await fetch('/api/public/staff-invitations/accept', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          password: password
-        }),
+      const token = new URLSearchParams(window.location.search).get("token");
+      const response = await fetch("/api/public/staff-invitations/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password }),
       });
-
       const result = await response.json();
 
-      if (response.ok) {
+      if (!response.ok) {
         toast({
-          title: "Welcome!",
-          description: result.message || "Your account has been created successfully.",
-        });
-        
-        // Redirect to login page so user can sign in with their new credentials
-        setLocation('/login');
-      } else {
-        toast({
-          title: "Error",
+          title: "Could not join",
           description: result.message || "Failed to accept invitation.",
           variant: "destructive",
         });
+        return;
       }
-    } catch (error) {
-      console.error('Error accepting invitation:', error);
+
+      const { error } = await signIn(invitationData?.email || result.email, password);
+      if (error) {
+        toast({
+          title: "Account created",
+          description: "Sign in with the password you just set.",
+        });
+        setLocation("/login");
+        return;
+      }
+
       toast({
-        title: "Error",
+        title: result.schoolName ? `Welcome to ${result.schoolName}` : "Welcome",
+        description: result.className ? `Your class: ${result.className}` : undefined,
+      });
+      setLocation("/educator/dashboard");
+    } catch {
+      toast({
+        title: "Could not join",
         description: "Failed to accept invitation.",
         variant: "destructive",
       });
@@ -114,37 +128,35 @@ export default function AcceptEducatorInvitationPage() {
     }
   };
 
-  // Show loading state while validating
   if (isValidating) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
         <Card className="w-full max-w-md">
           <CardHeader>
-            <CardTitle>Loading...</CardTitle>
-            <CardDescription>Validating your invitation...</CardDescription>
+            <CardTitle>Checking your invitation…</CardTitle>
+            <CardDescription>This only takes a moment.</CardDescription>
           </CardHeader>
         </Card>
       </div>
     );
   }
 
-  // Show error state if validation failed
   if (validationError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
               <XCircle className="h-16 w-16 text-destructive" />
             </div>
-            <CardTitle className="text-destructive">Invalid Invitation</CardTitle>
-            <CardDescription>{validationError}</CardDescription>
+            <CardTitle>Invitation unavailable</CardTitle>
+            <CardDescription data-testid="text-invite-error">{validationError}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button 
-              className="w-full" 
+            <Button
+              className="w-full"
               variant="outline"
-              onClick={() => setLocation('/login')}
+              onClick={() => setLocation("/login")}
               data-testid="button-go-to-login"
             >
               Go to Login
@@ -155,86 +167,96 @@ export default function AcceptEducatorInvitationPage() {
     );
   }
 
-  // If no invitation data (shouldn't happen but safety check)
   if (!invitationData) {
     return null;
   }
 
+  const schoolName = invitationData.schoolName || "your school";
+  const position = invitationData.position || invitationData.role || "Mentor";
+  const displayName = [invitationData.firstName, invitationData.lastName].filter(Boolean).join(" ");
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <Card className="w-full max-w-md" data-testid="card-accept-invite">
         <CardHeader>
-          <CardTitle>Accept Educator Invitation</CardTitle>
+          <CardTitle>Join {schoolName}</CardTitle>
           <CardDescription>
-            Welcome! You've been invited to join as an educator.
+            {displayName ? `Welcome, ${displayName}. ` : "Welcome. "}
+            You have been invited as a {position}
+            {invitationData.className ? ` for ${invitationData.className}` : ""}
+            {invitationData.campusName ? ` at ${invitationData.campusName}` : ""}.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <form onSubmit={handleAcceptInvitation} className="space-y-4">
             <div className="space-y-2">
-              <Label>Email</Label>
-              <Input 
-                type="email" 
-                value={invitationData.email} 
-                disabled 
+              <Label htmlFor="invite-email">Email</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                value={invitationData.email}
+                disabled
                 className="bg-gray-50"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Input 
-                type="text" 
-                value={invitationData.role} 
-                disabled 
-                className="bg-gray-50"
+                data-testid="input-invite-email-readonly"
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Department</Label>
-              <Input 
-                type="text" 
-                value={invitationData.department} 
-                disabled 
-                className="bg-gray-50"
-              />
-            </div>
-
-            <form onSubmit={handleAcceptInvitation} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="password">Create Password</Label>
+              <Label htmlFor="password">Create password</Label>
+              <div className="relative">
                 <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder="Enter a password"
                   required
+                  style={{ fontSize: 16 }}
+                  data-testid="input-invite-password"
                 />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 -translate-y-1/2"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm your password"
-                  required
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm password</Label>
+              <Input
+                id="confirmPassword"
+                type={showPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  setPasswordMismatch(false);
+                }}
+                onBlur={() => setPasswordMismatch(confirmPassword.length > 0 && password !== confirmPassword)}
+                placeholder="Confirm your password"
+                required
+                style={{ fontSize: 16 }}
+                data-testid="input-invite-password-confirm"
+              />
+              {passwordMismatch && (
+                <p className="text-sm text-destructive">Passwords do not match.</p>
+              )}
+            </div>
 
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={isLoading}
-              >
-                {isLoading ? "Setting up account..." : "Accept Invitation"}
-              </Button>
-            </form>
-          </div>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isLoading}
+              data-testid="button-join-school"
+            >
+              {isLoading ? "Setting up your account…" : `Join ${schoolName}`}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

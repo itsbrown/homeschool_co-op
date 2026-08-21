@@ -59,9 +59,6 @@ export default function StaffPage() {
   // Fetch staff data from API
   const { data: staff = [], isLoading, error } = useQuery<StaffMember[]>({
     queryKey: ['/api/school-admin/staff'],
-    refetchInterval: 5000, // Reasonable refresh interval
-    refetchIntervalInBackground: true,
-    staleTime: 1000, // Consider data stale after 1 second
   });
 
   // Ensure staff is treated as an array
@@ -69,6 +66,31 @@ export default function StaffPage() {
   const staffData = staffArray;
 
   // Mutation for resending individual invites
+  const copyInviteMutation = useMutation({
+    mutationFn: async (staffId: number) => {
+      const response = await apiRequest("GET", `/school-admin/staff/${staffId}/invite-link`);
+      return response.json() as Promise<{ inviteUrl: string; invitePath?: string }>;
+    },
+    onSuccess: async (data) => {
+      const link = data.invitePath
+        ? `${window.location.origin}${data.invitePath}`
+        : data.inviteUrl;
+      try {
+        await navigator.clipboard.writeText(link);
+        toast({ title: "Invite link copied" });
+      } catch {
+        toast({ title: "Invite link", description: link });
+      }
+    },
+    onError: () => {
+      toast({
+        title: "No pending invite",
+        description: "This person does not have a pending invitation to copy.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const resendInviteMutation = useMutation({
     mutationFn: async (staffId: number) => {
       return apiRequest("POST", `/school-admin/staff/${staffId}/resend-invite`);
@@ -80,7 +102,7 @@ export default function StaffPage() {
       });
       queryClient.invalidateQueries({ queryKey: ['/api/school-admin/staff'] });
     },
-    onError: (error) => {
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to resend invitation",
@@ -344,6 +366,15 @@ export default function StaffPage() {
                                         Resend Invite
                                       </DropdownMenuItem>
                                     )}
+                                    {(member.status === "Pending" || member.status === "Inactive") && (
+                                      <DropdownMenuItem
+                                        onClick={() => copyInviteMutation.mutate(member.id)}
+                                        disabled={copyInviteMutation.isPending}
+                                        data-testid={`menu-copy-invite-${member.id}`}
+                                      >
+                                        Copy invite link
+                                      </DropdownMenuItem>
+                                    )}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </TableCell>
@@ -426,6 +457,7 @@ export default function StaffPage() {
                                   <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
                                 </DropdownMenuItem>
                                 {(member.status === "Pending" || member.status === "Inactive") && (
+                                  <>
                                   <DropdownMenuItem 
                                     onClick={() => resendInviteMutation.mutate(member.id)}
                                     disabled={resendInviteMutation.isPending}
@@ -433,6 +465,13 @@ export default function StaffPage() {
                                     <Send className="w-4 h-4 mr-2" />
                                     Resend Invite
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => copyInviteMutation.mutate(member.id)}
+                                    disabled={copyInviteMutation.isPending}
+                                  >
+                                    Copy invite link
+                                  </DropdownMenuItem>
+                                  </>
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -496,6 +535,7 @@ export default function StaffPage() {
                               <Link href={`/schools/staff/${member.id}/edit`}>Edit</Link>
                             </Button>
                             {(member.status === "Pending" || member.status === "Inactive") && (
+                              <>
                               <Button 
                                 size="sm" 
                                 variant="outline"
@@ -505,6 +545,15 @@ export default function StaffPage() {
                                 <Send className="w-3 h-3 mr-1" />
                                 Resend
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => copyInviteMutation.mutate(member.id)}
+                                disabled={copyInviteMutation.isPending}
+                              >
+                                Copy link
+                              </Button>
+                              </>
                             )}
                           </CardFooter>
                         </Card>

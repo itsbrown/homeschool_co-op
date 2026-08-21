@@ -318,6 +318,9 @@ export const staffInvitations = pgTable("staff_invitations", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   role: text("role", { enum: ["teacher", "administrator", "staff", "other"] }).notNull(),
+  /** Staff Positions title (e.g. Mentor). `role` stays the mapped enum. */
+  position: text("position"),
+  invitedBy: integer("invited_by").references(() => users.id),
   schoolId: integer("school_id").notNull().references(() => schools.id),
   locationId: integer("location_id").references(() => locations.id),
   classId: integer("class_id"),
@@ -334,6 +337,8 @@ export const insertStaffInvitationSchema = createInsertSchema(staffInvitations)
     locationId: z.number().nullable().default(null),
     classId: z.number().nullable().default(null),
     message: z.string().nullable().default(null),
+    position: z.string().nullable().default(null),
+    invitedBy: z.number().nullable().default(null),
   });
 export type InsertStaffInvitation = z.infer<typeof insertStaffInvitationSchema>;
 export type StaffInvitation = typeof staffInvitations.$inferSelect;

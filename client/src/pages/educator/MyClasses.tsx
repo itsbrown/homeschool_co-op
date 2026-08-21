@@ -55,8 +55,8 @@ function MyClassesContent() {
   if (!classes || classes.length === 0) {
     return (
       <EducatorEmptyState
-        title="No Classes Assigned"
-        description="You haven't been assigned to any classes yet. Contact your school administrator to get started."
+        title="No class assigned yet"
+        description="Your director hasn’t assigned a class yet. Once they do, it will show up here."
       />
     );
   }
