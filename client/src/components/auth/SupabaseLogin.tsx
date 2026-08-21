@@ -11,6 +11,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import {
   canLeaveLoginPage,
+  clearStayOnLogin,
+  markStayOnLogin,
   navigateAfterLogin,
   syncAuthReturnToFromUrl,
 } from '@/lib/auth-return-to';
@@ -45,9 +47,24 @@ export const SupabaseLogin: React.FC = () => {
     } catch {
       // ignore
     }
+    clearStayOnLogin();
     console.log('👤 User logged in, leaving /login');
     navigateAfterLogin("/dashboard");
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signed_out") === "1") {
+      markStayOnLogin();
+      params.delete("signed_out");
+      const remainingQuery = params.toString();
+      window.history.replaceState(
+        {},
+        document.title,
+        window.location.pathname + (remainingQuery ? `?${remainingQuery}` : ""),
+      );
+    }
+  }, []);
 
   // Banner when middleware reports the Supabase user has no app DB row.
   useEffect(() => {
@@ -146,9 +163,11 @@ export const SupabaseLogin: React.FC = () => {
     setIsLoading(true);
     setError(null);
 
+    clearStayOnLogin();
     const { error } = await signInWithGoogle();
     
     if (error) {
+      markStayOnLogin();
       setError(error.message);
       toast({
         title: "Google Login Failed",

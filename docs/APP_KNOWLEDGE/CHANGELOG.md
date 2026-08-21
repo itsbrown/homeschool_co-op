@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-08-21 (Emergency logout skipped Google picker)
+
+- `/emergency-logout` cleared storage then jumped to `/login` before Supabase `signOut` finished, so a leftover session auto-sent people to `/dashboard` and never showed Google.
+- Now awaits sign-out, lands on `/login?signed_out=1`, and Google OAuth uses `prompt=select_account`. `/` is no longer a post-login `returnTo`.
+- Files: `client/src/lib/emergency-logout.ts`, `auth-return-to.ts`, `App.tsx`, `SupabaseLogin.tsx`, `SupabaseProvider.tsx`.
+
 ## 2026-08-21 (Staff edit Save Changes no-op)
 
 - School-admin Staff edit `Save Changes` silently failed when GET `classIds` were strings (`z.array(z.number())` with no field UI). Reset only editable fields; toast on invalid; parse `apiRequest` JSON. Status is derived, not saved. PUT/detail class lists use `getClassesBySchoolId`.

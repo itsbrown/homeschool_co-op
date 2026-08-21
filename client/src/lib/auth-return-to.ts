@@ -21,10 +21,40 @@ export function isSafeReturnPath(path: string): boolean {
   return path.startsWith("/") && !path.startsWith("//");
 }
 
+/** Session flag: stay on /login after emergency logout even if a leftover session flickers. */
+export const STAY_ON_LOGIN_KEY = "asa_stay_on_login";
+
+export function markStayOnLogin(): void {
+  try {
+    sessionStorage.setItem(STAY_ON_LOGIN_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
+
+export function clearStayOnLogin(): void {
+  try {
+    sessionStorage.removeItem(STAY_ON_LOGIN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function isStayOnLogin(): boolean {
+  try {
+    if (sessionStorage.getItem(STAY_ON_LOGIN_KEY) === "1") return true;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("signed_out") === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** Reject /login (and other auth screens) so post-login cannot loop on Sign in. */
 export function isPostLoginDestination(path: string): boolean {
   if (!isSafeReturnPath(path)) return false;
   const pathname = path.split("?")[0].split("#")[0];
+  if (pathname === "/") return false;
   if (AUTH_LANDING_PATHS.has(pathname)) return false;
   if (pathname.startsWith("/auth/")) return false;
   return true;
@@ -95,8 +125,10 @@ export function canLeaveLoginPage(options: {
   hasUser: boolean;
   registrationRequired?: boolean;
   redirectBlocked?: boolean;
+  stayOnLogin?: boolean;
 }): boolean {
   if (options.registrationRequired) return false;
+  if (options.stayOnLogin || isStayOnLogin()) return false;
   // Only honor the block while sign-out is in progress. A leftover key from a
   // prior 403 (often DB-down misread as unregistered) must not trap a valid session.
   if (options.redirectBlocked && !options.isAuthenticated) return false;

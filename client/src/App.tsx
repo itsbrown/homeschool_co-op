@@ -3,6 +3,7 @@ import { Switch, Route, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient, handleExpiredSession } from "./lib/queryClient";
 import { loginPathWithReturnTo } from "./lib/auth-return-to";
+import { performEmergencyLogout } from "./lib/emergency-logout";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupabaseProvider, useAuth } from "@/components/SupabaseProvider";
@@ -426,6 +427,17 @@ function DashboardRouter() {
   );
 }
 
+function EmergencyLogoutScreen() {
+  useEffect(() => {
+    void performEmergencyLogout();
+  }, []);
+  return (
+    <div className="min-h-screen flex items-center justify-center" data-testid="emergency-logout">
+      <p className="text-gray-600">Signing you out…</p>
+    </div>
+  );
+}
+
 function Router() {
   const { isAuthenticated, isLoading, user, error } = useAuth();
   const {
@@ -519,6 +531,11 @@ function Router() {
     }
   }, []);
 
+  const pathname = location.split("?")[0];
+  if (pathname === "/emergency-logout") {
+    return <EmergencyLogoutScreen />;
+  }
+
   // Handle Auth0 errors
   if (error) {
     return (
@@ -554,23 +571,6 @@ function Router() {
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
       </div>
     );
-  }
-
-  // Emergency logout for stuck users
-  if (location === '/emergency-logout') {
-    localStorage.clear();
-    sessionStorage.clear();
-    // Clear Supabase session
-    import('@supabase/supabase-js').then(({ createClient }) => {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      if (supabaseUrl && supabaseAnonKey) {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey);
-        supabase.auth.signOut();
-      }
-    });
-    window.location.href = '/login';
-    return <div>Logging out...</div>;
   }
 
   return (

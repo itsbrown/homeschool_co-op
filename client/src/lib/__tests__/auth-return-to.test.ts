@@ -99,6 +99,26 @@ describe("auth-return-to", () => {
         redirectBlocked: true,
       }),
     ).toBe(false);
+    expect(
+      canLeaveLoginPage({
+        isAuthenticated: true,
+        hasUser: true,
+        stayOnLogin: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("loginPathWithReturnTo maps / to /dashboard", () => {
+    const path = loginPathWithReturnTo("/");
+    expect(path).toBe("/login?returnTo=%2Fdashboard");
+    expect(sessionStorage.getItem(AUTH_RETURN_TO_KEY)).toBe("/dashboard");
+  });
+
+  it("isStayOnLogin blocks leave when signed_out query is set", () => {
+    window.history.replaceState({}, "", "/login?signed_out=1");
+    expect(
+      canLeaveLoginPage({ isAuthenticated: true, hasUser: true }),
+    ).toBe(false);
   });
 
   it("consumeAuthReturnDestination clears storage after first read", () => {
