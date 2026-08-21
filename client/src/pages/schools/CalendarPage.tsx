@@ -138,6 +138,12 @@ const generateICSFile = (event: CalendarEvent) => {
     return str.replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
   };
 
+  const allDayExclusiveEnd = (() => {
+    const d = new Date(event.endDate);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString();
+  })();
+
   const icsContent = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -151,7 +157,7 @@ const generateICSFile = (event: CalendarEvent) => {
       ? `DTSTART;VALUE=DATE:${formatICSDate(event.startDate, true)}`
       : `DTSTART:${formatICSDate(event.startDate, false)}`,
     event.isAllDay
-      ? `DTEND;VALUE=DATE:${formatICSDate(event.endDate, true)}`
+      ? `DTEND;VALUE=DATE:${formatICSDate(allDayExclusiveEnd, true)}`
       : `DTEND:${formatICSDate(event.endDate, false)}`,
     `SUMMARY:${escapeICS(event.title)}`,
     event.description ? `DESCRIPTION:${escapeICS(event.description)}` : '',

@@ -17,6 +17,20 @@ describe("calendar ICS helper", () => {
     expect(ics).toContain("SUMMARY:Seekers\\, Brighton");
     expect(ics).toContain("UID:class-1@asa-learning");
   });
+
+  it("uses exclusive DTEND for same-day all-day events", () => {
+    const ics = buildIcsCalendar("ASA Family", [
+      {
+        uid: "holiday-1@asa-learning",
+        title: "Winter Break",
+        start: new Date("2026-08-24T00:00:00.000Z"),
+        end: new Date("2026-08-24T00:00:00.000Z"),
+        isAllDay: true,
+      },
+    ]);
+    expect(ics).toContain("DTSTART;VALUE=DATE:20260824");
+    expect(ics).toContain("DTEND;VALUE=DATE:20260825");
+  });
 });
 
 describe("campus event visibility", () => {

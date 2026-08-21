@@ -21,6 +21,12 @@ function formatIcsDate(date: Date, isAllDay: boolean): string {
   );
 }
 
+/** RFC 5545: all-day DTEND is exclusive (the day after the last included date). */
+function formatIcsExclusiveAllDayEnd(end: Date): string {
+  const next = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() + 1));
+  return formatIcsDate(next, true);
+}
+
 function escapeIcs(str: string): string {
   return str
     .replace(/\\/g, "\\\\")
@@ -41,7 +47,7 @@ export function buildIcsCalendar(calendarName: string, events: IcsEventInput[]):
         ? `DTSTART;VALUE=DATE:${formatIcsDate(event.start, true)}`
         : `DTSTART:${formatIcsDate(event.start, false)}`,
       allDay
-        ? `DTEND;VALUE=DATE:${formatIcsDate(event.end, true)}`
+        ? `DTEND;VALUE=DATE:${formatIcsExclusiveAllDayEnd(event.end)}`
         : `DTEND:${formatIcsDate(event.end, false)}`,
       `SUMMARY:${escapeIcs(event.title)}`,
       event.description ? `DESCRIPTION:${escapeIcs(event.description)}` : "",

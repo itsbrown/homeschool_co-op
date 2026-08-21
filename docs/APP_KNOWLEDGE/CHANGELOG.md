@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-08-21 (ICS all-day DTEND exclusive)
+
+- All-day ICS `DTEND` is the day **after** the last included date (RFC 5545). Same-day holidays with equal start/end were emitting zero-length events in Apple/Google Calendar.
+- Dashboard Upcoming Events KPI counts class days in the next **7** days (not the first five from `/api/schedule` with no upper bound).
+
 ## 2026-08-21 (Family calendar E2E gate)
 
 - Calendar seed/login specs **passed** (0 skipped) against `.env` Railway clone + `.env.e2e`. Shell `DATABASE_URL` pointing at disabled Neon `asa_test` must be unset so `.env` loads.

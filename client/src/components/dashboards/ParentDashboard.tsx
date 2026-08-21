@@ -35,7 +35,7 @@ import { resolveEnrollmentOutstandingForOverview } from "@/utils/paymentOverview
 import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { Input } from "@/components/ui/input";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface FundraiserLink {
@@ -635,9 +635,13 @@ export default function ParentDashboard() {
     queryKey: ["/api/schedule"],
     enabled: !!user && !!session,
   });
-  const upcomingClassDays = (eventsData ?? [])
-    .filter((e) => e.date >= format(new Date(), "yyyy-MM-dd"))
-    .slice(0, 5);
+  const upcomingClassDays = (() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    const weekOut = format(addDays(new Date(), 7), "yyyy-MM-dd");
+    return (eventsData ?? [])
+      .filter((e) => e.date >= today && e.date <= weekOut)
+      .slice(0, 5);
+  })();
 
   // Fetch parent documents (signed agreements)
   interface ParentDocument {
