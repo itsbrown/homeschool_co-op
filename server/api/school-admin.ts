@@ -37,7 +37,6 @@ import {
 import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
 import { normalizeAllergiesInput } from '@shared/child-profile-patch';
 import {
-  assignInvitedEducatorToClass,
   createPendingStaffInvitation,
   getPendingStaffInvitationForEmail,
   getPendingStaffInvitationMapForSchool,
@@ -48,7 +47,7 @@ import {
   unusedLocalPassword,
   mapPositionToRole as mapStaffPositionToRole,
 } from '../lib/staff-invitations';
-import { staffInvitePath } from '@shared/staff-invitations';
+import { canAdoptUserSchoolId, staffInvitePath } from '@shared/staff-invitations';
 
 // Rate limiter for permission updates - prevent bulk abuse
 const permissionUpdateLimiter = rateLimit({
@@ -1558,12 +1557,20 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
         isActive: true,
       });
     } else {
-      await storage.updateUser(user.id, {
-        schoolId,
+      const patch: {
+        firstName: string;
+        lastName: string;
+        name: string;
+        schoolId?: number;
+      } = {
         firstName: String(firstName).trim(),
         lastName: String(lastName).trim(),
         name: `${firstName} ${lastName}`.trim(),
-      });
+      };
+      if (canAdoptUserSchoolId(user.schoolId, schoolId)) {
+        patch.schoolId = schoolId;
+      }
+      await storage.updateUser(user.id, patch);
       user = (await storage.getUser(user.id)) ?? user;
     }
 
@@ -1624,15 +1631,6 @@ router.post("/staff/invite", supabaseAuth, async (req: any, res: any) => {
       message: message ? String(message) : null,
       invitedBy: typeof req.user?.id === "number" ? req.user.id : null,
     });
-
-    if (parsedClassId) {
-      await assignInvitedEducatorToClass({
-        educatorId: user.id,
-        classId: parsedClassId,
-        schoolId,
-        instructorName: `${firstName} ${lastName}`.trim(),
-      });
-    }
 
     const roleRecord = existingRoleForSchool || {
       id: userRoleId,

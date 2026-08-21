@@ -272,6 +272,8 @@ Staff Permissions UI writes location + school-wide rows; those unlock matching s
 - Don't use bare `fetch()` for file uploads to authenticated endpoints — use `apiRequest('POST', url, formData)` which handles `FormData`, auth token, and role header automatically
 - Don't write school-admin Staff invites to `role_invitations` — accept is `/api/public/staff-invitations/*` on `staff_invitations`
 - Don't bounce invitees to `/login` after they set a password — sign them in and send `/educator/dashboard`
+- Don't overwrite an existing Supabase Auth password on staff-invite accept — create Auth only for new emails; existing accounts must enter their current password
+- Don't rewrite `users.schoolId` when inviting an email that already belongs to another school — add `user_roles` / `school_staff` at the inviting school instead
 - Don't redirect to login on every 401 — allow one token refresh retry first
 - Don't treat a thrown DB exception (`dbLookupFailed`) the same as a `null` return (user not found) — use separate flags and return `503` for DB errors, `403` only for a confirmed not-found user
 - Don't gate school-admin nav with `hasRole` while the user is acting as parent — use `activeRole` + effective permissions

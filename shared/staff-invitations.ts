@@ -41,6 +41,22 @@ export function invitationExpiryDate(from = new Date(), days = 7): Date {
   return new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
+/** Keep an existing user's home school; only fill schoolId when unset or already this school. */
+export function canAdoptUserSchoolId(
+  currentSchoolId: number | null | undefined,
+  invitingSchoolId: number,
+): boolean {
+  return currentSchoolId == null || currentSchoolId === invitingSchoolId;
+}
+
+/** Do not replace another mentor as class instructor; assignment rows can still be added. */
+export function shouldClaimClassInstructor(
+  currentInstructorId: number | null | undefined,
+  invitedEducatorId: number,
+): boolean {
+  return currentInstructorId == null || currentInstructorId === invitedEducatorId;
+}
+
 export function formatInvitationExpiry(expiresAt: Date): string {
   return expiresAt.toLocaleDateString("en-US", {
     weekday: "short",

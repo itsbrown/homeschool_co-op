@@ -12,9 +12,12 @@ import {
   invitationExpiryDate,
   mapPositionToRole,
   staffInviteAbsoluteUrl,
+  canAdoptUserSchoolId,
+  shouldClaimClassInstructor,
 } from "@shared/staff-invitations";
 import { getActiveEducatorAssignmentForClass } from "./educator-class-assignments-db";
 import { ensureStaffInvitationsSchema } from "./ensure-staff-invitations-schema";
+import { findAuthUserByEmail } from "./supabase-admin-auth";
 
 export { mapPositionToRole };
 
@@ -156,15 +159,17 @@ export async function assignInvitedEducatorToClass(params: {
       educatorId: params.educatorId,
       classId: params.classId,
       schoolId: params.schoolId,
-      isPrimary: true,
+      isPrimary: shouldClaimClassInstructor(classData.instructorId, params.educatorId),
       canStartSession: true,
     });
   }
 
-  await storage.updateClass(params.classId, {
-    instructorId: params.educatorId,
-    instructorName: params.instructorName,
-  } as Parameters<typeof storage.updateClass>[1]);
+  if (shouldClaimClassInstructor(classData.instructorId, params.educatorId)) {
+    await storage.updateClass(params.classId, {
+      instructorId: params.educatorId,
+      instructorName: params.instructorName,
+    } as Parameters<typeof storage.updateClass>[1]);
+  }
 }
 
 export async function loadInvitationWelcomeContext(invitation: StaffInvitation): Promise<{
@@ -196,34 +201,21 @@ type AcceptResult =
   | { ok: true; email: string; schoolName: string; position: string; className: string | null }
   | { ok: false; status: number; message: string };
 
-async function findSupabaseUserIdByEmail(
-  supabaseAdmin: {
-    auth: {
-      admin: {
-        listUsers: (opts: { page: number; perPage: number }) => Promise<{
-          data?: { users?: Array<{ id: string; email?: string | null }> };
-          error?: { message?: string } | null;
-        }>;
-      };
-    };
-  },
-  email: string,
-): Promise<string | null> {
-  for (let pageNum = 1; pageNum <= 10; pageNum++) {
-    const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
-      page: pageNum,
-      perPage: 200,
-    });
-    if (listErr || !listData?.users?.length) {
-      break;
-    }
-    const match = listData.users.find(
-      (u) => u.email?.toLowerCase() === email.toLowerCase(),
-    );
-    if (match) return match.id;
-    if (listData.users.length < 200) break;
+const EXISTING_ACCOUNT_PASSWORD_MESSAGE =
+  "This email already has an account. Enter the password you use to sign in.";
+
+async function verifyExistingAuthPassword(email: string, password: string): Promise<boolean> {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const anon = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !anon) {
+    throw new Error("Server configuration error - unable to create account");
   }
-  return null;
+  const { createClient } = await import("@supabase/supabase-js");
+  const client = createClient(url, anon, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  return !error;
 }
 
 export async function ensureSupabaseAuthUser(params: {
@@ -268,19 +260,16 @@ export async function ensureSupabaseAuthUser(params: {
     throw new Error(createErr?.message || "Failed to create account");
   }
 
-  const existingId = await findSupabaseUserIdByEmail(supabaseAdmin, params.email);
-  if (!existingId) {
+  const existing = await findAuthUserByEmail(params.email);
+  if (!existing?.id) {
     throw new Error("Supabase reported existing user but the account could not be found");
   }
 
-  const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(existingId, {
-    password: params.password,
-    email_confirm: true,
-  });
-  if (updateErr) {
-    throw new Error(updateErr.message);
+  const passwordMatches = await verifyExistingAuthPassword(params.email, params.password);
+  if (!passwordMatches) {
+    throw new Error(EXISTING_ACCOUNT_PASSWORD_MESSAGE);
   }
-  return { supabaseUserId: existingId, created: false };
+  return { supabaseUserId: existing.id, created: false };
 }
 
 export async function acceptStaffInvitation(params: {
@@ -344,14 +333,24 @@ export async function acceptStaffInvitation(params: {
       isActive: true,
     });
   } else {
-    await storage.updateUser(localUser.id, {
+    const patch: {
+      supabaseId: string;
+      firstName: string;
+      lastName: string;
+      name: string;
+      isActive: boolean;
+      schoolId?: number;
+    } = {
       supabaseId: supabaseUserId,
-      schoolId: invitation.schoolId,
       firstName: invitation.firstName,
       lastName: invitation.lastName,
       name: `${invitation.firstName} ${invitation.lastName}`.trim(),
       isActive: true,
-    });
+    };
+    if (canAdoptUserSchoolId(localUser.schoolId, invitation.schoolId)) {
+      patch.schoolId = invitation.schoolId;
+    }
+    await storage.updateUser(localUser.id, patch);
     localUser = (await storage.getUser(localUser.id)) ?? localUser;
   }
 

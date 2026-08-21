@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-08-20 (Mentor invite: do not hijack existing accounts)
+
+- Staff-invite accept must not `updateUserById` password for an email that already has Supabase Auth; existing users enter their current password. Do not rewrite `users.schoolId` for another school. Class assignment waits until accept and does not steal `instructorId`.
+
 ## 2026-08-20 (Mentor invite E2E: Vite JSX + Neon)
 
 - Staff pending Copy + Resend must not be two siblings inside one `{cond && ( … )}` — Vite esbuild fails and Playwright seed POSTs `socket hang up`.

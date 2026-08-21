@@ -4,6 +4,8 @@ import {
   invitationExpiryDate,
   isClassroomStaffPosition,
   mapPositionToRole,
+  canAdoptUserSchoolId,
+  shouldClaimClassInstructor,
   staffInviteAbsoluteUrl,
   staffInvitePath,
 } from "../staff-invitations";
@@ -48,5 +50,21 @@ describe("invitationExpiryDate", () => {
     const from = new Date("2026-08-20T12:00:00.000Z");
     expect(invitationExpiryDate(from).toISOString()).toBe("2026-08-27T12:00:00.000Z");
     expect(formatInvitationExpiry(from)).toMatch(/Aug/);
+  });
+});
+
+describe("canAdoptUserSchoolId", () => {
+  it("fills unset schoolId and keeps another school's user", () => {
+    expect(canAdoptUserSchoolId(null, 12)).toBe(true);
+    expect(canAdoptUserSchoolId(12, 12)).toBe(true);
+    expect(canAdoptUserSchoolId(3, 12)).toBe(false);
+  });
+});
+
+describe("shouldClaimClassInstructor", () => {
+  it("claims empty instructor and does not steal another mentor", () => {
+    expect(shouldClaimClassInstructor(null, 9)).toBe(true);
+    expect(shouldClaimClassInstructor(9, 9)).toBe(true);
+    expect(shouldClaimClassInstructor(4, 9)).toBe(false);
   });
 });

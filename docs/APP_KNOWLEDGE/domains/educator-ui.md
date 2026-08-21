@@ -24,9 +24,9 @@ Legacy `client/src/components/dashboards/EducatorDashboard.tsx` (`GET /api/educa
 
 School-admin **Staff → Invite** (`/schools/staff/invite`) writes **`staff_invitations`** (not `role_invitations`). The email and copy-link URL are `/accept-educator-invitation?token=…`, which validates/accepts that table.
 
-On accept the mentor sets a password, the API creates/updates the Supabase Auth user with that password, activates `school_staff`, and the page **signs them in** to `/educator/dashboard` (no second `/login` hop). `user_roles.role` keeps the Staff Positions title (`Mentor`); `staff_invitations.role` is the mapped enum (`teacher`).
+On accept, **new** emails get a Supabase Auth user with the password they chose. **Existing** Auth accounts must enter their current password — accept must not `updateUserById` a new password. Then `school_staff` activates and the page **signs them in** to `/educator/dashboard` (no second `/login` hop). `user_roles.role` keeps the Staff Positions title (`Mentor`); `staff_invitations.role` is the mapped enum (`teacher`). Do not move `users.schoolId` when it already belongs to another school.
 
-Invite `classId` creates `educator_class_assignments` plus `classes.instructorId` so Today is not empty. Campus filters the class list. Directors get `invitePath` to copy when email fails.
+Invite `classId` is stored on the invitation and applied **on accept** (`educator_class_assignments`). `classes.instructorId` is set only when empty or already this mentor. Campus filters the class list. Directors get `invitePath` to copy when email fails.
 
 E2E: `e2e/educator-invite-login.spec.ts` — seed `POST /api/test/setup-educator-invite-scenario`.
 
@@ -93,6 +93,7 @@ Seeds: `POST /api/test/setup-schedule-builder-scenario` and `setup-progress-scen
 | Dashboard “today” lists every assignment | `todayClasses` was unfiltered | `classMeetsOnWeekday`; empty days ≠ today |
 | Invite email “invalid token” | Invite wrote `role_invitations`; accept reads `staff_invitations` | `POST /staff/invite` → `createStaffInvitation`; accept page stays on staff-invitations |
 | Invite E2E `socket hang up` on seed | Vite failed to parse Staff pending menu (two items in one `{cond && (}` ) and/or Playwright reused a server on disabled Neon | Separate menu items (or a fragment); worktree `.env` symlink; do not reuse a Neon-booted `:5000` |
+| Parent locked out after staff invite | Accept used `updateUserById` to set a new password | Existing Auth: verify current password; never reset it |
 
 ## Out of scope (still leftover)
 
