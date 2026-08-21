@@ -9,6 +9,7 @@ export type HouseholdSupplyProduct = {
   affiliateUrl: string | null;
   listingSlug: string | null;
   purchasableInCart: false;
+  pickupOnly?: boolean;
 };
 
 export type ParentSupplyListResponse = {

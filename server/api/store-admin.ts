@@ -46,7 +46,7 @@ function handleStoreRouteError(res: Response, err: unknown, fallbackMessage: str
   if (isStoreSchemaMissing(err)) {
     return res.status(503).json({
       message:
-        'Public store schema is missing on this database. Apply server/migrations/251-public-store.sql and 255-store-affiliate-products.sql, then restart the server.',
+        'Public store schema is missing on this database. Apply server/migrations/251-public-store.sql, 255-store-affiliate-products.sql, and 261-store-product-pickup-only.sql, then restart the server.',
       code: 'STORE_SCHEMA_MISSING',
     });
   }
@@ -182,6 +182,7 @@ router.post('/products', async (req: any, res) => {
         affiliateUrl: optionalProductUrlSchema,
         asin: z.string().min(10).max(10).nullable().optional(),
         affiliateMetadata: z.record(z.unknown()).optional(),
+        pickupOnly: z.boolean().optional(),
       })
       .superRefine((data, ctx) => {
         if (data.productKind === 'affiliate') {
@@ -227,6 +228,7 @@ router.post('/products', async (req: any, res) => {
       asin: link.asin,
       affiliateMetadata:
         productKind === 'affiliate' ? (data.affiliateMetadata ?? {}) : {},
+      pickupOnly: productKind === 'affiliate' ? false : Boolean(data.pickupOnly),
     });
     res.status(201).json(product);
   } catch (err) {
@@ -292,6 +294,7 @@ router.patch('/products/:id', async (req: any, res) => {
       asin: z.string().min(10).max(10).nullable().optional(),
       affiliateMetadata: z.record(z.unknown()).optional(),
       isPublished: z.boolean().optional(),
+      pickupOnly: z.boolean().optional(),
     });
     const { isPublished, ...data } = schema.parse(req.body);
     const nextKind = (data.productKind ?? existing.productKind) as 'owned' | 'affiliate';
@@ -311,6 +314,7 @@ router.patch('/products/:id', async (req: any, res) => {
       inventoryQty: nextKind === 'affiliate' ? null : data.inventoryQty,
       affiliateUrl: link.affiliateUrl,
       asin: link.asin,
+      pickupOnly: nextKind === 'affiliate' ? false : (data.pickupOnly ?? existing.pickupOnly),
     });
     if (!product) return res.status(404).json({ message: 'Product not found' });
     const listing =

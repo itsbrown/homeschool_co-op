@@ -175,6 +175,14 @@ export default function PublicStoreCheckoutPage() {
     enabled: cart.lines.length > 0,
   });
 
+  const pickupOnlyRequired = Boolean(snapshot?.pickupOnlyRequired);
+
+  useEffect(() => {
+    if (!pickupOnlyRequired) return;
+    if (productDelivery.method === "pickup") return;
+    setProductDelivery({ method: "pickup" });
+  }, [pickupOnlyRequired, productDelivery.method]);
+
   useEffect(() => {
     if (currentStep === "payment") refetchSnapshot();
   }, [currentStep, refetchSnapshot]);
@@ -510,6 +518,7 @@ export default function PublicStoreCheckoutPage() {
               <StoreCheckoutDeliveryFields
                 delivery={productDelivery}
                 onChange={setProductDelivery}
+                pickupOnly={pickupOnlyRequired}
               />
               <Button
                 className="w-full"
@@ -602,7 +611,7 @@ export default function PublicStoreCheckoutPage() {
                 <p className="text-sm text-muted-foreground pt-1 border-t">
                   Products:{" "}
                   {productDelivery.method === "pickup"
-                    ? "Pick up at campus"
+                    ? "Pick up at school"
                     : productDelivery.shippingAddress
                       ? `Ship to ${productDelivery.shippingAddress.city}, ${productDelivery.shippingAddress.state}`
                       : "Shipping"}

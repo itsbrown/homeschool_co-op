@@ -13,7 +13,8 @@ Structured **what to buy / bring** lists on **classes** and **sessions**. Parent
   - `family` — once per household
 - **Shop is the catalog.** Optional `store_product_id` → existing `store_products` (Amazon affiliate or owned merch). Do **not** paste Amazon URLs on the supply item. CSV import resolves Associates links into shop products (reuse by school + ASIN) instead of storing the URL.
 - **Affiliate:** **Buy on Amazon** with `rel="noopener noreferrer sponsored"` when the shop URL is Amazon. Other vendor URLs: **View product**. Never Add to cart / Stripe (`purchasableInCart: false`).
-- **Owned merch:** **View in shop** when a published listing exists and there is no outbound URL. If `affiliate_url` is set, use the same Amazon / View product CTA as the storefront.
+- **Owned merch:** **View in shop** when a published listing exists and there is no outbound URL. If `affiliate_url` is set, use the same Amazon / View product CTA as the storefront. `pickup_only` products show **Pickup at school only** (no shipping at checkout).
+- **Orthography notebook (Brighton F2026):** owned shop SKU **My Orthography Notebook** (`pickup_only`, **$25**), linked on Tycoons / Seekers / Pioneers / Patriots. Script: `server/scripts/add-orthography-pickup-product-production.ts`. Do not create an Amazon affiliate for Access Literacy.
 - Legacy `classes.materials` jsonb / marketplace textarea is unused.
 
 ## Schema

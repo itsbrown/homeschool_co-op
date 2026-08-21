@@ -28,6 +28,7 @@ export type EditableStoreProduct = {
   asin?: string | null;
   listingId?: number | null;
   isPublished?: boolean;
+  pickupOnly?: boolean;
 };
 
 type EditFormState = {
@@ -37,6 +38,7 @@ type EditFormState = {
   imageUrl: string;
   isPublished: boolean;
   productUrl: string;
+  pickupOnly: boolean;
 };
 
 function formFromProduct(product: EditableStoreProduct): EditFormState {
@@ -47,6 +49,7 @@ function formFromProduct(product: EditableStoreProduct): EditFormState {
     imageUrl: product.imageUrl ?? "",
     isPublished: product.isPublished ?? false,
     productUrl: product.affiliateUrl ?? "",
+    pickupOnly: product.pickupOnly === true,
   };
 }
 
@@ -69,6 +72,7 @@ export function StoreProductEditDialog({
     imageUrl: "",
     isPublished: false,
     productUrl: "",
+    pickupOnly: false,
   });
 
   useEffect(() => {
@@ -106,6 +110,7 @@ export function StoreProductEditDialog({
           imageUrl: form.imageUrl || null,
           isPublished: form.isPublished,
           affiliateUrl: trimmedUrl || null,
+          pickupOnly: product.productKind === "affiliate" ? false : form.pickupOnly,
         },
       );
       if (!res.ok) {
@@ -203,6 +208,21 @@ export function StoreProductEditDialog({
                 />
                 <Label>List on public store</Label>
               </div>
+              {!isAffiliate ? (
+                <div className="flex items-start gap-2">
+                  <Switch
+                    checked={form.pickupOnly}
+                    onCheckedChange={(checked) => updateForm({ pickupOnly: checked })}
+                    data-testid="switch-edit-product-pickup-only"
+                  />
+                  <div>
+                    <Label>Pickup at school only</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Checkout will not offer shipping for this item.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
               <div>
                 <Label htmlFor="edit-product-name">Name</Label>
                 <Input

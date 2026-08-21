@@ -67,6 +67,7 @@ Apply **additive** SQL only when columns/tables are missing:
 | `server/migrations/258-supply-lists.sql` | Family supply lists (`supply_items`, `parent_supply_checks`) |
 | `server/migrations/255-store-affiliate-products.sql` | Public store Amazon affiliate columns on `store_products` — apply **before or with** deploy; Drizzle selects `product_kind` / `affiliate_url` / `asin` / `affiliate_metadata` for all merch |
 | `server/migrations/259-staff-invitations.sql` | Staff Invite → accept (`staff_invitations` + `position` / `invited_by`). Apply **before or with** deploy. Boot `ensureStaffInvitationsSchema` is idempotent; if it logs non-fatal failure, run this SQL. Never `db:push`. |
+| `server/migrations/261-store-product-pickup-only.sql` | Owned merch `pickup_only`. Idempotent; already applied on prod 2026-08-21 with the Orthography notebook SKU. |
 
 Verify with read-only checks or `scripts/verify-f001-schema.mjs` against a **non-prod** mirror when possible.
 

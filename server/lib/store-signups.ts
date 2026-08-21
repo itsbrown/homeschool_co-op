@@ -224,7 +224,7 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
         productDelivery?.method === 'shipping' && productDelivery.shippingAddress
           ? formatStoreProductDeliveryLabel(productDelivery)
           : productDelivery?.method === 'pickup'
-            ? 'Pick up at campus'
+            ? 'Pick up at school'
             : null,
       ...referral,
     };

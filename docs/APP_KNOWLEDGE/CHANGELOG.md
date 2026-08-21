@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-08-21 (Orthography notebook: shop pickup-only)
+
+- Owned merch can be **pickup at school only** (`store_products.pickup_only`, migration 261). Catalog `pickupOnly`; snapshot `pickupOnlyRequired`; checkout hides shipping and returns `400 PICKUP_ONLY` if shipping is submitted.
+- Brighton F2026 Tycoons/Seekers/Pioneers/Patriots supply lists link **My Orthography Notebook** (shop, not Access Literacy / Amazon). Script: `server/scripts/add-orthography-pickup-product-production.ts`.
+- **Prod 2026-08-21:** created `store_products.id=60` listing **64**, unpublished Access Literacy affiliate **35**, relinked supply items on classes 66/68/70/73. Price **$25.00**. Cover photo still needed in Public Store → Products → Edit. Column already applied on prod; this ships the checkout UI/API.
+- E2E: pickup-only guest merch in `e2e/public-store.spec.ts` (`productPickupOnly`). Docs: [public-store.md](./domains/public-store.md), [supply-lists.md](./domains/supply-lists.md).
+
 ## 2026-08-21 (Parent dashboard mix + day-sheet details)
 
 - Upcoming Events KPI/card merge class days with school events in the next **7** days (list max 5; KPI uncapped). Later events stay on `/schedule`.

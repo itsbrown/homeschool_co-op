@@ -6,11 +6,13 @@ import type { StoreProductDelivery, StoreShippingAddress } from "@/lib/store-che
 type StoreCheckoutDeliveryFieldsProps = {
   delivery: StoreProductDelivery;
   onChange: (value: StoreProductDelivery) => void;
+  pickupOnly?: boolean;
 };
 
 export function StoreCheckoutDeliveryFields({
   delivery,
   onChange,
+  pickupOnly = false,
 }: StoreCheckoutDeliveryFieldsProps) {
   const setMethod = (method: StoreProductDelivery["method"]) => {
     onChange({
@@ -47,10 +49,23 @@ export function StoreCheckoutDeliveryFields({
       <div>
         <h3 className="font-medium">Product delivery</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Choose how you would like to receive merchandise from this order.
+          {pickupOnly
+            ? "This order must be picked up at school. Shipping is not available."
+            : "Choose how you would like to receive merchandise from this order."}
         </p>
       </div>
 
+      {pickupOnly ? (
+        <div
+          className="rounded-lg border p-3 bg-slate-50"
+          data-testid="store-delivery-pickup-only"
+        >
+          <p className="font-medium text-foreground">Pick up at school</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            We will email pickup details after your order is confirmed.
+          </p>
+        </div>
+      ) : (
       <RadioGroup
         value={delivery.method}
         onValueChange={(value) => setMethod(value as StoreProductDelivery["method"])}
@@ -59,7 +74,7 @@ export function StoreCheckoutDeliveryFields({
         <div className="flex items-start gap-3 rounded-lg border p-3">
           <RadioGroupItem value="pickup" id="store-delivery-pickup" data-testid="store-delivery-pickup" />
           <Label htmlFor="store-delivery-pickup" className="font-normal leading-snug cursor-pointer">
-            <span className="font-medium text-foreground">Pick up at campus</span>
+            <span className="font-medium text-foreground">Pick up at school</span>
             <span className="block text-sm text-muted-foreground mt-0.5">
               We will email pickup details after your order is confirmed.
             </span>
@@ -75,8 +90,9 @@ export function StoreCheckoutDeliveryFields({
           </Label>
         </div>
       </RadioGroup>
+      )}
 
-      {delivery.method === "shipping" && (
+      {!pickupOnly && delivery.method === "shipping" && (
         <div className="space-y-3 pt-1">
           <div>
             <Label htmlFor="store-shipping-line1">Street address</Label>

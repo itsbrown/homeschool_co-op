@@ -20,6 +20,7 @@ export type PublicStoreSeedResult = {
     priceCents: number;
     imageUrl: string | null;
     productKind: 'owned' | 'affiliate';
+    pickupOnly: boolean;
   };
   listing: { id: number; isPublished: boolean };
   affiliateProduct?: {
@@ -82,6 +83,8 @@ export async function seedPublicStoreScenario(
     affiliateName?: string;
     affiliatePriceCents?: number;
     affiliateImageUrl?: string | null;
+    /** Owned merch that cannot be shipped. */
+    productPickupOnly?: boolean;
   } = {},
 ): Promise<PublicStoreSeedResult> {
   await ensurePublicStoreSchema();
@@ -125,6 +128,7 @@ export async function seedPublicStoreScenario(
       typeof options.productPriceCents === 'number' ? options.productPriceCents : 1999,
     imageUrl: options.productImageUrl ?? null,
     productKind: 'owned',
+    pickupOnly: options.productPickupOnly === true,
     isActive: true,
     sortOrder: 0,
   });
@@ -148,6 +152,7 @@ export async function seedPublicStoreScenario(
       priceCents: product.priceCents,
       imageUrl: product.imageUrl,
       productKind: 'owned',
+      pickupOnly: product.pickupOnly === true,
     },
     listing: { id: listing.id, isPublished: listing.isPublished },
   };

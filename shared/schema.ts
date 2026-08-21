@@ -3332,6 +3332,7 @@ export const storeProducts = pgTable("store_products", {
   affiliateUrl: text("affiliate_url"),
   asin: text("asin"),
   affiliateMetadata: jsonb("affiliate_metadata").$type<Record<string, unknown>>().default({}).notNull(),
+  pickupOnly: boolean("pickup_only").default(false).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   sortOrder: integer("sort_order").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -79,6 +79,8 @@ export interface StoreSnapshotResult {
   amountDueCents: number;
   hasMembersOnlyLine: boolean;
   membershipAlreadyPaid: boolean;
+  /** True when any owned cart line is pickup-only (no shipping). */
+  pickupOnlyRequired: boolean;
 }
 
 async function countClassEnrollments(classId: number): Promise<number> {
@@ -183,6 +185,7 @@ export async function calculateStoreSnapshot(params: {
   const snapshotLines: StoreSnapshotLine[] = [];
   let itemsTotalCents = 0;
   let hasMembersOnlyLine = false;
+  let pickupOnlyRequired = false;
 
   for (const line of params.cartLines) {
     const listing = listingMap.get(line.listingId);
@@ -201,6 +204,7 @@ export async function calculateStoreSnapshot(params: {
           'Products with an external buy link cannot be added to the cart.',
         );
       }
+      if (product.pickupOnly) pickupOnlyRequired = true;
       const lineTotal = product.priceCents * qty;
       itemsTotalCents += lineTotal;
       snapshotLines.push({
@@ -327,5 +331,6 @@ export async function calculateStoreSnapshot(params: {
     amountDueCents,
     hasMembersOnlyLine,
     membershipAlreadyPaid,
+    pickupOnlyRequired,
   };
 }

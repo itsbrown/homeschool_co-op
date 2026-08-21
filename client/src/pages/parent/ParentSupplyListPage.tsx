@@ -50,9 +50,14 @@ function SupplyBuyActions({
     );
   }
   return (
-    <Button asChild variant="outline" className="min-h-11" data-testid={`supply-view-shop-${action.productId}`}>
-      <Link href={action.href}>View in shop</Link>
-    </Button>
+    <div className="flex flex-col items-stretch sm:items-end gap-1">
+      <Button asChild variant="outline" className="min-h-11" data-testid={`supply-view-shop-${action.productId}`}>
+        <Link href={action.href}>View in shop</Link>
+      </Button>
+      {row.product?.pickupOnly ? (
+        <p className="text-xs text-muted-foreground">Pickup at school only</p>
+      ) : null}
+    </div>
   );
 }
 

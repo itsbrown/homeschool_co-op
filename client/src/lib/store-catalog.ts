@@ -15,6 +15,7 @@ export type StoreCatalogItem = {
   inStock?: boolean;
   productKind?: "owned" | "affiliate";
   affiliateUrl?: string | null;
+  pickupOnly?: boolean;
 };
 
 export function storeItemDetailPath(

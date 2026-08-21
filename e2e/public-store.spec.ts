@@ -346,6 +346,56 @@ test.describe("public store", () => {
     await expect(page.getByText(/Ship to Albany, NY/i)).toBeVisible();
   });
 
+  test("pickup-only merch is school pickup with no shipping option", async ({ page, request }) => {
+    const { response, json } = await postSetupPublicStoreScenario(request, {
+      productPickupOnly: true,
+    });
+    test.skip(!response.ok(), `seed failed (${response.status()})`);
+
+    const slug = json!.data!.storeSlug;
+    const unique = Date.now();
+
+    const catalogRes = await request.get(`/api/public/store/${slug}/catalog`);
+    expect(catalogRes.ok()).toBeTruthy();
+    const catalog = (await catalogRes.json()) as { items: Array<{ pickupOnly?: boolean; listingId: number; listingType: string; sourceId: number }> };
+    const merch = catalog.items.find((item) => item.listingType === "product");
+    expect(merch?.pickupOnly).toBe(true);
+
+    const snapshotRes = await request.post(`/api/public/store/${slug}/snapshot`, {
+      data: {
+        cart: [
+          {
+            lineId: "pickup-only-line",
+            listingId: merch!.listingId,
+            listingType: "product",
+            sourceId: merch!.sourceId,
+            quantity: 1,
+          },
+        ],
+      },
+    });
+    expect(snapshotRes.ok()).toBeTruthy();
+    const snapshot = (await snapshotRes.json()) as { pickupOnlyRequired?: boolean };
+    expect(snapshot.pickupOnlyRequired).toBe(true);
+
+    await page.goto(`/store/${slug}`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Add to cart" }).click();
+    await page.getByTestId("store-cart-button").click();
+
+    await page.getByTestId("store-checkout-step1-continue").click();
+    await page.getByTestId("store-checkout-parent-first-name").fill("Pickup");
+    await page.getByTestId("store-checkout-parent-last-name").fill("Tester");
+    await page.getByTestId("store-checkout-parent-email").fill(`store_pickup_${unique}@test.com`);
+    await page.getByTestId("store-checkout-parent-phone").fill("5555550100");
+    await page.getByTestId("store-checkout-step2-continue").click();
+
+    await expect(page.getByTestId("store-delivery-pickup-only")).toBeVisible();
+    await expect(page.getByTestId("store-delivery-shipping")).toHaveCount(0);
+    await page.getByTestId("store-checkout-delivery-continue").click();
+    await expect(page.getByText("Payment summary")).toBeVisible();
+    await expect(page.getByText(/Pick up at school/i)).toBeVisible();
+  });
+
   test("guest sees add-to-cart feedback and can edit merch quantity in checkout", async ({
     page,
     request,
