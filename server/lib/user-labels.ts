@@ -14,6 +14,61 @@ export const NOTIFICATION_SYSTEM_LABELS = [
 
 export const STAFF_TYPE_ROLES = ['educator', 'teacher', 'schoolAdmin'] as const;
 
+/** Staff-edit / staff-profile roles. Custom titles (e.g. Mentor) are passed in by the caller. */
+export const STAFF_PROFILE_ROLES = [
+  'educator',
+  'teacher',
+  'schoolAdmin',
+  'mentor',
+  'aide',
+  'director',
+  'instructor',
+] as const;
+
+/**
+ * Pick the user_roles row to show/update on Staff edit.
+ * Mentors who are also parents have two rows; the parent row is often id-first
+ * and must not be renamed to Mentor (unique on user_id+role+school_id).
+ */
+export function pickStaffRoleRecord<T extends { role: string; isPrimary?: boolean | null }>(
+  records: T[],
+  options?: {
+    preferredRole?: string | null;
+    staffRoleNames?: readonly string[];
+  },
+): T | undefined {
+  if (records.length === 0) return undefined;
+
+  const preferred = options?.preferredRole?.trim();
+  if (preferred) {
+    const match = records.find((r) => labelsMatch(r.role, preferred));
+    if (match) return match;
+  }
+
+  const staffKeys = new Set(
+    (options?.staffRoleNames ?? STAFF_PROFILE_ROLES).map(normalizeLabelKey),
+  );
+  const staffRows = records.filter((r) => staffKeys.has(normalizeLabelKey(r.role)));
+  const primaryStaff = staffRows.find((r) => r.isPrimary);
+  if (primaryStaff) return primaryStaff;
+  if (staffRows.length > 0) return staffRows[0];
+
+  return records.find((r) => normalizeLabelKey(r.role) !== 'parent') ?? records[0];
+}
+
+/** Remaining role to keep as active after removing a staff user_roles row. */
+export function fallbackRoleAfterStaffRemoval<T extends { id: number; role: string; isPrimary?: boolean | null }>(
+  records: T[],
+  removingId: number,
+): T | undefined {
+  const remaining = records.filter((r) => r.id !== removingId);
+  return (
+    remaining.find((r) => r.isPrimary) ??
+    remaining.find((r) => normalizeLabelKey(r.role) === 'parent') ??
+    remaining[0]
+  );
+}
+
 export function normalizeLabelKey(role: string): string {
   return String(role || '').trim().toLowerCase();
 }

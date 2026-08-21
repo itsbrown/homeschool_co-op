@@ -9,6 +9,7 @@ describeIntegration('Integration: Unified users labels', () => {
   let testSchool: any;
   let testAdmin: any;
   let testParent: any;
+  let testLocations: any[];
 
   beforeAll(async () => {
     await testDb.cleanup();
@@ -16,6 +17,7 @@ describeIntegration('Integration: Unified users labels', () => {
     testSchool = env.school;
     testAdmin = env.admin;
     testParent = env.parent;
+    testLocations = env.locations;
 
     const db = await getDb();
     await db.insert(userRoles).values({
@@ -48,6 +50,49 @@ describeIntegration('Integration: Unified users labels', () => {
     expect(response.status).toBe(200);
     expect(response.body.id).toBe(testParent.id);
     expect(response.body.email).toBe(testParent.email);
+  });
+
+  it('PUT staff keeps parent role when the person is also a Mentor', async () => {
+    const mentorParent = await testDb.createTestUser({
+      email: 'leigh-ann-staff-edit@test.com',
+      username: 'leighannstaffedit',
+      name: 'Leigh Ann Staff Edit',
+      role: 'parent',
+    });
+    const db = await getDb();
+    await db.insert(userRoles).values([
+      {
+        userId: mentorParent.id,
+        role: 'parent',
+        schoolId: testSchool.id,
+        isPrimary: false,
+      },
+      {
+        userId: mentorParent.id,
+        role: 'Mentor',
+        schoolId: testSchool.id,
+        isPrimary: true,
+      },
+    ]);
+
+    await api.loginAsUser(testAdmin.email);
+    const getResponse = await api.get(`/api/school-admin/staff/${mentorParent.id}`);
+    expect(getResponse.status).toBe(200);
+    expect(getResponse.body.role).toBe('Mentor');
+
+    const putResponse = await api.put(`/api/school-admin/staff/${mentorParent.id}`, {
+      name: 'Leigh Ann Staff Edit',
+      email: mentorParent.email,
+      phone: '5853306391',
+      role: 'Mentor',
+      locationId: testLocations[0].id,
+    });
+    expect(putResponse.status).toBe(200);
+    expect(putResponse.body.staff?.role).toBe('Mentor');
+
+    const roles = await db.select().from(userRoles);
+    const hers = roles.filter((r) => r.userId === mentorParent.id).map((r) => r.role);
+    expect(hers.sort()).toEqual(['Mentor', 'parent']);
   });
 
   it('sends role broadcast to users with matching user_roles label', async () => {

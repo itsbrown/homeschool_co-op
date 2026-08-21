@@ -1,5 +1,15 @@
 # App knowledge changelog
 
+## 2026-08-21 (Staff remove 500 active_role_id FK)
+
+- Mentor-only staff (e.g. Debbie Collichio #71): `users.active_role_id` pointed at the Mentor `user_roles` row. Remove Staff deleted that row without clearing the FK → `users_active_role_id_fkey` 500. Location “No campus” is empty `user_locations` (legacy campus may exist only on `school_staff`).
+- DELETE now re-points `active_role_id` to a remaining role (parent) or null, then deletes the staff row. Helper: `fallbackRoleAfterStaffRemoval`.
+
+## 2026-08-21 (Staff edit 500 for parent+Mentor)
+
+- Leigh Ann #103 is `parent` + `Mentor`. Staff save sent role Mentor; PUT took the first `user_roles` row (parent) and tried to rename it to Mentor → unique `(user_id, role, school_id)` → 500 “Error updating staff member”.
+- Fix: `pickStaffRoleRecord` in `server/lib/user-labels.ts` used by GET/PUT/DELETE `/school-admin/staff/:id`. Parent role is left alone. Remove Staff deletes Mentor only.
+
 ## 2026-08-21 (Emergency logout skipped Google picker)
 
 - `/emergency-logout` cleared storage then jumped to `/login` before Supabase `signOut` finished, so a leftover session auto-sent people to `/dashboard` and never showed Google.
