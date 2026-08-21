@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-08-21 (Parent dashboard mix + day-sheet details)
+
+- Upcoming Events KPI/card merge class days with school events in the next **7** days (list max 5; KPI uncapped). Later events stay on `/schedule`.
+- Parent day sheet shows school-event description, All day or start–end, and venue. Playwright: `parent-family-calendar`, `parent-dashboard-upcoming-events`.
+
 ## 2026-08-21 (Staff remove 500 active_role_id FK)
 
 - Mentor-only staff (e.g. Debbie Collichio #71): `users.active_role_id` pointed at the Mentor `user_roles` row. Remove Staff deleted that row without clearing the FK → `users_active_role_id_fkey` 500. Location “No campus” is empty `user_locations` (legacy campus may exist only on `school_staff`).
@@ -24,7 +29,6 @@
 ## 2026-08-21 (ICS all-day DTEND exclusive)
 
 - All-day ICS `DTEND` is the day **after** the last included date (RFC 5545). Same-day holidays with equal start/end were emitting zero-length events in Apple/Google Calendar.
-- Dashboard Upcoming Events KPI counts class days in the next **7** days (not the first five from `/api/schedule` with no upper bound).
 
 ## 2026-08-21 (Family calendar E2E gate)
 
