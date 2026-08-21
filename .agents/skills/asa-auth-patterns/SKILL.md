@@ -185,6 +185,7 @@ if (!isAssigned) {
 | "User not found" | Used Supabase UUID instead of DB integer ID | Use `authData.dbUserId` not `authData.userId` |
 | Role switcher not showing | Only one role at current school | Check `user_roles` entries for that school |
 | Wrong data returned | School context mismatch | Verify `schoolId` on user's active role matches expected school |
+| Continue with Google skips the account picker and lands on dashboard | ASA logout does not clear Google. Live OAuth omits `prompt=select_account`, so one signed-in Gmail is reused. Leftover ASA session can also leave `/login` before Google opens. | `queryParams: { prompt: "select_account" }`. Emergency logout must `await signOut` and land on `/login?signed_out=1`. |
 
 ## Best Practices
 

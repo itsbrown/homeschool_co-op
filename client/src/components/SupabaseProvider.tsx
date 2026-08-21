@@ -263,6 +263,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
       provider: "google",
       options: {
         redirectTo,
+        queryParams: { prompt: "select_account" },
       },
     });
     return { data, error };
