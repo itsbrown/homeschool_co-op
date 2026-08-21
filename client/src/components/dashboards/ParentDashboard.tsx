@@ -36,6 +36,11 @@ import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibi
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { Input } from "@/components/ui/input";
 import { format, addDays } from "date-fns";
+import {
+  mergeUpcomingEventsNext7Days,
+  type ClassDayEvent,
+  type SchoolCalendarEvent,
+} from "@/lib/parent-upcoming-events";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface FundraiserLink {
@@ -630,18 +635,32 @@ export default function ParentDashboard() {
     ).length;
   })();
 
-  // Fetch upcoming events
-  const { data: eventsData, isLoading: eventsLoading } = useQuery<Array<{ id: string; title: string; date: string }>>({
+  // Fetch upcoming events (class days + school-published events in the next 7 days)
+  const { data: eventsData, isLoading: eventsLoading } = useQuery<ClassDayEvent[]>({
     queryKey: ["/api/schedule"],
     enabled: !!user && !!session,
   });
-  const upcomingClassDays = (() => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const weekOut = format(addDays(new Date(), 7), "yyyy-MM-dd");
-    return (eventsData ?? [])
-      .filter((e) => e.date >= today && e.date <= weekOut)
-      .slice(0, 5);
-  })();
+  const rangeStart = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const rangeEnd = useMemo(() => {
+    const d = addDays(rangeStart, 7);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  }, [rangeStart]);
+  const schoolEventsUrl = `/api/calendar-events/parent/events?start=${encodeURIComponent(rangeStart.toISOString())}&end=${encodeURIComponent(rangeEnd.toISOString())}`;
+  const { data: schoolEventsData, isLoading: schoolEventsLoading } = useQuery<SchoolCalendarEvent[]>({
+    queryKey: [schoolEventsUrl],
+    enabled: !!user && !!session,
+  });
+  const upcomingEventsNext7 = useMemo(
+    () => mergeUpcomingEventsNext7Days(eventsData ?? [], schoolEventsData ?? []),
+    [eventsData, schoolEventsData],
+  );
+  const upcomingEventsPreview = upcomingEventsNext7.slice(0, 5);
+  const upcomingEventsLoading = eventsLoading || schoolEventsLoading;
 
   // Fetch parent documents (signed agreements)
   interface ParentDocument {
@@ -972,7 +991,9 @@ export default function ParentDashboard() {
                 <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{upcomingClassDays.length || 0}</div>
+                <div className="text-2xl font-bold" data-testid="parent-upcoming-events-kpi">
+                  {upcomingEventsNext7.length || 0}
+                </div>
                 <p className="text-xs text-muted-foreground">in the next 7 days</p>
               </CardContent>
             </Card>
@@ -1158,32 +1179,39 @@ export default function ParentDashboard() {
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Upcoming Events */}
-            <Card>
+            <Card data-testid="parent-upcoming-events-card">
               <CardHeader>
                 <CardTitle>Upcoming Events</CardTitle>
                 <CardDescription>Scheduled classes and activities</CardDescription>
               </CardHeader>
               <CardContent>
-                {eventsLoading ? (
+                {upcomingEventsLoading ? (
                   <div className="text-center py-8">Loading events...</div>
-                ) : upcomingClassDays.length === 0 ? (
+                ) : upcomingEventsPreview.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No upcoming class days</p>
+                    <p>No upcoming events scheduled</p>
                     <Button asChild variant="link" className="mt-2">
                       <Link href="/schedule">Open calendar</Link>
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {upcomingClassDays.map((event, index) => (
-                      <div key={event.id || `event-${index}`} className="flex items-center gap-3 p-3 rounded-lg border">
+                    {upcomingEventsPreview.map((event, index) => (
+                      <div
+                        key={event.id || `event-${index}`}
+                        className="flex items-center gap-3 p-3 rounded-lg border"
+                        data-testid="parent-upcoming-event-row"
+                      >
                         <div className="flex-shrink-0">
                           <Calendar className="h-4 w-4 text-blue-600" />
                         </div>
                         <div className="flex-1">
                           <p className="font-medium">{event.title}</p>
-                          <p className="text-sm text-muted-foreground">{event.date}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {event.date}
+                            {event.subtitle ? ` · ${event.subtitle}` : ""}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -1798,15 +1826,15 @@ export default function ParentDashboard() {
           <Card>
             <CardHeader>
               <CardTitle>Coming up</CardTitle>
-              <CardDescription>Class days from your family calendar</CardDescription>
+              <CardDescription>Classes and school events in the next 7 days</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {eventsLoading ? (
+              {upcomingEventsLoading ? (
                 <p className="text-sm text-muted-foreground">Loading…</p>
-              ) : upcomingClassDays.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No upcoming class days.</p>
+              ) : upcomingEventsPreview.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No upcoming events scheduled.</p>
               ) : (
-                upcomingClassDays.map((event) => (
+                upcomingEventsPreview.map((event) => (
                   <div key={event.id} className="flex justify-between text-sm border-b pb-2">
                     <span className="font-medium">{event.title}</span>
                     <span className="text-muted-foreground">{event.date}</span>

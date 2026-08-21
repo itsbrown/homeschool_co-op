@@ -14,6 +14,8 @@ Adjacent: `/schedule` is the parent Calendar hub (class days + school events + w
 
 **School events:** `events.school_id` + optional `location_id` (null = all campuses). Parent reads `GET /api/calendar-events/parent/events` using child campuses, not `users.schoolId` alone. Writes require schoolAdmin/admin/superAdmin/director.
 
+**Parent dashboard Upcoming Events:** KPI + card merge enrolled class days (`GET /api/schedule`) with school events in the **next 7 days**. List shows at most 5 rows; KPI is the full 7-day count. Events after day 7 still appear on `/schedule`. Helper: `client/src/lib/parent-upcoming-events.ts`. Day sheet for school events shows type label, description, all-day or start–end, and venue (read-only).
+
 **Family ICS:** `POST /api/calendar/feed-token` mints `users.calendar_feed_token`. `GET /api/calendar/feed/:token` is unauthenticated (calendar apps cannot send Bearer). Do not ship a public numeric school-id ICS feed. All-day `DTEND` is exclusive (next calendar day).
 
 ## Runtime mounts
@@ -87,7 +89,7 @@ Steps: templates → class bind → blocks/CSV → Week Planner → New Week →
 |----|----------|
 | `POST /api/test/setup-schedule-builder-scenario` | Admin/educator/parent, Seekers+Yankee classes (+ `schedule` jsonb + educator assignment), skeletons/`classId`, published+draft weeks, completion, attendance, optional Supabase link |
 | Jest | `schedule-builder-mount`, `schedule-builder-seed`, `schedule-builder-api` (incl. week-plan CSV import), `progress-scheduled-lessons`, `school-admin-academics-kpi`, `school-admin-attendance`, `schedule-day-index` |
-| Playwright | `parent-family-calendar`, `parent-calendar-redirects`, `school-admin-calendar`, `parent-weekly-schedule` (redirect + print root), `schedule-builder-publish`, `schedule-template-csv-import`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `educator-weekly-schedule-plans`, plus mentor loop specs in [educator-ui.md](./educator-ui.md) |
+| Playwright | `parent-family-calendar` (incl. school-event day-sheet details), `parent-dashboard-upcoming-events` (7-day mix + outside-window exclusion), `parent-calendar-redirects`, `school-admin-calendar`, `parent-weekly-schedule` (redirect + print root), `schedule-builder-publish`, `schedule-template-csv-import`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `educator-weekly-schedule-plans`, plus mentor loop specs in [educator-ui.md](./educator-ui.md) |
 
 Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: [student-progress-assessments.md](./student-progress-assessments.md).
 
@@ -103,6 +105,8 @@ Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: 
 | Educator Schedule “Unable to load” / `/schedules/week` 500 | Missing `getEducatorSchedulesForWeek` / events storage | Restored in `educator-schedules-db` + soft-fail `events-range-db`; overlay published plans via `schedule-day-index` |
 | POST `/api/calendar-events` 400 Validation error | `requireSchoolContext` sets `req.schoolId` as a **string**; drizzle-zod `insertEventSchema.schoolId` is integer | `Number(req.schoolId)` before parse/compare |
 | Parent Calendar empty / E2E miss school event chips | Month cell shows **one** school chip; switching users in the same Playwright context keeps admin auth; dashboard fetch storm can delay `/parent/events` | Isolated `browser.newPage()`; list view; `waitForResponse` on `/parent/events` |
+| Dashboard Upcoming Events only shows one class day | Card used `/api/schedule` class days only, capped to 7 days | Merge `GET /api/calendar-events/parent/events` for the same 7-day window; school events past day 7 belong on `/schedule` |
+| Parent day sheet only shows school event title | School rows rendered badge + title | Show description, All day or start–end, venue; human type label (`Holiday` not `holiday`) |
 | E2E `schedule-csv-done` / `schedule-csv-mapping-next` click times out | First-visit tour prompt (`schedule-tour-prompt`) Radix overlay intercepts the custom CSV portal; CI often hits this on Done (tour fires during import), fast local runs on Next | Seed `schedule_builder_tour_seen`; dismiss prompt when CSV opens; force-click Done after success. Skip `networkidle`. |
 
 ## Key files

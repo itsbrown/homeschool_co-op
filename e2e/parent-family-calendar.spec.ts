@@ -52,6 +52,20 @@ test.describe("parent family calendar hub", () => {
     await expect(page.getByTestId("family-day-sheet")).toBeVisible();
     await expect(page.getByTestId("day-sheet-class")).toContainText(/9:00|09:00|AM/i);
     await page.keyboard.press("Escape");
+    await expect(page.getByTestId("family-day-sheet")).toBeHidden({ timeout: 10_000 });
+
+    expect(seed.holiday?.title).toBeTruthy();
+    const holidayChip = page.getByTestId("school-event-chip").filter({ hasText: seed.holiday!.title }).first();
+    await page.locator('[data-testid^="calendar-day-"]').filter({ has: holidayChip }).click();
+    await expect(page.getByTestId("family-day-sheet")).toBeVisible();
+    const schoolSheet = page.getByTestId("day-sheet-school-event");
+    await expect(schoolSheet).toContainText(seed.holiday!.title, { timeout: 15_000 });
+    await expect(schoolSheet).toContainText("All-campus holiday");
+    await expect(schoolSheet).toContainText(/All day/i);
+    await expect(schoolSheet.getByText("Holiday", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("family-day-sheet").getByRole("button", { name: /Edit|Delete/i })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("family-day-sheet")).toBeHidden({ timeout: 10_000 });
 
     await page.getByTestId("button-view-week").click();
     await expect(page.getByTestId("schedule-print-root")).toBeVisible({ timeout: 30_000 });

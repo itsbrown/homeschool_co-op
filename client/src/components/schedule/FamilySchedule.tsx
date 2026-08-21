@@ -26,6 +26,24 @@ import ParentWeekPlanGrid, { getMondayWeekStart } from "@/components/schedule/Pa
 
 type HubView = "month" | "week" | "list";
 
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  class: "Class",
+  meeting: "Meeting",
+  holiday: "Holiday",
+  deadline: "Deadline",
+  special: "Special Event",
+  workshop: "Workshop",
+  camp: "Camp",
+  other: "Other",
+};
+
+function schoolEventWhenLabel(event: { isAllDay: boolean; startDate: string; endDate: string }): string {
+  if (event.isAllDay) return "All day";
+  const start = new Date(event.startDate);
+  const end = new Date(event.endDate);
+  return `${format(start, "h:mm a")} – ${format(end, "h:mm a")}`;
+}
+
 interface ScheduleEvent {
   id: string;
   title: string;
@@ -439,11 +457,20 @@ export default function FamilySchedule() {
               </div>
             ))}
             {daySchoolEvents.map((ev) => (
-              <div key={ev.id} className="border rounded-md p-3" data-testid="day-sheet-school-event">
-                <Badge variant="outline" className="mb-1">
-                  {ev.eventType}
-                </Badge>
+              <div key={ev.id} className="border rounded-md p-3 space-y-2" data-testid="day-sheet-school-event">
+                <Badge variant="outline">{EVENT_TYPE_LABELS[ev.eventType] || ev.eventType}</Badge>
                 <p className="font-medium">{ev.title}</p>
+                {ev.description ? <p className="text-sm whitespace-pre-wrap">{ev.description}</p> : null}
+                <p className="text-sm flex items-center gap-1 text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  {schoolEventWhenLabel(ev)}
+                </p>
+                {ev.location ? (
+                  <p className="text-sm flex items-center gap-1 text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5" />
+                    {ev.location}
+                  </p>
+                ) : null}
               </div>
             ))}
             {dayLessonTitles.length > 0 && (
