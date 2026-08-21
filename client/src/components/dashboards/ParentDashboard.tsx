@@ -35,7 +35,6 @@ import { resolveEnrollmentOutstandingForOverview } from "@/utils/paymentOverview
 import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
 import { Input } from "@/components/ui/input";
-import ParentCalendarView from "@/components/calendar/ParentCalendarView";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -632,10 +631,13 @@ export default function ParentDashboard() {
   })();
 
   // Fetch upcoming events
-  const { data: eventsData, isLoading: eventsLoading } = useQuery({
-    queryKey: ["/api/events/upcoming"],
+  const { data: eventsData, isLoading: eventsLoading } = useQuery<Array<{ id: string; title: string; date: string }>>({
+    queryKey: ["/api/schedule"],
     enabled: !!user && !!session,
   });
+  const upcomingClassDays = (eventsData ?? [])
+    .filter((e) => e.date >= format(new Date(), "yyyy-MM-dd"))
+    .slice(0, 5);
 
   // Fetch parent documents (signed agreements)
   interface ParentDocument {
@@ -966,7 +968,7 @@ export default function ParentDashboard() {
                 <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{eventsData?.length || 0}</div>
+                <div className="text-2xl font-bold">{upcomingClassDays.length || 0}</div>
                 <p className="text-xs text-muted-foreground">in the next 7 days</p>
               </CardContent>
             </Card>
@@ -1160,14 +1162,17 @@ export default function ParentDashboard() {
               <CardContent>
                 {eventsLoading ? (
                   <div className="text-center py-8">Loading events...</div>
-                ) : eventsData?.length === 0 ? (
+                ) : upcomingClassDays.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No upcoming events scheduled</p>
+                    <p>No upcoming class days</p>
+                    <Button asChild variant="link" className="mt-2">
+                      <Link href="/schedule">Open calendar</Link>
+                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {eventsData?.map((event: any, index: number) => (
+                    {upcomingClassDays.map((event, index) => (
                       <div key={event.id || `event-${index}`} className="flex items-center gap-3 p-3 rounded-lg border">
                         <div className="flex-shrink-0">
                           <Calendar className="h-4 w-4 text-blue-600" />
@@ -1178,6 +1183,9 @@ export default function ParentDashboard() {
                         </div>
                       </div>
                     ))}
+                    <Button asChild variant="outline" className="w-full">
+                      <Link href="/schedule">View full calendar</Link>
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -1782,8 +1790,32 @@ export default function ParentDashboard() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="schedule" className="space-y-4">
-          <ParentCalendarView />
+        <TabsContent value="schedule" className="space-y-4" data-testid="dashboard-schedule-teaser">
+          <Card>
+            <CardHeader>
+              <CardTitle>Coming up</CardTitle>
+              <CardDescription>Class days from your family calendar</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {eventsLoading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : upcomingClassDays.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No upcoming class days.</p>
+              ) : (
+                upcomingClassDays.map((event) => (
+                  <div key={event.id} className="flex justify-between text-sm border-b pb-2">
+                    <span className="font-medium">{event.title}</span>
+                    <span className="text-muted-foreground">{event.date}</span>
+                  </div>
+                ))
+              )}
+              <Button asChild variant="outline">
+                <Link href="/schedule" data-testid="link-open-family-calendar">
+                  Open calendar
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="fundraisers" className="space-y-6">

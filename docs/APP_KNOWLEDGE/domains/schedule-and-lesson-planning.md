@@ -6,11 +6,15 @@ Operational truth for **class weekly templates / week plans**, educator calendar
 
 1. **Weekly Templates** — `/schools/schedule-builder` → skeletons + recurring time blocks (`weekly_skeletons`, `skeleton_blocks`). Bind **`classId`** to marketplace `classes.id` (not title-as-value). CSV import uses `ScheduleBlocksCsvImportDialog` (map → preview → confirm); `POST .../skeletons/:id/blocks/import-csv` accepts optional FormData `mapping` JSON. Requires `express-fileupload` on `/api/schedule-builder`.
 2. **Week Planner** — `/schools/week-planner` → per-week plans + block content (`week_plans`, `week_plan_blocks`); optional `/api/schedule-ai/*`. Week-card **Actions** menu includes **Build** (create `week_plan_blocks` for empty skeleton slots from template defaults), Publish/Complete, CSV, Clone, AI, Delete. CSV import reuses the same dialog in `mode="week-plan"` (map → preview → confirm); `POST .../week-plans/:id/blocks/import-csv` accepts optional `mapping`, resolves slots by day+start_time → `skeletonBlockId`, and accepts template-shaped CSVs (`default_title` → title).
-3. **Publish** — parents see `/parent/weekly-schedule` via enrollment-scoped my-week; educators see published blocks on **Schedule** (`/educator/weekly-calendar` via `/api/educator/schedules/week` `planBlocks`) and can still browse/print on `/educator/week-plans`. `/educator/schedule` redirects to `/educator/weekly-calendar`.
+3. **Publish** — parents see week lessons as **Week** mode on `/schedule` (bookmark `/parent/weekly-schedule` redirects there) via enrollment-scoped my-week; educators see published blocks on **Schedule** (`/educator/weekly-calendar` via `/api/educator/schedules/week` `planBlocks`) and can still browse/print on `/educator/week-plans`. `/educator/schedule` redirects to `/educator/weekly-calendar`.
 
-Adjacent: `/schedule` (enrollment family schedule via `GET /api/schedule`), `/schools/calendar` (school events), `/lessons` + AI generators.
+Adjacent: `/schedule` is the parent Calendar hub (class days + school events + week lessons + ICS subscribe). `/schools/calendar` is the school-admin event publisher. `/lessons` + AI generators remain separate.
 
-**Family `/api/schedule`:** `classes.schedule` is **jsonb** (usually `{ variants: [{ days, startTime, endTime }] }`). Never `.match()` it as a string — use `server/utils/family-schedule.ts` `extractFamilyScheduleTiming`. A thrown parse used to 500 the whole calendar (“0 scheduled activities”).
+**Family `/api/schedule`:** `classes.schedule` is **jsonb** (usually `{ variants: [{ days, startTime, endTime }] }`). Never `.match()` it as a string — use `server/utils/family-schedule.ts` `extractFamilyScheduleTiming`. Expansion is shared via `server/lib/family-class-schedule.ts` (JSON + ICS).
+
+**School events:** `events.school_id` + optional `location_id` (null = all campuses). Parent reads `GET /api/calendar-events/parent/events` using child campuses, not `users.schoolId` alone. Writes require schoolAdmin/admin/superAdmin/director.
+
+**Family ICS:** `POST /api/calendar/feed-token` mints `users.calendar_feed_token`. `GET /api/calendar/feed/:token` is unauthenticated (calendar apps cannot send Bearer). Do not ship a public numeric school-id ICS feed.
 
 ## Runtime mounts
 
@@ -18,7 +22,8 @@ Adjacent: `/schedule` (enrollment family schedule via `GET /api/schedule`), `/sc
 |--------|--------|-------------------|----------------------|
 | `schedule-builder.ts` | `/api/schedule-builder` | **Yes** | Yes |
 | `schedule-ai.ts` | `/api/schedule-ai` | **Yes** | Yes |
-| `calendar-events.ts` | `/api/calendar-events` | **No** | **No** |
+| `calendar-events.ts` | `/api/calendar-events` | **Yes** | Yes |
+| `calendar-feed.ts` | `/api/calendar` | **Yes** | Yes |
 | `smart-tutorial.ts` | `/api/smart-tutorial` | **No** | **No** |
 
 **Canonical runtime** is `server/index.ts`. Storage for schedule-builder lives in `server/lib/schedule-builder-db.ts` (wired through `dbStorage` / `CombinedStorage`).
@@ -54,7 +59,8 @@ Block completion stays admin/Week Planner in v1 (sets `week_plan_blocks.is_compl
 | Page | Live API? |
 |------|-----------|
 | `ScheduleBuilderPage` / `WeekPlannerPage` | Yes |
-| `WeeklySchedulePage` | Yes (`/parent/my-week-plans`) |
+| `FamilySchedule` (`/schedule`) | Yes (`/api/schedule`, parent events, my-week-plans) |
+| `WeeklySchedulePage` | Removed — week grid is `ParentWeekPlanGrid` on `/schedule?view=week` |
 | `Lessons.tsx` | **Mock** `queryFn` |
 | `AILessonGenerator.tsx` | **Simulated** |
 
@@ -81,7 +87,7 @@ Steps: templates → class bind → blocks/CSV → Week Planner → New Week →
 |----|----------|
 | `POST /api/test/setup-schedule-builder-scenario` | Admin/educator/parent, Seekers+Yankee classes (+ `schedule` jsonb + educator assignment), skeletons/`classId`, published+draft weeks, completion, attendance, optional Supabase link |
 | Jest | `schedule-builder-mount`, `schedule-builder-seed`, `schedule-builder-api` (incl. week-plan CSV import), `progress-scheduled-lessons`, `school-admin-academics-kpi`, `school-admin-attendance`, `schedule-day-index` |
-| Playwright | `schedule-builder-publish`, `schedule-template-csv-import`, `parent-weekly-schedule`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `educator-weekly-schedule-plans`, plus mentor loop specs in [educator-ui.md](./educator-ui.md) |
+| Playwright | `parent-family-calendar`, `parent-calendar-redirects`, `school-admin-calendar`, `parent-weekly-schedule` (redirect + print root), `schedule-builder-publish`, `schedule-template-csv-import`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `educator-weekly-schedule-plans`, plus mentor loop specs in [educator-ui.md](./educator-ui.md) |
 
 Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: [student-progress-assessments.md](./student-progress-assessments.md).
 
@@ -95,6 +101,8 @@ Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: 
 | Week Planner **Confirm Import** 500 / failed | Import built `{ dayOfWeek, startTime, data }` but `bulkUpdateWeekPlanBlocks` needs `skeletonBlockId` + flat fields | Resolve skeleton slot by day+start_time; pass correct shape (fixed 2026-07-14) |
 | Template CSV (`default_title`) on Week Planner looks wrong / empty titles | Week-plan columns use `title`; no mapper | Shared dialog maps `default_title` → title; server also falls back to `default_title` |
 | Educator Schedule “Unable to load” / `/schedules/week` 500 | Missing `getEducatorSchedulesForWeek` / events storage | Restored in `educator-schedules-db` + soft-fail `events-range-db`; overlay published plans via `schedule-day-index` |
+| POST `/api/calendar-events` 400 Validation error | `requireSchoolContext` sets `req.schoolId` as a **string**; drizzle-zod `insertEventSchema.schoolId` is integer | `Number(req.schoolId)` before parse/compare |
+| Parent Calendar empty / E2E miss school event chips | Month cell shows **one** school chip; switching users in the same Playwright context keeps admin auth; dashboard fetch storm can delay `/parent/events` | Isolated `browser.newPage()`; list view; `waitForResponse` on `/parent/events` |
 | E2E `schedule-csv-done` / `schedule-csv-mapping-next` click times out | First-visit tour prompt (`schedule-tour-prompt`) Radix overlay intercepts the custom CSV portal; CI often hits this on Done (tour fires during import), fast local runs on Next | Seed `schedule_builder_tour_seen`; dismiss prompt when CSV opens; force-click Done after success. Skip `networkidle`. |
 
 ## Key files
@@ -103,7 +111,9 @@ Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: 
 |------|------|
 | Storage | `server/lib/schedule-builder-db.ts`, `educator-schedules-db.ts` |
 | Admin UI | `ScheduleBuilderPage.tsx`, `WeekPlannerPage.tsx` |
-| Consumers | `WeeklySchedulePage.tsx`, `ParentProgressPage.tsx`, `WeeklyCalendar.tsx` (mentor Schedule) |
+| Consumers | `FamilySchedule.tsx`, `ParentWeekPlanGrid.tsx`, `ParentProgressPage.tsx`, `WeeklyCalendar.tsx` (mentor Schedule) |
+| School events | `server/api/calendar-events.ts`, `server/api/calendar-feed.ts`, `server/lib/events-range-db.ts`, `server/lib/calendar-ics.ts` |
+| Migration | `server/migrations/260-family-calendar.sql` |
 | Mentor week API | `server/api/educator.ts` `GET /schedules/week` |
 | Day index | `shared/schedule-day-index.ts` |
 | Block detail | `client/src/components/schedule/WeekPlanBlockDetailSheet.tsx` |

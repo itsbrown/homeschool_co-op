@@ -51,6 +51,8 @@ import storeAdminRouter from './api/store-admin';
 import unifiedUploadsRouter from './api/unified-uploads';
 import scheduleBuilderRouter from "./api/schedule-builder";
 import scheduleAiRouter from "./api/schedule-ai";
+import calendarEventsRouter from "./api/calendar-events";
+import calendarFeedRouter from "./api/calendar-feed";
 import { registerObjectStorageRoutes } from './replit_integrations/object_storage';
 import {
   isE2eObjectStorageStubEnabled,
@@ -257,6 +259,8 @@ app.use("/api/unified-uploads", unifiedUploadsRouter);
 app.use("/api/school-admin/public-store", storeAdminRouter);
 app.use("/api/schedule-builder", scheduleBuilderRouter);
 app.use("/api/schedule-ai", scheduleAiRouter);
+app.use("/api/calendar-events", calendarEventsRouter);
+app.use("/api/calendar", calendarFeedRouter);
 
 // Test endpoints for development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {

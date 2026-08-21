@@ -9,7 +9,7 @@ import { insertCurriculumSchema, insertLessonSchema, insertEventSchema, insertMa
 import { getDb } from "./db";
 import { eq } from "drizzle-orm";
 import { supabaseAuth } from "./middleware/supabase-auth";
-import { extractFamilyScheduleTiming } from "./utils/family-schedule";
+import { buildFamilyClassScheduleEvents } from "./lib/family-class-schedule";
 import { childMatchesParent } from "@shared/parent-identity";
 import { buildChildProfilePatch } from "@shared/child-profile-patch";
 
@@ -2174,137 +2174,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: 'User email not found in token' });
       }
 
-      console.log(`📅 Fetching schedule for parent: ${userEmail}`);
-
-      // Get query parameters for filtering
       const childIdFilter = req.query.childId as string;
-      const typeFilter = req.query.type as string;
-
-      // Get all children for this parent
       const children = await storage.getChildrenByParentEmail(userEmail);
-      console.log(`👨‍👩‍👧‍👦 Found ${children.length} children for parent`);
-
       if (children.length === 0) {
         return res.json([]);
       }
 
-      // Get enrollments for all children (or filtered child)
-      let allEnrollments: any[] = [];
-      
-      if (childIdFilter && childIdFilter !== 'all') {
-        const childId = parseInt(childIdFilter);
-        const enrollments = await storage.getEnrollmentsByChildId(childId);
-        allEnrollments = enrollments.map((e: any) => ({
-          ...e,
-          childId,
-          childName: children.find(c => c.id === childId)?.firstName + ' ' + children.find(c => c.id === childId)?.lastName
-        }));
-      } else {
-        // Get enrollments for all children
-        for (const child of children) {
-          const enrollments = await storage.getEnrollmentsByChildId(child.id);
-          allEnrollments.push(...enrollments.map((e: any) => ({
-            ...e,
-            childId: child.id,
-            childName: `${child.firstName} ${child.lastName}`
-          })));
-        }
-      }
-
-      console.log(`📋 Found ${allEnrollments.length} total enrollments`);
-
-      // Filter to only enrolled status
-      const activeEnrollments = allEnrollments.filter(e => e.status === 'enrolled');
-      console.log(`✅ ${activeEnrollments.length} active enrollments`);
-
-      // Get class details for each enrollment and format as schedule events
-      const scheduleEvents = await Promise.all(
-        activeEnrollments.map(async (enrollment) => {
-          try {
-            // Prefer marketplace class id when present (unified enrollments).
-            const classId =
-              enrollment.marketplaceClassId ?? enrollment.classId ?? enrollment.programId;
-            if (classId == null) {
-              console.log(`⚠️ No class id for enrollment:`, enrollment.id);
-              return null;
-            }
-            const classDetails = await storage.getClassById(classId);
-
-            if (!classDetails) {
-              console.log(`⚠️ Class not found for enrollment:`, enrollment.id, classId);
-              return null;
-            }
-
-            const { scheduleDays, startTime, endTime, scheduleLabel } = extractFamilyScheduleTiming(
-              classDetails.schedule,
-              enrollment.variantId,
-            );
-
-            if (scheduleDays.length === 0) {
-              console.log(
-                `⚠️ No recurring days parsed for class ${classDetails.id} (enrollment ${enrollment.id})`,
-              );
-              return null;
-            }
-
-            // Generate recurring events from class start through class end (fallback: +3 months).
-            const events: any[] = [];
-            const startDateObj = new Date(classDetails.startDate || new Date());
-            const endDateObj = classDetails.endDate
-              ? new Date(classDetails.endDate)
-              : (() => {
-                  const d = new Date(startDateObj);
-                  d.setMonth(d.getMonth() + 3);
-                  return d;
-                })();
-
-            const currentDate = new Date(startDateObj);
-            // Normalize to local calendar day iteration
-            currentDate.setHours(12, 0, 0, 0);
-            endDateObj.setHours(23, 59, 59, 999);
-
-            while (currentDate <= endDateObj) {
-              if (scheduleDays.includes(currentDate.getDay())) {
-                events.push({
-                  id: `enrollment-${enrollment.id}-${classDetails.id}-${currentDate.toISOString().slice(0, 10)}`,
-                  title: classDetails.title || enrollment.className,
-                  date: currentDate.toISOString().split('T')[0],
-                  startTime,
-                  endTime,
-                  location: classDetails.location || 'Location TBD',
-                  type: 'class',
-                  childId: enrollment.childId.toString(),
-                  childName: enrollment.childName,
-                  color: '#3b82f6',
-                  description: classDetails.description || '',
-                  programName: classDetails.title,
-                  instructorName: classDetails.instructorName || 'TBD',
-                  schedule: scheduleLabel || classDetails.schedule,
-                });
-              }
-              currentDate.setDate(currentDate.getDate() + 1);
-            }
-
-            return events;
-          } catch (enrollmentErr) {
-            console.error(
-              `⚠️ Failed to build schedule events for enrollment ${enrollment.id}:`,
-              enrollmentErr,
-            );
-            return null;
-          }
-        }),
-      );
-
-      // Flatten array of arrays (each enrollment returns multiple events)
-      // and filter out null values
-      let validEvents = scheduleEvents.flat().filter(Boolean);
-      
-      if (typeFilter && typeFilter !== 'all') {
-        validEvents = validEvents.filter(e => e.type === typeFilter);
-      }
-
-      console.log(`📅 Returning ${validEvents.length} schedule events`);
+      const validEvents = await buildFamilyClassScheduleEvents({
+        children,
+        childIdFilter,
+      });
       res.json(validEvents);
     } catch (error) {
       console.error('Error fetching schedule:', error);

@@ -39,6 +39,8 @@ export const users = pgTable("users", {
   autoPayEnabled: boolean("auto_pay_enabled").default(false).notNull(),
   hasCompletedOnboarding: boolean("has_completed_onboarding").default(false), // Whether user has completed the onboarding tour
   memberId: text("member_id"), // System-generated or admin-assigned membership ID (e.g., ASA-2025-X7K9M2)
+  /** Secret token for unauthenticated family calendar ICS subscribe URLs. */
+  calendarFeedToken: text("calendar_feed_token").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1617,11 +1619,23 @@ export const events = pgTable("events", {
   endDate: timestamp("end_date").notNull(),
   location: text("location"),
   organizerId: integer("organizer_id").notNull().references(() => users.id),
-  eventType: text("event_type", { enum: ["class", "meeting", "workshop", "camp", "other"] }).notNull(),
+  eventType: text("event_type", {
+    enum: ["class", "meeting", "workshop", "camp", "holiday", "deadline", "special", "other"],
+  }).notNull(),
+  schoolId: integer("school_id").references(() => schools.id),
+  locationId: integer("location_id").references(() => locations.id),
+  color: text("color"),
+  isAllDay: boolean("is_all_day").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertEventSchema = createInsertSchema(events).omit({ id: true, createdAt: true, organizerId: true });
+export const insertEventSchema = createInsertSchema(events).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  organizerId: true,
+});
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type Event = typeof events.$inferSelect;
 
@@ -1633,7 +1647,9 @@ export const roleInvitationsRelations = relations(roleInvitations, ({ one }) => 
 
 // Define event relations
 export const eventsRelations = relations(events, ({ one }) => ({
-  organizer: one(users, { fields: [events.organizerId], references: [users.id] })
+  organizer: one(users, { fields: [events.organizerId], references: [users.id] }),
+  school: one(schools, { fields: [events.schoolId], references: [schools.id] }),
+  campus: one(locations, { fields: [events.locationId], references: [locations.id] }),
 }));
 
 // MarketplaceItems table

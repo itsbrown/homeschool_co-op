@@ -30,8 +30,8 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 | [domains/payments-and-billing.md](./domains/payments-and-billing.md) | Ledgers, credits, prod balance audit, correction email |
 | [domains/ci-and-testing.md](./domains/ci-and-testing.md) | GitHub Actions, Playwright, agent knowledge maintenance |
 | [domains/custom-forms-public-access.md](./domains/custom-forms-public-access.md) | Public Form Builder, mentor app, resume upload, E2E |
-| [../E2E_COMMANDS.md](../E2E_COMMANDS.md) | Playwright: npm scripts, per-spec commands, seeds (**update catalog when adding `e2e/*.spec.ts`**) |
-| [domains/schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md) | Week templates/plans, family schedule jsonb, lessons/AI, progress pills, academics KPI |
+| [../E2E_COMMANDS.md](../E2E_COMMANDS.md) | Playwright: npm scripts, per-spec commands, seeds (**update catalog when adding `e2e/*.spec.ts`**). Seed/login specs use `requireLinkedSeed` (skip ≠ pass). |
+| [domains/schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md) | Week templates/plans, parent Calendar hub (`/schedule`), family ICS, school-admin events |
 | [domains/grade-placement.md](./domains/grade-placement.md) | Auto-place by grade: campus + session-paid + grade → roster; preview/reason codes |
 | [domains/student-progress-assessments.md](./domains/student-progress-assessments.md) | F-14 assessments, Lexile, progress tracking audit |
 | [domains/school-analytics.md](./domains/school-analytics.md) | Engagement, cart funnel, progress charts, telemetry |

@@ -263,8 +263,24 @@ export class FileStorage implements IStorage {
     return fileDb.getAllEvents(userId);
   }
 
-  async createEvent(event: InsertEvent): Promise<Event> {
+  async createEvent(event: InsertEvent & { organizerId: number }): Promise<Event> {
     return fileDb.createEvent(event);
+  }
+
+  async updateEvent(_id: number, _event: Partial<InsertEvent>): Promise<Event | undefined> {
+    throw new Error('Not implemented');
+  }
+
+  async deleteEvent(_id: number): Promise<boolean> {
+    throw new Error('Not implemented');
+  }
+
+  async getUserByCalendarFeedToken(_token: string): Promise<User | undefined> {
+    return undefined;
+  }
+
+  async setUserCalendarFeedToken(_userId: number, _token: string): Promise<User | undefined> {
+    throw new Error('Not implemented');
   }
 
   // Marketplace methods

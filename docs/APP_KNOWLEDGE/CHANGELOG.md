@@ -1,5 +1,24 @@
 # App knowledge changelog
 
+## 2026-08-21 (Family calendar E2E gate)
+
+- Calendar seed/login specs **passed** (0 skipped) against `.env` Railway clone + `.env.e2e`. Shell `DATABASE_URL` pointing at disabled Neon `asa_test` must be unset so `.env` loads.
+- `setup-schedule-builder-scenario` needed `getDb` imported and `ensureFamilyCalendarSchema()` before user writes (`calendar_feed_token`).
+- `POST /api/calendar-events` 400: `requireSchoolContext` injects `schoolId` as a **string**; coerce with `Number()` before `insertEventSchema`. Parent isolation E2E uses a new browser context + list view (month shows one school chip per day; dashboard load can starve `/parent/events`).
+
+## 2026-08-20 (Playwright seed/login gate)
+
+- New seed/login E2E is a **gate**: `requireLinkedSeed` fails if Postgres seed or Supabase link is missing (Playwright skip is exit 0 — not a pass). Laptop escape hatch `E2E_ALLOW_SKIP=1` (ignored in CI).
+- Local E2E uses `.env` (Railway **clone** `DATABASE_URL`) + `.env.e2e`. Never `.env.prod`. Worktrees symlink those files.
+- Rule `.cursor/rules/e2e-seed-gate.mdc`; skill `asa-testing-deployment`; helper `e2e/helpers/requireLinkedSeed.ts`. Calendar specs (`parent-family-calendar`, `parent-calendar-redirects`, `school-admin-calendar`, `parent-weekly-schedule`) use the helper.
+
+## 2026-08-20 (Family Calendar Hub)
+
+- One parent **Calendar** at `/schedule` (nav still **Family Schedule**). Month = class days + school events; Week = published lesson grid; List = upcoming. Parents subscribe via tokenized ICS (`GET /api/calendar/feed/:token`); they cannot create events.
+- School admin `/schools/calendar` is live (mounted `/api/calendar-events`) with campus All vs location. Campus-scoped events only show to families with a child at that campus.
+- Deleted overlapping parent screens (`CalendarPage`, `ParentCalendarView`, standalone `WeeklySchedulePage`). Bookmarks: `/calendar` → `/schedule`, `/parent/weekly-schedule` → `/schedule?view=week`.
+- Schema: `server/migrations/260-family-calendar.sql`. Playwright: `parent-family-calendar`, `parent-calendar-redirects`, `school-admin-calendar`; weekly-schedule spec retargeted.
+
 ## 2026-08-20 (Mentor invite: do not hijack existing accounts)
 
 - Staff-invite accept must not `updateUserById` password for an email that already has Supabase Auth; existing users enter their current password. Do not rewrite `users.schoolId` for another school. Class assignment waits until accept and does not steal `instructorId`.

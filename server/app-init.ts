@@ -44,6 +44,8 @@ import financialReportsRouter, {
 import retentionRouter from "./api/retention";
 import scheduleBuilderRouter from "./api/schedule-builder";
 import scheduleAiRouter from "./api/schedule-ai";
+import calendarEventsRouter from "./api/calendar-events";
+import calendarFeedRouter from "./api/calendar-feed";
 import assessmentsRouter from "./api/assessments";
 import lexileRouter from "./api/lexile";
 import lexileAiRouter from "./api/lexile-ai";
@@ -219,6 +221,8 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/unified-uploads", unifiedUploadsRouter);
   app.use("/api/schedule-builder", scheduleBuilderRouter);
   app.use("/api/schedule-ai", scheduleAiRouter);
+  app.use("/api/calendar-events", calendarEventsRouter);
+  app.use("/api/calendar", calendarFeedRouter);
   app.use("/api/assessments", assessmentsRouter);
   app.use("/api/lexile", lexileRouter);
   app.use("/api/lexile", lexileAiRouter);
@@ -420,6 +424,12 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
       await ensureSupplyListsSchema();
     } catch (err) {
       console.error('⚠️ ensureSupplyListsSchema failed (non-fatal):', err);
+    }
+    try {
+      const { ensureFamilyCalendarSchema } = await import('./lib/ensure-family-calendar-schema');
+      await ensureFamilyCalendarSchema();
+    } catch (err) {
+      console.error('⚠️ ensureFamilyCalendarSchema failed (non-fatal):', err);
     }
   })();
 

@@ -606,6 +606,10 @@ export class SupabaseStorage implements IStorage {
   async getUpcomingEvents(userId: number): Promise<any[]> { return []; }
   async getAllEvents(userId: number): Promise<any[]> { return []; }
   async createEvent(event: any): Promise<any> { throw new Error('Not implemented'); }
+  async updateEvent(_id: number, _event: any): Promise<any> { throw new Error('Not implemented'); }
+  async deleteEvent(_id: number): Promise<boolean> { throw new Error('Not implemented'); }
+  async getUserByCalendarFeedToken(_token: string): Promise<any | undefined> { return undefined; }
+  async setUserCalendarFeedToken(_userId: number, _token: string): Promise<any | undefined> { throw new Error('Not implemented'); }
   async getMarketplaceItem(id: number): Promise<any | undefined> { return undefined; }
   async getMarketplaceItemsBySeller(sellerId: number): Promise<any[]> { return []; }
   async getTopSellingItems(limit: number): Promise<any[]> { return []; }
