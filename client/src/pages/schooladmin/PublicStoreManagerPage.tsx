@@ -29,6 +29,7 @@ type ProductFormState = {
   description: string;
   imageUrl: string;
   productLink: string;
+  pickupOnly: boolean;
 };
 
 type AffiliatePreviewSource = "paapi" | "mock" | "manual";
@@ -55,6 +56,7 @@ const emptyProductForm = (): ProductFormState => ({
   description: "",
   imageUrl: "",
   productLink: "",
+  pickupOnly: false,
 });
 
 const emptyAffiliateForm = (): AffiliateFormState => ({
@@ -92,6 +94,7 @@ function readProductDraft(): ProductFormState {
       description: parsed.description ?? "",
       imageUrl: parsed.imageUrl ?? "",
       productLink: parsed.productLink ?? "",
+      pickupOnly: parsed.pickupOnly === true,
     };
   } catch {
     return emptyProductForm();
@@ -182,6 +185,7 @@ export default function PublicStoreManagerPage() {
         imageUrl: productForm.imageUrl || null,
         productKind: "owned",
         affiliateUrl: productForm.productLink.trim() || null,
+        pickupOnly: productForm.pickupOnly,
       });
       if (!res.ok) throw new Error("Failed to create product");
       const product = (await res.json()) as StoreProduct;
@@ -401,6 +405,19 @@ export default function PublicStoreManagerPage() {
                     If set, families open this URL instead of adding to cart.
                   </p>
                 </div>
+                <div className="flex items-start gap-3 rounded-lg border p-3">
+                  <Switch
+                    checked={productForm.pickupOnly}
+                    onCheckedChange={(checked) => updateProductForm({ pickupOnly: checked })}
+                    data-testid="switch-create-product-pickup-only"
+                  />
+                  <div>
+                    <Label>Pickup at school only</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Checkout will not offer shipping. Use this for items families collect on campus.
+                    </p>
+                  </div>
+                </div>
                 <div>
                   <Label className="mb-2 block">Product photo</Label>
                   <ImageUpload
@@ -574,6 +591,9 @@ export default function PublicStoreManagerPage() {
                           ) : (
                             <Badge variant="outline">Merch</Badge>
                           )}
+                          {p.productKind !== "affiliate" && p.pickupOnly ? (
+                            <Badge variant="secondary">Pickup only</Badge>
+                          ) : null}
                           {p.isPublished ? (
                             <Badge
                               className="bg-green-100 text-green-800 hover:bg-green-100"

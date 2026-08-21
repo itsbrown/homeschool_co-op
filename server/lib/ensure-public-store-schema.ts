@@ -8,6 +8,7 @@ let ensured = false;
 const PUBLIC_STORE_MIGRATIONS = [
   'server/migrations/251-public-store.sql',
   'server/migrations/255-store-affiliate-products.sql',
+  'server/migrations/261-store-product-pickup-only.sql',
 ] as const;
 
 /** Idempotent apply of public store migrations (E2E + local). */

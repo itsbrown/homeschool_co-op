@@ -55,6 +55,9 @@ export function StoreCatalogCard({
             {storeListingTypeLabel(item.listingType, item.productKind, item.affiliateUrl)}
           </Badge>
           {item.membersOnly && <Badge variant="secondary">Members only</Badge>}
+          {item.listingType === "product" && item.pickupOnly && (
+            <Badge variant="secondary">Pickup at school</Badge>
+          )}
           {item.listingType === "product" &&
             storeProductCta({ affiliateUrl: item.affiliateUrl }).kind === "cart" &&
             item.inStock === false && (

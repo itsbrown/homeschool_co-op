@@ -24,6 +24,8 @@ export type StoreCatalogItem = {
   /** Owned merch vs Amazon affiliate (external buy). */
   productKind?: 'owned' | 'affiliate';
   affiliateUrl?: string | null;
+  /** Owned merch that cannot be shipped — pickup at school only. */
+  pickupOnly?: boolean;
 };
 
 export async function buildStoreCatalogItem(
@@ -50,6 +52,7 @@ export async function buildStoreCatalogItem(
           : product.inventoryQty == null || product.inventoryQty > 0,
       productKind: (product.productKind as 'owned' | 'affiliate') ?? 'owned',
       affiliateUrl: product.affiliateUrl ?? null,
+      pickupOnly: product.productKind === 'affiliate' ? false : Boolean(product.pickupOnly),
     };
   }
 

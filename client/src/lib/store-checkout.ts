@@ -134,7 +134,7 @@ export function formatShippingAddressOneLine(address: StoreShippingAddress): str
 }
 
 export function productDeliverySummary(delivery: StoreProductDelivery): string {
-  if (delivery.method === "pickup") return "Pick up at campus";
+  if (delivery.method === "pickup") return "Pick up at school";
   if (!delivery.shippingAddress) return "Shipping";
   return `Ship to: ${formatShippingAddressOneLine(delivery.shippingAddress)}`;
 }

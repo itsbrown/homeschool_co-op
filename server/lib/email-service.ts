@@ -2268,7 +2268,7 @@ export async function sendStorePurchaseConfirmationEmail(data: {
       <p style="margin:0;color:#4B5563;font-size:14px;">
         ${
           data.productDelivery.method === 'pickup'
-            ? 'Pick up at campus — the school will follow up with pickup details.'
+            ? 'Pick up at school — the school will follow up with pickup details.'
             : data.productDelivery.shippingAddress
               ? `Ship to:<br/>${data.productDelivery.shippingAddress.line1}${
                   data.productDelivery.shippingAddress.line2
@@ -2338,7 +2338,7 @@ export async function sendStorePurchaseConfirmationEmail(data: {
       ? [
           '',
           data.productDelivery.method === 'pickup'
-            ? 'Product delivery: Pick up at campus'
+            ? 'Product delivery: Pick up at school'
             : data.productDelivery.shippingAddress
               ? `Product delivery: Ship to ${data.productDelivery.shippingAddress.line1}, ${data.productDelivery.shippingAddress.city}, ${data.productDelivery.shippingAddress.state} ${data.productDelivery.shippingAddress.postalCode}`
               : 'Product delivery: Shipping',

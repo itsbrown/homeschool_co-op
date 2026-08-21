@@ -41,10 +41,29 @@ export function formatStoreShippingAddress(address: StoreShippingAddress): strin
 
 export function formatStoreProductDeliveryLabel(delivery: StoreProductDelivery): string {
   if (delivery.method === 'pickup') {
-    return 'Pick up at campus';
+    return 'Pick up at school';
   }
   if (!delivery.shippingAddress) {
     return 'Ship to address';
   }
   return `Ship to: ${formatStoreShippingAddress(delivery.shippingAddress)}`;
+}
+
+export class StorePickupOnlyError extends Error {
+  readonly code = 'PICKUP_ONLY';
+
+  constructor(message = 'This order must be picked up at school. Shipping is not available.') {
+    super(message);
+    this.name = 'StorePickupOnlyError';
+  }
+}
+
+export function assertStoreProductDeliveryAllowed(
+  delivery: StoreProductDelivery | undefined,
+  pickupOnlyRequired: boolean,
+): void {
+  if (!pickupOnlyRequired) return;
+  if (!delivery || delivery.method !== 'pickup') {
+    throw new StorePickupOnlyError();
+  }
 }

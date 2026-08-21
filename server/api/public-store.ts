@@ -34,7 +34,7 @@ import {
   formatStoreOrderNumber,
   persistStoreEmergencyContact,
 } from '../lib/store-checkout-contact';
-import { storeProductDeliverySchema } from '../lib/store-product-fulfillment';
+import { storeProductDeliverySchema, StorePickupOnlyError, assertStoreProductDeliveryAllowed } from '../lib/store-product-fulfillment';
 import { resolveStoreShareReferral } from '../lib/store-share-attribution';
 
 const router = Router();
@@ -246,6 +246,15 @@ router.post('/:storeSlug/checkout', async (req, res) => {
       cartLines: cartWithChildren as StoreCartLineInput[],
       parentUserId: parentResult.parentId,
     });
+
+    try {
+      assertStoreProductDeliveryAllowed(parsed.data.productDelivery, snapshot.pickupOnlyRequired);
+    } catch (err) {
+      if (err instanceof StorePickupOnlyError) {
+        return res.status(400).json({ message: err.message, code: err.code });
+      }
+      throw err;
+    }
 
     const unavailable = snapshot.lines.filter((l) => l.unavailableReason);
     if (unavailable.length > 0) {

@@ -466,6 +466,7 @@ export type SetupPublicStoreScenarioResponse = {
       priceCents: number;
       imageUrl: string | null;
       productKind?: "owned" | "affiliate";
+      pickupOnly?: boolean;
     };
     listing: { id: number; isPublished: boolean };
     affiliateProduct?: {

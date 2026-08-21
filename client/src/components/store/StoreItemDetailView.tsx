@@ -111,6 +111,11 @@ export function StoreItemDetailView({
                   <Package className="h-4 w-4 shrink-0" aria-hidden />
                   Sold on the vendor site — you will leave this site to view the product.
                 </p>
+              ) : isProduct && item.pickupOnly ? (
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <Package className="h-4 w-4 shrink-0" aria-hidden />
+                  Pickup at school only — shipping is not available.
+                </p>
               ) : isProduct ? (
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                   <Package className="h-4 w-4 shrink-0" aria-hidden />

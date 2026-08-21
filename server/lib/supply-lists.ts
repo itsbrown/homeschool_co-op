@@ -63,6 +63,7 @@ export type HouseholdProductCta = {
   affiliateUrl: string | null;
   listingSlug: string | null;
   purchasableInCart: false;
+  pickupOnly: boolean;
 };
 
 export type HouseholdSupplyListResponse = {
@@ -439,6 +440,7 @@ export async function buildHouseholdSupplyList(params: {
         affiliateUrl: p.affiliateUrl ?? null,
         listingSlug: listing ? slugifyStoreListingTitle(p.name) : null,
         purchasableInCart: false,
+        pickupOnly: p.productKind === "affiliate" ? false : Boolean(p.pickupOnly),
       });
     }
   }

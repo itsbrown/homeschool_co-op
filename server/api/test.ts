@@ -3806,6 +3806,7 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
       withPublishedSessionListing: req.body?.withPublishedSessionListing === true,
       withParent: req.body?.withParent === true,
       withAffiliateProduct: req.body?.withAffiliateProduct === true,
+      productPickupOnly: req.body?.productPickupOnly === true,
       affiliateUrl: typeof req.body?.affiliateUrl === 'string' ? req.body.affiliateUrl : undefined,
       affiliateAsin: typeof req.body?.affiliateAsin === 'string' ? req.body.affiliateAsin : undefined,
       affiliateName: typeof req.body?.affiliateName === 'string' ? req.body.affiliateName : undefined,
