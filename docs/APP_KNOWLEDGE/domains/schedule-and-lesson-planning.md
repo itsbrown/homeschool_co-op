@@ -14,7 +14,7 @@ Adjacent: `/schedule` is the parent Calendar hub (class days + school events + w
 
 **School events:** `events.school_id` + optional `location_id` (null = all campuses). Parent reads `GET /api/calendar-events/parent/events` using child campuses, not `users.schoolId` alone. Writes require schoolAdmin/admin/superAdmin/director.
 
-**Family ICS:** `POST /api/calendar/feed-token` mints `users.calendar_feed_token`. `GET /api/calendar/feed/:token` is unauthenticated (calendar apps cannot send Bearer). Do not ship a public numeric school-id ICS feed.
+**Family ICS:** `POST /api/calendar/feed-token` mints `users.calendar_feed_token`. `GET /api/calendar/feed/:token` is unauthenticated (calendar apps cannot send Bearer). Do not ship a public numeric school-id ICS feed. All-day `DTEND` is exclusive (next calendar day).
 
 ## Runtime mounts
 
