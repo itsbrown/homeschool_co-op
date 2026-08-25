@@ -1,13 +1,17 @@
 import express from "express";
 import { storage } from "../storage";
 import { supabaseAuth } from "../middleware/supabase-auth";
+import { requireRole } from "../middleware/auth0-auth";
 import { requireSchoolContext } from "../middleware/require-school-context";
 import { z } from "zod";
 import type { InsertEducatorSchedule, InsertAuditLog } from "@shared/schema";
 
 const router = express.Router();
 
+const requireAdminOrDirector = requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']);
+
 router.use(supabaseAuth);
+router.use(requireAdminOrDirector);
 router.use(requireSchoolContext);
 
 // ============================================
@@ -66,74 +70,6 @@ router.get('/', async (req: any, res) => {
   } catch (error) {
     console.error('[AdminEducators] Error fetching educators:', error);
     res.status(500).json({ error: 'Failed to fetch educators' });
-  }
-});
-
-// GET /api/admin/educators/:educatorId - Get single educator details with schedules
-router.get('/:educatorId', async (req: any, res) => {
-  try {
-    const schoolId = req.schoolId;
-    const educatorId = parseInt(req.params.educatorId);
-    
-    if (!schoolId) {
-      return res.status(400).json({ error: 'School context required' });
-    }
-
-    console.log('[AdminEducators] Fetching educator details:', educatorId);
-
-    // Get educator user info
-    const user = await storage.getUser(educatorId);
-    if (!user) {
-      return res.status(404).json({ error: 'Educator not found' });
-    }
-
-    // Get assignments for this educator in this school
-    const allAssignments = await storage.getEducatorClassAssignmentsByEducatorId(educatorId);
-    const schoolAssignments = allAssignments.filter(a => a.schoolId === parseInt(schoolId));
-
-    if (schoolAssignments.length === 0) {
-      return res.status(404).json({ error: 'Educator not found in this school' });
-    }
-
-    // Get schedules for this educator
-    const schedules = await storage.getEducatorSchedulesByEducatorId(educatorId);
-    const schoolSchedules = schedules.filter(s => s.schoolId === parseInt(schoolId));
-
-    // Get class details for assignments
-    const classesWithDetails = await Promise.all(
-      schoolAssignments.map(async (assignment) => {
-        const classInfo = await storage.getClassById(assignment.classId);
-        const classSchedules = schoolSchedules.filter(s => s.assignmentId === assignment.id);
-        
-        return {
-          assignmentId: assignment.id,
-          classId: assignment.classId,
-          className: classInfo?.title || 'Unknown Class',
-          classLocation: classInfo?.location,
-          isPrimary: assignment.isPrimary,
-          canStartSession: assignment.canStartSession,
-          validFrom: assignment.validFrom,
-          validTo: assignment.validTo,
-          schedules: classSchedules
-        };
-      })
-    );
-
-    // Get recent sessions for hours worked
-    const sessions = await storage.getClassSessionsByEducatorId(educatorId);
-    const recentSessions = sessions.slice(0, 20);
-
-    res.json({
-      id: educatorId,
-      name: user.name,
-      email: user.email,
-      classes: classesWithDetails,
-      totalSchedules: schoolSchedules.length,
-      recentSessions
-    });
-  } catch (error) {
-    console.error('[AdminEducators] Error fetching educator details:', error);
-    res.status(500).json({ error: 'Failed to fetch educator details' });
   }
 });
 
@@ -766,6 +702,73 @@ router.get('/sessions', async (req: any, res) => {
   } catch (error) {
     console.error('[AdminEducators] Error fetching sessions:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+// GET /api/admin/educators/:educatorId — after /schedules, /class-assignments, /audit-logs, /sessions
+// so those paths are not captured as educatorId. Digits-only as a second guard.
+router.get('/:educatorId(\\d+)', async (req: any, res) => {
+  try {
+    const schoolId = req.schoolId;
+    const educatorId = parseInt(req.params.educatorId, 10);
+
+    if (!schoolId) {
+      return res.status(400).json({ error: 'School context required' });
+    }
+    if (!Number.isFinite(educatorId)) {
+      return res.status(400).json({ error: 'Invalid educator ID' });
+    }
+
+    console.log('[AdminEducators] Fetching educator details:', educatorId);
+
+    const user = await storage.getUser(educatorId);
+    if (!user) {
+      return res.status(404).json({ error: 'Educator not found' });
+    }
+
+    const allAssignments = await storage.getEducatorClassAssignmentsByEducatorId(educatorId);
+    const schoolAssignments = allAssignments.filter(a => a.schoolId === parseInt(schoolId));
+
+    if (schoolAssignments.length === 0) {
+      return res.status(404).json({ error: 'Educator not found in this school' });
+    }
+
+    const schedules = await storage.getEducatorSchedulesByEducatorId(educatorId);
+    const schoolSchedules = schedules.filter(s => s.schoolId === parseInt(schoolId));
+
+    const classesWithDetails = await Promise.all(
+      schoolAssignments.map(async (assignment) => {
+        const classInfo = await storage.getClassById(assignment.classId);
+        const classSchedules = schoolSchedules.filter(s => s.assignmentId === assignment.id);
+
+        return {
+          assignmentId: assignment.id,
+          classId: assignment.classId,
+          className: classInfo?.title || 'Unknown Class',
+          classLocation: classInfo?.location,
+          isPrimary: assignment.isPrimary,
+          canStartSession: assignment.canStartSession,
+          validFrom: assignment.validFrom,
+          validTo: assignment.validTo,
+          schedules: classSchedules
+        };
+      })
+    );
+
+    const sessions = await storage.getClassSessionsByEducatorId(educatorId);
+    const recentSessions = sessions.slice(0, 20);
+
+    res.json({
+      id: educatorId,
+      name: user.name,
+      email: user.email,
+      classes: classesWithDetails,
+      totalSchedules: schoolSchedules.length,
+      recentSessions
+    });
+  } catch (error) {
+    console.error('[AdminEducators] Error fetching educator details:', error);
+    res.status(500).json({ error: 'Failed to fetch educator details' });
   }
 });
 

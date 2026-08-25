@@ -107,8 +107,8 @@ router.post('/manual-enrollment', requireRole(['admin', 'superAdmin', 'schoolAdm
 });
 
 // Apply platform/school admin middleware for all remaining routes on this router.
-// Note: /api/admin/financial-reports is mounted separately in routes.ts (before this router)
-// so school admins are not blocked here.
+// Note: /api/admin/financial-reports and /api/admin/educators are mounted separately in
+// routes.ts (before this router) so those paths are not 404'd as unmatched /api/admin/*.
 router.use(requireRole(['admin', 'superAdmin', 'schoolAdmin', 'director']));
 
 // Add any other admin-only routes below this line

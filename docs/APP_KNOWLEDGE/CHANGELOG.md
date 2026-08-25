@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-08-25 (Edit Class lead mentor 404)
+
+- School-admin Edit Class “Add” lead mentor posted to `POST /api/admin/educators/class-assignments`. Handlers existed in `server/api/admin-educators.ts` but the router was never mounted (`registerRoutes`), so Express returned HTML `Cannot POST …`. Mount at `/api/admin/educators` **before** `/api/admin`. `GET /:educatorId` must not precede `/class-assignments/:classId`.
+
 ## 2026-08-21 (Orthography notebook: shop pickup-only)
 
 - Owned merch can be **pickup at school only** (`store_products.pickup_only`, migration 261). Catalog `pickupOnly`; snapshot `pickupOnlyRequired`; checkout hides shipping and returns `400 PICKUP_ONLY` if shipping is submitted.

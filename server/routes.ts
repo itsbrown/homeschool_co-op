@@ -2117,6 +2117,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const adminSessionsRouter = (await import("./api/admin-sessions")).default;
   app.use("/api/admin/sessions", adminSessionsRouter);
 
+  const adminEducatorsRouter = (await import("./api/admin-educators")).default;
+  // MUST mount before app.use("/api/admin", adminRouter). Unmounted handlers 404 as
+  // Express "Cannot POST /api/admin/educators/class-assignments" (Edit Class lead mentor).
+  app.use("/api/admin/educators", adminEducatorsRouter);
+
   const sessionEnrollmentsRouter = (await import("./api/session-enrollments")).default;
   app.use("/api/session-enrollments", sessionEnrollmentsRouter);
 

@@ -250,6 +250,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - **Using `classData?.price` instead of `enrollment.totalCost` for balance updates** → `enrollment.programId` is not a reliable class ID (legacy field, not always populated), so `storage.getClassById(enrollment.programId)` often returns `null`, making `totalCost = 0` → `remainingBalance = 0` (wrong, understates balance). Always use `enrollment.totalCost` directly — it is the authoritative financial field set at enrollment creation.
 - **Educator student list shows graduated/cancelled students** → enrollment query missing status filter → always restrict to `status IN ('enrolled', 'pending_admin_approval')`; never include `completed`, `cancelled`, or `withdrawn`
 - **Empty educator roster / bulk attendance in production** → `getEnrollmentsByClassId` used memStorage and/or `classId` only. Marketplace seats set `marketplaceClassId` → `classes.id`. Use Postgres `or(classId, marketplaceClassId)` via `dbStorage`; CombinedStorage must not return mem-only success when DB is up.
+- **Edit Class lead mentor 404 HTML `Cannot POST /api/admin/educators/class-assignments`** → `server/api/admin-educators.ts` existed but was not mounted. Mount at `/api/admin/educators` in `server/routes.ts` **before** `app.use("/api/admin", adminRouter)`. Keep `GET /class-assignments/:classId` before `GET /:educatorId`.
 
 ## Best Practices
 
@@ -278,6 +279,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - `server/lib/session-enrollment-counts.ts` — half/full seat + waitlist aggregates
 - `server/api/classes.ts` — class creation and management
 - `server/api/admin-classes.ts` — admin class management endpoints
+- `server/api/admin-educators.ts` — school-admin lead mentor / class assignments (`POST /api/admin/educators/class-assignments`); must be mounted in `server/routes.ts`
 - `server/services/grade-placement-sync.ts` — Grade Placement preview/sync
 - `shared/grade-levels.ts` / `shared/session-payment-eligibility.ts` — placement helpers
 - `server/lib/prorate-calculator.ts` — proration date math
