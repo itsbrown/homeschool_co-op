@@ -86,6 +86,7 @@ Exercises **real HTTP routes** and **Postgres** (`asa_test`) with the same mount
 | `integration/production-path/auth-register-school-signup.test.ts` | `POST /api/auth/register` + mocked Supabase admin → user, roles, children |
 | `integration/production-path/auth-register-orphan-supabase.test.ts` | Orphan Supabase auth blocks signup (`AUTH_EMAIL_EXISTS`) |
 | `integration/production-path/associate-parent-school.test.ts` | `associateParentWithSchool` storage path (no self-HTTP) |
+| `integration/production-path/admin-educators-mount.test.ts` | `routes.ts` mounts `/api/admin/educators` before `/api/admin`; POST class-assignments is 401 JSON not HTML 404 |
 
 **Run locally** (requires `asa_test` + `db:push`):
 

@@ -90,6 +90,7 @@ Protocol: `~/.cursor/skills/maintain-app-knowledge/SKILL.md` (Step 2 = edit file
 | Dev server: missing `SUPABASE_ANON_KEY` | tests.yml env incomplete | Placeholder in workflow |
 | 49m Tests job, 180 failures | Full `test:server` in CI | Scoped to production-path + client only |
 | Jest hang | Open handles | `--forceExit` in CI production-path step |
+| Edit Class lead mentor: HTML `Cannot POST /api/admin/educators/class-assignments` | Router file existed, never mounted in `registerRoutes` | Mount before `/api/admin`; gate: `admin-educators-mount.test.ts` |
 | E2E seed returns HTML / no data | Port 5000 reused by server without `/api/test` | `node scripts/free-port-5000.mjs` or `CI=true` for fresh `webServer` |
 | Playwright report green but skipped | `test.skip` on missing `supabaseLinked` | `requireLinkedSeed`; symlink `.env` + `.env.e2e` in worktrees |
 | E2E against live Stripe/prod | Loaded `.env.prod` | Use `.env` (Railway clone) + `.env.e2e` only |

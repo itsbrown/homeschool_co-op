@@ -91,6 +91,7 @@ Seeds: `POST /api/test/setup-schedule-builder-scenario` and `setup-progress-scen
 | Dashboard / hours stale after session | Invalidated `['/api/educator']` | `invalidateEducatorSessionQueries()` |
 | My Hours “0 assigned classes” | Hours loop required `schedule.variants` | Use `extractFamilyScheduleTiming` (`days` + `startTime`/`endTime`) |
 | Record assessment types empty | `/api/assessments` only on unused `app-init.ts` | Mount on `server/index.ts` |
+| Edit Class “Add” lead mentor toast is HTML `Cannot POST /api/admin/educators/class-assignments` | Handlers lived in `server/api/admin-educators.ts` but the router was never mounted; `GET /:educatorId` also swallowed `/class-assignments/:classId` | Mount `app.use("/api/admin/educators", …)` in `server/routes.ts` **before** `app.use("/api/admin", adminRouter)`; keep assignment routes before `GET /:educatorId(\\d+)` |
 | `/educator/attendance` 403 | Mounted school-admin attendance | Redirect to My Classes; mark on `/educator/session/:id` |
 | Dashboard “today” lists every assignment | `todayClasses` was unfiltered | `classMeetsOnWeekday`; empty days ≠ today |
 | Invite email “invalid token” | Invite wrote `role_invitations`; accept reads `staff_invitations` | `POST /staff/invite` → `createStaffInvitation`; accept page stays on staff-invitations |
@@ -112,6 +113,7 @@ Volunteer check-in on Start Session (assigned aides are read-only). Email blast 
 | Routes | `client/src/App.tsx` |
 | Shell / nav | `EducatorAppShell.tsx` |
 | API | `server/api/educator.ts` |
+| School-admin assignments | `server/api/admin-educators.ts` (mounted at `/api/admin/educators` in `server/routes.ts`) |
 | Storage | `server/dbStorage.ts` `getEnrollmentsByClassId` |
 | Query helper | `client/src/lib/educator-queries.ts` |
 | Safety | `shared/educator-student-safety.ts`, `server/lib/educator-student-safety.ts`, `StudentSafetySheet.tsx` |
