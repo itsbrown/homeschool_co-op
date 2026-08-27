@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-08-27 (Fall 2026 full-day student roster CSV)
+
+- Live prod snapshot of Fall 2026 `day_type = full_day` session seats (session **#2**): **36 enrolled** + **18 pending_payment** = **54** children. Campus resolves class → `school_students` → child → parent (all Brighton after Greece close). Age is as-of **2026-08-27**.
+- Columns: campus, class placement, name, birthdate, age, grade, gender, allergies, special needs, medical info, parent + emergency contacts, session program, status, paid/cost/balance.
+- CSV: `docs/audit/fall-2026-full-day-students.csv`. Re-query: `program_enrollments.session_id = 2 AND day_type = 'full_day'` excluding cancelled.
+
 ## 2026-08-27 (Members-only enrollment via member ID)
 
 - Opt-in `sessions.require_member_id` / `classes.require_member_id` (default false, migration `262-require-member-id.sql`). Parents without `users.member_id` cannot self-enroll; office/admin bypasses. Public store hides those programs. Parent `/enroll` + dashboard show `membersOnlyNotices`.
