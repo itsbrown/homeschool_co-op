@@ -107,6 +107,9 @@ export type SetupSessionEnrollmentScenarioResponse = {
     child: { id: number; firstName: string; lastName: string };
     openSessions: { id: number; name: string; enrollmentOpen: boolean }[];
     closedSession: { id: number; name: string; enrollmentOpen: boolean } | null;
+    class?: { id: number; title: string; requireMemberId: boolean };
+    requireMemberId?: boolean;
+    parentHasMemberId?: boolean;
   };
   error?: string;
   details?: string;
@@ -190,6 +193,8 @@ export async function postSetupSessionEnrollmentScenario(
   body: {
     openSessionCount?: number;
     includeClosedSession?: boolean;
+    requireMemberId?: boolean;
+    withMemberId?: boolean;
     linkSupabaseAuth?: boolean;
   } = {},
 ): Promise<{ response: APIResponse; json: SetupSessionEnrollmentScenarioResponse | null }> {

@@ -102,7 +102,7 @@ async function resolveSessionLine(
   variant: 'half_day' | 'full_day',
 ): Promise<{ title: string; description: string | null; unitPriceCents: number; fulfillment: 'paid' | 'waitlist'; waitlistPosition?: number; unavailableReason?: string } | null> {
   const session = await getSessionById(listing.sourceId);
-  if (!session || !session.enrollmentOpen) {
+  if (!session || !session.enrollmentOpen || session.requireMemberId) {
     return null;
   }
   if (session.locationId != null) {

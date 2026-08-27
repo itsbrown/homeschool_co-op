@@ -14,6 +14,10 @@ import {
 import { getLocationCore } from "../lib/location-db";
 import { isLocationCollectingWishlist } from "@shared/location-activation";
 import {
+  MEMBERS_ONLY_ENROLLMENT_NOTICE,
+  parentHasMemberId,
+} from "@shared/member-id-enrollment-gate";
+import {
   syncStoreListingFromProgram,
   getStoreListingState,
 } from "../lib/store-listing-sync";
@@ -104,6 +108,8 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
 
     const result = [];
     const closedNotices: { sessionId: number; name: string; message: string }[] = [];
+    const membersOnlyNotices: { sessionId: number; name: string; message: string }[] = [];
+    const hasMemberId = parentHasMemberId(parent?.memberId);
     for (const session of allForSchool) {
       if (session.locationId != null && parentLocationId != null) {
         if (session.locationId !== parentLocationId) continue;
@@ -112,6 +118,14 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
       }
 
       if (session.enrollmentOpen) {
+        if (session.requireMemberId && !hasMemberId) {
+          membersOnlyNotices.push({
+            sessionId: session.id,
+            name: session.name,
+            message: MEMBERS_ONLY_ENROLLMENT_NOTICE,
+          });
+          continue;
+        }
         result.push(session);
         continue;
       }
@@ -128,12 +142,13 @@ router.get("/open", supabaseAuth, async (req: any, res) => {
       if (session.locationId != null) {
         const loc = await getLocationCore(session.locationId);
         if (isLocationCollectingWishlist(loc)) {
+          if (session.requireMemberId && !hasMemberId) continue;
           result.push(session);
         }
       }
     }
 
-    res.json({ sessions: result, closedNotices });
+    res.json({ sessions: result, closedNotices, membersOnlyNotices });
   } catch (error) {
     console.error("Error fetching open sessions:", error);
     res.status(500).json({ message: "Failed to fetch open sessions" });

@@ -7,6 +7,7 @@ export type SessionClosedNotice = {
 export type OpenSessionsResponse<TSession = unknown> = {
   sessions: TSession[];
   closedNotices: SessionClosedNotice[];
+  membersOnlyNotices: SessionClosedNotice[];
 };
 
 /**
@@ -16,16 +17,23 @@ export function parseOpenSessionsResponse<TSession = unknown>(
   data: unknown,
 ): OpenSessionsResponse<TSession> {
   if (Array.isArray(data)) {
-    return { sessions: data as TSession[], closedNotices: [] };
+    return { sessions: data as TSession[], closedNotices: [], membersOnlyNotices: [] };
   }
   if (data && typeof data === "object") {
-    const obj = data as { sessions?: unknown; closedNotices?: unknown };
+    const obj = data as {
+      sessions?: unknown;
+      closedNotices?: unknown;
+      membersOnlyNotices?: unknown;
+    };
     return {
       sessions: Array.isArray(obj.sessions) ? (obj.sessions as TSession[]) : [],
       closedNotices: Array.isArray(obj.closedNotices)
         ? (obj.closedNotices as SessionClosedNotice[])
         : [],
+      membersOnlyNotices: Array.isArray(obj.membersOnlyNotices)
+        ? (obj.membersOnlyNotices as SessionClosedNotice[])
+        : [],
     };
   }
-  return { sessions: [], closedNotices: [] };
+  return { sessions: [], closedNotices: [], membersOnlyNotices: [] };
 }

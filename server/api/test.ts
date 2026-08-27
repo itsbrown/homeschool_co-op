@@ -802,6 +802,8 @@ router.post('/setup-session-enrollment-scenario', async (req: Request, res: Resp
 
     const openSessionCount = Math.min(Math.max(Number(req.body?.openSessionCount ?? 2), 1), 5);
     const includeClosedSession = req.body?.includeClosedSession === true;
+    const requireMemberId = req.body?.requireMemberId === true;
+    const withMemberId = req.body?.withMemberId === true;
 
     const adminPassword = 'TestPassword123!';
     const admin = await testDb.createTestUser({
@@ -829,6 +831,10 @@ router.post('/setup-session-enrollment-scenario', async (req: Request, res: Resp
       schoolId: school.id,
     });
     await storage.updateUser(parent.id, { password: await bcrypt.hash(parentPassword, 10) });
+    if (withMemberId) {
+      const { generateMemberId } = await import('../utils/membership');
+      await storage.updateUser(parent.id, { memberId: generateMemberId() });
+    }
 
     const child = await storage.createChild({
       parentId: parent.id,
@@ -858,6 +864,7 @@ router.post('/setup-session-enrollment-scenario', async (req: Request, res: Resp
           endDate: end,
           status: 'upcoming',
           enrollmentOpen: true,
+          requireMemberId,
           halfDayPrice: 15000,
           fullDayPrice: 25000,
           sortOrder: i,
@@ -885,6 +892,21 @@ router.post('/setup-session-enrollment-scenario', async (req: Request, res: Resp
         .returning();
       closedSession = { id: row.id, name: row.name, enrollmentOpen: row.enrollmentOpen };
     }
+
+    const gatedClass = requireMemberId
+      ? await testDb.createTestClass(school.id, {
+          title: `E2E Gated Class ${uniqueId}`,
+          description: 'Playwright members-only class',
+          category: 'Academic',
+          status: 'upcoming',
+          type: 'school_admin',
+          price: 7500,
+          enrollmentOpen: true,
+          requireMemberId: true,
+          isAdminOnly: false,
+          instructorId: admin.id,
+        })
+      : null;
 
     let supabaseLinked = false;
     if (req.body?.linkSupabaseAuth === true) {
@@ -914,6 +936,11 @@ router.post('/setup-session-enrollment-scenario', async (req: Request, res: Resp
         child: { id: child.id, firstName: child.firstName, lastName: child.lastName },
         openSessions,
         closedSession,
+        class: gatedClass
+          ? { id: gatedClass.id, title: gatedClass.title, requireMemberId: true }
+          : undefined,
+        requireMemberId,
+        parentHasMemberId: withMemberId,
       },
     });
   } catch (error) {

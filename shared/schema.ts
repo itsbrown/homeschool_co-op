@@ -471,6 +471,11 @@ export const sessions = pgTable("sessions", {
    * Returned on GET /api/admin/sessions/open as closedNotices.
    */
   enrollmentClosedMessage: text("enrollment_closed_message"),
+  /**
+   * When true with enrollmentOpen, only parents with a non-empty users.member_id
+   * may self-enroll. Default false. Office/admin enroll is not gated.
+   */
+  requireMemberId: boolean("require_member_id").notNull().default(false),
   halfDayPrice: integer("half_day_price"),
   fullDayPrice: integer("full_day_price"),
   halfDayStartTime: text("half_day_start_time"),
@@ -1813,6 +1818,8 @@ export const classes = pgTable("classes", {
   // When false, the class is "closed for enrollment" and hidden from the parent
   // catalog (still visible to admins). Mirrors the sessions.enrollmentOpen pattern.
   enrollmentOpen: boolean("enrollment_open").default(false).notNull(),
+  /** Same members-first gate as sessions.requireMemberId. Default false. */
+  requireMemberId: boolean("require_member_id").notNull().default(false),
   enrollmentCount: integer("enrollment_count").default(0).notNull(),
   
   // Marketplace specific fields (from original programs table)
@@ -1874,6 +1881,7 @@ export const insertClassSchema = createInsertSchema(classes)
     totalCollected: z.number().optional(),
     isAdminOnly: z.boolean().optional(),
     enrollmentOpen: z.boolean().optional(),
+    requireMemberId: z.boolean().optional(),
     
     // Marketplace specific fields (optional)
     ageRange: z.string().optional(),

@@ -47,6 +47,12 @@ function sessionReady(row: typeof sessions.$inferSelect): { ready: boolean; hint
   if (!row.enrollmentOpen) {
     return { ready: false, hint: 'Turn on enrollment open in Sessions' };
   }
+  if (row.requireMemberId) {
+    return {
+      ready: false,
+      hint: 'Turn off Members only (member ID) before listing on the public store',
+    };
+  }
   if (row.halfDayPrice == null && row.fullDayPrice == null) {
     return { ready: false, hint: 'Add half-day or full-day pricing in Sessions' };
   }
@@ -57,10 +63,12 @@ function sessionReady(row: typeof sessions.$inferSelect): { ready: boolean; hint
 export function isClassEligibleForPublicStore(cls: {
   enrollmentOpen?: boolean | null;
   isAdminOnly?: boolean | null;
+  requireMemberId?: boolean | null;
   price?: number | null;
   endDate?: string | Date | null;
 }): boolean {
   if (!cls.enrollmentOpen || cls.isAdminOnly) return false;
+  if (cls.requireMemberId) return false;
   if (!cls.price || cls.price <= 0) return false;
   if (cls.endDate && new Date(cls.endDate) < new Date()) return false;
   return true;
@@ -69,6 +77,12 @@ export function isClassEligibleForPublicStore(cls: {
 function classReady(row: typeof classes.$inferSelect): { ready: boolean; hint: string | null } {
   if (!row.enrollmentOpen) {
     return { ready: false, hint: 'Turn on Open for Enrollment in Classes' };
+  }
+  if (row.requireMemberId) {
+    return {
+      ready: false,
+      hint: 'Turn off Members only (member ID) before listing on the public store',
+    };
   }
   if (!row.price || row.price <= 0) {
     return { ready: false, hint: 'Set a price on the class' };

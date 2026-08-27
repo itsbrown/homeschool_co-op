@@ -20,6 +20,11 @@ import {
   locationAllowsNewWishlistSignups,
 } from "@shared/location-activation";
 import { recheckLocationThreshold } from "../services/location-activation-service";
+import {
+  MEMBERS_ONLY_ENROLLMENT_NOTICE,
+  canSelfEnrollWhenRequireMemberId,
+  callerBypassesMemberIdEnrollmentGate,
+} from "@shared/member-id-enrollment-gate";
 
 const router = Router();
 
@@ -128,6 +133,27 @@ router.post("/", supabaseAuth, async (req: any, res) => {
       }
       return res.status(400).json({
         message: `Enrollment is not open for: ${session.name}`,
+      });
+    }
+
+    const adminBypass = callerBypassesMemberIdEnrollmentGate(
+      req.user?.allRoles,
+      req.user?.role,
+    );
+    for (const session of sessionRows) {
+      if (
+        canSelfEnrollWhenRequireMemberId({
+          requireMemberId: session.requireMemberId,
+          memberId: parent.memberId,
+          adminBypass,
+        })
+      ) {
+        continue;
+      }
+      return res.status(403).json({
+        message: MEMBERS_ONLY_ENROLLMENT_NOTICE,
+        code: "MEMBER_ID_REQUIRED",
+        sessionId: session.id,
       });
     }
 

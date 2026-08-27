@@ -62,6 +62,7 @@ interface SessionFormData {
   endDate: string;
   status: string;
   enrollmentOpen: boolean;
+  requireMemberId: boolean;
   /** Shown to parents when Enrollment Open is off */
   enrollmentClosedMessage: string;
   halfDayPrice: string;
@@ -85,6 +86,7 @@ const emptyForm: SessionFormData = {
   endDate: "",
   status: "upcoming",
   enrollmentOpen: true,
+  requireMemberId: false,
   enrollmentClosedMessage: "",
   halfDayPrice: "",
   fullDayPrice: "",
@@ -108,6 +110,7 @@ function sessionToForm(s: Session): SessionFormData {
     endDate: s.endDate,
     status: s.status,
     enrollmentOpen: s.enrollmentOpen,
+    requireMemberId: s.requireMemberId === true,
     enrollmentClosedMessage: s.enrollmentClosedMessage || "",
     halfDayPrice: s.halfDayPrice != null ? String(s.halfDayPrice / 100) : "",
     fullDayPrice: s.fullDayPrice != null ? String(s.fullDayPrice / 100) : "",
@@ -132,6 +135,7 @@ function formToPayload(f: SessionFormData) {
     endDate: f.endDate,
     status: f.status,
     enrollmentOpen: f.enrollmentOpen,
+    requireMemberId: f.requireMemberId,
     enrollmentClosedMessage: f.enrollmentClosedMessage.trim() ? f.enrollmentClosedMessage.trim() : null,
     halfDayPrice: f.halfDayPrice ? Math.round(parseFloat(f.halfDayPrice) * 100) : null,
     fullDayPrice: f.fullDayPrice ? Math.round(parseFloat(f.fullDayPrice) * 100) : null,
@@ -329,6 +333,11 @@ export default function SessionsManagementPage() {
                         ) : (
                           <Badge variant="outline" className="border-amber-500 text-amber-800">Enrollment Closed</Badge>
                         )}
+                        {s.requireMemberId && (
+                          <Badge variant="secondary" data-testid={`session-members-only-badge-${s.id}`}>
+                            Members only
+                          </Badge>
+                        )}
                       </CardTitle>
                       {s.description && <CardDescription className="mt-1">{s.description}</CardDescription>}
                       {!s.enrollmentOpen && s.enrollmentClosedMessage && (
@@ -482,8 +491,27 @@ export default function SessionsManagementPage() {
                 </Select>
               </div>
               <div className="flex items-center gap-3 pt-6">
-                <Switch checked={form.enrollmentOpen} onCheckedChange={(v) => setForm({ ...form, enrollmentOpen: v })} />
+                <Switch
+                  checked={form.enrollmentOpen}
+                  onCheckedChange={(v) => setForm({ ...form, enrollmentOpen: v })}
+                  data-testid="switch-session-enrollment-open"
+                />
                 <Label>Enrollment Open</Label>
+              </div>
+              <div className="flex items-center gap-3 pt-6 md:col-span-2">
+                <Switch
+                  checked={form.requireMemberId}
+                  onCheckedChange={(v) => setForm({ ...form, requireMemberId: v })}
+                  data-testid="switch-session-require-member-id"
+                />
+                <div>
+                  <Label>Members only (member ID)</Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    While Enrollment Open is on, only parents with an ASA member ID can self-enroll.
+                    New school-code accounts are blocked until you turn this off. Office enroll still works.
+                    Do not list this session on the public store while this is on.
+                  </p>
+                </div>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Closed enrollment message</Label>
