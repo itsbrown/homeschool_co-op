@@ -4,7 +4,7 @@ How child grade/age relate to classes and enrollment **today**.
 
 ## Invariants
 
-- **No enrollment constraint by grade or age.** `POST /api/classes/:id/enroll` checks existence, duplicates, and capacity/waitlist only — not `children.gradeLevel` vs `classes.gradeLevels`.
+- **No enrollment constraint by grade or age.** `POST /api/classes/:id/enroll` does not compare `children.gradeLevel` vs `classes.gradeLevels`. It does gate on `classes.require_member_id` (non-empty `users.member_id`, staff bypass) in addition to existence, duplicates, and capacity/waitlist.
 - **No `minGrade` / `maxGrade` / `ageMin` / `ageMax` columns** anywhere in schema.
 - **Grade Placement (opt-in):** when `classes.auto_place_by_grade` is on, sync places session-paid campus students whose grade matches — see [grade-placement.md](./grade-placement.md). Normalization lives in `shared/grade-levels.ts`.
 - **Roster source of truth:** `program_enrollments` joined to `children` (not `school_class_enrollments` for current school-admin class UI). Paid enroll still has no grade gate; placement is a separate opt-in path.

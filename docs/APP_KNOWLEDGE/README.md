@@ -38,7 +38,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 | [domains/observability.md](./domains/observability.md) | Sentry, error telemetry, SendGrid webhooks, report audit |
 | [domains/public-store.md](./domains/public-store.md) | Public storefront `/store/:slug`, store lane checkout, admin |
 | [domains/supply-lists.md](./domains/supply-lists.md) | Class/session supply items; household shopping list; shop/affiliate links |
-| [domains/grades-ages-classes.md](./domains/grades-ages-classes.md) | Child grade/age vs class targeting; roster; no enroll gate |
+| [domains/grades-ages-classes.md](./domains/grades-ages-classes.md) | Child grade/age vs class targeting; roster; member-ID enroll gate |
 | [domains/educator-ui.md](./domains/educator-ui.md) | Mentor `/educator/*`, staff invite → first login, roster, sessions |
 | [runbooks/merge-replit-prod.md](./runbooks/merge-replit-prod.md) | Merge → Replit → prod SQL |
 | [../PERMISSIONS_ROLLOUT.md](../PERMISSIONS_ROLLOUT.md) | Staff nav permissions, school-wide scope, SQL (no db:push) |

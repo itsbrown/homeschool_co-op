@@ -1071,14 +1071,15 @@ router.get('/classes', jwtCheck, async (req: any, res) => {
       };
     }));
 
-    // Visibility rules — kept identical to the public catalog (server/api/classes.ts).
-    // enrollmentOpen is the single visibility gate; we deliberately do NOT require
-    // status === 'published' (school-admin classes use statuses like 'upcoming'),
-    // matching the catalog so the parent page and catalog never diverge.
+    // Visibility rules — kept identical to the public catalog (server/api/classes.ts)
+    // except requireMemberId: public catalog always hides those classes; this
+    // endpoint shows them only to parents with a member ID.
     const now = new Date();
+    const parentMaySeeMembersOnly = parentHasMemberIdForCheckout(user.memberId);
     const filtered = classesWithEnrichment.filter((cls: any) => {
       if (!cls.enrollmentOpen) return false;
       if (cls.isAdminOnly) return false;
+      if (cls.requireMemberId && !parentMaySeeMembersOnly) return false;
       if (cls.endDate && new Date(cls.endDate) < now) return false;
       if (cls.categoryId && !cls.categoryIsPublic) return false;
       return true;

@@ -2497,6 +2497,14 @@ async function runMigrations() {
     `);
     await db.execute(sql`
       ALTER TABLE sessions
+      ADD COLUMN IF NOT EXISTS require_member_id BOOLEAN NOT NULL DEFAULT false;
+    `);
+    await db.execute(sql`
+      ALTER TABLE classes
+      ADD COLUMN IF NOT EXISTS require_member_id BOOLEAN NOT NULL DEFAULT false;
+    `);
+    await db.execute(sql`
+      ALTER TABLE sessions
       ADD COLUMN IF NOT EXISTS cover_image TEXT;
     `);
     console.log('✅ Migration completed: sessions table created');

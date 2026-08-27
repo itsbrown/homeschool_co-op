@@ -46,6 +46,7 @@ const classFormSchema = z.object({
   status: z.string().min(1, "Please select a status"),
   isAdminOnly: z.boolean().default(false),
   enrollmentOpen: z.boolean().default(false),
+  requireMemberId: z.boolean().default(false),
 });
 
 type ClassFormValues = z.infer<typeof classFormSchema>;
@@ -92,6 +93,7 @@ export default function SchoolClassCreationPage() {
       status: "upcoming",
       isAdminOnly: false,
       enrollmentOpen: false,
+      requireMemberId: false,
     },
   });
 
@@ -319,6 +321,7 @@ export default function SchoolClassCreationPage() {
         status: classData.status || "upcoming",
         isAdminOnly: classData.isAdminOnly || false,
         enrollmentOpen: classData.enrollmentOpen || false,
+        requireMemberId: classData.requireMemberId === true,
       });
       
       console.log('📍 Form reset with locationId:', targetLocationId, 'from classData.locationId:', classData.locationId, 'or location:', classData.location);
@@ -681,6 +684,29 @@ export default function SchoolClassCreationPage() {
                           <Switch
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="requireMemberId"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">Members only (member ID)</FormLabel>
+                          <FormDescription>
+                            While Open for Enrollment is on, only parents with an ASA member ID can self-enroll.
+                            Turn this off to open the class to new families. Office enroll still works.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="switch-class-require-member-id"
                           />
                         </FormControl>
                       </FormItem>

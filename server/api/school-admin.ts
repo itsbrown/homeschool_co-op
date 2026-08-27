@@ -988,6 +988,7 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
       isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly,
       enrollmentOpen: req.body.enrollmentOpen !== undefined ? req.body.enrollmentOpen : existingClass.enrollmentOpen,
+      requireMemberId: req.body.requireMemberId !== undefined ? req.body.requireMemberId === true : existingClass.requireMemberId,
       prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled
     };
 
@@ -1133,6 +1134,7 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
       isAdminOnly: req.body.isAdminOnly !== undefined ? req.body.isAdminOnly : existingClass.isAdminOnly,
       enrollmentOpen: req.body.enrollmentOpen !== undefined ? req.body.enrollmentOpen : existingClass.enrollmentOpen,
+      requireMemberId: req.body.requireMemberId !== undefined ? req.body.requireMemberId === true : existingClass.requireMemberId,
       prorateEnabled: req.body.prorateEnabled !== undefined ? req.body.prorateEnabled : existingClass.prorateEnabled
     };
 
@@ -3030,6 +3032,7 @@ router.post(
       isPublished: false,
       // New classes default to closed for enrollment (admin opens when ready)
       enrollmentOpen: req.body.enrollmentOpen === true,
+      requireMemberId: req.body.requireMemberId === true,
     };
 
     console.log('💰 Extracted price from variants:', price);

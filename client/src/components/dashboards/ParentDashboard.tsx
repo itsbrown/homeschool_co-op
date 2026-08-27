@@ -606,6 +606,7 @@ export default function ParentDashboard() {
   });
   const openSessions = openSessionsPayload?.sessions ?? [];
   const closedNotices = openSessionsPayload?.closedNotices ?? [];
+  const membersOnlyNotices = openSessionsPayload?.membersOnlyNotices ?? [];
 
   const nextOpenSession = useMemo(
     () => getNextOpenSessionByStartDate(openSessions),
@@ -928,6 +929,19 @@ export default function ParentDashboard() {
                   </Button>
                 </div>
               </div>
+            ) : membersOnlyNotices.length > 0 ? (
+              <Alert className="border-blue-200 bg-blue-50" data-testid="enroll-members-only-notice-banner">
+                <Megaphone className="h-4 w-4 text-blue-800" />
+                <AlertTitle className="text-blue-950">{membersOnlyNotices[0].name}</AlertTitle>
+                <AlertDescription className="flex flex-col gap-3 text-blue-950">
+                  <span className="whitespace-pre-wrap">{membersOnlyNotices[0].message}</span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href="/enroll">View enrollment info</Link>
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
             ) : closedNotices.length > 0 ? (
               <Alert className="border-amber-200 bg-amber-50" data-testid="enroll-closed-notice-banner">
                 <Megaphone className="h-4 w-4 text-amber-800" />

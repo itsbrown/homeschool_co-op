@@ -7,6 +7,7 @@ import {
   ensurePendingMembershipEnrollmentForCheckout,
   isPlaceholderMembershipEnrollmentRow,
 } from '../lib/ensure-pending-membership-enrollment';
+import { parentHasMemberId } from '@shared/member-id-enrollment-gate';
 
 export { isPlaceholderMembershipEnrollmentRow, ensurePendingMembershipEnrollmentForCheckout };
 
@@ -364,11 +365,7 @@ export function isMembershipFullyPaidForCheckout(
 }
 
 /** Non-empty `users.member_id` means annual membership is satisfied for checkout. */
-export function parentHasMemberIdForCheckout(
-  memberId: string | null | undefined,
-): boolean {
-  return typeof memberId === 'string' && memberId.trim() !== '';
-}
+export const parentHasMemberIdForCheckout = parentHasMemberId;
 
 export async function resolveMembershipOwedForCheckout(
   userId: number,

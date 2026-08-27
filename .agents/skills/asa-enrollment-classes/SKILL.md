@@ -220,7 +220,8 @@ Enrollment-period sessions (`sessions` table) use half/full day variants on `pro
 School-admin observability (not a separate roster product):
 
 - **Sessions** (`/schools/sessions`): `GET /api/admin/sessions` includes `halfDayEnrolled`, `fullDayEnrolled`, `halfDayWaitlist`, `fullDayWaitlist` via `server/lib/session-enrollment-counts.ts`
-- **Close online enrollment:** set `sessions.enrollment_open = false`. Optional `sessions.enrollment_closed_message` is returned on `GET /api/admin/sessions/open` as `closedNotices` and shown on parent `/enroll` + dashboard when no sessions are open (case-by-case / contact-us copy). Response shape is `{ sessions, closedNotices }` (clients normalize via `parseOpenSessionsResponse`).
+- **Close online enrollment:** set `sessions.enrollment_open = false`. Optional `sessions.enrollment_closed_message` is returned on `GET /api/admin/sessions/open` as `closedNotices` and shown on parent `/enroll` + dashboard when no sessions are open (case-by-case / contact-us copy). Response shape is `{ sessions, closedNotices, membersOnlyNotices }` (clients normalize via `parseOpenSessionsResponse`).
+- **Members-first window:** set `sessions.require_member_id` / `classes.require_member_id` (admin **Members only (member ID)**). Default false. While Enrollment Open is on, only parents with a non-empty `users.member_id` see/enroll. New school-code accounts are blocked. Public store omits these programs until the toggle is off. Office/admin enroll bypasses. Response `membersOnlyNotices` explains the window when the parent has no ID. Do not enable in prod until auditing parents who paid but lack `member_id`.
 - **Enrollments** (`/schools/enrollments`): `GET /api/school-admin/enrollments` returns `sessionId`, `dayType`, `variantId`, `waitlistPosition`, `childId` for Day Type column, half/full + session filters, and CSV export
 - Do **not** parse day type from denormalized `className` — use `dayType` / `variantId`
 - Do **not** confuse enrollment `sessions` with educator attendance `class_sessions`
@@ -248,6 +249,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - **Missing variant context** → enrollment created without `variantId` when class has multiple variants → always capture variant selection from cart
 - **Orphaned scheduled payments** → enrollment deleted but `scheduled_payments` remain → filter orphaned records from admin views (see `asa-database-patterns`)
 - **Using `classData?.price` instead of `enrollment.totalCost` for balance updates** → `enrollment.programId` is not a reliable class ID (legacy field, not always populated), so `storage.getClassById(enrollment.programId)` often returns `null`, making `totalCost = 0` → `remainingBalance = 0` (wrong, understates balance). Always use `enrollment.totalCost` directly — it is the authoritative financial field set at enrollment creation.
+- **Paying family locked out of members-only enrollment** → `users.member_id` is null despite paid membership/tuition (ledger drift). Reconcile via `GET /api/parent/member-id` / Activate membership before flipping `require_member_id` in prod.
 - **Educator student list shows graduated/cancelled students** → enrollment query missing status filter → always restrict to `status IN ('enrolled', 'pending_admin_approval')`; never include `completed`, `cancelled`, or `withdrawn`
 - **Empty educator roster / bulk attendance in production** → `getEnrollmentsByClassId` used memStorage and/or `classId` only. Marketplace seats set `marketplaceClassId` → `classes.id`. Use Postgres `or(classId, marketplaceClassId)` via `dbStorage`; CombinedStorage must not return mem-only success when DB is up.
 - **Edit Class lead mentor 404 HTML `Cannot POST /api/admin/educators/class-assignments`** → `server/api/admin-educators.ts` existed but was not mounted. Mount at `/api/admin/educators` in `server/routes.ts` **before** `app.use("/api/admin", adminRouter)`. Keep `GET /class-assignments/:classId` before `GET /:educatorId`.
@@ -273,6 +275,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - Don't look up class price via `programId` when computing `remainingBalance` — use `enrollment.totalCost` directly (see Common Pitfalls above)
 
 ## Key Files
+- `shared/member-id-enrollment-gate.ts` — `requireMemberId` self-enroll helper (`users.member_id`)
 - `server/api/enrollments.ts` — enrollment CRUD, confirm, unenroll, bulk cancel
 - `server/api/admin-enrollment-payment.ts` — admin payment management for enrollments
 - `server/api/admin-sessions.ts` — enrollment-period sessions CRUD + fill counts

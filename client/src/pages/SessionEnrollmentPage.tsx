@@ -62,6 +62,7 @@ export default function SessionEnrollmentPage() {
   });
   const openSessions: Session[] = openSessionsPayload?.sessions ?? [];
   const closedNotices: SessionClosedNotice[] = openSessionsPayload?.closedNotices ?? [];
+  const membersOnlyNotices: SessionClosedNotice[] = openSessionsPayload?.membersOnlyNotices ?? [];
 
   const enrollMutation = useMutation({
     mutationFn: async (data: { childIds: number[]; sessionIds: number[]; variant: string }) => {
@@ -262,7 +263,20 @@ export default function SessionEnrollmentPage() {
                 <div className="text-center py-8 space-y-4">
                   <AlertCircle className="h-10 w-10 text-muted-foreground mx-auto" />
                   <p className="text-muted-foreground">No sessions are currently open for online enrollment.</p>
-                  {closedNotices.length > 0 ? (
+                  {membersOnlyNotices.length > 0 ? (
+                    <div className="max-w-lg mx-auto space-y-3 text-left">
+                      {membersOnlyNotices.map((notice) => (
+                        <div
+                          key={notice.sessionId}
+                          className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950"
+                          data-testid={`session-members-only-notice-${notice.sessionId}`}
+                        >
+                          <p className="font-medium mb-1">{notice.name}</p>
+                          <p className="whitespace-pre-wrap">{notice.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : closedNotices.length > 0 ? (
                     <div className="max-w-lg mx-auto space-y-3 text-left">
                       {closedNotices.map((notice) => (
                         <div

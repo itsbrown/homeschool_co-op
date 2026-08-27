@@ -836,6 +836,9 @@ export default function SchoolClassesPage() {
                                       <Badge variant={cls.enrollmentOpen ? "default" : "outline"} className="shrink-0">
                                         {cls.enrollmentOpen ? "Open" : "Closed"}
                                       </Badge>
+                                      {cls.requireMemberId && (
+                                        <Badge variant="secondary" className="shrink-0">Members only</Badge>
+                                      )}
                                     </div>
                                   </TableCell>
                                 )}

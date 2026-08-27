@@ -58,7 +58,7 @@ export async function buildStoreCatalogItem(
 
   if (listing.listingType === 'session') {
     const session = await getSessionById(listing.sourceId);
-    if (!session || !session.enrollmentOpen) return null;
+    if (!session || !session.enrollmentOpen || session.requireMemberId) return null;
     return {
       listingId: listing.id,
       listingType: 'session',

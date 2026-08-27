@@ -4,6 +4,12 @@ import { sendWaitlistJoinedEmail, sendWaitlistPromotedEmail } from "../lib/email
 import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 import { legacyCanCreateClassesAllowed } from "@shared/permissions";
 import { attachAccessScope } from "../middleware/access-scope";
+import { supabaseAuth } from "../middleware/supabase-auth";
+import {
+  MEMBERS_ONLY_ENROLLMENT_NOTICE,
+  canSelfEnrollWhenRequireMemberId,
+  callerBypassesMemberIdEnrollmentGate,
+} from "@shared/member-id-enrollment-gate";
 
 const router = express.Router();
 
@@ -49,6 +55,8 @@ router.get('/', async (req, res) => {
       // Closed for enrollment → hidden from the parent catalog (still visible to admins)
       if (!c.enrollmentOpen) return false;
       if (c.isAdminOnly) return false;
+      // Members-first classes are not on the unauthenticated public catalog.
+      if (c.requireMemberId) return false;
       if (c.endDate && new Date(c.endDate) < now) return false;
       if (c.categoryId && hiddenCategoryIds.includes(c.categoryId)) return false;
       return true;
@@ -169,7 +177,7 @@ router.post('/', attachAccessScope, async (req: any, res) => {
 router.get('/public', async (_req, res) => {
   try {
     const classes = await storage.getAllClasses();
-    const visible = classes.filter((c: any) => c.status !== 'draft' && !c.isAdminOnly);
+    const visible = classes.filter((c: any) => c.status !== 'draft' && !c.isAdminOnly && !c.requireMemberId);
     res.json({ classes: visible });
   } catch (error) {
     console.error('Error fetching public classes:', error);
@@ -365,6 +373,7 @@ router.get('/category/:categoryName', async (req, res) => {
     const now = new Date();
     const filteredClasses = allClasses.filter(c => {
       if (c.isAdminOnly) return false;
+      if (c.requireMemberId) return false;
       if (c.endDate && new Date(c.endDate) < now) return false;
       return c.categoryName === categoryName;
     });
@@ -435,8 +444,15 @@ router.get('/categories/names', async (req, res) => {
   }
 });
 
+function optionalSupabaseAuth(req: any, res: any, next: any) {
+  if (!req.headers.authorization && !req.headers["x-test-user-email"]) {
+    return next();
+  }
+  return supabaseAuth(req, res, next);
+}
+
 // Add to cart (creates pending enrollment - will be confirmed during checkout payment)
-router.post('/:id/enroll', async (req, res) => {
+router.post('/:id/enroll', optionalSupabaseAuth, async (req, res) => {
   try {
     console.log(`📝 ADD TO CART REQUEST: Class ${req.params.id}, Body:`, req.body);
 
@@ -460,6 +476,26 @@ router.post('/:id/enroll', async (req, res) => {
     const child = await storage.getChildById(childId);
     if (!child) {
       return res.status(404).json({ message: 'Child not found' });
+    }
+
+    const adminBypass = callerBypassesMemberIdEnrollmentGate(
+      (req as any).user?.allRoles,
+      (req as any).user?.role,
+    );
+    if (classItem.requireMemberId) {
+      const parentUser = child.parentId ? await storage.getUser(child.parentId) : null;
+      if (
+        !canSelfEnrollWhenRequireMemberId({
+          requireMemberId: true,
+          memberId: parentUser?.memberId,
+          adminBypass,
+        })
+      ) {
+        return res.status(403).json({
+          message: MEMBERS_ONLY_ENROLLMENT_NOTICE,
+          code: 'MEMBER_ID_REQUIRED',
+        });
+      }
     }
 
     // CRITICAL: Check if child is already enrolled or has a pending enrollment for this class

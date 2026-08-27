@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-08-27 (Members-only enrollment via member ID)
+
+- Opt-in `sessions.require_member_id` / `classes.require_member_id` (default false, migration `262-require-member-id.sql`). Parents without `users.member_id` cannot self-enroll; office/admin bypasses. Public store hides those programs. Parent `/enroll` + dashboard show `membersOnlyNotices`.
+- E2E: `e2e/members-only-enrollment.spec.ts` — `npm run test:e2e -- e2e/members-only-enrollment.spec.ts` (`requireLinkedSeed`).
+- Prod: audit parents with enrolled/paid history and null `member_id` before flipping the toggle.
+
 ## 2026-08-25 (Edit Class lead mentor 404)
 
 - School-admin Edit Class “Add” lead mentor posted to `POST /api/admin/educators/class-assignments`. Handlers existed in `server/api/admin-educators.ts` but the router was never mounted (`registerRoutes`), so Express returned HTML `Cannot POST …`. Mount at `/api/admin/educators` **before** `/api/admin`. `GET /:educatorId` must not precede `/class-assignments/:classId`.
