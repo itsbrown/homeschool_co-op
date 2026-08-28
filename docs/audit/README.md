@@ -15,4 +15,5 @@ Each report should include:
 
 ## Related docs
 
+- [fall-2026-class-rosters.csv](fall-2026-class-rosters.csv) — Fall 2026 class rosters with day type, pending balance, parent contact. Refresh: `server/scripts/export-fall-2026-class-rosters.ts`.
 - [BALANCE_TRIAGE_PRODUCTION.md](BALANCE_TRIAGE_PRODUCTION.md) — production balance dashboard triage (orphans, cache, schedules).

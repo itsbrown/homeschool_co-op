@@ -49,6 +49,7 @@ How child grade/age relate to classes and enrollment **today**.
 
 ## Key files
 
+- `docs/audit/fall-2026-class-rosters.csv` — Fall 2026 class rosters (day type + pending + parent contact); refresh via `server/scripts/export-fall-2026-class-rosters.ts`
 - `shared/schema.ts` — `children`, `classes`, `programEnrollments`
 - `shared/grade-levels.ts` — normalize, age−5 helpers, `GRADE_LEVEL_OPTIONS`
 - `shared/child-profile-patch.ts` — allergy text coerce + child update whitelist
