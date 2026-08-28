@@ -223,6 +223,8 @@ School-admin observability (not a separate roster product):
 - **Close online enrollment:** set `sessions.enrollment_open = false`. Optional `sessions.enrollment_closed_message` is returned on `GET /api/admin/sessions/open` as `closedNotices` and shown on parent `/enroll` + dashboard when no sessions are open (case-by-case / contact-us copy). Response shape is `{ sessions, closedNotices, membersOnlyNotices }` (clients normalize via `parseOpenSessionsResponse`).
 - **Members-first window:** set `sessions.require_member_id` / `classes.require_member_id` (admin **Members only (member ID)**). Default false. While Enrollment Open is on, only parents with a non-empty `users.member_id` see/enroll. New school-code accounts are blocked. Public store omits these programs until the toggle is off. Office/admin enroll bypasses. Response `membersOnlyNotices` explains the window when the parent has no ID. Do not enable in prod until auditing parents who paid but lack `member_id`.
 - **Enrollments** (`/schools/enrollments`): `GET /api/school-admin/enrollments` returns `sessionId`, `dayType`, `variantId`, `waitlistPosition`, `childId` for Day Type column, half/full + session filters, and CSV export
+- **Teacher / class roster:** class seats do not store day type. Join the child’s session-tuition row (`shared/roster-day-type.ts`) onto `GET /api/educator/classes/:id/students`, `GET /api/educator/my-students`, `GET /api/educator/sessions/:id/roster`, and `GET /api/school-admin/classes/:id/roster`. Prefer `dayType` then `variantId`; parse `className` only as a last resort (Mon/Fri custom labels)
+- **Roster birthday:** `children.birthdate` on those same APIs (attendance roster must include it). Display with `shared/student-birthday.ts` / `RosterBirthday` — never `new Date("YYYY-MM-DD")` (UTC shift)
 - Do **not** parse day type from denormalized `className` — use `dayType` / `variantId`
 - Do **not** confuse enrollment `sessions` with educator attendance `class_sessions`
 
@@ -284,6 +286,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - `server/api/admin-classes.ts` — admin class management endpoints
 - `server/api/admin-educators.ts` — school-admin lead mentor / class assignments (`POST /api/admin/educators/class-assignments`); must be mounted in `server/routes.ts`
 - `server/services/grade-placement-sync.ts` — Grade Placement preview/sync
+- `shared/roster-day-type.ts` / `shared/student-birthday.ts` / `shared/current-class-enrollment.ts` — roster day type join; birthday display; current class seats
 - `shared/grade-levels.ts` / `shared/session-payment-eligibility.ts` — placement helpers
 - `server/lib/prorate-calculator.ts` — proration date math
 - `server/utils/cart-pricing.ts` — pricing calculations for enrollments

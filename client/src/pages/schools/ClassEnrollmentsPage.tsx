@@ -30,6 +30,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DayTypeBadge } from "@/components/roster/DayTypeBadge";
+import { RosterBirthday } from "@/components/roster/RosterBirthday";
+import { formatRosterDayTypeSummary } from "@shared/roster-day-type";
 
 export default function SchoolAdminClassEnrollmentsPage() {
   const [, params] = useRoute("/schools/classes/:id/enrollments");
@@ -101,7 +104,9 @@ export default function SchoolAdminClassEnrollmentsPage() {
     enrollmentDate: student.enrollmentDate,
     createdAt: student.enrollmentDate,
     studentName: `${student.firstName} ${student.lastName}`,
-    grade: student.gradeLevel
+    grade: student.gradeLevel,
+    birthdate: student.birthdate ?? null,
+    dayType: student.dayType ?? null,
   }));
 
   const enrollStudentMutation = useMutation({
@@ -387,7 +392,9 @@ export default function SchoolAdminClassEnrollmentsPage() {
           <CardHeader>
             <CardTitle>Current Enrollments</CardTitle>
             <CardDescription>
-              Students currently enrolled in this class
+              {rosterData?.dayTypeCounts
+                ? `${formatRosterDayTypeSummary(rosterData.dayTypeCounts)} enrolled`
+                : "Students currently enrolled in this class"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -405,7 +412,9 @@ export default function SchoolAdminClassEnrollmentsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Student Name</TableHead>
+                    <TableHead>Birthday</TableHead>
                     <TableHead>Grade</TableHead>
+                    <TableHead>Day Type</TableHead>
                     <TableHead>Enrollment Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -419,7 +428,19 @@ export default function SchoolAdminClassEnrollmentsPage() {
                         <TableCell className="font-medium">
                           {enrollment.studentName || student?.name || "Unknown Student"}
                         </TableCell>
+                        <TableCell>
+                          <RosterBirthday
+                            birthdate={enrollment.birthdate ?? student?.birthdate}
+                            testId={`text-birthday-${enrollment.childId}`}
+                          />
+                        </TableCell>
                         <TableCell>{enrollment.grade || student?.grade || "N/A"}</TableCell>
+                        <TableCell>
+                          <DayTypeBadge
+                            dayType={enrollment.dayType}
+                            testId={`badge-day-type-${enrollment.childId}`}
+                          />
+                        </TableCell>
                         <TableCell>
                           {enrollment.enrollmentDate ? new Date(enrollment.enrollmentDate).toLocaleDateString() : "N/A"}
                         </TableCell>

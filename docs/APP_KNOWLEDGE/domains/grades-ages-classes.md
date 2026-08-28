@@ -29,10 +29,10 @@ How child grade/age relate to classes and enrollment **today**.
 |---------|------|----------------|
 | Class create/edit | `client/src/pages/schools/SchoolClassCreationPage.tsx` | Multi-select → `gradeLevels` slugs (`littles`…`12th-grade`) |
 | Class details | `client/src/pages/schools/SchoolClassDetailsPage.tsx` | Display map for slugs; students tab includes Day Type from session tuition |
-| Educator class details | `/educator/classes/:id` Students tab | Day Type from session tuition; CSV includes it |
-| Educator My Students | `/educator/students` | Same join per assigned class `sessionId` |
-| Educator attendance | `/educator/session/:id` | Badge + `N Full Day · M Half Day` on the day-of roster |
-| School admin class roster | `/schools/classes/:id/enrollments` and class details Students | `GET /api/school-admin/classes/:id/roster` includes `dayType` |
+| Educator class details | `/educator/classes/:id` Students tab | Day Type from session tuition; Birthday + age; CSV includes both |
+| Educator My Students | `/educator/students` | Same day type join; Birthday column |
+| Educator attendance | `/educator/session/:id` | Day type badge + birthday on each row |
+| School admin class roster | `/schools/classes/:id/enrollments` and class details Students | `GET /api/school-admin/classes/:id/roster` includes `dayType` and `birthdate` |
 | Classes list filter | `client/src/pages/schools/ClassesPage.tsx` | Client filter on `cls.gradeLevel` (singular — may not match array field) |
 | Parent catalog filter | `client/src/components/registration/ProgramList.tsx` | `program.gradeLevels.includes(filter)` — browse filter only |
 | Parent profile (admin) | `client/src/pages/schools/ParentProfilePage.tsx` | Child cards: grade + birthdate; class titles on **Enrollments** tab via `enrollment.className` |
@@ -46,6 +46,7 @@ How child grade/age relate to classes and enrollment **today**.
 | Symptom | Cause | Fix |
 |---------|--------|-----|
 | Age − 5 in August disagrees with ops (Rowan 3rd vs 4th) | Helper used completed years **as of today** | Default `asOf` is **Dec 31** of the current year (`gradeAsOfDate`). Do not change session `endDate` to match. |
+| Roster birthday is a day early | `new Date("2015-06-01")` is UTC midnight | Use `formatBirthdayDisplay` / `toDateInputValue` (`YYYY-MM-DD` prefix), not `toLocaleDateString` on a date-only string |
 | Grade dropdown shows placeholder after load | Select values (`1st`) ≠ stored labels (`1st Grade`) | Use `GRADE_LEVEL_OPTIONS` labels as Select values; normalize on GET/PUT |
 | Grade “didn't save” after Update | `staleTime: Infinity` + no query invalidation on students list | `invalidateQueries(['/api/school-admin/students'])` after PUT |
 | DOB date input blank | ISO datetime in `birthdate` | `toDateInputValue()` → `YYYY-MM-DD` |

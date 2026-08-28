@@ -21,16 +21,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/utils";
 import { StudentSafetyBadges, StudentSafetySheet, type StudentSafetyProfile } from "@/components/educator/StudentSafetySheet";
-
-function calculateAge(birthdate: string): number {
-  const today = new Date();
-  const bday = new Date(birthdate);
-  let age = today.getFullYear() - bday.getFullYear();
-  if (today < new Date(today.getFullYear(), bday.getMonth(), bday.getDate())) {
-    age--;
-  }
-  return age;
-}
+import { DayTypeBadge } from "@/components/roster/DayTypeBadge";
+import { RosterBirthday } from "@/components/roster/RosterBirthday";
 
 export default function EducatorStudentsPage() {
   const { user } = useAuth();
@@ -223,6 +215,7 @@ export default function EducatorStudentsPage() {
                     <TableHead>Student Name</TableHead>
                     <TableHead>Birthday</TableHead>
                     <TableHead>Grade Level</TableHead>
+                    <TableHead>Day Type</TableHead>
                     <TableHead>Class</TableHead>
                     <TableHead>Parent Contact</TableHead>
                     <TableHead>Enrollment Date</TableHead>
@@ -266,21 +259,21 @@ export default function EducatorStudentsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {student.birthdate ? (
-                          <div className="text-sm">
-                            <div>{new Date(student.birthdate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                            <div className="text-muted-foreground">
-                              Age {calculateAge(student.birthdate)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">N/A</span>
-                        )}
+                        <RosterBirthday
+                          birthdate={student.birthdate}
+                          testId={`text-birthday-${student.id}`}
+                        />
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {student.gradeLevel || 'N/A'}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DayTypeBadge
+                          dayType={student.dayType}
+                          testId={`badge-day-type-${student.id}`}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">

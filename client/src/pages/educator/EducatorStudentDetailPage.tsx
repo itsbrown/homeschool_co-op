@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import LexileProfileSection from "@/components/lexile/LexileProfileSection";
 import ProgressQuickLogDialog from "@/components/educator/ProgressQuickLogDialog";
+import { formatBirthdayDisplay, ageFromBirthdate } from "@shared/student-birthday";
 
 interface Student {
   id: number;
@@ -27,24 +28,6 @@ interface Student {
   className: string;
   enrollmentDate: string;
   enrollmentStatus: string;
-}
-
-function calculateAge(birthdate: string): number {
-  const today = new Date();
-  const bday = new Date(birthdate);
-  let age = today.getFullYear() - bday.getFullYear();
-  if (today < new Date(today.getFullYear(), bday.getMonth(), bday.getDate())) {
-    age--;
-  }
-  return age;
-}
-
-function formatBirthday(birthdate: string): string {
-  return new Date(birthdate).toLocaleDateString('en-US', { 
-    month: 'long', 
-    day: 'numeric',
-    year: 'numeric'
-  });
 }
 
 export default function EducatorStudentDetailPage() {
@@ -142,11 +125,11 @@ export default function EducatorStudentDetailPage() {
                     <Cake className="h-4 w-4" />
                     Birthday
                   </span>
-                  <span data-testid="text-birthday">{formatBirthday(student.birthdate)}</span>
+                  <span data-testid="text-birthday">{formatBirthdayDisplay(student.birthdate)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Age</span>
-                  <span data-testid="text-age">{calculateAge(student.birthdate)} years old</span>
+                  <span data-testid="text-age">{ageFromBirthdate(student.birthdate)} years old</span>
                 </div>
               </>
             )}
