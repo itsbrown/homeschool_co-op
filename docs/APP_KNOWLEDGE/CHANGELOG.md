@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-08-28 (Daily Fall 2026 roster snapshot through Sep 21)
+
+- GitHub Action `fall-2026-roster-snapshot.yml` runs daily 08:00 ET through **2026-09-21**, overwrites `docs/audit/fall-2026-class-rosters.csv`, appends pending→enrolled to `docs/audit/fall-2026-class-rosters-transitions.csv`. Secret `PROD_DATABASE_URL` (Neon prod). Local refresh still: `export-fall-2026-class-rosters.ts`.
+
 ## 2026-08-28 (Fall 2026 class rosters CSV)
 
 - Full class roster dump (Brighton + Greece F2026) with **day_type** on the main row, **pending** = remaining session `effective_balance`, parent name/email/phone. Unpaid carts with no class seat listed under the matching auto-place class (`seat=not on roster`). Refresh: `node scripts/with-prod-env.mjs -- npx tsx server/scripts/export-fall-2026-class-rosters.ts` → `docs/audit/fall-2026-class-rosters.csv`.

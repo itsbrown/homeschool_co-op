@@ -9,6 +9,7 @@ How GitHub Actions and local test commands relate to merge gates.
 | **Tests** | `tests.yml` | Schema + **production-path** + dev smoke + **client jsdom** |
 | **Payments CI** | payments subset | Billing/webhook tests |
 | **E2E** | Playwright | Dev server boot; placeholder Supabase env OK (see `playwright.config.ts` `envOr`) |
+| **Fall 2026 roster snapshot** | `fall-2026-roster-snapshot.yml` | Not a merge gate. Daily 08:00 ET through **2026-09-21**. Overwrites `docs/audit/fall-2026-class-rosters.csv`; appends pending→enrolled to `docs/audit/fall-2026-class-rosters-transitions.csv`. Secret: `PROD_DATABASE_URL` (Neon prod, never Railway clone). Optional `ROSTER_SNAPSHOT_TOKEN` if Actions cannot push `main`. Manual: Actions → Fall 2026 roster snapshot → Run workflow. |
 
 ## Tests job steps (canonical)
 
@@ -94,12 +95,6 @@ Protocol: `~/.cursor/skills/maintain-app-knowledge/SKILL.md` (Step 2 = edit file
 | E2E seed returns HTML / no data | Port 5000 reused by server without `/api/test` | `node scripts/free-port-5000.mjs` or `CI=true` for fresh `webServer` |
 | Playwright report green but skipped | `test.skip` on missing `supabaseLinked` | `requireLinkedSeed`; symlink `.env` + `.env.e2e` in worktrees |
 | E2E against live Stripe/prod | Loaded `.env.prod` | Use `.env` (Railway clone) + `.env.e2e` only |
-| Playwright `getByText` strict-mode: 2 matches | Print + screen copies of the same string (`hidden print:block` stays in the DOM; locators still match it) | Unique `data-testid` on the interactive copy |
-| E2E all skipped; HTML Skipped filter empty | `beforeAll` `test.skip` after seed 500 (`getDb` / no Postgres); report counts skips but lists no rows | Worktree needs `.env` (symlink from main clone). Do not inject localhost `asa_test` in `playwright.config.ts` `webServer` env — it overrides `.env`. Check server log for `setup-*-scenario` 500 |
-| Seed `socket hang up` / Vite `Expected ")" but found "onClick"` | Two JSX siblings inside one `{cond && ( … )}` (Staff pending Copy + Resend) | One element per condition, or wrap in `<>…</>` |
-| `The endpoint has been disabled` (Neon `28000`) | Login-shell `DATABASE_URL` still points at retired Neon `asa_test`; worktree had no `.env` | Symlink `.env`; `apply-local-env` yields to file Railway URL. Free `:5000` before re-run so a Neon-booted server is not reused. |
-| Playwright `click` times out after success UI is visible | Overlay/toast intercepts pointer events. CSV import: first-visit `schedule-tour-prompt` (Radix `z-[9999]`) opens 600ms after Schedule Builder load and sits on `schedule-csv-*` buttons | Seed `schedule_builder_tour_seen` + `schedule_builder_tour_prompt_session` before `goto`; dismiss `schedule-tour-dismiss` if visible. After import success, `click({ force: true })` on `schedule-csv-done` if a toast remains. Do **not** `waitForLoadState("networkidle")`. |
-| `text-placement-preview` missing in 45s | Preview only mounts when `autoPlaceByGrade` is on **and** location/session/grades make `canAutoPlace` true; form defaults are off until GET class `reset` | Wait for `switch-auto-place-by-grade` **enabled**, click only if `data-state !== "checked"` (toggling off hides preview). |
 
 ## Key files
 

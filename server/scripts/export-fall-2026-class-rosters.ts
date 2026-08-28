@@ -1,7 +1,13 @@
 /**
  * Export Fall 2026 class rosters (enrolled + pending-in-band) to CSV.
  *
+ * Overwrites `docs/audit/fall-2026-class-rosters.csv`. After 2026-09-21
+ * (America/New_York) the script no-ops unless `--force`.
+ *
+ * Daily CI: `.github/workflows/fall-2026-roster-snapshot.yml`
+ *
  *   node scripts/with-prod-env.mjs -- npx tsx server/scripts/export-fall-2026-class-rosters.ts
+ *   node scripts/with-prod-env.mjs -- npx tsx server/scripts/export-fall-2026-class-rosters.ts --force
  */
 
 import fs from 'node:fs';
@@ -21,16 +27,223 @@ import { gradesMatch } from '../../shared/grade-levels';
 
 const FALL_SESSION_ID = 2;
 const SCHOOL_ID = 2;
-const AS_OF = new Date('2026-08-28T12:00:00-04:00');
-const OUT = path.resolve(
+const LAST_SNAPSHOT_DAY = '2026-09-21';
+const DRY_RUN = process.argv.includes('--dry-run');
+const FORCE = process.argv.includes('--force');
+const OUT = path.resolve(process.cwd(), 'docs/audit/fall-2026-class-rosters.csv');
+const TRANSITIONS_OUT = path.resolve(
   process.cwd(),
-  'docs/audit/fall-2026-class-rosters.csv',
+  'docs/audit/fall-2026-class-rosters-transitions.csv',
 );
+
+function todayNyDate(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+const AS_OF_DAY = todayNyDate();
+const AS_OF = new Date(`${AS_OF_DAY}T12:00:00`);
 
 function csvEscape(value: unknown): string {
   const s = value == null ? '' : String(value);
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
+}
+
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i + 1] === '"') {
+        cur += '"';
+        i += 1;
+      } else {
+        inQ = !inQ;
+      }
+    } else if (c === ',' && !inQ) {
+      out.push(cur);
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+type PriorRow = {
+  classTitle: string;
+  child: string;
+  childId: string;
+  seat: string;
+  classStatus: string;
+  pending: string;
+  parent: string;
+  email: string;
+};
+
+function loadPriorRoster(filePath: string): PriorRow[] {
+  if (!fs.existsSync(filePath)) return [];
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCsvLine(lines[0]);
+  const idx = (name: string) => headers.indexOf(name);
+  const classI = idx('class');
+  const childI = idx('child');
+  const childIdI = idx('child_id');
+  const seatI = idx('seat');
+  const statusI = idx('class_status');
+  const pendingI = idx('pending');
+  const parentI = idx('parent');
+  const emailI = idx('email');
+  if (classI < 0 || childIdI < 0) return [];
+  return lines.slice(1).map((line) => {
+    const cols = parseCsvLine(line);
+    return {
+      classTitle: cols[classI] || '',
+      child: cols[childI] || '',
+      childId: cols[childIdI] || '',
+      seat: cols[seatI] || '',
+      classStatus: cols[statusI] || '',
+      pending: cols[pendingI] || '',
+      parent: cols[parentI] || '',
+      email: cols[emailI] || '',
+    };
+  });
+}
+
+function rowKey(classTitle: string, childId: string | number): string {
+  return `${classTitle}::${childId}`;
+}
+
+type Row = {
+  classTitle: string;
+  campus: string;
+  child: string;
+  dayType: string;
+  grade: string;
+  pending: string;
+  parent: string;
+  email: string;
+  phone: string;
+  seat: string;
+  classStatus: string;
+  age: string;
+  birthdate: string;
+  childId: number;
+  parentId: number;
+  classEnrollmentId: string;
+  sessionEnrollmentId: string;
+  classId: number;
+  sortName: string;
+};
+
+function appendTransitions(prior: PriorRow[], next: Row[], asOf: string) {
+  const priorByKey = new Map(prior.map((r) => [rowKey(r.classTitle, r.childId), r]));
+  const nextByKey = new Map(next.map((r) => [rowKey(r.classTitle, String(r.childId)), r]));
+  const events: string[][] = [];
+
+  for (const [key, now] of nextByKey) {
+    const was = priorByKey.get(key);
+    if (!was) {
+      if (now.seat === 'not on roster') {
+        events.push([
+          asOf,
+          'pending_added',
+          now.classTitle,
+          now.child,
+          String(now.childId),
+          '',
+          now.seat,
+          '',
+          now.classStatus,
+          '',
+          now.pending,
+          now.parent,
+          now.email,
+        ]);
+      }
+      continue;
+    }
+    const wasPendingSeat = was.seat === 'not on roster';
+    const nowOnRoster = now.seat !== 'not on roster';
+    if (wasPendingSeat && nowOnRoster) {
+      events.push([
+        asOf,
+        'pending_to_enrolled',
+        now.classTitle,
+        now.child,
+        String(now.childId),
+        was.seat,
+        now.seat,
+        was.classStatus,
+        now.classStatus,
+        was.pending,
+        now.pending,
+        now.parent,
+        now.email,
+      ]);
+    }
+  }
+
+  for (const [key, was] of priorByKey) {
+    if (nextByKey.has(key)) continue;
+    if (was.seat !== 'not on roster') continue;
+    events.push([
+      asOf,
+      'pending_removed',
+      was.classTitle,
+      was.child,
+      was.childId,
+      was.seat,
+      '',
+      was.classStatus,
+      '',
+      was.pending,
+      '',
+      was.parent,
+      was.email,
+    ]);
+  }
+
+  if (events.length === 0) {
+    console.log('No pending→enrolled (or pending add/remove) changes since last snapshot');
+    return;
+  }
+
+  const header = [
+    'as_of',
+    'change',
+    'class',
+    'child',
+    'child_id',
+    'from_seat',
+    'to_seat',
+    'from_status',
+    'to_status',
+    'from_pending',
+    'to_pending',
+    'parent',
+    'email',
+  ];
+  const existed = fs.existsSync(TRANSITIONS_OUT) && fs.statSync(TRANSITIONS_OUT).size > 0;
+  const lines = events.map((cols) => cols.map(csvEscape).join(','));
+  if (!existed) {
+    fs.writeFileSync(TRANSITIONS_OUT, `${header.join(',')}\n${lines.join('\n')}\n`);
+  } else {
+    fs.appendFileSync(TRANSITIONS_OUT, `${lines.join('\n')}\n`);
+  }
+  console.log(`Appended ${events.length} transition(s) → ${TRANSITIONS_OUT}`);
+  for (const e of events) {
+    console.log(`  ${e[1]} ${e[3]} (${e[2]})`);
+  }
 }
 
 function formatPhone(raw: string | null | undefined): string {
@@ -88,29 +301,14 @@ function parentName(u: {
   return (u.name || '').trim();
 }
 
-type Row = {
-  classTitle: string;
-  campus: string;
-  child: string;
-  dayType: string;
-  grade: string;
-  pending: string;
-  parent: string;
-  email: string;
-  phone: string;
-  seat: string;
-  classStatus: string;
-  age: string;
-  birthdate: string;
-  childId: number;
-  parentId: number;
-  classEnrollmentId: string;
-  sessionEnrollmentId: string;
-  classId: number;
-  sortName: string;
-};
-
 async function main() {
+  if (AS_OF_DAY > LAST_SNAPSHOT_DAY && !FORCE) {
+    console.log(
+      `Past snapshot window (${AS_OF_DAY} > ${LAST_SNAPSHOT_DAY}). Skipping. Use --force to override.`,
+    );
+    process.exit(0);
+  }
+
   const db = await getDb();
   if (!db) throw new Error('DATABASE_URL required');
 
@@ -329,6 +527,7 @@ async function main() {
   });
 
   const header = [
+    'as_of',
     'class',
     'campus',
     'child',
@@ -348,10 +547,13 @@ async function main() {
     'session_enrollment_id',
   ];
 
+  const prior = loadPriorRoster(OUT);
+
   const lines = [
     header.join(','),
     ...rows.map((r) =>
       [
+        AS_OF_DAY,
         r.classTitle,
         r.campus,
         r.child,
@@ -375,8 +577,13 @@ async function main() {
     ),
   ];
 
-  fs.mkdirSync(path.dirname(OUT), { recursive: true });
-  fs.writeFileSync(OUT, `${lines.join('\n')}\n`);
+  if (DRY_RUN) {
+    console.log(`DRY RUN — would write ${rows.length} rows to ${OUT}`);
+  } else {
+    fs.mkdirSync(path.dirname(OUT), { recursive: true });
+    fs.writeFileSync(OUT, `${lines.join('\n')}\n`);
+    appendTransitions(prior, rows, AS_OF_DAY);
+  }
 
   const byClass = new Map<string, { enrolled: number; pending: number; full: number; half: number }>();
   for (const r of rows) {
@@ -389,7 +596,7 @@ async function main() {
     byClass.set(key, cur);
   }
 
-  console.log(`Wrote ${rows.length} rows → ${OUT}`);
+  console.log(`Wrote ${rows.length} rows → ${OUT} (as_of=${AS_OF_DAY})`);
   for (const [title, n] of byClass) {
     console.log(
       `  ${title}: on roster ${n.enrolled} | pending ${n.pending} | full ${n.full} | half ${n.half}`,
