@@ -24,6 +24,9 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { invalidateEducatorSessionQueries } from '@/lib/educator-queries';
 import { EducatorLoadingState, EducatorErrorState } from './EducatorErrorBoundary';
 import { StudentSafetyBadges, StudentSafetySheet, type StudentSafetyProfile } from './StudentSafetySheet';
+import { DayTypeBadge } from '@/components/roster/DayTypeBadge';
+import { RosterBirthday } from '@/components/roster/RosterBirthday';
+import { countRosterDayTypes, formatRosterDayTypeSummary } from '@shared/roster-day-type';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
@@ -32,6 +35,8 @@ interface RosterStudent {
   firstName: string;
   lastName: string;
   gradeLevel?: string;
+  birthdate?: string | null;
+  dayType?: string | null;
   attendanceId?: number;
   status?: AttendanceStatus;
   checkInTime?: string;
@@ -77,6 +82,8 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
       firstName: item.childFirstName || item.firstName || '',
       lastName: item.childLastName || item.lastName || '',
       gradeLevel: item.gradeLevel,
+      birthdate: item.birthdate ?? null,
+      dayType: item.dayType ?? null,
       attendanceId: item.attendance?.id,
       status: item.attendance?.status,
       checkInTime: item.attendance?.checkInTime,
@@ -235,6 +242,8 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
   const absentCount = roster.filter(s => getEffectiveStatus(s) === 'absent').length;
   const lateCount = roster.filter(s => getEffectiveStatus(s) === 'late').length;
   const unmarkedCount = roster.filter(s => !getEffectiveStatus(s)).length;
+  const dayTypeCounts = countRosterDayTypes(roster.map((s) => s.dayType));
+  const dayTypeSummary = formatRosterDayTypeSummary(dayTypeCounts);
 
   return (
     <>
@@ -248,6 +257,9 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
               </CardTitle>
               <CardDescription>
                 {roster.length} student{roster.length !== 1 ? 's' : ''} enrolled
+                {dayTypeSummary ? (
+                  <span data-testid="text-roster-day-type-summary"> · {dayTypeSummary}</span>
+                ) : null}
                 {bulkAttendanceMutation.isPending && (
                   <span className="ml-2 inline-flex items-center gap-1 text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -342,6 +354,19 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
                           {student.gradeLevel}
                         </div>
                       )}
+                      {(student.dayType === 'half_day' || student.dayType === 'full_day') && (
+                        <div className="mt-1">
+                          <DayTypeBadge
+                            dayType={student.dayType}
+                            testId={`badge-day-type-${student.childId}`}
+                          />
+                        </div>
+                      )}
+                      <RosterBirthday
+                        birthdate={student.birthdate}
+                        compact
+                        testId={`text-birthday-${student.childId}`}
+                      />
                       {student.checkInTime && (
                         <div className="text-xs text-muted-foreground">
                           Marked {new Date(student.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

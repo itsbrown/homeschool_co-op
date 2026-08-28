@@ -26,14 +26,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDate, formatClassSchedule } from "@/lib/utils";
 
+import { DayTypeBadge } from "@/components/roster/DayTypeBadge";
+import { RosterBirthday } from "@/components/roster/RosterBirthday";
+import {
+  formatRosterDayTypeSummary,
+  rosterDayTypeLabel,
+} from "@shared/roster-day-type";
+import { ageFromBirthdate, birthdateYmd, formatBirthdayDisplay } from "@shared/student-birthday";
+
 function exportStudentsCSV(students: StudentData[], className: string) {
-  const headers = ['Student Name', 'Age', 'Grade Level', 'Parent Email', 'Parent Phone', 'Emergency Contact', 'Emergency Phone', 'Relationship', 'Enrollment Date'];
+  const headers = ['Student Name', 'Birthday', 'Age', 'Grade Level', 'Day Type', 'Parent Email', 'Parent Phone', 'Emergency Contact', 'Emergency Phone', 'Relationship', 'Enrollment Date'];
   const rows = students.map(s => {
-    const age = s.birthdate ? String(Math.floor((Date.now() - new Date(s.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000))) : '';
+    const age = ageFromBirthdate(s.birthdate);
     return [
       `${s.firstName} ${s.lastName}`,
-      age,
+      formatBirthdayDisplay(s.birthdate) || birthdateYmd(s.birthdate),
+      age != null ? String(age) : '',
       s.gradeLevel || '',
+      rosterDayTypeLabel(s.dayType) || '',
       s.parentEmail || '',
       s.parentPhone || '',
       s.emergencyContactName || '',
@@ -75,6 +85,7 @@ interface StudentData {
   lastName: string;
   gradeLevel?: string;
   birthdate?: string;
+  dayType?: string | null;
   enrollmentStatus?: string;
   parentName?: string;
   parentEmail?: string;
@@ -87,6 +98,7 @@ interface StudentData {
 
 interface StudentsResponse {
   students: StudentData[];
+  dayTypeCounts?: { fullDay: number; halfDay: number };
 }
 
 export default function EducatorClassDetailsPage() {
@@ -192,7 +204,7 @@ export default function EducatorClassDetailsPage() {
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="students">Students ({studentsData?.students?.length || 0})</TabsTrigger>
+          <TabsTrigger value="students" data-testid="tab-class-students">Students ({studentsData?.students?.length || 0})</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
         </TabsList>
 
@@ -277,8 +289,10 @@ export default function EducatorClassDetailsPage() {
                   <Users className="h-5 w-5 mr-2" />
                   Enrolled Students
                 </CardTitle>
-                <CardDescription>
-                  Students enrolled in this class
+                <CardDescription data-testid="text-roster-day-type-summary">
+                  {studentsData?.dayTypeCounts
+                    ? `${formatRosterDayTypeSummary(studentsData.dayTypeCounts)} enrolled`
+                    : "Students enrolled in this class"}
                 </CardDescription>
               </div>
               {(studentsData?.students?.length ?? 0) > 0 && (
@@ -305,8 +319,9 @@ export default function EducatorClassDetailsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Student Name</TableHead>
-                        <TableHead>Age</TableHead>
+                        <TableHead>Birthday</TableHead>
                         <TableHead>Grade Level</TableHead>
+                        <TableHead>Day Type</TableHead>
                         <TableHead>Parent Email</TableHead>
                         <TableHead>Parent Phone</TableHead>
                         <TableHead>Emergency Contact</TableHead>
@@ -323,12 +338,18 @@ export default function EducatorClassDetailsPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            {student.birthdate ? 
-                              Math.floor((Date.now() - new Date(student.birthdate).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
-                              : 'N/A'
-                            }
+                            <RosterBirthday
+                              birthdate={student.birthdate}
+                              testId={`text-birthday-${student.id}`}
+                            />
                           </TableCell>
                           <TableCell>{student.gradeLevel}</TableCell>
+                          <TableCell>
+                            <DayTypeBadge
+                              dayType={student.dayType}
+                              testId={`badge-day-type-${student.id}`}
+                            />
+                          </TableCell>
                           <TableCell>{student.parentEmail || '—'}</TableCell>
                           <TableCell>
                             {student.parentPhone ? (

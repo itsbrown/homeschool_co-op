@@ -23,6 +23,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate, formatClassSchedule } from "@/lib/utils";
 import { SupplyListEditor } from "@/components/admin/SupplyListEditor";
+import { DayTypeBadge } from "@/components/roster/DayTypeBadge";
+import { RosterBirthday } from "@/components/roster/RosterBirthday";
+import { formatRosterDayTypeSummary } from "@shared/roster-day-type";
 
 export default function SchoolClassDetailsPage() {
   const [, navigate] = useLocation();
@@ -48,10 +51,10 @@ export default function SchoolClassDetailsPage() {
 
   // Get enrolled students for this class
   const { data: studentsData, isLoading: studentsLoading } = useQuery({
-    queryKey: ["/api/school-admin/class-students", classId],
+    queryKey: ["/api/school-admin/classes", classId, "roster"],
     queryFn: async () => {
       const token = localStorage.getItem('supabase_token');
-      const response = await fetch(`/api/school-admin/class-students/${classId}`, {
+      const response = await fetch(`/api/school-admin/classes/${classId}/roster`, {
         headers: {
           ...(token && { Authorization: `Bearer ${token}` })
         },
@@ -328,7 +331,9 @@ export default function SchoolClassDetailsPage() {
               <CardHeader>
                 <CardTitle>Enrolled Students</CardTitle>
                 <CardDescription>
-                  Students currently enrolled in this class
+                  {studentsData?.dayTypeCounts
+                    ? `${formatRosterDayTypeSummary(studentsData.dayTypeCounts)} enrolled`
+                    : "Students currently enrolled in this class"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -343,6 +348,8 @@ export default function SchoolClassDetailsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Student Name</TableHead>
+                        <TableHead>Birthday</TableHead>
+                        <TableHead>Day Type</TableHead>
                         <TableHead>Parent Email</TableHead>
                         <TableHead>Enrollment Date</TableHead>
                         <TableHead>Status</TableHead>
@@ -352,7 +359,19 @@ export default function SchoolClassDetailsPage() {
                       {students.map((student: any) => (
                         <TableRow key={student.id}>
                           <TableCell className="font-medium">
-                            {student.childName}
+                            {student.childName || `${student.firstName ?? ""} ${student.lastName ?? ""}`.trim()}
+                          </TableCell>
+                          <TableCell>
+                            <RosterBirthday
+                              birthdate={student.birthdate}
+                              testId={`text-birthday-${student.id}`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <DayTypeBadge
+                              dayType={student.dayType}
+                              testId={`badge-day-type-${student.id}`}
+                            />
                           </TableCell>
                           <TableCell>{student.parentEmail}</TableCell>
                           <TableCell>

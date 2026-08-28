@@ -218,8 +218,10 @@ export type SetupSessionDayTypeAdminScenarioResponse = {
   success: boolean;
   data?: {
     adminSupabaseLinked?: boolean;
+    educatorSupabaseLinked?: boolean;
     school: { id: number; name: string };
     admin: { id: number; email: string; password: string };
+    educator?: { id: number; email: string; password: string };
     parent: { id: number; email: string; password: string };
     session: {
       id: number;
@@ -227,9 +229,15 @@ export type SetupSessionDayTypeAdminScenarioResponse = {
       halfDayCapacity: number | null;
       fullDayCapacity: number | null;
     };
+    class?: { id: number; title: string };
+    children?: {
+      half: { id: number; firstName: string; lastName: string; birthdate?: string | null };
+      full: { id: number; firstName: string; lastName: string; birthdate?: string | null };
+    };
     halfEnrollment: { id: number; childName: string | null; dayType: string };
     fullEnrollment: { id: number; childName: string | null; dayType: string };
     expectedFillSummary: string;
+    expectedRosterDayTypeSummary?: string;
   };
   error?: string;
   details?: string;
@@ -237,7 +245,7 @@ export type SetupSessionDayTypeAdminScenarioResponse = {
 
 export async function postSetupSessionDayTypeAdminScenario(
   request: APIRequestContext,
-  body: { linkSupabaseAuthAdmin?: boolean } = {},
+  body: { linkSupabaseAuthAdmin?: boolean; linkSupabaseAuthEducator?: boolean } = {},
 ): Promise<{ response: APIResponse; json: SetupSessionDayTypeAdminScenarioResponse | null }> {
   const response = await request.post("/api/test/setup-session-day-type-admin-scenario", {
     headers: {

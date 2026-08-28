@@ -52,6 +52,8 @@ Director Academics (when `showAcademics`): **Weekly Templates** → `/schools/sc
 - Active roster statuses: `enrolled` + `pending_admin_approval` (`isEducatorRosterStatus` in `server/api/educator.ts`). Same rule as supply lists.
 - Session start: assignment `canStartSession`, else instructorId/name fallback (`resolveSessionStartAccess`).
 - **Two (or more) assigned classes:** day-of attendance is **per session/class** and does not merge. My Students / assessments / notification targeting **union** enrollments across assignments (one row per enrollment; same child in two classes appears twice on My Students). Notification parent counts unique emails. `canManageStudents` staff see a location list instead of assignment rosters.
+- **Half day vs full day** is not on the class seat. It lives on the child’s v2 session-tuition enrollment (`sessionId` set, no class link). Roster APIs join via `shared/roster-day-type.ts` using `classes.sessionId`. Surfaces: class Students tab, My Students, attendance tracker, school-admin class roster. Summary: `1 Full Day · 1 Half Day`. Custom Mon/Fri names fall back from `className` only when `dayType` / `variantId` are empty.
+- **Birthday** on those same roster surfaces comes from `children.birthdate`. Display via `shared/student-birthday.ts` (`Jun 1, 2015` + age) so YYYY-MM-DD is not shifted by UTC. Attendance roster must return `birthdate` (class/my-students already did).
 - **Safety on roster:** session roster, class students, and My Students include allergies / medical / special needs plus emergency contact. Priority: parent user emergency fields → `emergency_contacts` → `children.emergencyContact`. Blank and “none” / “n/a” do not show Allergy/Medical badges. Helper: `shared/educator-student-safety.ts`. Day-of UI: `StudentSafetySheet` (Info does not mark attendance).
 
 ## Cache
@@ -72,19 +74,22 @@ TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/ap
 | `e2e/educator-landing-nav.spec.ts` | `/dashboard` → live dashboard, sidebar, redirects |
 | `e2e/educator-today-honesty.spec.ts` | Today weekday filter + one-tap Start + honest Staff Guide |
 | `e2e/educator-mentor-loop.spec.ts` | Classes, students, hours, notifications, settings |
+| `e2e/educator-roster-day-type.spec.ts` | Class roster + My Students + attendance show Half Day / Full Day and birthday |
 | `e2e/attendance-educator-mark.spec.ts` | Start → roster → allergy/medical Info sheet → mark present → end |
 | `e2e/educator-assessments-record.spec.ts` | Record tab `my-students` + save score |
 | `e2e/educator-invite-login.spec.ts` | Staff invite → accept password → auto `/educator/dashboard` |
 | `e2e/educator-weekly-schedule-plans.spec.ts` | Published plan overlay |
 | `e2e/quarterly-progress-report-wizard.spec.ts` | NY IHIP wizard |
 
-Seeds: `POST /api/test/setup-schedule-builder-scenario` and `setup-progress-scenario` with `linkSupabaseAuth: true`. Skip when `educatorSupabaseLinked` is false. Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md).
+Seeds: `POST /api/test/setup-schedule-builder-scenario` and `setup-progress-scenario` with `linkSupabaseAuth: true`. Day-type roster: `setup-session-day-type-admin-scenario` (`linkSupabaseAuthEducator`). Skip when `educatorSupabaseLinked` is false. Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md).
 
 ## Pitfalls
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Empty live roster / bulk attendance | `getEnrollmentsByClassId` mem-only or `classId` only | Postgres `or(classId, marketplaceClassId)` |
+| Roster shows names but no Half/Full Day | Class seat has no `dayType`; join missed session tuition or `classes.sessionId` is null | Join session-tuition rows via `shared/roster-day-type.ts`; set `classes.sessionId` for the academic session |
+| Roster birthday is a day early | `new Date("2015-06-01")` is UTC midnight | `formatBirthdayDisplay` / `RosterBirthday` (`shared/student-birthday.ts`) |
 | Roster has names but no allergy flag | `GET .../roster` was name-only; “none” allergies are not alerts | `loadEducatorStudentSafetyByChildId`; `isSafetyAlertText` |
 | Record assessment empty | `GET /api/educator/students` (needs `?email=`) | `GET /api/educator/my-students` → `{ students }` |
 | Start session 403 with instructor named on class | Assignment-only gate | `resolveSessionStartAccess` instructor fallback |
@@ -117,6 +122,8 @@ Volunteer check-in on Start Session (assigned aides are read-only). Email blast 
 | Storage | `server/dbStorage.ts` `getEnrollmentsByClassId` |
 | Query helper | `client/src/lib/educator-queries.ts` |
 | Safety | `shared/educator-student-safety.ts`, `server/lib/educator-student-safety.ts`, `StudentSafetySheet.tsx` |
+| Day type | `shared/roster-day-type.ts`, `DayTypeBadge.tsx` |
+| Birthday | `shared/student-birthday.ts`, `RosterBirthday.tsx` |
 | Staff invite | `server/lib/staff-invitations.ts`, `shared/staff-invitations.ts`, `StaffInvitePage.tsx`, `AcceptEducatorInvitationPage.tsx` |
 | Staff edit | `client/src/pages/schools/StaffEditPage.tsx`, `PUT /api/school-admin/staff/:id` |
 | Attendance UI | `AttendanceTracker.tsx`, `ActiveSession.tsx`, `StartSession.tsx` |

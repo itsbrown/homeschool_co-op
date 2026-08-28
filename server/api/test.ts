@@ -1092,26 +1092,109 @@ router.post('/setup-session-day-type-admin-scenario', async (req: Request, res: 
     const halfEnrollment = await storage.createProgramEnrollment(halfEnrollmentData as any);
     const fullEnrollment = await storage.createProgramEnrollment(fullEnrollmentData as any);
 
+    const educatorEmail = `daytype_ed_${uniqueId}@test.com`;
+    const educatorPassword = 'TestPassword123!';
+    const educator = await testDb.createTestUser({
+      email: educatorEmail,
+      username: `daytypeed_${uniqueId}`,
+      name: 'Day Type Educator',
+      role: 'educator',
+      schoolId: school.id,
+    });
+    await storage.updateUser(educator.id, { password: await bcrypt.hash(educatorPassword, 10) });
+    await db.insert(userRoles).values({
+      userId: educator.id,
+      role: 'educator',
+      schoolId: school.id,
+      isPrimary: true,
+    });
+
+    const rosterClass = await testDb.createTestClass(school.id, {
+      title: `Seekers ${uniqueId}`,
+      description: 'E2E class roster with half and full day students',
+      price: 0,
+      status: 'active',
+      instructorId: educator.id,
+      sessionId: sessionRow.id,
+    });
+    await storage.updateClass(rosterClass.id, { sessionId: sessionRow.id });
+    await storage.createEducatorClassAssignment({
+      educatorId: educator.id,
+      classId: rosterClass.id,
+      schoolId: school.id,
+      isPrimary: true,
+      canStartSession: true,
+    });
+
+    const classSeatBase = {
+      schoolId: school.id,
+      classType: 'marketplace' as const,
+      classId: null,
+      marketplaceClassId: rosterClass.id,
+      sessionId: null,
+      parentId: parent.id,
+      parentEmail,
+      totalCost: 0,
+      totalPaid: 0,
+      remainingBalance: 0,
+      depositRequired: 0,
+      paymentStatus: 'completed' as const,
+      paymentPlan: null,
+      paymentFrequency: 'one_time' as const,
+      programStartDate: sessionRow.startDate,
+      programEndDate: sessionRow.endDate,
+      status: 'enrolled' as const,
+    };
+    await storage.createProgramEnrollment(
+      createEnrollmentDataSimple({
+        ...classSeatBase,
+        childId: halfChild.id,
+        childName: `${halfChild.firstName} ${halfChild.lastName}`,
+        className: rosterClass.title,
+      }) as any,
+    );
+    await storage.createProgramEnrollment(
+      createEnrollmentDataSimple({
+        ...classSeatBase,
+        childId: fullChild.id,
+        childName: `${fullChild.firstName} ${fullChild.lastName}`,
+        className: rosterClass.title,
+      }) as any,
+    );
+
     let adminSupabaseLinked = false;
-    if (req.body?.linkSupabaseAuthAdmin === true) {
+    let educatorSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthAdmin === true || req.body?.linkSupabaseAuthEducator === true) {
       const supabaseUrl = process.env.SUPABASE_URL;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       if (!supabaseUrl || !serviceKey) {
         return res.status(400).json({
-          error: 'linkSupabaseAuthAdmin requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+          error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
         });
       }
       try {
-        adminSupabaseLinked = await linkSeedUserToSupabase({
-          dbUserId: admin.id,
-          email: admin.email,
-          password: adminPassword,
-          role: 'schoolAdmin',
-          schoolId: school.id,
-          displayName: admin.name || 'Day Type Admin',
-        });
+        if (req.body?.linkSupabaseAuthAdmin === true) {
+          adminSupabaseLinked = await linkSeedUserToSupabase({
+            dbUserId: admin.id,
+            email: admin.email,
+            password: adminPassword,
+            role: 'schoolAdmin',
+            schoolId: school.id,
+            displayName: admin.name || 'Day Type Admin',
+          });
+        }
+        if (req.body?.linkSupabaseAuthEducator === true) {
+          educatorSupabaseLinked = await linkSeedUserToSupabase({
+            dbUserId: educator.id,
+            email: educatorEmail,
+            password: educatorPassword,
+            role: 'educator',
+            schoolId: school.id,
+            displayName: educator.name || 'Day Type Educator',
+          });
+        }
       } catch (e) {
-        console.error('linkSupabaseAuthAdmin failed (day-type scenario):', e);
+        console.error('linkSupabaseAuth failed (day-type scenario):', e);
       }
     }
 
@@ -1119,14 +1202,21 @@ router.post('/setup-session-day-type-admin-scenario', async (req: Request, res: 
       success: true,
       data: {
         adminSupabaseLinked,
+        educatorSupabaseLinked,
         school: { id: school.id, name: school.name },
         admin: { id: admin.id, email: admin.email, password: adminPassword },
+        educator: { id: educator.id, email: educatorEmail, password: educatorPassword },
         parent: { id: parent.id, email: parentEmail, password: parentPassword },
         session: {
           id: sessionRow.id,
           name: sessionRow.name,
           halfDayCapacity: sessionRow.halfDayCapacity,
           fullDayCapacity: sessionRow.fullDayCapacity,
+        },
+        class: { id: rosterClass.id, title: rosterClass.title },
+        children: {
+          half: { id: halfChild.id, firstName: halfChild.firstName, lastName: halfChild.lastName, birthdate: halfChild.birthdate },
+          full: { id: fullChild.id, firstName: fullChild.firstName, lastName: fullChild.lastName, birthdate: fullChild.birthdate },
         },
         halfEnrollment: {
           id: halfEnrollment.id,
@@ -1139,6 +1229,7 @@ router.post('/setup-session-day-type-admin-scenario', async (req: Request, res: 
           dayType: 'full_day',
         },
         expectedFillSummary: '1/20 half · 1/25 full',
+        expectedRosterDayTypeSummary: '1 Full Day · 1 Half Day',
       },
     });
   } catch (error) {

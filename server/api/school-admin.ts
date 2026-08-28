@@ -12,6 +12,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmail, getBrevoApiInstance, logEmailAttempt } from '../lib/email-service';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { attachRosterDayTypes } from "../lib/roster-session-day-type";
+import { countRosterDayTypes } from "@shared/roster-day-type";
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { clearPermissionCache } from '../middleware/locationPermissions';
 import {
@@ -1418,6 +1420,7 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
 
       return {
         id: child.id,
+        childId: child.id,
         enrollmentId: enrollment.id,
         firstName: child.firstName,
         lastName: child.lastName,
@@ -1427,6 +1430,7 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
         parentEmail: parentEmail,
         parentPhone: parentPhone,
         gradeLevel: child.gradeLevel || 'Unknown',
+        birthdate: child.birthdate ?? null,
         enrollmentDate: enrollment.enrollmentDate?.toISOString() || enrollment.createdAt?.toISOString() || new Date().toISOString(),
         status: enrollment.status === 'pending_payment' ? 'Pending' : 
                 enrollment.status === 'waitlist' ? 'Waitlist' : 'Active',
@@ -1436,11 +1440,17 @@ router.get("/classes/:id/roster", supabaseAuth, async (req: any, res) => {
     }));
 
     // Filter out null entries (students that couldn't be found)
-    const validStudents = students.filter(s => s !== null);
+    const validStudents = students.filter(s => s !== null) as Array<{ childId: number }>;
+    const studentsWithDayType = await attachRosterDayTypes(
+      validStudents,
+      () => classData.sessionId ?? null,
+    );
+    const dayTypeCounts = countRosterDayTypes(studentsWithDayType.map((s) => s.dayType));
 
     res.json({
-      students: validStudents,
-      totalStudents: validStudents.length
+      students: studentsWithDayType,
+      totalStudents: studentsWithDayType.length,
+      dayTypeCounts,
     });
 
   } catch (error) {

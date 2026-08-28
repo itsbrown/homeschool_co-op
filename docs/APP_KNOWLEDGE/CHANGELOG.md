@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-08-28 (Teacher roster day type and birthdays)
+
+- Educator class Students, My Students, attendance, and school-admin class roster show Half/Full Day (joined from session tuition, not the class seat) and each student’s birthday (`Jun 1, 2015` + age) from `children.birthdate`. Parse as calendar date (`shared/student-birthday.ts`) so YYYY-MM-DD does not shift a day west of UTC. Attendance roster API now returns `birthdate`. Playwright: `e2e/educator-roster-day-type.spec.ts`.
+
 ## 2026-08-28 (Daily Fall 2026 roster snapshot through Sep 21)
 
 - GitHub Action `fall-2026-roster-snapshot.yml` runs daily 08:00 ET through **2026-09-21**, overwrites `docs/audit/fall-2026-class-rosters.csv`, appends pending→enrolled to `docs/audit/fall-2026-class-rosters-transitions.csv`. Commits go to **`docs/fall-2026-class-rosters`** (not protected `main`). Secret `PROD_DATABASE_URL` (Neon prod). Cron needs the yml on default `main`. Local refresh still: `export-fall-2026-class-rosters.ts`.

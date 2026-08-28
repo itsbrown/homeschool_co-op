@@ -14,6 +14,8 @@ import {
   skeletonSlotMatchesClassMeeting,
 } from "@shared/schedule-day-index";
 import { loadEducatorStudentSafetyByChildId } from "../lib/educator-student-safety";
+import { attachRosterDayTypes } from "../lib/roster-session-day-type";
+import { countRosterDayTypes } from "@shared/roster-day-type";
 
 const router = express.Router();
 
@@ -413,6 +415,7 @@ router.get('/my-students', async (req, res) => {
             
             return {
               id: child.id,
+              childId: child.id,
               firstName: child.firstName,
               lastName: child.lastName,
               gradeLevel: child.gradeLevel,
@@ -439,12 +442,16 @@ router.get('/my-students', async (req, res) => {
           const { child, ...student } = row!;
           return { ...student, ...locationSafety.get(child.id) };
         });
+        const studentsWithDayType = await attachRosterDayTypes(
+          validStudents,
+          () => null,
+        );
 
-        console.log(`📊 [EducatorDashboard] Found ${validStudents.length} students at user's permitted locations`);
+        console.log(`📊 [EducatorDashboard] Found ${studentsWithDayType.length} students at user's permitted locations`);
         
         return res.json({
-          students: validStudents,
-          totalStudents: validStudents.length,
+          students: studentsWithDayType,
+          totalStudents: studentsWithDayType.length,
           assignedClasses: 0,
           viewMode: 'location' // Indicate this is location-based view
         });
@@ -502,6 +509,7 @@ router.get('/my-students', async (req, res) => {
       if (child) {
         return {
           id: child.id,
+          childId: child.id,
           firstName: child.firstName,
           lastName: child.lastName,
           gradeLevel: child.gradeLevel,
@@ -517,11 +525,18 @@ router.get('/my-students', async (req, res) => {
       return null;
     }).filter(Boolean);
 
-    console.log(`[EducatorDashboard] Found ${studentsWithClasses.length} students for educator`);
+    const studentsWithDayType = await attachRosterDayTypes(
+      studentsWithClasses as Array<{ childId: number; classId?: number | null }>,
+      (row) =>
+        assignedClasses.find((c: { id: number; sessionId?: number | null }) => c.id === row.classId)
+          ?.sessionId ?? null,
+    );
+
+    console.log(`[EducatorDashboard] Found ${studentsWithDayType.length} students for educator`);
     
     res.json({
-      students: studentsWithClasses,
-      totalStudents: studentsWithClasses.length,
+      students: studentsWithDayType,
+      totalStudents: studentsWithDayType.length,
       assignedClasses: assignedClasses.length,
       viewMode: 'class' // Indicate this is class-based view
     });
@@ -714,6 +729,9 @@ router.get('/classes/:id/students', async (req, res) => {
       }
     }
 
+    const classRow = await storage.getClassById(classId);
+    const academicSessionId = classRow?.sessionId ?? null;
+
     const allChildren = await storage.getAllChildren();
     const classEnrollments = (await storage.getEnrollmentsByClassId(classId))
       .filter((enrollment) => isEducatorRosterStatus(enrollment.status));
@@ -730,6 +748,7 @@ router.get('/classes/:id/students', async (req, res) => {
 
         return {
           id: child.id,
+          childId: child.id,
           firstName: child.firstName,
           lastName: child.lastName,
           gradeLevel: child.gradeLevel,
@@ -750,13 +769,19 @@ router.get('/classes/:id/students', async (req, res) => {
         };
       });
 
-    const filteredStudents = students.filter(Boolean);
+    const filteredStudents = students.filter(Boolean) as Array<{ childId: number }>;
+    const studentsWithDayType = await attachRosterDayTypes(
+      filteredStudents,
+      () => academicSessionId,
+    );
+    const dayTypeCounts = countRosterDayTypes(studentsWithDayType.map((s) => s.dayType));
 
-    console.log(`[EducatorDashboard] Found ${filteredStudents.length} students for class ${classId}`);
+    console.log(`[EducatorDashboard] Found ${studentsWithDayType.length} students for class ${classId}`);
     
     res.json({
-      students: filteredStudents,
-      totalStudents: filteredStudents.length
+      students: studentsWithDayType,
+      totalStudents: studentsWithDayType.length,
+      dayTypeCounts,
     });
   } catch (error) {
     console.error('[EducatorDashboard] Error fetching class students:', error);
@@ -2326,6 +2351,8 @@ router.get('/sessions/:sessionId/roster', async (req, res) => {
     // Get enrollments for this class
     const enrollments = await storage.getEnrollmentsByClassId(session.classId);
     const activeEnrollments = enrollments.filter(e => isEducatorRosterStatus(e.status));
+    const classInfo = await storage.getClassById(session.classId);
+    const academicSessionId = classInfo?.sessionId ?? null;
 
     // Get existing attendance for this session
     const existingAttendance = await storage.getAttendanceBySessionId(sessionId);
@@ -2347,6 +2374,7 @@ router.get('/sessions/:sessionId/roster', async (req, res) => {
           childFirstName: child?.firstName,
           childLastName: child?.lastName,
           gradeLevel: child?.gradeLevel,
+          birthdate: child?.birthdate ?? null,
           enrollmentId: enrollment.id,
           attendance: attendance ? {
             id: attendance.id,
@@ -2367,9 +2395,13 @@ router.get('/sessions/:sessionId/roster', async (req, res) => {
           emergencyContactRelationship: safety?.emergencyContactRelationship ?? null,
         };
       });
+    const rosterWithDayType = await attachRosterDayTypes(
+      roster,
+      () => academicSessionId,
+    );
 
-    console.log(`[Attendance] Roster for session ${sessionId}: ${roster.length} students`);
-    res.json(roster);
+    console.log(`[Attendance] Roster for session ${sessionId}: ${rosterWithDayType.length} students`);
+    res.json(rosterWithDayType);
   } catch (error) {
     console.error('[Attendance] Error fetching roster:', error);
     res.status(500).json({ error: 'Failed to fetch roster' });
