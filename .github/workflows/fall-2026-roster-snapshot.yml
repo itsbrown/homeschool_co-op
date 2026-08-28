@@ -2,10 +2,12 @@
 # Overwrites docs/audit/fall-2026-class-rosters.csv and appends pending→enrolled
 # rows to docs/audit/fall-2026-class-rosters-transitions.csv.
 #
+# Commits land on docs/fall-2026-class-rosters (not main). main is protected
+# (required review + payments check), so GITHUB_TOKEN cannot push CSV there.
+# Cron only runs after this workflow file exists on the default branch.
+#
 # Required GitHub secret: PROD_DATABASE_URL — Neon production (same as .env.prod).
 # Never point this at the Railway clone / .env / asa_test.
-# Optional: ROSTER_SNAPSHOT_TOKEN — PAT with contents:write if GITHUB_TOKEN cannot
-# push to a protected default branch.
 
 name: Fall 2026 roster snapshot
 
@@ -67,6 +69,18 @@ jobs:
         if: steps.window.outputs.skip != 'true' || github.event_name == 'workflow_dispatch'
         run: node scripts/ci-npm-install.mjs
 
+      - name: Load prior snapshot CSVs
+        if: steps.window.outputs.skip != 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          SNAPSHOT_BRANCH: docs/fall-2026-class-rosters
+        run: |
+          git fetch origin "$SNAPSHOT_BRANCH" || true
+          if git rev-parse --verify "origin/$SNAPSHOT_BRANCH" >/dev/null 2>&1; then
+            git checkout "origin/$SNAPSHOT_BRANCH" -- \
+              docs/audit/fall-2026-class-rosters.csv \
+              docs/audit/fall-2026-class-rosters-transitions.csv || true
+          fi
+
       - name: Export roster
         if: steps.window.outputs.skip != 'true' || github.event_name == 'workflow_dispatch'
         env:
@@ -81,13 +95,24 @@ jobs:
 
       - name: Commit snapshot
         if: steps.window.outputs.skip != 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          SNAPSHOT_BRANCH: docs/fall-2026-class-rosters
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          roster=$(mktemp)
+          transitions=$(mktemp)
+          cp docs/audit/fall-2026-class-rosters.csv "$roster"
+          cp docs/audit/fall-2026-class-rosters-transitions.csv "$transitions"
+          git fetch origin "$SNAPSHOT_BRANCH:$SNAPSHOT_BRANCH" || git branch "$SNAPSHOT_BRANCH"
+          git checkout "$SNAPSHOT_BRANCH"
+          mkdir -p docs/audit
+          cp "$roster" docs/audit/fall-2026-class-rosters.csv
+          cp "$transitions" docs/audit/fall-2026-class-rosters-transitions.csv
           git add docs/audit/fall-2026-class-rosters.csv docs/audit/fall-2026-class-rosters-transitions.csv
           if git diff --cached --quiet; then
             echo "No roster changes"
             exit 0
           fi
           git commit -m "Refresh Fall 2026 class rosters (${{ steps.window.outputs.today }})."
-          git push
+          git push origin "$SNAPSHOT_BRANCH"

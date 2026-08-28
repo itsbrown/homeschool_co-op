@@ -341,5 +341,5 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - `docs/E2E_COMMANDS.md` — Playwright command + spec catalog
 - `.cursor/rules/e2e-seed-gate.mdc` — always-on seed/login gate
 - `client/src/lib/queryClient.ts` — API client configuration
-- `.github/workflows/fall-2026-roster-snapshot.yml` — daily prod roster CSV through 2026-09-21 (`PROD_DATABASE_URL`)
+- `.github/workflows/fall-2026-roster-snapshot.yml` — daily prod roster CSV through 2026-09-21 on `docs/fall-2026-class-rosters` (`PROD_DATABASE_URL`)
 - `replit.md` — project documentation and architecture notes

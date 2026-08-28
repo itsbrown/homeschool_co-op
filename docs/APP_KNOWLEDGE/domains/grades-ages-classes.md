@@ -28,7 +28,11 @@ How child grade/age relate to classes and enrollment **today**.
 | Surface | Path | Grade behavior |
 |---------|------|----------------|
 | Class create/edit | `client/src/pages/schools/SchoolClassCreationPage.tsx` | Multi-select → `gradeLevels` slugs (`littles`…`12th-grade`) |
-| Class details | `client/src/pages/schools/SchoolClassDetailsPage.tsx` | Display map for slugs; students tab |
+| Class details | `client/src/pages/schools/SchoolClassDetailsPage.tsx` | Display map for slugs; students tab includes Day Type from session tuition |
+| Educator class details | `/educator/classes/:id` Students tab | Day Type from session tuition; CSV includes it |
+| Educator My Students | `/educator/students` | Same join per assigned class `sessionId` |
+| Educator attendance | `/educator/session/:id` | Badge + `N Full Day · M Half Day` on the day-of roster |
+| School admin class roster | `/schools/classes/:id/enrollments` and class details Students | `GET /api/school-admin/classes/:id/roster` includes `dayType` |
 | Classes list filter | `client/src/pages/schools/ClassesPage.tsx` | Client filter on `cls.gradeLevel` (singular — may not match array field) |
 | Parent catalog filter | `client/src/components/registration/ProgramList.tsx` | `program.gradeLevels.includes(filter)` — browse filter only |
 | Parent profile (admin) | `client/src/pages/schools/ParentProfilePage.tsx` | Child cards: grade + birthdate; class titles on **Enrollments** tab via `enrollment.className` |
@@ -50,7 +54,7 @@ How child grade/age relate to classes and enrollment **today**.
 
 ## Key files
 
-- `docs/audit/fall-2026-class-rosters.csv` — Fall 2026 class rosters (day type + pending + parent contact); daily CI through 2026-09-21 (`fall-2026-roster-snapshot.yml`); refresh via `server/scripts/export-fall-2026-class-rosters.ts`
+- `docs/audit/fall-2026-class-rosters.csv` — Fall 2026 class rosters (day type + pending + parent contact); daily CI through 2026-09-21 on branch `docs/fall-2026-class-rosters` (`fall-2026-roster-snapshot.yml`); refresh via `server/scripts/export-fall-2026-class-rosters.ts`
 - `shared/schema.ts` — `children`, `classes`, `programEnrollments`
 - `shared/grade-levels.ts` — normalize, `gradeAsOfDate` (Dec 31), age−5 helpers, `GRADE_LEVEL_OPTIONS`
 - `server/scripts/apply-fall-move-up-grades-production.ts` — Fall class seats, move-up only, no placement sync
