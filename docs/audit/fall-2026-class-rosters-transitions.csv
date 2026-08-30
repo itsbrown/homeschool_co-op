@@ -1,2 +1,5 @@
 as_of,change,class,child,child_id,from_seat,to_seat,from_status,to_status,from_pending,to_pending,parent,email
 2026-08-29,pending_removed,Pioneers & Patriots | Brighton | F2026,Mackenzie Bochno,268,not on roster,,pending_payment,,"$1,500 unpaid",,DeAnna Bochno,d.bochno@yahoo.com
+2026-08-30,pending_added,Pioneers & Patriots | Brighton | F2026,Mackenzie Bochno,268,,not on roster,,pending_payment,,"$1,500 unpaid",DeAnna Bochno,d.bochno@yahoo.com
+2026-08-30,pending_added,Seekers | Brighton | F2026,Ella Torres,111,,not on roster,,pending_payment,,"$1,500 unpaid",Tiffany Torres,tiffanykarnath@yahoo.com
+2026-08-30,pending_added,Yankee Doodle | Brighton | F2026,Reyna Torres,112,,not on roster,,pending_payment,,"$1,500 unpaid",Tiffany Torres,tiffanykarnath@yahoo.com
