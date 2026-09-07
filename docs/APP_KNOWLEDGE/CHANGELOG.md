@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-09-07 (Fall 2026 parents enrolled + in cart)
+
+- Live prod parent list for Fall 2026 session tuition (session **#2**, no class link): **53 enrolled** + **10 in cart** = **63** households. Cart-only includes newest Virginia Klun #245 and Berenice De los santos #248.
+- Filter `family_fall_status` = `enrolled` vs `in_cart`. Children, campus, member ID, paid/cost/balance on each row.
+- CSV: `docs/audit/fall-2026-parents-enrolled-and-cart.csv`.
+
 ## 2026-08-28 (Teacher roster day type and birthdays)
 
 - Educator class Students, My Students, attendance, and school-admin class roster show Half/Full Day (joined from session tuition, not the class seat) and each student’s birthday (`Jun 1, 2015` + age) from `children.birthdate`. Parse as calendar date (`shared/student-birthday.ts`) so YYYY-MM-DD does not shift a day west of UTC. Attendance roster API now returns `birthdate`. Playwright: `e2e/educator-roster-day-type.spec.ts`.
