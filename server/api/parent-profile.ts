@@ -791,6 +791,17 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
       children.map((c) => c.id),
     );
 
+    let doorCode: string | null = null;
+    let doorCodesEnabled = false;
+    try {
+      const { getParentAccessCodeView } = await import('../lib/family-access-codes');
+      const access = await getParentAccessCodeView(parent.id);
+      doorCodesEnabled = access.enabled;
+      doorCode = access.code;
+    } catch (err) {
+      console.warn('[parent-profile] door code lookup failed:', err);
+    }
+
     const profile = {
       parent: {
         id: parent.id,
@@ -805,6 +816,8 @@ router.get('/:parentId', supabaseAuth, async (req: any, res) => {
         memberId: parent.memberId || null,
         locationId: parentCampus.locationId,
         locationName: parentCampus.locationName,
+        doorCode,
+        doorCodesEnabled,
       },
       children: await Promise.all(
         childrenWithCampus.map(async ({ child, campus }) => {

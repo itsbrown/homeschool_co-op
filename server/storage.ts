@@ -4086,6 +4086,7 @@ export class MemStorage implements IStorage {
       ...location,
       isActive: location.isActive ?? true,
       timezone: location.timezone || 'UTC',
+      doorCodesEnabled: location.doorCodesEnabled ?? false,
       createdAt: now,
       updatedAt: now
     };

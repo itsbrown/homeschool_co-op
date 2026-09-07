@@ -93,6 +93,22 @@ export async function updateParentLocation(
       })
       .where(eq(users.id, parentId));
 
+    if (previousLocationId != null && previousLocationId !== newLocationId) {
+      try {
+        const { revokeActiveForParent } = await import('../lib/family-access-codes');
+        await revokeActiveForParent({
+          parentId,
+          schoolId: context.schoolId,
+          locationId: previousLocationId,
+          actorId: context.actorId,
+          actorEmail: context.actorEmail,
+          actorRole: context.actorRole,
+        });
+      } catch (err) {
+        console.warn('[family-access-codes] campus transfer revoke failed:', err);
+      }
+    }
+
     // Keep user_locations (permissions / grants) aligned with profile campus
     const { syncUserLocationForSchool } = await import('../lib/sync-user-location-for-school');
     await syncUserLocationForSchool(parentId, context.schoolId, newLocationId);

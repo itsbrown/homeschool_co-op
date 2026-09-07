@@ -13,6 +13,7 @@ description: Database schema conventions, data relationships, storage patterns, 
 - **`getDb()` is one-shot**: `connectionTested` is set on first call — a startup DB timeout causes all subsequent calls to throw for the lifetime of the process; never assume permanent failure from a single startup error
 - **Distinguish DB errors from not-found**: A throw from `getDb()` means the DB is unreachable; `null`/`undefined` means not found — handle these two cases separately in any access-control path
 - **Postgres `date` columns require `YYYY-MM-DD` strings**: Never pass JavaScript `Date` objects — the driver throws `ERR_INVALID_ARG_TYPE`
+- **Do not use `db.execute(...).rows`**: drizzle + postgres-js returns a row **array** (no `.rows`). That throws or silently defaults. Prefer `db.select()` (examples: `getSchoolFeatures`, collections `loadParentInfo`).
 
 ## Database Connection
 

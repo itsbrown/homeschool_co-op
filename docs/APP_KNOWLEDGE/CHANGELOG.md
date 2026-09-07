@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-09-07 (Family door codes)
+
+- Optional per-campus keypad lookup: school flag `doorCodes` (default off) + `locations.door_codes_enabled`. Table `family_access_codes` (one active code per parent per campus). Parents see an above-the-fold Home banner; campus transfer revokes the old code. E2E: `school-admin-door-codes.spec.ts`, `parent-door-code.spec.ts`.
+- Seeds that open unified User Profile **Family & Billing** must insert `user_roles` (`role='parent'`, `school_id`). `users.role` alone is not enough (`viewFamily` is label-derived).
+- `storage.getSchoolFeatures` must Drizzle-select `schools.enabledFeatures` — `db.execute().rows` is undefined under postgres-js (same class of bug as collections autopay).
+- Query-string TanStack keys must be one URL string; array segments become path (`access-codes?locationId=` vs `/access-codes/123`).
+
 ## 2026-09-07 (Fall 2026 parents enrolled + in cart)
 
 - Live prod parent list for Fall 2026 session tuition (session **#2**, no class link): **53 enrolled** + **10 in cart** = **63** households. Cart-only includes newest Virginia Klun #245 and Berenice De los santos #248.

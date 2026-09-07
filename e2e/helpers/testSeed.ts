@@ -677,3 +677,46 @@ export async function postSetupAdditiveNavScenario(
   }
   return { response, json };
 }
+
+export type SetupFamilyAccessCodeScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    adminSupabaseLinked?: boolean;
+    parentSupabaseLinked?: boolean;
+    admin: { id: number; email: string; password: string };
+    parent: { id: number; email: string; password: string };
+    parentB: { id: number; email: string; password: string };
+    school: { id: number; name: string };
+    keyedCampus: { id: number; name: string };
+    otherCampus: { id: number; name: string };
+    assignedCode: string;
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupFamilyAccessCodeScenario(
+  request: APIRequestContext,
+  body: {
+    linkSupabaseAuth?: boolean;
+    linkSupabaseAuthAdmin?: boolean;
+    linkSupabaseAuthParent?: boolean;
+    assignCode?: boolean;
+  } = {},
+): Promise<{ response: APIResponse; json: SetupFamilyAccessCodeScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-family-access-code-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupFamilyAccessCodeScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupFamilyAccessCodeScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}

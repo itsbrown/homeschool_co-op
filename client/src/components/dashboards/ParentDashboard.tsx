@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2, Megaphone, MapPin, ShoppingBag } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2, Megaphone, MapPin, ShoppingBag, KeyRound } from "lucide-react";
 import {
   formatSessionSignupCta,
   formatSessionStartDate,
@@ -30,6 +30,12 @@ import {
   PARENT_MEMBER_ID_QUERY_KEY,
   type ParentMemberIdResponse,
 } from "@/lib/parent-member-id";
+import {
+  formatDoorCodeLabel,
+  PARENT_ACCESS_CODE_QUERY_KEY,
+  shouldShowParentDoorCode,
+  type ParentAccessCodeResponse,
+} from "@/lib/parent-access-code";
 import { getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
 import { resolveEnrollmentOutstandingForOverview } from "@/utils/paymentOverviewTotals";
 import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
@@ -405,6 +411,10 @@ export default function ParentDashboard() {
     queryKey: [...PARENT_MEMBER_ID_QUERY_KEY],
     queryFn: fetchParentMemberId,
     enabled: !!session,
+  });
+
+  const { data: accessCodeData } = useQuery<ParentAccessCodeResponse>({
+    queryKey: [...PARENT_ACCESS_CODE_QUERY_KEY],
   });
 
   // Mutation to update member ID
@@ -975,6 +985,47 @@ export default function ParentDashboard() {
                 </AlertDescription>
               </Alert>
             ))}
+          {shouldShowParentDoorCode(accessCodeData) && (
+            <div
+              className="rounded-xl border-2 border-primary/30 bg-primary/5 p-5 shadow-sm"
+              data-testid="dashboard-door-code"
+            >
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <KeyRound className="h-6 w-6" aria-hidden />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {formatDoorCodeLabel(accessCodeData?.locationName)}
+                    </p>
+                    <p
+                      className="font-mono text-3xl font-bold tracking-[0.35em] text-foreground"
+                      data-testid="dashboard-door-code-value"
+                    >
+                      {accessCodeData?.code}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Use this at the keypad. Don’t share it outside your household.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  className="h-11 w-full sm:w-auto"
+                  onClick={() => {
+                    if (accessCodeData?.code) {
+                      navigator.clipboard.writeText(accessCodeData.code);
+                      toast({ title: "Copied", description: "Door code copied to clipboard." });
+                    }
+                  }}
+                  data-testid="dashboard-door-code-copy"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy
+                </Button>
+              </div>
+            </div>
+          )}
           {/* Stats Cards Row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card>

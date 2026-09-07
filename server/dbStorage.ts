@@ -243,10 +243,11 @@ export class DatabaseStorage implements IStorage {
   async getSchoolFeatures(schoolId: number): Promise<Record<string, boolean>> {
     const db = await getDb();
     try {
-      const result = await db.execute(sql`
-        SELECT enabled_features AS features FROM schools WHERE id = ${schoolId} LIMIT 1
-      `);
-      const row = result.rows[0] as { features?: unknown } | undefined;
+      const [row] = await db
+        .select({ features: schools.enabledFeatures })
+        .from(schools)
+        .where(eq(schools.id, schoolId))
+        .limit(1);
       return normalizeSchoolFeatures(row?.features ?? {});
     } catch (err: unknown) {
       console.warn(`getSchoolFeatures: lookup failed for school ${schoolId}`, err);

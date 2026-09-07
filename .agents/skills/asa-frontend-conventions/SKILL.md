@@ -25,6 +25,7 @@ const { data, isLoading } = useQuery<ResponseType>({
 - No `queryFn` needed — default fetcher attaches auth token and active role header
 - Hierarchical keys use arrays: `queryKey: ['/api/classes', id]` — never template literals
 - Array keys auto-join into URL path: `['/api/staff', 5]` → `/api/staff/5`
+- Query-string GETs: put the full URL in **one** string key. Extra array segments become path (`['/api/school-admin/access-codes', id]` → `/access-codes/123`, not `?locationId=`).
 - `staleTime: Infinity` by default — data doesn't auto-refetch
 
 ### Mutations — `apiRequest`
@@ -123,6 +124,7 @@ const mutation = useMutation({
 - **Form silently won't submit** → validation fails on fields without visible error display → log `form.formState.errors` to find the failing field
 - **`SelectItem` crashes at runtime** → missing `value` prop on `<SelectItem>` → always include `value="..."` prop
 - **Cache invalidation doesn't work** → used template literal queryKey `` [`/api/classes/${id}`] `` → use array segments `['/api/classes', id]`
+- **Query-string GET 404s** → `['/api/school-admin/access-codes', locationId]` hits `/access-codes/:id` → use `` [`/api/school-admin/access-codes?locationId=${id}`] ``
 - **`['/api/enrollments']` vs `['/api/parent/enrollments']`** → these are two separate cache key prefixes; invalidating one does not invalidate the other. Admin enrollment views use `/api/enrollments`; parent payment balance and Outstanding Balance card use `/api/parent/enrollments`. After any payment, invalidate both if the data is visible to both roles.
 - **API calls return 401 unexpectedly** → used bare `fetch()` without auth headers → use `apiRequest` or the default TanStack Query fetcher
 - **Hardcoded cultural/religious content in templates** → used specific subjects like "Arabic Language Arts" or "Islamic Studies" as sample data → always use neutral examples like "Math 101", "Science Basics"

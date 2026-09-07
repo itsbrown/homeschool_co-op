@@ -10,7 +10,8 @@ Parents register with a **school registration code**, pick a location when offer
 
 - **Parent campus on signup** — school-code registration must set **four** places: `user_locations` (permissions), `users.location_id` (profile), each child’s `children.location_id`, and `school_students.location_id`. `ensureParentRegistrationLocation` requires a selected campus when the school has campuses, and **fails closed** (400) when the school has zero campuses. Registration UI does **not** auto-select the first campus.
 - **No silent first-campus default** — `resolveSchoolAndChildLocation` returns `locationId: null` when preferred is missing/invalid; it does not fall back to `locations[0]`.
-- **Family campus transfer** — school admin changes parent campus via `PATCH /api/locations/parent/:parentId/location` (`updateParentLocation` in `locationSyncService.ts`). Cascades to all children + `school_students`, syncs `user_locations`, writes `audit_logs`. Soft transfer: does **not** move/cancel existing enrollments or payment plans.
+- **Family campus transfer** — school admin changes parent campus via `PATCH /api/locations/parent/:parentId/location` (`updateParentLocation` in `locationSyncService.ts`). Cascades to all children + `school_students`, syncs `user_locations`, writes `audit_logs`. Soft transfer: does **not** move/cancel existing enrollments or payment plans. **Revokes** any active family door code at the old campus.
+- **Family door codes** — optional keypad lookup (`schools.enabled_features.doorCodes` default false **and** `locations.door_codes_enabled`). One active code per household per campus in `family_access_codes`. Parents see it as an above-the-fold Home banner (`dashboard-door-code`) plus Settings. Staff assign on Parent Profile or CSV import on Location Management. Educators never see codes. Audit metadata uses last4 only. Unified User Profile shows Family & Billing only when `user_roles` has `parent` at that school. Location Management “Door codes” tab needs school feature on (`GET /api/school-admin/features`).
 - **Admin school** = school where `schools.admin_id = user.id`, not only `users.school_id`.
 - **Public locations** must be readable **before** auth (registration landing).
 - **POST /api/locations** must accept body `schoolId` for the registration school when admin is misaligned; server resolves via `resolveRequestedSchoolIdForUser`.
@@ -72,6 +73,9 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 | Need to stop self-serve Fall signup but still take case-by-case | Turning off Enrollment Open alone shows a generic empty state | Set `enrollment_closed_message` on the session (migration `257`); parents see it via `GET /api/admin/sessions/open` → `closedNotices` on `/enroll` + dashboard |
 | Returning members should enroll before new school-code families | Enrollment Open is visible to any logged-in parent | Set **Members only (member ID)** (`sessions.require_member_id` / `classes.require_member_id`, migration `262`). Not the public-store `members_only` fee flag. Audit null `users.member_id` before enabling in prod. |
 | `/schools/students` stuck on “Loading students…” | `GET /api/school-admin/students` N+1 (all users × `getUserRolesByUserId`) or sync loading full tables | Use v5 set-based query in `school-admin.ts`; RoleSwitcher console warns are unrelated |
+| Door codes tab missing on Location Management | School feature `doorCodes` is off (default) | Super-admin School Edit → Family door codes, then Edit location checkbox (`name="doorCodesEnabled"` native checkbox for FormData) |
+| Access-codes list 404 / empty | TanStack `queryKey` array joined as path `/access-codes/:id` | Use `` [`/api/school-admin/access-codes?locationId=${id}`] `` |
+| Family & Billing tab missing door-code card | Unified profile `viewFamily` needs `user_roles` parent at that school; `users.role` is not enough | Seed/insert `user_roles` (`role='parent'`, `school_id`) |
 
 ## Key files
 
@@ -89,7 +93,10 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 - `server/api/school-admin.ts` — `GET /students` + `POST /students/sync` (set-based roster)
 - `client/src/pages/schools/StudentsPage.tsx` — school admin roster UI
 - `client/src/pages/RegistrationLandingPage.tsx` — conscious campus select (no auto-first)
-- `client/src/pages/schools/ParentProfilePage.tsx` — admin campus change UI (defer confirm open after Select; E2E: `e2e/parent-profile-campus-change.spec.ts`)
+- `client/src/pages/schools/ParentProfilePage.tsx` — admin campus change UI (defer confirm open after Select; E2E: `e2e/parent-profile-campus-change.spec.ts`); family door code assign/clear
+- `server/lib/family-access-codes.ts` — door-code CRUD, CSV import, revoke on campus transfer
+- `server/api/family-access-codes.ts` — admin CRUD/import + `GET /api/parent/access-code`
+- `server/migrations/263-family-access-codes.sql` — `family_access_codes` + `locations.door_codes_enabled`
 - `server/migrations/locations-schema-align.sql` — prod-safe location columns
 
 ## Location activation threshold (planned — product locked 2026-05-26)

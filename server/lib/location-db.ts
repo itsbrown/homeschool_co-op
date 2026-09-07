@@ -24,6 +24,7 @@ const LOCATION_COLUMNS = `
   capacity,
   is_active,
   timezone,
+  door_codes_enabled,
   activation_threshold,
   activation_status,
   notice_started_at,
@@ -51,6 +52,7 @@ function mapLocationRow(row: Record<string, unknown>): Location {
     capacity: row.capacity != null ? Number(row.capacity) : null,
     isActive: Boolean(row.is_active),
     timezone: String(row.timezone ?? 'America/New_York'),
+    doorCodesEnabled: Boolean(row.door_codes_enabled),
     activationThreshold:
       row.activation_threshold != null ? Number(row.activation_threshold) : null,
     activationStatus:
@@ -114,6 +116,7 @@ export async function ensureLocationsTable(): Promise<void> {
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS activated_at timestamp;
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS collection_deadline timestamp;
     ALTER TABLE locations ADD COLUMN IF NOT EXISTS activation_notice_hours integer NOT NULL DEFAULT 72;
+    ALTER TABLE locations ADD COLUMN IF NOT EXISTS door_codes_enabled boolean NOT NULL DEFAULT false;
   `);
   await pg.unsafe(`
     ALTER TABLE sessions ADD COLUMN IF NOT EXISTS location_id integer REFERENCES locations(id);
@@ -251,8 +254,9 @@ export async function createLocationCore(location: InsertLocation): Promise<Loca
     `INSERT INTO locations (
       school_id, name, code, address, city, state, zip_code,
       phone_number, email, manager_name, capacity, is_active, timezone,
-      activation_threshold, activation_status, collection_deadline, activation_notice_hours
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      activation_threshold, activation_status, collection_deadline, activation_notice_hours,
+      door_codes_enabled
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
     RETURNING ${LOCATION_COLUMNS}`,
     [
       location.schoolId,
@@ -272,6 +276,7 @@ export async function createLocationCore(location: InsertLocation): Promise<Loca
       hasThreshold ? activationStatus : 'activated',
       location.collectionDeadline ?? null,
       location.activationNoticeHours ?? 72,
+      location.doorCodesEnabled ?? false,
     ],
   );
   const row = rows[0] as Record<string, unknown> | undefined;
@@ -319,6 +324,10 @@ export async function updateLocationCore(
       update.collectionDeadline !== undefined
         ? update.collectionDeadline
         : existing.collectionDeadline,
+    doorCodesEnabled:
+      update.doorCodesEnabled !== undefined
+        ? update.doorCodesEnabled
+        : existing.doorCodesEnabled,
   };
 
   const pg = getRawPg();
@@ -341,6 +350,7 @@ export async function updateLocationCore(
       activation_status = $16,
       collection_deadline = $17,
       activation_notice_hours = $18,
+      door_codes_enabled = $19,
       updated_at = now()
      WHERE id = $1
      RETURNING ${LOCATION_COLUMNS}`,
@@ -363,6 +373,7 @@ export async function updateLocationCore(
       merged.activationStatus,
       merged.collectionDeadline,
       merged.activationNoticeHours ?? 72,
+      merged.doorCodesEnabled ?? false,
     ],
   );
   const row = rows[0] as Record<string, unknown> | undefined;

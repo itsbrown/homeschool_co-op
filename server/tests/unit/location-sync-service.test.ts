@@ -57,6 +57,11 @@ jest.mock('../../lib/sync-user-location-for-school', () => ({
   syncUserLocationForSchool: (...args: unknown[]) => syncUserLocationForSchool(...args),
 }));
 
+const revokeActiveForParent = jest.fn(async () => ({ revoked: 1 }));
+jest.mock('../../lib/family-access-codes', () => ({
+  revokeActiveForParent: (...args: unknown[]) => revokeActiveForParent(...args),
+}));
+
 import { getDb } from '../../db';
 import { updateParentLocation } from '../../services/locationSyncService';
 
@@ -102,6 +107,13 @@ describe('updateParentLocation', () => {
       childrenUpdated: 1,
     });
     expect(syncUserLocationForSchool).toHaveBeenCalledWith(135, 2, 4);
+    expect(revokeActiveForParent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentId: 135,
+        schoolId: 2,
+        locationId: 3,
+      }),
+    );
     expect(db.update).toHaveBeenCalled();
     expect(db.insert).toHaveBeenCalled();
   });

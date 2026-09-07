@@ -12,9 +12,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { useSchoolAdmin } from '@/hooks/useSchoolAdmin'
-import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle, Trash2, Edit, Power } from 'lucide-react'
+import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle, Trash2, Edit, Power, FileSpreadsheet } from 'lucide-react'
 import { apiRequest } from '@/lib/queryClient'
 import { formatFetchErrorMessage } from '@/lib/formatFetchError'
+import { useSchoolFeatures } from '@/lib/useSchoolFeatures'
+import { DoorCodeCsvImportDialog } from '@/components/admin/DoorCodeCsvImportDialog'
 
 interface LocationOverview {
   id: number
@@ -29,6 +31,7 @@ interface LocationOverview {
   activationStatus?: string | null
   eligibleStudentCount?: number
   chargeScheduledAt?: string | null
+  doorCodesEnabled?: boolean
 }
 
 interface Student {
@@ -62,8 +65,10 @@ export default function LocationManagementPage() {
   const [editingLocation, setEditingLocation] = useState<Location | null>(null)
   const { toast } = useToast()
   const queryClient = useQueryClient()
-
   const { hasSchool } = useSchoolAdmin()
+  const { hasFeature } = useSchoolFeatures()
+  const doorCodesFeatureOn = hasFeature('doorCodes')
+  const [doorCodeImportOpen, setDoorCodeImportOpen] = useState(false)
 
   const { data: assignableSchoolsData, isLoading: isLoadingAssignableSchools } = useQuery<{
     schools: AssignableSchool[]
@@ -141,6 +146,13 @@ export default function LocationManagementPage() {
   // Fetch user location permissions
   const { data: permissionsData } = useQuery({
     queryKey: ['/api/school-admin/user-locations/my-permissions']
+  })
+
+  const { data: doorCodesData } = useQuery<{
+    codes: Array<{ parentId: number; parentEmail: string; parentName: string; code: string }>
+  }>({
+    queryKey: [`/api/school-admin/access-codes?locationId=${selectedLocationId}`],
+    enabled: doorCodesFeatureOn && !!selectedLocationId,
   })
 
   // Create location mutation
@@ -371,7 +383,8 @@ export default function LocationManagementPage() {
       email: formData.get('email') as string || undefined,
       managerName: formData.get('managerName') as string || undefined,
       capacity: formData.get('capacity') ? parseInt(formData.get('capacity') as string) : undefined,
-      timezone: formData.get('timezone') as string || 'America/New_York'
+      timezone: formData.get('timezone') as string || 'America/New_York',
+      doorCodesEnabled: formData.get('doorCodesEnabled') === 'on',
     }
 
     updateLocationMutation.mutate({ id: editingLocation.id, locationData })
@@ -789,6 +802,23 @@ export default function LocationManagementPage() {
                   </div>
                 </div>
                 
+                {doorCodesFeatureOn && (
+                  <label className="flex items-center justify-between rounded-lg border p-3 gap-3">
+                    <div>
+                      <span className="text-sm font-medium">This campus uses family door codes</span>
+                      <p className="text-xs text-muted-foreground">Parents see their keypad code on Home.</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      id="edit-doorCodesEnabled"
+                      name="doorCodesEnabled"
+                      defaultChecked={editingLocation.doorCodesEnabled === true}
+                      data-testid="switch-location-door-codes"
+                      className="h-4 w-4"
+                    />
+                  </label>
+                )}
+
                 <div className="flex justify-end space-x-2 pt-4">
                   <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                     Cancel
@@ -855,10 +885,15 @@ export default function LocationManagementPage() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
+        <TabsList className="w-full sm:w-auto h-auto flex flex-wrap justify-start">
           <TabsTrigger value="overview" className="text-xs sm:text-sm">Location Overview</TabsTrigger>
           <TabsTrigger value="students" className="text-xs sm:text-sm">Students by Location</TabsTrigger>
           <TabsTrigger value="permissions" className="text-xs sm:text-sm">My Permissions</TabsTrigger>
+          {doorCodesFeatureOn && (
+            <TabsTrigger value="door-codes" className="text-xs sm:text-sm" data-testid="tab-door-codes">
+              Door codes
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -1115,6 +1150,81 @@ export default function LocationManagementPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {doorCodesFeatureOn && (
+          <TabsContent value="door-codes" className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>Family door codes</CardTitle>
+                  <CardDescription>
+                    Codes already programmed on this campus keypad. Parents see them on Home.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                    <SelectTrigger className="w-[220px]" data-testid="select-door-code-location">
+                      <SelectValue placeholder="Select a campus" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations.map((location) => (
+                        <SelectItem key={location.id} value={location.id.toString()}>
+                          {location.name}
+                          {location.doorCodesEnabled ? "" : " (off)"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    disabled={!selectedLocationId}
+                    onClick={() => setDoorCodeImportOpen(true)}
+                    data-testid="button-import-door-codes"
+                  >
+                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                    Import CSV
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {selectedLocationId && locations.find((l) => String(l.id) === selectedLocationId)?.doorCodesEnabled === false ? (
+                  <p className="text-sm text-muted-foreground">
+                    Turn on door codes for this campus in Edit location first.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Family</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Code</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(doorCodesData?.codes ?? []).map((row) => (
+                        <TableRow key={row.parentId} data-testid={`door-code-row-${row.parentId}`}>
+                          <TableCell>{row.parentName}</TableCell>
+                          <TableCell>{row.parentEmail}</TableCell>
+                          <TableCell className="font-mono tracking-widest">{row.code}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+            {selectedLocationId && (
+              <DoorCodeCsvImportDialog
+                open={doorCodeImportOpen}
+                onOpenChange={setDoorCodeImportOpen}
+                locationId={Number(selectedLocationId)}
+                locationName={
+                  locations.find((l) => String(l.id) === selectedLocationId)?.name ?? "Campus"
+                }
+              />
+            )}
+          </TabsContent>
+        )}
 
         <TabsContent value="permissions" className="space-y-4">
           <Card>
