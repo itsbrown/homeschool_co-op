@@ -37,6 +37,7 @@ description: >-
 | Auth, API tenancy | `asa-auth-patterns` |
 | Form Builder, public forms, mentor application | `domains/custom-forms-public-access.md` |
 | Educator / mentor `/educator/*` | `domains/educator-ui.md` |
+| Assessments, Lexile KPIs, multi-state standards | `domains/student-progress-assessments.md` + `domains/school-analytics.md` |
 
 ## Maintenance workflow
 

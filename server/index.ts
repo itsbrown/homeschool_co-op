@@ -41,6 +41,7 @@ import assessmentUploadRouter from "./api/assessment-upload";
 import progressRouter from "./api/progress";
 import progressInsightsRouter from "./api/progress-insights";
 import progressAnalyticsRouter from "./api/progress-analytics";
+import educationStandardsRouter from "./api/education-standards";
 import supplyListsRouter, { parentSupplyListRouter } from "./api/supply-lists";
 import schoolAnalyticsRouter from "./api/school-analytics";
 import telemetryActivityRouter from "./api/telemetry-activity";
@@ -165,6 +166,11 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 // Object storage: /objects/* (private) and /public/* (public catalog assets)
 registerObjectStorageRoutes(app);
 
+// Education standards schema + US/NY seed (idempotent)
+void import("./lib/ensure-education-standards-schema")
+  .then(({ ensureEducationStandardsSchema }) => ensureEducationStandardsSchema())
+  .catch((err) => console.error("⚠️ ensureEducationStandardsSchema failed (non-fatal):", err));
+
 // E2E presigned upload stub — accepts PUT from uploadClient during Playwright runs
 if (isE2eObjectStorageStubEnabled()) {
   app.put(
@@ -248,6 +254,7 @@ app.use("/api/assessment-upload", assessmentUploadRouter);
 app.use("/api/progress", progressRouter);
 app.use("/api/progress/insights", progressInsightsRouter);
 app.use("/api/progress/analytics", progressAnalyticsRouter);
+app.use("/api/education-standards", educationStandardsRouter);
 app.use("/api/supply-lists", supplyListsRouter);
 app.use("/api/parent/supply-list", parentSupplyListRouter);
 app.use("/api/school-analytics", schoolAnalyticsRouter);

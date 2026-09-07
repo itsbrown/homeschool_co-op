@@ -33,8 +33,8 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 | [../E2E_COMMANDS.md](../E2E_COMMANDS.md) | Playwright: npm scripts, per-spec commands, seeds (**update catalog when adding `e2e/*.spec.ts`**). Seed/login specs use `requireLinkedSeed` (skip ≠ pass). |
 | [domains/schedule-and-lesson-planning.md](./domains/schedule-and-lesson-planning.md) | Week templates/plans, parent Calendar hub (`/schedule`), family ICS, school-admin events |
 | [domains/grade-placement.md](./domains/grade-placement.md) | Auto-place by grade: campus + session-paid + grade → roster; preview/reason codes |
-| [domains/student-progress-assessments.md](./domains/student-progress-assessments.md) | F-14 assessments, Lexile, progress tracking audit |
-| [domains/school-analytics.md](./domains/school-analytics.md) | Engagement, cart funnel, progress charts, telemetry |
+| [domains/student-progress-assessments.md](./domains/student-progress-assessments.md) | F-14 assessments, Lexile, progress tracking, multi-state standards/KPIs |
+| [domains/school-analytics.md](./domains/school-analytics.md) | Engagement, cart funnel, progress charts, jurisdiction KPI, telemetry |
 | [domains/observability.md](./domains/observability.md) | Sentry, error telemetry, SendGrid webhooks, report audit |
 | [domains/public-store.md](./domains/public-store.md) | Public storefront `/store/:slug`, store lane checkout, admin |
 | [domains/supply-lists.md](./domains/supply-lists.md) | Class/session supply items; household shopping list; shop/affiliate links |

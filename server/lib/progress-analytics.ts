@@ -17,6 +17,13 @@ import {
   parseGradeLevelScore,
   lexileFromGradeLevel,
 } from "./parse-lexile-range";
+import {
+  resolveSchoolJurisdiction,
+  getKpiThresholds,
+  thresholdForGrade,
+  classifyLexileBand,
+  fallbackLexileThreshold,
+} from "./education-standards";
 
 const READING_CATEGORIES = new Set(["reading", "phonics", "language_arts"]);
 
@@ -24,6 +31,7 @@ export interface SchoolLiteracyAnalyticsOptions {
   schoolYear?: string;
   sessionId?: number;
   locationId?: number;
+  jurisdictionCode?: string;
 }
 
 function schoolYearBounds(schoolYear?: string): { start: Date; end: Date } | null {
@@ -49,6 +57,15 @@ function monthKey(d: Date): string {
   return d.toLocaleString("default", { month: "short" });
 }
 
+function median(nums: number[]): number | null {
+  if (!nums.length) return null;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+    : sorted[mid];
+}
+
 export async function buildSchoolLiteracyAnalytics(
   schoolId: number,
   options: SchoolLiteracyAnalyticsOptions = {},
@@ -56,6 +73,13 @@ export async function buildSchoolLiteracyAnalytics(
   const db = await getDb();
   const schoolYear = options.schoolYear || currentSchoolYear();
   const bounds = schoolYearBounds(schoolYear);
+
+  const jurisdiction = await resolveSchoolJurisdiction(schoolId, options.jurisdictionCode);
+  const { thresholds, jurisdiction: kpiJurisdiction } = await getKpiThresholds({
+    jurisdictionCode: jurisdiction.code,
+    subject: "ela",
+    metric: "lexile",
+  });
 
   const types = await db
     .select()
@@ -106,6 +130,8 @@ export async function buildSchoolLiteracyAnalytics(
   let withData = 0;
   const statusBreakdown: Record<string, number> = {};
   const monthlyMap = new Map<string, number>();
+  /** Per-month: latest Lexile per child that month (for cohort median). */
+  const monthlyChildLexile = new Map<string, Map<number, number>>();
   const bandCounts = { below: 0, at: 0, above: 0 };
   const gradeDist = new Map<string, number>();
 
@@ -142,18 +168,28 @@ export async function buildSchoolLiteracyAnalytics(
 
     if (baselineLex != null && endLex != null && endLex > baselineLex) improved++;
 
-    const childGradeNum = parseGradeLevelScore(child.gradeLevel);
-    if (endLex != null && childGradeNum != null) {
-      const expected = lexileFromGradeLevel(childGradeNum);
-      if (endLex < expected - 100) bandCounts.below++;
-      else if (endLex > expected + 100) bandCounts.above++;
-      else bandCounts.at++;
+    if (endLex != null) {
+      const thr =
+        thresholdForGrade(thresholds, child.gradeLevel) ||
+        (() => {
+          const g = parseGradeLevelScore(child.gradeLevel);
+          return g != null ? fallbackLexileThreshold(g) : null;
+        })();
+      if (thr) {
+        const band = classifyLexileBand(endLex, thr);
+        bandCounts[band]++;
+      }
     }
 
     for (const r of sorted) {
       const mk = monthKey(new Date(r.assessmentDate));
       monthlyMap.set(mk, (monthlyMap.get(mk) || 0) + 1);
       statusBreakdown["assessed"] = (statusBreakdown["assessed"] || 0) + 1;
+      const lex = scoreLex(r);
+      if (lex != null) {
+        if (!monthlyChildLexile.has(mk)) monthlyChildLexile.set(mk, new Map());
+        monthlyChildLexile.get(mk)!.set(r.childId, lex);
+      }
     }
   }
 
@@ -162,8 +198,25 @@ export async function buildSchoolLiteracyAnalytics(
 
   const proficiencyTotal = bandCounts.below + bandCounts.at + bandCounts.above || 1;
 
+  const cohortTrend = monthlyTrends.map((m) => {
+    const childMap = monthlyChildLexile.get(m.month);
+    const values = childMap ? Array.from(childMap.values()) : [];
+    return {
+      period: m.month,
+      medianLexile: median(values),
+      medianGrade: null as number | null,
+      count: m.count,
+    };
+  });
+
   return {
     schoolYear,
+    jurisdiction: {
+      code: kpiJurisdiction.code,
+      name: kpiJurisdiction.name,
+      kind: kpiJurisdiction.kind,
+      sourceNote: kpiJurisdiction.sourceNote,
+    },
     coverage: {
       totalStudents,
       withReadingData: withData,
@@ -184,7 +237,7 @@ export async function buildSchoolLiteracyAnalytics(
       { band: "above", count: bandCounts.above, pct: Math.round((bandCounts.above / proficiencyTotal) * 100) },
     ],
     gradeDistribution: Array.from(gradeDist.entries()).map(([gradeLevel, count]) => ({ gradeLevel, count })),
-    cohortTrend: monthlyTrends.map((m) => ({ period: m.month, medianLexile: null, medianGrade: null, count: m.count })),
+    cohortTrend,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -295,13 +348,36 @@ export async function buildChildProgressAnalytics(
         Math.min(...mathSeries.filter((s) => s.lessonNumber != null).map((s) => s.lessonNumber!))
       : 0;
 
+  const jurisdiction = await resolveSchoolJurisdiction(schoolId);
+  const { thresholds, jurisdiction: kpiJurisdiction } = await getKpiThresholds({
+    jurisdictionCode: jurisdiction.code,
+    subject: "ela",
+    metric: "lexile",
+  });
+  const thr =
+    thresholdForGrade(thresholds, child.gradeLevel) ||
+    (() => {
+      const g = parseGradeLevelScore(child.gradeLevel);
+      return g != null ? fallbackLexileThreshold(g) : null;
+    })();
+
   return {
     child: {
       id: child.id,
       firstName: child.firstName,
+      lastName: child.lastName,
       gradeLevel: child.gradeLevel,
     },
     schoolYear,
+    jurisdiction: {
+      code: kpiJurisdiction.code,
+      name: kpiJurisdiction.name,
+      kind: kpiJurisdiction.kind,
+      sourceNote: kpiJurisdiction.sourceNote,
+    },
+    readingBand: thr
+      ? { atMin: thr.atMin, atMax: thr.atMax, sourceNote: thr.sourceNote }
+      : null,
     reading: {
       headline:
         gradeGrowth != null

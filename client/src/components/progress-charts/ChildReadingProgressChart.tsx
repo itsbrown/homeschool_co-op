@@ -17,13 +17,20 @@ interface ReadingPoint {
 export function ChildReadingProgressChart({
   series,
   childGradeLevel,
+  bandAtMin,
+  bandAtMax,
+  jurisdictionName,
 }: {
   series: ReadingPoint[];
   childGradeLevel?: string | null;
+  /** Jurisdiction KPI band; when omitted falls back to ASA heuristic from grade. */
+  bandAtMin?: number | null;
+  bandAtMax?: number | null;
+  jurisdictionName?: string | null;
 }) {
   if (series.length < 2) {
     return (
-      <Card>
+      <Card data-testid="child-reading-progress-empty">
         <CardContent className="pt-6 text-sm text-muted-foreground">
           At least 2 reading data points are needed to show a progress chart.
         </CardContent>
@@ -37,15 +44,25 @@ export function ChildReadingProgressChart({
     tooltip: p.label,
   }));
 
-  const gradeNum = childGradeLevel ? parseFloat(childGradeLevel) : null;
-  const bandLow = gradeNum != null ? 200 + gradeNum * 100 - 100 : null;
-  const bandHigh = gradeNum != null ? 200 + gradeNum * 100 + 100 : null;
+  let bandLow = bandAtMin ?? null;
+  let bandHigh = bandAtMax ?? null;
+  if (bandLow == null || bandHigh == null) {
+    const gradeNum = childGradeLevel ? parseFloat(childGradeLevel) : null;
+    if (gradeNum != null && Number.isFinite(gradeNum)) {
+      bandLow = 200 + gradeNum * 100 - 100;
+      bandHigh = 200 + gradeNum * 100 + 100;
+    }
+  }
+
+  const bandLabel = jurisdictionName
+    ? `Compared to ${jurisdictionName} expected Lexile for grade`
+    : "Lexile growth through the school year";
 
   return (
-    <Card>
+    <Card data-testid="child-reading-progress-chart">
       <CardHeader>
         <CardTitle className="text-lg">Reading Progress</CardTitle>
-        <CardDescription>Lexile growth through the school year</CardDescription>
+        <CardDescription>{bandLabel}</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={{ lexile: { label: "Lexile", color: "hsl(var(--chart-1))" } }} className="h-72 w-full">

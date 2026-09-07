@@ -16,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ChevronRight, Building, School } from "lucide-react";
+import { UsStateSelect } from "@/components/forms/UsStateSelect";
+import { usStateCodeSchema } from "@shared/schema";
 
 // School registration form schema
 const schoolFormSchema = z.object({
@@ -23,7 +25,7 @@ const schoolFormSchema = z.object({
   type: z.enum(["school", "co-op", "homeschool_group", "other"]),
   address: z.string().optional().nullable(),
   city: z.string().min(1, { message: "City is required" }),
-  state: z.string().min(1, { message: "State/Province is required" }),
+  state: usStateCodeSchema,
   zipCode: z.string().min(1, { message: "Zip/Postal code is required" }),
   phoneNumber: z.string().optional().nullable(),
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -254,15 +256,15 @@ export default function SchoolRegistrationPage() {
                     )}
                   />
 
-                  {/* State/Province */}
+                  {/* State */}
                   <FormField
                     control={form.control}
                     name="state"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>State/Province*</FormLabel>
+                        <FormLabel>State*</FormLabel>
                         <FormControl>
-                          <Input placeholder="State/Province" {...field} />
+                          <UsStateSelect value={field.value} onChange={field.onChange} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

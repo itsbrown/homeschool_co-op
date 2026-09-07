@@ -1,5 +1,14 @@
 # App knowledge changelog
 
+## 2026-09-07 (Multi-state education standards + student KPI charts)
+
+- **Standards registry:** `education_jurisdictions` / frameworks / standards / `education_kpi_thresholds` (migration `256`); seed US National + NY; `shared/us-states.ts` + school/location state Select (ISO-2).
+- **KPIs:** Progress analytics proficiency bands + cohort median Lexile use jurisdiction thresholds; Progress Insights jurisdiction selector; Standards catalog tab on `/school-admin/assessments`.
+- **Student charts:** Admin Progress Insights — individual Lexile/math lines + multi-select compare (batch `/api/progress/analytics/children`).
+- **E2E:** `school-admin-education-standards`, `school-admin-progress-insights-kpi`, `school-admin-student-progress-charts` (seed: `setup-progress-scenario` + `linkSupabaseAuthAdmin`).
+- **Prod:** apply additive SQL `server/migrations/256-education-standards.sql` then restart so seed runs (or hit `/api/education-standards/jurisdictions`).
+
+
 ## 2026-09-07 (Family door codes)
 
 - Optional per-campus keypad lookup: school flag `doorCodes` (default off) + `locations.door_codes_enabled`. Table `family_access_codes` (one active code per parent per campus). Parents see an above-the-fold Home banner; campus transfer revokes the old code. E2E: `school-admin-door-codes.spec.ts`, `parent-door-code.spec.ts`.

@@ -15,6 +15,7 @@ import { useSchoolAdmin } from '@/hooks/useSchoolAdmin'
 import { MapPin, Users, Building2, TrendingUp, Eye, PlusCircle, Trash2, Edit, Power, FileSpreadsheet } from 'lucide-react'
 import { apiRequest } from '@/lib/queryClient'
 import { formatFetchErrorMessage } from '@/lib/formatFetchError'
+import { US_STATES, normalizeUsState } from '@shared/us-states'
 import { useSchoolFeatures } from '@/lib/useSchoolFeatures'
 import { DoorCodeCsvImportDialog } from '@/components/admin/DoorCodeCsvImportDialog'
 
@@ -569,13 +570,23 @@ export default function LocationManagementPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="state">State *</Label>
-                  <Input
+                  <select
                     id="state"
                     name="state"
-                    placeholder="GA"
                     required
-                    maxLength={2}
-                  />
+                    data-testid="select-us-state"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      Select state
+                    </option>
+                    {US_STATES.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.name} ({s.code})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               
@@ -726,13 +737,23 @@ export default function LocationManagementPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="edit-state">State *</Label>
-                    <Input
+                    <select
                       id="edit-state"
                       name="state"
-                      defaultValue={editingLocation.state || ''}
                       required
-                      maxLength={2}
-                    />
+                      data-testid="select-us-state-edit"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      defaultValue={normalizeUsState(editingLocation.state) || ''}
+                    >
+                      <option value="" disabled>
+                        Select state
+                      </option>
+                      {US_STATES.map((s) => (
+                        <option key={s.code} value={s.code}>
+                          {s.name} ({s.code})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 

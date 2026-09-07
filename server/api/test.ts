@@ -4333,8 +4333,14 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
       '../tests/helpers/quarterlyReportTestHelpers'
     );
     const { resolveProgressReportBand } = await import('../lib/resolve-progress-report-band');
+    const { ensureEducationStandardsSchema } = await import(
+      '../lib/ensure-education-standards-schema'
+    );
+    const { schools: schoolsTable, studentAssessments } = await import('../../shared/schema');
+    const { eq } = await import('drizzle-orm');
 
     await ensureQuarterlyReportTables();
+    await ensureEducationStandardsSchema();
 
     const testDb = new TestDatabase();
     const uniqueId = nanoid(8);
@@ -4354,8 +4360,13 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
     const school = await testDb.createTestSchool(admin.id, {
       name: `Progress School ${uniqueId}`,
       registrationCode: `PRG${uniqueId.toUpperCase()}`,
+      state: 'NY',
     });
     await storage.updateUser(admin.id, { schoolId: school.id });
+    {
+      const dbFix = await getDb();
+      await dbFix.update(schoolsTable).set({ state: 'NY' }).where(eq(schoolsTable.id, school.id));
+    }
 
     const educatorEmail = `progress_ed_${uniqueId}@test.com`;
     const educator = await testDb.createTestUser({
@@ -4378,20 +4389,17 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
     await storage.updateUser(parent.id, { password: await bcrypt.hash(password, 10) });
 
     const db = await getDb();
-    await db.insert(userRoles).values([
-      {
-        userId: educator.id,
-        role: 'educator',
-        schoolId: school.id,
-        isPrimary: true,
-      },
-      {
-        userId: parent.id,
-        role: 'parent',
-        schoolId: school.id,
-        isPrimary: true,
-      },
-    ]);
+    for (const roleRow of [
+      { userId: admin.id, role: 'schoolAdmin' as const, schoolId: school.id, isPrimary: true },
+      { userId: educator.id, role: 'educator' as const, schoolId: school.id, isPrimary: true },
+      { userId: parent.id, role: 'parent' as const, schoolId: school.id, isPrimary: true },
+    ]) {
+      try {
+        await db.insert(userRoles).values(roleRow);
+      } catch {
+        /* role may already exist */
+      }
+    }
 
     const child = await storage.createChild({
       parentId: parent.id,
@@ -4399,7 +4407,17 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
       firstName: 'Progress',
       lastName: `E2E${uniqueId}`,
       birthdate: '2018-09-01',
-      gradeLevel: 'Kindergarten',
+      gradeLevel: '3rd Grade',
+      schoolId: school.id,
+    });
+
+    const child2 = await storage.createChild({
+      parentId: parent.id,
+      parentEmail,
+      firstName: 'ProgressB',
+      lastName: `E2E${uniqueId}`,
+      birthdate: '2016-03-15',
+      gradeLevel: '5th Grade',
       schoolId: school.id,
     });
 
@@ -4449,9 +4467,71 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
       })
       .returning();
 
+    // Keep both Lexile points inside the current school-year window (Aug 1–Jul 31).
+    // Relative "months ago" can fall into the prior year and leave charts empty (need ≥2 points).
+    const syStart = (() => {
+      const now = new Date();
+      const y = now.getFullYear();
+      const startYear = now.getMonth() >= 7 ? y : y - 1;
+      return startYear;
+    })();
+    const d1 = new Date(syStart, 8, 15); // Sep 15
+    const d2 = new Date(syStart, 10, 15); // Nov 15
+    await db.insert(studentAssessments).values([
+      {
+        schoolId: school.id,
+        childId: child.id,
+        assessmentTypeId: readingType.id,
+        assessmentDate: d1,
+        score: '3.0',
+        recordedBy: educator.id,
+        source: 'manual_entry',
+        lexileScore: 480,
+      },
+      {
+        schoolId: school.id,
+        childId: child.id,
+        assessmentTypeId: readingType.id,
+        assessmentDate: d2,
+        score: '3.5',
+        recordedBy: educator.id,
+        source: 'manual_entry',
+        lexileScore: 560,
+      },
+      {
+        schoolId: school.id,
+        childId: child2.id,
+        assessmentTypeId: readingType.id,
+        assessmentDate: d1,
+        score: '5.0',
+        recordedBy: educator.id,
+        source: 'manual_entry',
+        lexileScore: 780,
+      },
+      {
+        schoolId: school.id,
+        childId: child2.id,
+        assessmentTypeId: readingType.id,
+        assessmentDate: d2,
+        score: '5.2',
+        recordedBy: educator.id,
+        source: 'manual_entry',
+        lexileScore: 850,
+      },
+    ]);
+    await storage.updateChild(child.id, {
+      currentLexileRange: '480L-560L',
+      currentReadingGradeLevel: '3.5',
+    } as any);
+    await storage.updateChild(child2.id, {
+      currentLexileRange: '780L-850L',
+      currentReadingGradeLevel: '5.2',
+    } as any);
+
     let educatorSupabaseLinked = false;
     let parentSupabaseLinked = false;
-    if (req.body?.linkSupabaseAuth === true) {
+    let adminSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuth === true || req.body?.linkSupabaseAuthAdmin === true) {
       const supabaseUrl = process.env.SUPABASE_URL;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       if (!supabaseUrl || !serviceKey) {
@@ -4459,22 +4539,34 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
           error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
         });
       }
-      educatorSupabaseLinked = await linkSeedUserToSupabase({
-        dbUserId: educator.id,
-        email: educatorEmail,
-        password,
-        role: 'educator',
-        schoolId: school.id,
-        displayName: educator.name || 'Progress Test Educator',
-      });
-      parentSupabaseLinked = await linkSeedUserToSupabase({
-        dbUserId: parent.id,
-        email: parentEmail,
-        password,
-        role: 'parent',
-        schoolId: school.id,
-        displayName: parent.name || 'Progress Test Parent',
-      });
+      if (req.body?.linkSupabaseAuth === true) {
+        educatorSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: educator.id,
+          email: educatorEmail,
+          password,
+          role: 'educator',
+          schoolId: school.id,
+          displayName: educator.name || 'Progress Test Educator',
+        });
+        parentSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: parent.id,
+          email: parentEmail,
+          password,
+          role: 'parent',
+          schoolId: school.id,
+          displayName: parent.name || 'Progress Test Parent',
+        });
+      }
+      if (req.body?.linkSupabaseAuthAdmin === true) {
+        adminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: admin.id,
+          email: admin.email,
+          password,
+          role: 'schoolAdmin',
+          schoolId: school.id,
+          displayName: admin.name || 'Progress Test Admin',
+        });
+      }
     }
 
     if (req.body?.withCompleteRubric === true) {
@@ -4499,7 +4591,14 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
         supabaseLinked: educatorSupabaseLinked && parentSupabaseLinked,
         educatorSupabaseLinked,
         parentSupabaseLinked,
-        school: { id: school.id, name: school.name, registrationCode: school.registrationCode },
+        adminSupabaseLinked,
+        school: {
+          id: school.id,
+          name: school.name,
+          registrationCode: school.registrationCode,
+          state: 'NY',
+        },
+        admin: { id: admin.id, email: admin.email, password },
         educator: { id: educator.id, email: educatorEmail, password },
         parent: { id: parent.id, email: parentEmail, password },
         child: {
@@ -4508,6 +4607,20 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
           lastName: child.lastName,
           gradeLevel: child.gradeLevel,
         },
+        children: [
+          {
+            id: child.id,
+            firstName: child.firstName,
+            lastName: child.lastName,
+            gradeLevel: child.gradeLevel,
+          },
+          {
+            id: child2.id,
+            firstName: child2.firstName,
+            lastName: child2.lastName,
+            gradeLevel: child2.gradeLevel,
+          },
+        ],
         class: { id: progressClass.id, title: progressClass.title },
         assessmentType: { id: readingType.id, name: readingType.name },
         schoolYear,

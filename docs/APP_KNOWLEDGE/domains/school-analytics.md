@@ -39,7 +39,10 @@ Lanes: `member_cart`, `public_store`. Each attempt has a `correlation_id` (UUID)
 | GET | `/api/school-analytics/engagement` | School admin / director |
 | GET | `/api/school-analytics/cart-abandonment` | School admin / director |
 | GET | `/api/progress/analytics/school` | School context |
-| GET | `/api/progress/analytics/child/:childId` | Parent (own child) or staff |
+| GET | `/api/progress/analytics/school` | School context; optional `jurisdictionCode`; returns `jurisdiction` + `cohortTrend.medianLexile` |
+| GET | `/api/progress/analytics/child/:childId` | Parent (own child) or staff; includes `readingBand` |
+| GET | `/api/progress/analytics/children?ids=` | Staff; batch up to 8 children |
+| GET | `/api/education-standards/*` | Jurisdictions, standards catalog, KPI thresholds |
 
 Shared filters (query params): `from`, `to`, `locationId`, `grade`, `gender`, `ageBand`, `teacherId`.
 
