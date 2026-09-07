@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useRoute } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,6 +68,7 @@ import {
   XCircle,
   Gift,
   Download,
+  KeyRound,
   FileText
 } from 'lucide-react';
 import { Link } from 'wouter';
@@ -90,6 +91,8 @@ interface ParentProfile {
     memberId: string | null;
     locationId?: number | null;
     locationName?: string | null;
+    doorCode?: string | null;
+    doorCodesEnabled?: boolean;
   };
   children: Array<{
     id: number;
@@ -778,6 +781,7 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
 
   // Campus change state
   const [pendingCampusLocationId, setPendingCampusLocationId] = useState<string | null>(null);
+  const [doorCodeInput, setDoorCodeInput] = useState("");
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -801,6 +805,12 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
     queryKey: [`/api/parent-profile/${parentId}`],
     enabled: !!parentId,
   });
+
+  useEffect(() => {
+    if (profile?.parent.doorCode) {
+      setDoorCodeInput(profile.parent.doorCode);
+    }
+  }, [profile?.parent.doorCode]);
 
   const { data: schoolLocations = [] } = useQuery<Array<{ id: number; name: string; isActive?: boolean }>>({
     queryKey: ['/api/locations'],
@@ -829,6 +839,41 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
     onError: (err: any) => {
       toast({
         title: 'Could not update campus',
+        description: err?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const saveDoorCodeMutation = useMutation({
+    mutationFn: async (code: string) => {
+      return apiRequest('PUT', `/api/school-admin/parents/${parentId}/access-code`, { code });
+    },
+    onSuccess: async () => {
+      toast({ title: 'Door code saved', description: 'The family can see this on their dashboard.' });
+      await queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Could not save door code',
+        description: err?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const clearDoorCodeMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('DELETE', `/api/school-admin/parents/${parentId}/access-code`);
+    },
+    onSuccess: async () => {
+      setDoorCodeInput('');
+      toast({ title: 'Door code cleared' });
+      await queryClient.invalidateQueries({ queryKey: [`/api/parent-profile/${parentId}`] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Could not clear door code',
         description: err?.message || 'Please try again.',
         variant: 'destructive',
       });
@@ -1827,6 +1872,53 @@ export default function ParentProfilePage({ userIdOverride, embedded }: ParentPr
             </div>
           </CardHeader>
         </Card>
+
+        {profile.parent.doorCodesEnabled && (
+          <Card data-testid="card-parent-door-code">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <KeyRound className="h-5 w-5 text-primary" />
+                <div>
+                  <CardTitle className="text-lg">Door code</CardTitle>
+                  <CardDescription>
+                    {profile.parent.locationName
+                      ? `${profile.parent.locationName} keypad code for this family`
+                      : "Assign a keypad code after the family has a campus"}
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-end gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="parent-door-code-input">Code</Label>
+                <Input
+                  id="parent-door-code-input"
+                  data-testid="parent-door-code-input"
+                  value={doorCodeInput}
+                  onChange={(e) => setDoorCodeInput(e.target.value)}
+                  placeholder="e.g. 4821"
+                  className="w-40 font-mono tracking-widest"
+                  maxLength={12}
+                />
+              </div>
+              <Button
+                data-testid="parent-door-code-save"
+                disabled={saveDoorCodeMutation.isPending || !doorCodeInput.trim()}
+                onClick={() => saveDoorCodeMutation.mutate(doorCodeInput)}
+              >
+                Save
+              </Button>
+              <Button
+                variant="outline"
+                data-testid="parent-door-code-clear"
+                disabled={clearDoorCodeMutation.isPending || !profile.parent.doorCode}
+                onClick={() => clearDoorCodeMutation.mutate()}
+              >
+                Clear
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Member ID Card */}
         <Card data-testid="card-member-id">

@@ -1,7 +1,7 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique, doublePrecision, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varchar, pgEnum, unique, uniqueIndex, doublePrecision, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // Exported so drizzle-kit emits CREATE TYPE "role" before tables that reference it.
 export const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "teacher", "schoolAdmin", "admin", "superAdmin"]);
@@ -2086,6 +2086,8 @@ export const locations = pgTable("locations", {
   capacity: integer("capacity"), // total capacity for this location
   isActive: boolean("is_active").default(true).notNull(),
   timezone: text("timezone").default("America/New_York").notNull(),
+  /** When true, this campus issues per-family keypad codes (school feature doorCodes must also be on). */
+  doorCodesEnabled: boolean("door_codes_enabled").default(false).notNull(),
   /** Minimum students (with saved PM on wishlist) before campus opens; NULL = always active */
   activationThreshold: integer("activation_threshold"),
   activationStatus: text("activation_status", {
@@ -2115,6 +2117,7 @@ export const insertLocationSchema = createInsertSchema(locations)
     email: z.string().nullable().default(null),
     managerName: z.string().nullable().default(null),
     capacity: z.number().nullable().default(null),
+    doorCodesEnabled: z.boolean().optional(),
     activationThreshold: z.number().int().positive().nullable().optional(),
     activationStatus: z.enum(LOCATION_ACTIVATION_STATUSES).nullable().optional(),
     activationNoticeHours: z.number().int().positive().optional(),
@@ -2122,6 +2125,43 @@ export const insertLocationSchema = createInsertSchema(locations)
   });
 export type InsertLocation = z.infer<typeof insertLocationSchema>;
 export type Location = typeof locations.$inferSelect;
+
+export const FAMILY_ACCESS_CODE_STATUSES = ["active", "revoked"] as const;
+export type FamilyAccessCodeStatus = (typeof FAMILY_ACCESS_CODE_STATUSES)[number];
+
+/** Per-family keypad codes for campuses that opt in. */
+export const familyAccessCodes = pgTable(
+  "family_access_codes",
+  {
+    id: serial("id").primaryKey(),
+    schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),
+    locationId: integer("location_id").notNull().references(() => locations.id, { onDelete: "cascade" }),
+    parentId: integer("parent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    status: text("status", { enum: FAMILY_ACCESS_CODE_STATUSES }).notNull().default("active"),
+    assignedBy: integer("assigned_by").references(() => users.id, { onDelete: "set null" }),
+    assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("family_access_codes_active_parent_location")
+      .on(table.locationId, table.parentId)
+      .where(sql`${table.status} = 'active'`),
+    uniqueIndex("family_access_codes_active_code_location")
+      .on(table.locationId, table.code)
+      .where(sql`${table.status} = 'active'`),
+  ],
+);
+
+export const insertFamilyAccessCodeSchema = createInsertSchema(familyAccessCodes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertFamilyAccessCode = z.infer<typeof insertFamilyAccessCodeSchema>;
+export type FamilyAccessCode = typeof familyAccessCodes.$inferSelect;
 
 /** PII access audit trail (init-db `pii_access_logs`) */
 export const piiAccessLogs = pgTable("pii_access_logs", {

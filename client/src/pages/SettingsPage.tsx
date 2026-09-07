@@ -8,11 +8,17 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Bell, User, Shield, Save, MapPin } from "lucide-react";
+import { Bell, User, Shield, Save, MapPin, Copy, KeyRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import {
+  formatDoorCodeLabel,
+  PARENT_ACCESS_CODE_QUERY_KEY,
+  shouldShowParentDoorCode,
+  type ParentAccessCodeResponse,
+} from "@/lib/parent-access-code";
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
@@ -34,6 +40,10 @@ export default function SettingsPage() {
   // Fetch user profile data from API
   const { data: profileData, isLoading: profileLoading } = useQuery({
     queryKey: ['/api/users/profile']
+  });
+
+  const { data: accessCodeData } = useQuery<ParentAccessCodeResponse>({
+    queryKey: [...PARENT_ACCESS_CODE_QUERY_KEY],
   });
 
   // Initialize form with profile data
@@ -197,6 +207,46 @@ export default function SettingsPage() {
                     Contact your school administrator to change campus.
                   </p>
                 </div>
+
+                {shouldShowParentDoorCode(accessCodeData) && (
+                  <div className="space-y-2" data-testid="settings-door-code">
+                    <Label className="flex items-center gap-1.5">
+                      <KeyRound className="h-3.5 w-3.5" />
+                      {formatDoorCodeLabel(accessCodeData?.locationName)}
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <p
+                        className="font-mono text-2xl font-bold tracking-[0.35em]"
+                        data-testid="settings-door-code-value"
+                      >
+                        {accessCodeData?.code}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        data-testid="settings-door-code-copy"
+                        onClick={() => {
+                          if (accessCodeData?.code) {
+                            navigator.clipboard.writeText(accessCodeData.code);
+                            toast({ title: "Copied", description: "Door code copied to clipboard." });
+                          }
+                        }}
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Use this at the keypad. Don’t share it outside your household.
+                    </p>
+                  </div>
+                )}
+                {accessCodeData?.enabled && !accessCodeData.code && (
+                  <p className="text-sm text-muted-foreground">
+                    Your campus hasn’t assigned a door code yet.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>

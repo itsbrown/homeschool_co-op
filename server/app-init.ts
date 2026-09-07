@@ -431,6 +431,12 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
     } catch (err) {
       console.error('⚠️ ensureFamilyCalendarSchema failed (non-fatal):', err);
     }
+    try {
+      const { ensureFamilyAccessCodesSchema } = await import('./lib/ensure-family-access-codes-schema');
+      await ensureFamilyAccessCodesSchema();
+    } catch (err) {
+      console.error('⚠️ ensureFamilyAccessCodesSchema failed (non-fatal):', err);
+    }
   })();
 
   // Admin role seeding — idempotent, safe to run in background

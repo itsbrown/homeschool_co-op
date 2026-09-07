@@ -4070,6 +4070,71 @@ router.post('/setup-supply-list-scenario', async (req: Request, res: Response) =
 });
 
 /**
+ * POST /api/test/setup-family-access-code-scenario
+ * School + keyed campus, two parents, optional assigned door code.
+ */
+router.post('/setup-family-access-code-scenario', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+    }
+
+    const { seedFamilyAccessCodeScenario } = await import('../tests/helpers/seedFamilyAccessCodeScenario');
+    const seed = await seedFamilyAccessCodeScenario(new TestDatabase(), {
+      assignCode: req.body?.assignCode !== false,
+    });
+
+    let adminSupabaseLinked = false;
+    let parentSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthAdmin === true) {
+      try {
+        adminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.admin.id,
+          email: seed.admin.email,
+          password: seed.admin.password,
+          role: 'schoolAdmin',
+          schoolId: seed.school.id,
+          displayName: 'Door Code Admin',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthAdmin failed:', e);
+      }
+    }
+    if (req.body?.linkSupabaseAuthParent === true || req.body?.linkSupabaseAuth === true) {
+      try {
+        parentSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.parent.id,
+          email: seed.parent.email,
+          password: seed.parent.password,
+          role: 'parent',
+          schoolId: seed.school.id,
+          displayName: 'Door Code Parent',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthParent failed:', e);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...seed,
+        adminSupabaseLinked,
+        parentSupabaseLinked,
+        supabaseLinked: parentSupabaseLinked || adminSupabaseLinked,
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-family-access-code-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup family access code scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
  * POST /api/test/fulfill-store-checkout
  * Simulates Stripe webhook fulfillment for a pending public-store checkout (E2E only).
  */

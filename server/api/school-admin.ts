@@ -4554,6 +4554,7 @@ router.get("/locations/overview", supabaseAuth, requireSchoolContext, async (req
           activationStatus: full?.activationStatus ?? null,
           eligibleStudentCount: progress?.eligibleStudentCount ?? 0,
           chargeScheduledAt: full?.chargeScheduledAt ?? null,
+          doorCodesEnabled: full?.doorCodesEnabled === true,
         };
       }),
     );

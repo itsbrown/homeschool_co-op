@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
-import { Loader2, ArrowLeft, Sparkles, Shield, Store } from "lucide-react";
+import { Loader2, ArrowLeft, Sparkles, Shield, Store, KeyRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -440,6 +440,25 @@ export default function SchoolEditPage() {
                         <Switch
                           checked={localFeatures.publicStore || false}
                           onCheckedChange={(checked) => handleFeatureToggle('publicStore', checked)}
+                          disabled={updateFeaturesMutation.isPending}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-purple-100 rounded-lg">
+                            <KeyRound className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium">Family door codes</p>
+                            <p className="text-sm text-muted-foreground">
+                              Per-campus keypad codes parents can look up on Home (then enable per campus)
+                            </p>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={localFeatures.doorCodes || false}
+                          onCheckedChange={(checked) => handleFeatureToggle('doorCodes', checked)}
                           disabled={updateFeaturesMutation.isPending}
                         />
                       </div>
