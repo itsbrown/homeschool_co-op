@@ -28,11 +28,13 @@ import {
   Search,
   BookMarked,
   TrendingUp,
+  Library,
 } from 'lucide-react';
 import LexileTab from '@/components/lexile/LexileTab';
 import ProgressCatalogTab from '@/components/admin/ProgressCatalogTab';
 import AssessmentSessionsTab from '@/components/admin/AssessmentSessionsTab';
 import ProgressInsightsTab from '@/components/admin/ProgressInsightsTab';
+import StandardsCatalogTab from '@/components/admin/StandardsCatalogTab';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import AppShell from '@/components/layout/AppShell';
@@ -475,6 +477,10 @@ export default function AssessmentManagementPage() {
               <TrendingUp className="h-4 w-4" />
               Progress insights
             </TabsTrigger>
+            <TabsTrigger value="standards-catalog" className="flex items-center gap-2" data-testid="tab-standards-catalog">
+              <Library className="h-4 w-4" />
+              Standards catalog
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="types">
@@ -745,6 +751,10 @@ export default function AssessmentManagementPage() {
             <ProgressInsightsTab
               locations={schoolLocations.map((l) => ({ id: l.id, name: l.name }))}
             />
+          </TabsContent>
+
+          <TabsContent value="standards-catalog">
+            <StandardsCatalogTab />
           </TabsContent>
         </Tabs>
 

@@ -13,6 +13,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
+import { UsStateSelect } from "@/components/forms/UsStateSelect";
+import { usStateCodeSchema } from "@shared/schema";
 
 const schoolFormSchema = z.object({
   name: z.string().min(1, "School name is required"),
@@ -20,7 +22,7 @@ const schoolFormSchema = z.object({
   description: z.string().optional(),
   address: z.string().min(1, "Address is required"),
   city: z.string().min(1, "City is required"),
-  state: z.string().min(1, "State is required"),
+  state: usStateCodeSchema,
   zipCode: z.string().min(1, "ZIP code is required"),
   phoneNumber: z.string().min(1, "Phone number is required"),
   email: z.string().email("Valid email is required"),
@@ -295,7 +297,7 @@ export default function SchoolEditPage() {
                       <FormItem>
                         <FormLabel>State*</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <UsStateSelect value={field.value} onChange={field.onChange} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

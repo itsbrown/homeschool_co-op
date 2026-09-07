@@ -53,6 +53,7 @@ import assessmentUploadRouter from "./api/assessment-upload";
 import progressRouter from "./api/progress";
 import progressInsightsRouter from "./api/progress-insights";
 import progressAnalyticsRouter from "./api/progress-analytics";
+import educationStandardsRouter from "./api/education-standards";
 import supplyListsRouter, { parentSupplyListRouter } from "./api/supply-lists";
 import schoolAnalyticsRouter from "./api/school-analytics";
 import telemetryActivityRouter from "./api/telemetry-activity";
@@ -230,6 +231,7 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/progress", progressRouter);
   app.use("/api/progress/insights", progressInsightsRouter);
   app.use("/api/progress/analytics", progressAnalyticsRouter);
+  app.use("/api/education-standards", educationStandardsRouter);
   app.use("/api/supply-lists", supplyListsRouter);
   app.use("/api/parent/supply-list", parentSupplyListRouter);
   app.use("/api/school-analytics", schoolAnalyticsRouter);
@@ -424,6 +426,12 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
       await ensureSupplyListsSchema();
     } catch (err) {
       console.error('⚠️ ensureSupplyListsSchema failed (non-fatal):', err);
+    }
+    try {
+      const { ensureEducationStandardsSchema } = await import('./lib/ensure-education-standards-schema');
+      await ensureEducationStandardsSchema();
+    } catch (err) {
+      console.error('⚠️ ensureEducationStandardsSchema failed (non-fatal):', err);
     }
     try {
       const { ensureFamilyCalendarSchema } = await import('./lib/ensure-family-calendar-schema');

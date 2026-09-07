@@ -2,6 +2,20 @@ import { pgTable, text, serial, integer, boolean, jsonb, timestamp, date, varcha
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
+import { normalizeUsState } from "./us-states";
+
+/** Normalize free-text state to ISO-2; reject unknown values. */
+export const usStateCodeSchema = z
+  .string()
+  .min(1, "State is required")
+  .transform((val, ctx) => {
+    const code = normalizeUsState(val);
+    if (!code) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Select a valid US state" });
+      return z.NEVER;
+    }
+    return code;
+  });
 
 // Exported so drizzle-kit emits CREATE TYPE "role" before tables that reference it.
 export const roleEnum = pgEnum('role', ["student", "parent", "learner", "educator", "teacher", "schoolAdmin", "admin", "superAdmin"]);
@@ -131,6 +145,7 @@ export const schools = pgTable("schools", {
 export const insertSchoolSchema = createInsertSchema(schools)
   .omit({ id: true, createdAt: true, updatedAt: true, adminId: true, isVerified: true })
   .extend({
+    state: usStateCodeSchema,
     // Set default values for nullable fields
     address: z.string().nullable().default(null),
     phoneNumber: z.string().nullable().default(null),
@@ -2113,6 +2128,7 @@ export type LocationActivationStatus = (typeof LOCATION_ACTIVATION_STATUSES)[num
 export const insertLocationSchema = createInsertSchema(locations)
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
+    state: usStateCodeSchema,
     phoneNumber: z.string().nullable().default(null),
     email: z.string().nullable().default(null),
     managerName: z.string().nullable().default(null),
@@ -3579,3 +3595,69 @@ export const parentSupplyChecks = pgTable(
 export type SupplyItem = typeof supplyItems.$inferSelect;
 export type InsertSupplyItem = typeof supplyItems.$inferInsert;
 export type ParentSupplyCheck = typeof parentSupplyChecks.$inferSelect;
+
+
+// ==================== EDUCATION STANDARDS (multi-state) ====================
+
+export const educationJurisdictionKindEnum = ["national", "state"] as const;
+export const educationSubjectEnum = ["ela", "math", "science", "social_studies"] as const;
+export const educationKpiMetricEnum = ["lexile"] as const;
+
+export const educationJurisdictions = pgTable("education_jurisdictions", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  kind: text("kind").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  reportTemplateKey: text("report_template_key"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const educationStandardFrameworks = pgTable("education_standard_frameworks", {
+  id: serial("id").primaryKey(),
+  jurisdictionId: integer("jurisdiction_id")
+    .notNull()
+    .references(() => educationJurisdictions.id, { onDelete: "cascade" }),
+  subject: text("subject").notNull(),
+  title: text("title").notNull(),
+  version: text("version"),
+  sourceLabel: text("source_label"),
+  effectiveYear: integer("effective_year"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const educationStandards = pgTable("education_standards", {
+  id: serial("id").primaryKey(),
+  frameworkId: integer("framework_id")
+    .notNull()
+    .references(() => educationStandardFrameworks.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  gradeLevels: jsonb("grade_levels").default([]).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const educationKpiThresholds = pgTable("education_kpi_thresholds", {
+  id: serial("id").primaryKey(),
+  jurisdictionId: integer("jurisdiction_id")
+    .notNull()
+    .references(() => educationJurisdictions.id, { onDelete: "cascade" }),
+  subject: text("subject").notNull(),
+  metric: text("metric").notNull(),
+  gradeLevel: text("grade_level").notNull(),
+  belowMax: integer("below_max").notNull(),
+  atMin: integer("at_min").notNull(),
+  atMax: integer("at_max").notNull(),
+  aboveMin: integer("above_min").notNull(),
+  sourceNote: text("source_note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type EducationJurisdiction = typeof educationJurisdictions.$inferSelect;
+export type EducationStandardFramework = typeof educationStandardFrameworks.$inferSelect;
+export type EducationStandard = typeof educationStandards.$inferSelect;
+export type EducationKpiThreshold = typeof educationKpiThresholds.$inferSelect;

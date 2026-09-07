@@ -14,6 +14,7 @@ const schoolQuerySchema = z.object({
   schoolYear: z.string().optional(),
   sessionId: z.coerce.number().optional(),
   locationId: z.coerce.number().optional(),
+  jurisdictionCode: z.string().optional(),
 });
 
 router.get("/school", supabaseAuth, requireSchoolContext, async (req: Request, res: Response) => {
@@ -28,6 +29,40 @@ router.get("/school", supabaseAuth, requireSchoolContext, async (req: Request, r
   } catch (e) {
     console.error("progress analytics school:", e);
     res.status(500).json({ message: "Failed to load school progress analytics" });
+  }
+});
+
+const childrenQuerySchema = z.object({
+  ids: z.string().min(1),
+  schoolYear: z.string().optional(),
+});
+
+/** Batch child progress analytics for multi-select compare (max 8). */
+router.get("/children", supabaseAuth, requireSchoolContext, async (req: Request, res: Response) => {
+  try {
+    const schoolId = Number((req as any).schoolId);
+    const parsed = childrenQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid query", errors: parsed.error.errors });
+    }
+    const ids = parsed.data.ids
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isFinite(n));
+    if (!ids.length || ids.length > 8) {
+      return res.status(400).json({ message: "Provide 1–8 child ids" });
+    }
+    const childrenData = [];
+    for (const childId of ids) {
+      const data = await buildChildProgressAnalytics(schoolId, childId, {
+        schoolYear: parsed.data.schoolYear,
+      });
+      if (data) childrenData.push(data);
+    }
+    res.json({ children: childrenData });
+  } catch (e) {
+    console.error("progress analytics children:", e);
+    res.status(500).json({ message: "Failed to load children progress analytics" });
   }
 });
 

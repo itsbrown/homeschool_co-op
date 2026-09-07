@@ -5,6 +5,7 @@ import * as brevo from '@getbrevo/brevo';
 import { supabaseStorage } from "../supabase-storage";
 import { storage } from "../storage";
 import { getBrevoApiInstance, logEmailAttempt } from "../lib/email-service";
+import { usStateCodeSchema } from "../../shared/schema";
 
 const router = Router();
 
@@ -27,7 +28,7 @@ const schoolApplicationSchema = z.object({
   // School Details
   address: z.string().min(1, "Address is required"),
   city: z.string().min(1, "City is required"),
-  state: z.string().min(1, "State is required"),
+  state: usStateCodeSchema,
   zipCode: z.string().min(1, "ZIP code is required"),
   website: z.string().url().optional().or(z.literal("")),
   

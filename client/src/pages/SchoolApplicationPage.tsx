@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { UsStateSelect } from "@/components/forms/UsStateSelect";
+import { usStateCodeSchema } from "@shared/schema";
 import { 
   School, 
   User, 
@@ -43,7 +45,7 @@ const schoolApplicationSchema = z.object({
   // School Details
   address: z.string().min(1, "Address is required"),
   city: z.string().min(1, "City is required"),
-  state: z.string().min(1, "State is required"),
+  state: usStateCodeSchema,
   zipCode: z.string().min(1, "ZIP code is required"),
   website: z.string().url().optional().or(z.literal("")),
   
@@ -427,7 +429,7 @@ export default function SchoolApplicationPage() {
                           <FormItem>
                             <FormLabel>State *</FormLabel>
                             <FormControl>
-                              <Input placeholder="State" {...field} />
+                              <UsStateSelect value={field.value} onChange={field.onChange} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

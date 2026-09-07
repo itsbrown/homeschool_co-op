@@ -228,6 +228,9 @@ export default function ParentProgressPage() {
                     <ChildReadingProgressChart
                       series={childAnalytics.reading?.series || []}
                       childGradeLevel={activeChild?.child?.gradeLevel}
+                      bandAtMin={childAnalytics.readingBand?.atMin}
+                      bandAtMax={childAnalytics.readingBand?.atMax}
+                      jurisdictionName={childAnalytics.jurisdiction?.name}
                     />
                     <ChildMathProgressChart series={childAnalytics.math?.series || []} />
                     <p className="text-sm text-muted-foreground">

@@ -1,6 +1,8 @@
 # Student progress & assessments
 
-**Last updated:** 2026-07-01
+**Last updated:** 2026-09-07 (multi-state standards)
+
+> Prior: 2026-07-01
 
 ## Two lanes
 
@@ -91,3 +93,11 @@ RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your
 - `client/src/pages/parent/ParentProgressPage.tsx`
 - `client/src/components/admin/ProgressCatalogTab.tsx`, `AssessmentSessionsTab.tsx`
 - Reference PDF: `docs/templates/` (copy ASA source PDF when committed)
+
+## Multi-state standards & Lexile KPIs
+
+- **State storage:** `schools.state` / `locations.state` normalized to ISO-2 via `shared/us-states.ts` + `UsStateSelect`.
+- **Jurisdiction resolve:** school state → seeded state (`NY`) or **US National** fallback. Analytics may override with `?jurisdictionCode=`.
+- **Seeded v1:** US + NY curated ELA/Math anchors + Lexile thresholds (`server/data/education-standards/`, migration `256-education-standards.sql`).
+- **Admin UI:** Progress Insights (cohort Lexile line, student picker 1–8) + Standards catalog tab.
+- **Prod:** run additive migration `256` then restart (seed is idempotent via `ensureEducationStandardsSchema`).

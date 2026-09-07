@@ -20,7 +20,13 @@ const bandLabel: Record<string, string> = {
   above: "Above grade band",
 };
 
-export function ProficiencyBandsChart({ bands }: { bands: Band[] }) {
+export function ProficiencyBandsChart({
+  bands,
+  jurisdictionName,
+}: {
+  bands: Band[];
+  jurisdictionName?: string | null;
+}) {
   const data = bands
     .filter((b) => b.count > 0)
     .map((b) => ({ name: bandLabel[b.band] || b.band, value: b.count, pct: b.pct }));
@@ -36,10 +42,12 @@ export function ProficiencyBandsChart({ bands }: { bands: Band[] }) {
   }
 
   return (
-    <Card>
+    <Card data-testid="proficiency-bands-chart">
       <CardHeader>
         <CardTitle className="text-lg">Reading Proficiency</CardTitle>
-        <CardDescription>Compared to expected Lexile for grade level</CardDescription>
+        <CardDescription>
+          Compared to {jurisdictionName || "expected"} Lexile for grade level
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer

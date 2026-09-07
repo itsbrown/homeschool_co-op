@@ -69,6 +69,7 @@ Apply **additive** SQL only when columns/tables are missing:
 | `server/migrations/259-staff-invitations.sql` | Staff Invite → accept (`staff_invitations` + `position` / `invited_by`). Apply **before or with** deploy. Boot `ensureStaffInvitationsSchema` is idempotent; if it logs non-fatal failure, run this SQL. Never `db:push`. |
 | `server/migrations/261-store-product-pickup-only.sql` | Owned merch `pickup_only`. Idempotent; already applied on prod 2026-08-21 with the Orthography notebook SKU. |
 | `server/migrations/262-require-member-id.sql` | `sessions.require_member_id` / `classes.require_member_id` (default false). Replit boot `init-db.ts` ALTER IF NOT EXISTS should add it; run this SQL only if 42703. Do not flip the admin toggle until auditing null `users.member_id`. |
+| `server/migrations/256-education-standards.sql` | Multi-state standards registry + Lexile KPI thresholds (`education_jurisdictions`, frameworks, standards, `education_kpi_thresholds`). Apply **before or with** deploy of Progress Insights / Standards catalog. Boot `ensureEducationStandardsSchema` is idempotent and seeds US + NY; run this SQL if ensure logs non-fatal failure. Never `db:push`. |
 
 Verify with read-only checks or `scripts/verify-f001-schema.mjs` against a **non-prod** mirror when possible.
 

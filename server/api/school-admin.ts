@@ -3123,6 +3123,15 @@ router.patch("/schools/:id", supabaseAuth, async (req: any, res) => {
     delete updateData.created_at;
     delete updateData.created_by;
 
+    if (updateData.state != null) {
+      const { normalizeUsState } = await import("../../shared/us-states");
+      const normalized = normalizeUsState(updateData.state);
+      if (!normalized) {
+        return res.status(400).json({ message: "Select a valid US state" });
+      }
+      updateData.state = normalized;
+    }
+
     // Map frontend field names to database field names
     const dbUpdateData: any = {
       name: updateData.name,
