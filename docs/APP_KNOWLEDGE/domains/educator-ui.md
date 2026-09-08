@@ -63,7 +63,7 @@ TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/ap
 ## Day-of honesty
 
 - Dashboard `todayClasses` is **assigned** classes whose `class.schedule` includes **today’s weekday** (`classMeetsOnWeekday`). Empty/unknown days are **not** treated as today. Full assignment list stays on My Classes. E2E seed assigns Seekers (Mon/Wed) and Yankee (Tue/Thu).
-- Attendance saves on tap (`POST /api/educator/attendance/bulk`). There is no Attendance tab. Staff Guide must not claim auto-save-from-a-tab, volunteer add, or QR as the default start.
+- Attendance saves on tap (`POST /api/educator/attendance/bulk`). There is **no Submit button**. Staff Guide must not claim auto-save-from-a-tab, volunteer add, or QR as the default start. Do not send `notes: null` — roster rows store empty notes as `null`, and `z.string().optional()` rejects it.
 - End Session stays on the session page with present/absent counts. Unmarked kids are highlighted; optional “mark remaining absent”.
 
 ## Tests
@@ -75,7 +75,7 @@ TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/ap
 | `e2e/educator-today-honesty.spec.ts` | Today weekday filter + one-tap Start + honest Staff Guide |
 | `e2e/educator-mentor-loop.spec.ts` | Classes, students, hours, notifications, settings |
 | `e2e/educator-roster-day-type.spec.ts` | Class roster + My Students + attendance show Half Day / Full Day and birthday |
-| `e2e/attendance-educator-mark.spec.ts` | Start → roster → allergy/medical Info sheet → mark present → end |
+| `e2e/attendance-educator-mark.spec.ts` | Start → roster → Info sheet → All present → rematch Late (null notes) → end |
 | `e2e/educator-assessments-record.spec.ts` | Record tab `my-students` + save score |
 | `e2e/educator-invite-login.spec.ts` | Staff invite → accept password → auto `/educator/dashboard` |
 | `e2e/educator-weekly-schedule-plans.spec.ts` | Published plan overlay |
@@ -88,6 +88,7 @@ Seeds: `POST /api/test/setup-schedule-builder-scenario` and `setup-progress-scen
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Empty live roster / bulk attendance | `getEnrollmentsByClassId` mem-only or `classId` only | Postgres `or(classId, marketplaceClassId)` |
+| “Attendance did not save” 400 `notes` expected string, received null | Tap Present/Late/Absent after a row is already saved; roster `attendance.notes` is `null` and JSON keeps it | Omit null notes in `AttendanceTracker`; bulk/create Zod `notesSchema.nullable().optional()` |
 | Roster shows names but no Half/Full Day | Class seat has no `dayType`; join missed session tuition or `classes.sessionId` is null | Join session-tuition rows via `shared/roster-day-type.ts`; set `classes.sessionId` for the academic session |
 | Roster birthday is a day early | `new Date("2015-06-01")` is UTC midnight | `formatBirthdayDisplay` / `RosterBirthday` (`shared/student-birthday.ts`) |
 | Roster has names but no allergy flag | `GET .../roster` was name-only; “none” allergies are not alerts | `loadEducatorStudentSafetyByChildId`; `isSafetyAlertText` |

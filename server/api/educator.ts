@@ -2237,7 +2237,8 @@ const createAttendanceSchema = z.object({
   status: attendanceStatusSchema,
   checkInTime: timeStringSchema.optional(),
   checkOutTime: timeStringSchema.optional(),
-  notes: notesSchema.optional()
+  // Roster rows store notes as null; JSON keeps null (optional() only allows undefined).
+  notes: notesSchema.nullable().optional()
 });
 
 const updateAttendanceSchema = z.object({
@@ -2254,7 +2255,7 @@ const bulkAttendanceSchema = z.object({
     status: attendanceStatusSchema,
     checkInTime: timeStringSchema.optional(),
     checkOutTime: timeStringSchema.optional(),
-    notes: notesSchema.optional()
+    notes: notesSchema.nullable().optional()
   }))
 });
 
