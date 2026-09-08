@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-09-08 (Math/Lexile save FK: program session ≠ assessment session)
+
+- Prod 500 on Math Level save for enrolled kids: `recordMathLevelAssessment` / `recordLexileAssessment` wrote `program_enrollments.session_id` (`sessions.id`) into `student_assessments.session_id`, which FKs `assessment_sessions`. Fix: leave assessment `session_id` null on manual Lexile/Math Level entry. `resolveActiveSessionIdForChild` remains for progress logs only.
+- `setup-progress-scenario` now attaches a real program session on enrollment so E2E `school-admin-math-level-profile.spec.ts` would catch a regression.
+
 ## 2026-09-08 (Attendance tap-save notes null)
 
 - Day-of attendance has **no Submit button** — Present / Late / Absent / All present save immediately. After a row is saved with empty notes, the roster returns `notes: null`; posting that on rematch was a 400 (`Expected string, received null`). Omit null notes client-side; bulk/create schemas accept null. Playwright rematch: `e2e/attendance-educator-mark.spec.ts`.

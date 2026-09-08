@@ -4416,6 +4416,23 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
       isPrimary: true,
       canStartSession: true,
     });
+    // Attach a real program session so math/lexile entry is exercised against enrolled kids
+    // (student_assessments.session_id must NOT receive this sessions.id — FK is assessment_sessions).
+    const [progressSession] = await db
+      .insert(sessions)
+      .values({
+        schoolId: school.id,
+        name: `Progress Session ${uniqueId}`,
+        description: 'E2E progress enrolled session',
+        startDate: '2030-01-01',
+        endDate: '2030-06-01',
+        status: 'active',
+        enrollmentOpen: false,
+        halfDayPrice: 15000,
+        fullDayPrice: 25000,
+        sortOrder: 0,
+      })
+      .returning();
     await db.insert(programEnrollments).values({
       classType: 'marketplace',
       parentId: parent.id,
@@ -4432,6 +4449,7 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
       enrollmentDate: new Date(),
       childId: child.id,
       marketplaceClassId: progressClass.id,
+      sessionId: progressSession.id,
       childName: `${child.firstName} ${child.lastName}`,
       className: progressClass.title,
     });

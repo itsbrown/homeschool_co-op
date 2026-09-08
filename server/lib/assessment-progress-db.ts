@@ -347,7 +347,8 @@ export async function recordLexileAssessment(
     const score = data.readingGradeLevel || data.lexileRange || "updated";
     const gradeLevel = data.readingGradeLevel ? parseGradeLevelScore(data.readingGradeLevel) : null;
     const lexileScore = gradeLevel !== null ? calculateLexileFromGradeLevel(gradeLevel) : null;
-    const sessionId = await resolveActiveSessionIdForChild(childId, schoolId);
+    // student_assessments.session_id FKs assessment_sessions — not program `sessions`.
+    // Never pass resolveActiveSessionIdForChild() here (that returns sessions.id).
     const db2 = await getDb();
     const [inserted] = await db2
       .insert(studentAssessments)
@@ -361,7 +362,7 @@ export async function recordLexileAssessment(
         recordedBy: userId,
         source: "manual_entry",
         lexileScore: lexileScore ?? null,
-        sessionId: sessionId ?? null,
+        sessionId: null,
         locationId: child.locationId ?? null,
       })
       .returning();
@@ -429,7 +430,8 @@ export async function recordMathLevelAssessment(
   const mathType = await ensureMathLevelAssessmentType(schoolId);
   let assessment: StudentAssessment | undefined;
   if (mathType) {
-    const sessionId = await resolveActiveSessionIdForChild(childId, schoolId);
+    // student_assessments.session_id FKs assessment_sessions — not program `sessions`.
+    // Never pass resolveActiveSessionIdForChild() here (that returns sessions.id).
     const [inserted] = await db
       .insert(studentAssessments)
       .values({
@@ -441,7 +443,7 @@ export async function recordMathLevelAssessment(
         notes: data.notes ?? null,
         recordedBy: userId,
         source: "manual_entry",
-        sessionId: sessionId ?? null,
+        sessionId: null,
         locationId: child.locationId ?? null,
       })
       .returning();
