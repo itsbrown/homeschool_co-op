@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-08 (Attendance tap-save notes null)
+
+- Day-of attendance has **no Submit button** — Present / Late / Absent / All present save immediately. After a row is saved with empty notes, the roster returns `notes: null`; posting that on rematch was a 400 (`Expected string, received null`). Omit null notes client-side; bulk/create schemas accept null. Playwright rematch: `e2e/attendance-educator-mark.spec.ts`.
+
 ## 2026-09-08 (Mentor weekly calendar: collapse empty days)
 
 - `/educator/weekly-calendar` hides days with no classes/events/holidays/birthdays by default and widens teaching-day columns. Off-days bar lists hidden day abbrevs; **Show empty days** restores the full 7-column week. Print already used teaching days only.

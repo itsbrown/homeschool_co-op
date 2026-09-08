@@ -2,25 +2,22 @@ import { test, expect } from "@playwright/test";
 import { loginEducatorFromSeed, educatorSupabaseLinked } from "./helpers/educatorAuth";
 import { postSetupScheduleScenario } from "./helpers/testSeed";
 import { waitForSupabaseToken, bearerAuthHeaders } from "./helpers/parentCheckoutHelpers";
+import { requireLinkedSeed } from "./helpers/requireLinkedSeed";
 
 test.describe.configure({ mode: "serial", timeout: 120_000 });
 
 test.describe("attendance educator mark", () => {
-  test("start session, roster marketplace enrollment, mark present, end", async ({
+  test("start session, roster marketplace enrollment, mark present, rematch, end", async ({
     page,
     request,
   }) => {
     const { response, json } = await postSetupScheduleScenario(request, {
       linkSupabaseAuth: true,
     });
-    test.skip(
-      !response.ok(),
-      `seed failed (${response.status()}): ${json?.error ?? json?.details ?? "see server logs"}`,
-    );
-    test.skip(!json?.success || !json.data?.educator?.email, "seed returned no educator credentials");
-    test.skip(!educatorSupabaseLinked(json.data!), "Supabase auth was not linked");
-
-    const seed = json.data!;
+    const seed = requireLinkedSeed(response, json, {
+      linked: json?.data ? educatorSupabaseLinked(json.data) : false,
+      need: "Educator Supabase",
+    });
     const seekersId = seed.classes.seekers.id;
     const seekersChild = seed.children.seekers;
 
@@ -60,6 +57,7 @@ test.describe("attendance educator mark", () => {
     await expect(page.getByTestId(`attendance-row-${seekersChild.id}`)).toContainText(
       seekersChild.firstName,
     );
+    await expect(page.getByTestId("text-attendance-autosave-hint")).toBeVisible();
     await expect(page.getByTestId(`badge-allergy-${seekersChild.id}`)).toBeVisible();
     await expect(page.getByTestId(`badge-medical-${seekersChild.id}`)).toBeVisible();
     await page.getByTestId(`button-student-safety-${seekersChild.id}`).click();
@@ -78,9 +76,29 @@ test.describe("attendance educator mark", () => {
         r.ok(),
       { timeout: 30_000 },
     );
+    const rosterAfterSave = page.waitForResponse(
+      (r) =>
+        r.request().method() === "GET" &&
+        r.url().includes(`/api/educator/sessions/`) &&
+        r.url().includes("/roster") &&
+        r.ok(),
+      { timeout: 30_000 },
+    );
     await page.getByTestId("button-mark-all-present").click();
     await bulkApi;
+    await rosterAfterSave;
     await expect(page.getByTestId("badge-unmarked-count")).toHaveCount(0);
+
+    // Rematch after the roster returns notes: null (Zod used to 400 that payload).
+    const rematchApi = page.waitForResponse(
+      (r) =>
+        r.request().method() === "POST" &&
+        r.url().includes("/api/educator/attendance/bulk") &&
+        r.ok(),
+      { timeout: 30_000 },
+    );
+    await page.getByTestId(`button-status-${seekersChild.id}-late`).click();
+    await rematchApi;
 
     const endApi = page.waitForResponse(
       (r) =>

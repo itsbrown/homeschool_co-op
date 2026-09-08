@@ -133,6 +133,7 @@ const mutation = useMutation({
 - **Director Weekly Templates** → `/schools/schedule-builder` (also `/educator/templates` redirect). Mentors without school-admin permission may see `ForbiddenPage`.
 - **Educator cache looks stale after start/end session** → `invalidateQueries({ queryKey: ['/api/educator'] })` does not match `['/api/educator/dashboard']`. Use `invalidateEducatorSessionQueries()` in `client/src/lib/educator-queries.ts`.
 - **Dashboard “Today’s Classes” lists every assignment** → `GET /api/educator/dashboard` `todayClasses` must be weekday meetings (`classMeetsOnWeekday`). Empty schedule days are not today. One-tap Start uses `createAndStartEducatorSession()`.
+- **Attendance “did not save” 400 on status tap** → roster `notes` is `null`; `JSON.stringify` keeps it and Zod `z.string().optional()` rejects null. Omit null notes (same class of bug as assessment `lesson`/`notes`). There is no Submit button — tap saves immediately.
 
 ## Best Practices
 

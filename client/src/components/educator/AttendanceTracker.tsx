@@ -21,7 +21,6 @@ import {
 } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { invalidateEducatorSessionQueries } from '@/lib/educator-queries';
 import { EducatorLoadingState, EducatorErrorState } from './EducatorErrorBoundary';
 import { StudentSafetyBadges, StudentSafetySheet, type StudentSafetyProfile } from './StudentSafetySheet';
 import { DayTypeBadge } from '@/components/roster/DayTypeBadge';
@@ -41,7 +40,7 @@ interface RosterStudent {
   status?: AttendanceStatus;
   checkInTime?: string;
   checkOutTime?: string;
-  notes?: string;
+  notes?: string | null;
   allergies: string | null;
   medicalInfo: string | null;
   specialNeeds: string | null;
@@ -66,6 +65,23 @@ const STATUS_CONFIG: Record<AttendanceStatus, { label: string; icon: typeof Chec
   late: { label: 'Late', icon: Clock, color: 'text-yellow-600', bgColor: 'bg-yellow-100' },
   excused: { label: 'Excused', icon: AlertCircle, color: 'text-blue-600', bgColor: 'bg-blue-100' },
 };
+
+type AttendanceRecord = { childId: number; status: AttendanceStatus; notes?: string };
+
+function notesForApi(notes: string | null | undefined): string | undefined {
+  return typeof notes === 'string' ? notes : undefined;
+}
+
+function toAttendanceRecord(
+  childId: number,
+  status: AttendanceStatus,
+  notes: string | null | undefined,
+): AttendanceRecord {
+  const record: AttendanceRecord = { childId, status };
+  const payloadNotes = notesForApi(notes);
+  if (payloadNotes !== undefined) record.notes = payloadNotes;
+  return record;
+}
 
 export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrackerProps) {
   const { toast } = useToast();
@@ -103,7 +119,7 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
   });
 
   const bulkAttendanceMutation = useMutation({
-    mutationFn: async (records: { childId: number; status: AttendanceStatus; notes?: string }[]) => {
+    mutationFn: async (records: AttendanceRecord[]) => {
       return apiRequest('POST', '/api/educator/attendance/bulk', {
         sessionId,
         attendance: records,
@@ -111,7 +127,6 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
     },
     onSuccess: (_data, records) => {
       queryClient.invalidateQueries({ queryKey: ['/api/educator/sessions', sessionId, 'roster'] });
-      invalidateEducatorSessionQueries();
       setPendingChanges((prev) => {
         const next = new Map(prev);
         for (const record of records) next.delete(record.childId);
@@ -127,7 +142,7 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
     },
   });
 
-  const persistRecords = (records: { childId: number; status: AttendanceStatus; notes?: string }[]) => {
+  const persistRecords = (records: AttendanceRecord[]) => {
     if (records.length === 0) return;
     setPendingChanges((prev) => {
       const next = new Map(prev);
@@ -142,7 +157,7 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
   const handleStatusChange = (childId: number, status: AttendanceStatus) => {
     const student = roster?.find((s) => s.childId === childId);
     const notes = pendingChanges.get(childId)?.notes ?? student?.notes;
-    persistRecords([{ childId, status, notes }]);
+    persistRecords([toAttendanceRecord(childId, status, notes)]);
   };
 
   const handleNoteAdd = (student: RosterStudent) => {
@@ -158,7 +173,7 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
         pendingChanges.get(currentStudent.childId)?.status ||
         currentStudent.status ||
         'present';
-      persistRecords([{ childId: currentStudent.childId, status, notes: noteText }]);
+      persistRecords([toAttendanceRecord(currentStudent.childId, status, noteText)]);
     }
     setNoteDialogOpen(false);
     setCurrentStudent(null);
@@ -168,11 +183,13 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
   const markAllAs = (status: AttendanceStatus) => {
     if (!roster) return;
     persistRecords(
-      roster.map((student) => ({
-        childId: student.childId,
-        status,
-        notes: pendingChanges.get(student.childId)?.notes ?? student.notes,
-      })),
+      roster.map((student) =>
+        toAttendanceRecord(
+          student.childId,
+          status,
+          pendingChanges.get(student.childId)?.notes ?? student.notes,
+        ),
+      ),
     );
   };
 
@@ -180,11 +197,7 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
     if (!roster) return;
     const unmarked = roster.filter((s) => !(pendingChanges.get(s.childId)?.status || s.status));
     persistRecords(
-      unmarked.map((student) => ({
-        childId: student.childId,
-        status,
-        notes: student.notes,
-      })),
+      unmarked.map((student) => toAttendanceRecord(student.childId, status, student.notes)),
     );
   };
 
@@ -193,7 +206,7 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
   };
 
   const getEffectiveNotes = (student: RosterStudent): string | undefined => {
-    return pendingChanges.get(student.childId)?.notes ?? student.notes;
+    return pendingChanges.get(student.childId)?.notes ?? student.notes ?? undefined;
   };
 
   if (isLoading) {
@@ -260,10 +273,23 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
                 {dayTypeSummary ? (
                   <span data-testid="text-roster-day-type-summary"> · {dayTypeSummary}</span>
                 ) : null}
-                {bulkAttendanceMutation.isPending && (
+                {bulkAttendanceMutation.isPending ? (
                   <span className="ml-2 inline-flex items-center gap-1 text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" />
                     Saving
+                  </span>
+                ) : bulkAttendanceMutation.isSuccess ? (
+                  <span
+                    className="ml-2 inline-flex items-center gap-1 text-green-700"
+                    data-testid="text-attendance-saved"
+                  >
+                    <Check className="h-3 w-3" />
+                    Saved
+                  </span>
+                ) : null}
+                {isSessionActive && (
+                  <span className="block mt-1" data-testid="text-attendance-autosave-hint">
+                    Tapping Present, Late, or Absent saves immediately.
                   </span>
                 )}
               </CardDescription>
