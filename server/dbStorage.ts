@@ -4491,6 +4491,8 @@ export class DatabaseStorage implements IStorage {
   deleteStudentAssessment = apDb.deleteStudentAssessment;
   recordLexileAssessment = apDb.recordLexileAssessment;
   getLexileHistoryForChildBySchool = apDb.getLexileHistoryForChildBySchool;
+  recordMathLevelAssessment = apDb.recordMathLevelAssessment;
+  getMathLevelHistoryForChildBySchool = apDb.getMathLevelHistoryForChildBySchool;
   getProgressSubjectsBySchool = apDb.getProgressSubjectsBySchool;
   createProgressSubject = apDb.createProgressSubject;
   updateProgressSubject = apDb.updateProgressSubject;

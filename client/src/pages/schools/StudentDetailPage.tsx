@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import SchoolAdminLayout from "@/components/layout/SchoolAdminLayout";
 import LexileProfileSection from "@/components/lexile/LexileProfileSection";
+import MathLevelProfileSection from "@/components/math/MathLevelProfileSection";
 
 interface Student {
   id: number;
@@ -49,6 +50,12 @@ export default function StudentDetailPage() {
     enabled: !!studentId,
   });
   const lexileData = lexileStudents.find((s: { id: number }) => s.id === studentId);
+
+  const { data: mathStudents = [] } = useQuery<Array<{ id: number; currentMathLevel?: string | null }>>({
+    queryKey: ['/api/math-level/students'],
+    enabled: !!studentId,
+  });
+  const mathData = mathStudents.find((s) => s.id === studentId);
 
   if (isLoading) {
     return (
@@ -310,6 +317,15 @@ export default function StudentDetailPage() {
             currentReadingGradeLevel={lexileData?.currentReadingGradeLevel}
             currentBookList={lexileData?.currentBookList}
             showAIInsights={true}
+          />
+        )}
+
+        {/* Math Level */}
+        {studentId && (
+          <MathLevelProfileSection
+            childId={studentId}
+            currentMathLevel={mathData?.currentMathLevel}
+            allowEdit={true}
           />
         )}
       </div>

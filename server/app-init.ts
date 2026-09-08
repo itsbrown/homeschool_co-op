@@ -49,6 +49,7 @@ import calendarFeedRouter from "./api/calendar-feed";
 import assessmentsRouter from "./api/assessments";
 import lexileRouter from "./api/lexile";
 import lexileAiRouter from "./api/lexile-ai";
+import mathLevelRouter from "./api/math-level";
 import assessmentUploadRouter from "./api/assessment-upload";
 import progressRouter from "./api/progress";
 import progressInsightsRouter from "./api/progress-insights";
@@ -226,6 +227,7 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/assessments", assessmentsRouter);
   app.use("/api/lexile", lexileRouter);
   app.use("/api/lexile", lexileAiRouter);
+  app.use("/api/math-level", mathLevelRouter);
   app.use("/api/assessment-upload", assessmentUploadRouter);
   app.use("/api/progress", progressRouter);
   app.use("/api/progress/insights", progressInsightsRouter);

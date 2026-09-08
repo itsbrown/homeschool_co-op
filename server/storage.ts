@@ -8185,6 +8185,17 @@ export class MemStorage implements IStorage {
       getLexileHistoryForChildBySchool(childId: number, schoolId: number) {
         return this.requireApDb().getLexileHistoryForChildBySchool(childId, schoolId);
       }
+      recordMathLevelAssessment(
+        childId: number,
+        schoolId: number,
+        userId: number,
+        data: Parameters<DatabaseStorage['recordMathLevelAssessment']>[3],
+      ) {
+        return this.requireApDb().recordMathLevelAssessment(childId, schoolId, userId, data);
+      }
+      getMathLevelHistoryForChildBySchool(childId: number, schoolId: number) {
+        return this.requireApDb().getMathLevelHistoryForChildBySchool(childId, schoolId);
+      }
       getProgressSubjectsBySchool(schoolId: number) {
         return this.requireApDb().getProgressSubjectsBySchool(schoolId);
       }

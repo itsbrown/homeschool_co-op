@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-09-08 (Math level on student profile)
+
+- `children.current_math_level` + assessment type **Math Level** (migration `264`). Staff can view/enter Dimensions-style levels (e.g. `3A`) on school-admin and educator student profiles via `/api/math-level/*`.
+- History timeline mirrors Lexile. Boot ensure: `ensureMathLevelSchema` + `init-db` ALTER/upsert. E2E: `school-admin-math-level-profile.spec.ts`.
+
 ## 2026-09-07 (Family door codes)
 
 - Optional per-campus keypad lookup: school flag `doorCodes` (default off) + `locations.door_codes_enabled`. Table `family_access_codes` (one active code per parent per campus). Parents see an above-the-fold Home banner; campus transfer revokes the old code. E2E: `school-admin-door-codes.spec.ts`, `parent-door-code.spec.ts`.
