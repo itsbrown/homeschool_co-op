@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-09-08 (Mentor weekly calendar: collapse empty days)
+
+- `/educator/weekly-calendar` hides days with no classes/events/holidays/birthdays by default and widens teaching-day columns. Off-days bar lists hidden day abbrevs; **Show empty days** restores the full 7-column week. Print already used teaching days only.
+- E2E: `educator-weekly-schedule-plans.spec.ts` asserts collapse + toggle (`requireLinkedSeed`).
+
 ## 2026-09-07 (Family door codes)
 
 - Optional per-campus keypad lookup: school flag `doorCodes` (default off) + `locations.door_codes_enabled`. Table `family_access_codes` (one active code per parent per campus). Parents see an above-the-fold Home banner; campus transfer revokes the old code. E2E: `school-admin-door-codes.spec.ts`, `parent-door-code.spec.ts`.

@@ -4,6 +4,7 @@ import {
   loginParent,
   preventStaffGuideModal,
 } from "./helpers/parentCheckoutHelpers";
+import { requireLinkedSeed } from "./helpers/requireLinkedSeed";
 import { postSetupScheduleScenario } from "./helpers/testSeed";
 
 test.describe.configure({ mode: "serial", timeout: 120_000 });
@@ -16,17 +17,15 @@ test.describe("educator weekly schedule + published plans", () => {
     const { response, json } = await postSetupScheduleScenario(request, {
       linkSupabaseAuth: true,
     });
-    test.skip(
-      !response.ok(),
-      `seed failed (${response.status()}): ${json?.error ?? json?.details ?? "see server logs"}`,
-    );
-    test.skip(!json?.success || !json.data?.educator?.email, "seed returned no educator credentials");
-    test.skip(
-      json.data?.educatorSupabaseLinked !== true && json.data?.supabaseLinked !== true,
-      "Supabase auth was not linked (configure SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)",
-    );
+    const seed = requireLinkedSeed(response, json, {
+      linked:
+        json?.data?.educatorSupabaseLinked === true || json?.data?.supabaseLinked === true,
+      need: "Educator Supabase",
+    });
+    if (!seed.educator?.email) {
+      throw new Error("seed returned no educator credentials");
+    }
 
-    const seed = json!.data!;
     const weekStart = seed.weekStart as string;
     const planTitle = seed.blocks?.seekersTitle || "Seekers: Intro to Nature";
 
@@ -60,16 +59,34 @@ test.describe("educator weekly schedule + published plans", () => {
     const planBlock = page.getByTestId("schedule-plan-block").filter({ hasText: planTitle });
     await expect(planBlock.first()).toBeVisible();
 
+    // Empty days are collapsed by default (Mon/Wed/Fri teaching pattern → fewer than 7 columns).
+    const weekGrid = page.getByTestId("calendar-week-grid");
+    await expect(weekGrid).toBeVisible();
+    const visibleDays = Number(await weekGrid.getAttribute("data-visible-days"));
+    expect(visibleDays).toBeGreaterThan(0);
+    expect(visibleDays).toBeLessThan(7);
+    await expect(page.getByTestId("calendar-off-days-bar")).toBeVisible();
+    await expect(page.getByTestId("button-toggle-empty-days")).toBeVisible();
+
+    // Toggle reveals empty day columns again.
+    await page.getByTestId("button-toggle-empty-days").click();
+    await expect(weekGrid).toHaveAttribute("data-visible-days", "7");
+    await expect(page.getByTestId("calendar-day-empty").first()).toBeVisible();
+
+    await page.getByTestId("button-toggle-empty-days").click();
+    await expect(weekGrid).toHaveAttribute("data-visible-days", String(visibleDays));
+
     // Wednesday slot (same class, no Monday skeleton block) should show empty badge
     await expect(page.getByTestId("schedule-plan-empty").first()).toBeVisible();
 
     await planBlock.first().click();
     await expect(page.getByTestId("schedule-block-detail")).toBeVisible();
     await expect(page.getByTestId("schedule-block-detail")).toContainText(planTitle);
-    await expect(page.getByTestId("schedule-block-detail")).toContainText(/Observe local plants|Learning Objectives/i);
+    await expect(page.getByTestId("schedule-block-detail")).toContainText(
+      /Observe local plants|Learning Objectives/i,
+    );
 
     await expect(page.getByTestId("educator-schedule-print")).toBeVisible();
-    // Print sheet is screen-hidden; still present for window.print()
     await expect(page.getByTestId("schedule-print-root")).toBeAttached();
   });
 });
