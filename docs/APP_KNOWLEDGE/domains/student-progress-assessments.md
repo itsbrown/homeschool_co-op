@@ -1,6 +1,6 @@
 # Student progress & assessments
 
-**Last updated:** 2026-07-01
+**Last updated:** 2026-09-08
 
 ## Two lanes
 
@@ -27,6 +27,7 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 
 - **Hybrid validation:** Log POST requires at least one of lesson number, unit label, or topics covered (`insertStudentProgressLogBodySchema`).
 - **Session required:** `student_progress_log.session_id` from `resolveActiveSessionIdForChild` (enrolled `program_enrollments` with non-null `session_id`).
+- **Do not reuse that ID on assessments:** `student_assessments.session_id` FKs `assessment_sessions`, not program `sessions`. Manual Lexile / Math Level entry leaves `session_id` null; writing a program session id causes FK 500 for enrolled students.
 - **Carry-forward:** `student_progress_current` upserted on each log; unique `(child_id, progress_track_id)`.
 - **Reading bridge:** Creating a `student_assessment` with a `curriculum_book` linked to `progress_track_id` updates current + optional log when session resolvable.
 - **Default subjects:** `ensureProgressSubjectsForSchool` seeds math, science, reading, etc. on first catalog read.
@@ -71,6 +72,7 @@ RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your
 
 - Educator assessment POST must use `score` and `lesson`, not legacy `scoreValue` / `lessonNumber`.
 - Progress log without active enrolled session → 400 / UI “no active session” alert.
+- Manual Lexile / Math Level: never put program `sessions.id` on `student_assessments.session_id` (FK → `assessment_sessions`); enrolled kids 500 otherwise.
 - `ParentProgressPage` **Charts** tab uses `/api/progress/analytics/child/:childId`; detailed reading history remains on `/parent/assessments`.
 - Admin progress catalog uses same `/api/progress/subjects` as educators; subject **create** is admin-only.
 
