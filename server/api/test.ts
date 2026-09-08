@@ -4333,8 +4333,10 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
       '../tests/helpers/quarterlyReportTestHelpers'
     );
     const { resolveProgressReportBand } = await import('../lib/resolve-progress-report-band');
+    const { ensureMathLevelSchema } = await import('../lib/ensure-math-level-schema');
 
     await ensureQuarterlyReportTables();
+    await ensureMathLevelSchema();
 
     const testDb = new TestDatabase();
     const uniqueId = nanoid(8);
@@ -4378,20 +4380,17 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
     await storage.updateUser(parent.id, { password: await bcrypt.hash(password, 10) });
 
     const db = await getDb();
-    await db.insert(userRoles).values([
-      {
-        userId: educator.id,
-        role: 'educator',
-        schoolId: school.id,
-        isPrimary: true,
-      },
-      {
-        userId: parent.id,
-        role: 'parent',
-        schoolId: school.id,
-        isPrimary: true,
-      },
-    ]);
+    for (const roleRow of [
+      { userId: admin.id, role: 'schoolAdmin' as const, schoolId: school.id, isPrimary: true },
+      { userId: educator.id, role: 'educator' as const, schoolId: school.id, isPrimary: true },
+      { userId: parent.id, role: 'parent' as const, schoolId: school.id, isPrimary: true },
+    ]) {
+      try {
+        await db.insert(userRoles).values(roleRow);
+      } catch {
+        /* role may already exist */
+      }
+    }
 
     const child = await storage.createChild({
       parentId: parent.id,
@@ -4451,7 +4450,8 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
 
     let educatorSupabaseLinked = false;
     let parentSupabaseLinked = false;
-    if (req.body?.linkSupabaseAuth === true) {
+    let adminSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuth === true || req.body?.linkSupabaseAuthAdmin === true) {
       const supabaseUrl = process.env.SUPABASE_URL;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       if (!supabaseUrl || !serviceKey) {
@@ -4459,22 +4459,34 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
           error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
         });
       }
-      educatorSupabaseLinked = await linkSeedUserToSupabase({
-        dbUserId: educator.id,
-        email: educatorEmail,
-        password,
-        role: 'educator',
-        schoolId: school.id,
-        displayName: educator.name || 'Progress Test Educator',
-      });
-      parentSupabaseLinked = await linkSeedUserToSupabase({
-        dbUserId: parent.id,
-        email: parentEmail,
-        password,
-        role: 'parent',
-        schoolId: school.id,
-        displayName: parent.name || 'Progress Test Parent',
-      });
+      if (req.body?.linkSupabaseAuth === true) {
+        educatorSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: educator.id,
+          email: educatorEmail,
+          password,
+          role: 'educator',
+          schoolId: school.id,
+          displayName: educator.name || 'Progress Test Educator',
+        });
+        parentSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: parent.id,
+          email: parentEmail,
+          password,
+          role: 'parent',
+          schoolId: school.id,
+          displayName: parent.name || 'Progress Test Parent',
+        });
+      }
+      if (req.body?.linkSupabaseAuthAdmin === true) {
+        adminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: admin.id,
+          email: admin.email,
+          password,
+          role: 'schoolAdmin',
+          schoolId: school.id,
+          displayName: admin.name || 'Progress Test Admin',
+        });
+      }
     }
 
     if (req.body?.withCompleteRubric === true) {
@@ -4499,7 +4511,9 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
         supabaseLinked: educatorSupabaseLinked && parentSupabaseLinked,
         educatorSupabaseLinked,
         parentSupabaseLinked,
+        adminSupabaseLinked,
         school: { id: school.id, name: school.name, registrationCode: school.registrationCode },
+        admin: { id: admin.id, email: admin.email, password },
         educator: { id: educator.id, email: educatorEmail, password },
         parent: { id: parent.id, email: parentEmail, password },
         child: {

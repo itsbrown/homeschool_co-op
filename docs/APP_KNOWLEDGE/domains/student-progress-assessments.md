@@ -6,7 +6,7 @@
 
 | Lane | Purpose | Tables | APIs |
 |------|---------|--------|------|
-| **Assessments** | Scores, McCall-Crabbs, Lexile snapshots | `assessment_types`, `curriculum_books`, `student_assessments`, `assessment_sessions` | `/api/assessments`, `/api/lexile`, `/api/lexile-ai`, `/api/assessment-upload` |
+| **Assessments** | Scores, McCall-Crabbs, Lexile snapshots, math level | `assessment_types`, `curriculum_books`, `student_assessments`, `assessment_sessions`; `children.current_*` | `/api/assessments`, `/api/lexile`, `/api/lexile-ai`, `/api/math-level`, `/api/assessment-upload` |
 | **Curriculum progress** | Where left off + session coverage (any subject) | `progress_subjects`, `progress_tracks`, `student_progress_current`, `student_progress_log`, `child_progress_insights` | `/api/progress`, `/api/progress/insights` |
 
 Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.ts`, delegated via `CombinedStorage` / `dbStorage`.
@@ -18,7 +18,8 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 | Parent | `/parent/progress` | Hub: **Charts** (reading/math API), overview, this session, AI summary |
 | Parent | `/parent/assessments` | Reading charts + Lexile history |
 | Educator | `/educator/assessments` | Default mentor nav. Tabs: record assessment, **Progress** (log form), Lexile. See [educator-ui.md](./educator-ui.md). |
-| Educator | Student detail | Quick **Log progress** dialog |
+| School admin | `/schools/students/:id` | Profile: Lexile + **Math Level** (enter/update + history) |
+| Educator | Student detail | Lexile + **Math Level** entry |
 | School admin | `/school-admin/assessments` | Types/books + **Progress catalog** + **Sessions & reports** + **Progress insights** |
 | School admin | `/school-admin/analytics` | Engagement, cart abandonment, student progress (see [school-analytics.md](./school-analytics.md)) |
 
@@ -45,6 +46,7 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 | `server/tests/integration/progress-api.test.ts` | DB smoke (`TEST_DATABASE_URL`) |
 | `server/tests/integration/progress-analytics-school.test.ts` | Progress analytics school + child APIs |
 | `server/tests/parse-lexile-range.test.ts` | Lexile parser unit tests |
+| `e2e/school-admin-math-level-profile.spec.ts` | Admin enter/view Math Level on `/schools/students/:id` (`setup-progress-scenario` + `linkSupabaseAuthAdmin`) |
 | `e2e/parent-progress-charts.spec.ts` | Parent Charts tab (`setup-progress-scenario`, Supabase) |
 
 **Run validation bundle:**
@@ -86,7 +88,9 @@ RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your
 - `server/lib/assessment-progress-db.ts` — CRUD + bridge + insights + quarterly
 - `server/lib/build-student-progress-report.ts`, `server/services/progressReportPdf.ts`
 - `server/lib/progress-context-bundle.ts` — shared Claude context for insights, Lexile AI, concierge
-- `server/api/progress.ts`, `progress-insights.ts`, `assessments.ts`, `lexile.ts`
+- `server/api/progress.ts`, `progress-insights.ts`, `assessments.ts`, `lexile.ts`, `math-level.ts`
+- `client/src/components/math/MathLevelProfileSection.tsx` — profile card + inline entry
+- `server/migrations/264-children-math-level.sql` — `current_math_level` + assessment type
 - `client/src/components/educator/ProgressLogForm.tsx`, `ProgressLogTab.tsx`, `ProgressQuickLogDialog.tsx`
 - `client/src/pages/parent/ParentProgressPage.tsx`
 - `client/src/components/admin/ProgressCatalogTab.tsx`, `AssessmentSessionsTab.tsx`

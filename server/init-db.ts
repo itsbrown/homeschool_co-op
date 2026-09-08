@@ -3027,6 +3027,37 @@ async function runMigrations() {
     console.log('Migration note (non-blocking):', lexileTypeError.message);
   }
 
+  // Math level column + assessment type
+  try {
+    const db = await getDb();
+    console.log('Running migration: Adding current_math_level to children...');
+    await db.execute(sql`
+      ALTER TABLE children
+      ADD COLUMN IF NOT EXISTS current_math_level TEXT;
+    `);
+    await db.execute(sql`
+      INSERT INTO assessment_types (school_id, name, description, category, score_format, is_active, sort_order, created_at, updated_at)
+      SELECT
+        s.id,
+        'Math Level',
+        'Tracks student math placement level (e.g. Dimensions Math 3A)',
+        'math',
+        'level',
+        true,
+        110,
+        NOW(),
+        NOW()
+      FROM schools s
+      WHERE NOT EXISTS (
+        SELECT 1 FROM assessment_types at2
+        WHERE at2.school_id = s.id AND at2.name = 'Math Level'
+      );
+    `);
+    console.log('✅ Migration completed: Math Level column + assessment type');
+  } catch (mathLevelError: any) {
+    console.log('Migration note (non-blocking):', mathLevelError.message);
+  }
+
   // Add functional index on LOWER(email) for case-insensitive email lookups.
   // getUserByEmail (called on every token-authenticated request) queries with LOWER(),
   // but the existing users_email_unique constraint is on the raw column — without this
