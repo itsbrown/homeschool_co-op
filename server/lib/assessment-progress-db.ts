@@ -392,6 +392,93 @@ export async function getLexileHistoryForChildBySchool(
     .limit(50);
 }
 
+// ---------- Math level ----------
+
+async function ensureMathLevelAssessmentType(schoolId: number) {
+  const types = await getAssessmentTypesBySchoolId(schoolId);
+  const existing = types.find((t) => t.name === "Math Level");
+  if (existing) return existing;
+  return createAssessmentType({
+    schoolId,
+    name: "Math Level",
+    description: "Tracks student math placement level (e.g. Dimensions Math 3A)",
+    category: "math",
+    scoreFormat: "level",
+    isActive: true,
+    sortOrder: 110,
+  });
+}
+
+export async function recordMathLevelAssessment(
+  childId: number,
+  schoolId: number,
+  userId: number,
+  data: { mathLevel: string; notes?: string },
+): Promise<{ child: Child; assessment?: StudentAssessment }> {
+  const db = await getDb();
+  const mathLevel = data.mathLevel.trim();
+  const [child] = await db
+    .update(children)
+    .set({
+      currentMathLevel: mathLevel,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(children.id, childId), eq(children.schoolId, schoolId)))
+    .returning();
+
+  const mathType = await ensureMathLevelAssessmentType(schoolId);
+  let assessment: StudentAssessment | undefined;
+  if (mathType) {
+    const sessionId = await resolveActiveSessionIdForChild(childId, schoolId);
+    const [inserted] = await db
+      .insert(studentAssessments)
+      .values({
+        schoolId,
+        childId,
+        assessmentTypeId: mathType.id,
+        assessmentDate: new Date(),
+        score: mathLevel,
+        notes: data.notes ?? null,
+        recordedBy: userId,
+        source: "manual_entry",
+        sessionId: sessionId ?? null,
+        locationId: child.locationId ?? null,
+      })
+      .returning();
+    assessment = inserted;
+  }
+  await invalidateProgressInsight(childId, schoolId);
+  return { child, assessment };
+}
+
+export async function getMathLevelHistoryForChildBySchool(
+  childId: number,
+  schoolId: number,
+): Promise<StudentAssessment[]> {
+  const db = await getDb();
+  const types = await getAssessmentTypesBySchoolId(schoolId);
+  const mathTypeIds = types
+    .filter(
+      (t) =>
+        t.name === "Math Level" ||
+        (t.category === "math" && t.name.toLowerCase().includes("level")),
+    )
+    .map((t) => t.id);
+  if (mathTypeIds.length === 0) return [];
+  return db
+    .select()
+    .from(studentAssessments)
+    .where(
+      and(
+        eq(studentAssessments.childId, childId),
+        eq(studentAssessments.schoolId, schoolId),
+        inArray(studentAssessments.assessmentTypeId, mathTypeIds),
+      ),
+    )
+    .orderBy(desc(studentAssessments.assessmentDate))
+    .limit(50);
+}
+
 // ---------- Progress catalog ----------
 
 export async function getProgressSubjectsBySchool(schoolId: number): Promise<ProgressSubject[]> {

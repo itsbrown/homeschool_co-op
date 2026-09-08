@@ -14,6 +14,7 @@ import {
   Cake
 } from "lucide-react";
 import LexileProfileSection from "@/components/lexile/LexileProfileSection";
+import MathLevelProfileSection from "@/components/math/MathLevelProfileSection";
 import ProgressQuickLogDialog from "@/components/educator/ProgressQuickLogDialog";
 import { formatBirthdayDisplay, ageFromBirthdate } from "@shared/student-birthday";
 
@@ -44,8 +45,14 @@ export default function EducatorStudentDetailPage() {
     enabled: !!studentId,
   });
 
+  const { data: mathStudents = [] } = useQuery<Array<{ id: number; currentMathLevel?: string | null }>>({
+    queryKey: ['/api/math-level/students'],
+    enabled: !!studentId,
+  });
+
   const student = studentsResponse?.students?.find(s => s.id === studentId);
   const lexileData = lexileStudents.find(s => s.id === studentId);
+  const mathData = mathStudents.find(s => s.id === studentId);
 
   if (isLoading) {
     return (
@@ -187,6 +194,14 @@ export default function EducatorStudentDetailPage() {
             currentReadingGradeLevel={lexileData?.currentReadingGradeLevel}
             currentBookList={lexileData?.currentBookList}
             showAIInsights={true}
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <MathLevelProfileSection
+            childId={studentId}
+            currentMathLevel={mathData?.currentMathLevel}
+            allowEdit={true}
           />
         </div>
 

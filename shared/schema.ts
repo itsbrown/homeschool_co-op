@@ -573,6 +573,8 @@ export const children = pgTable("children", {
   currentLexileRange: text("current_lexile_range"),
   currentReadingGradeLevel: text("current_reading_grade_level"),
   currentBookList: text("current_book_list"),
+  /** Dimensions Math placement (e.g. 3A) or grade-equivalent math level label. */
+  currentMathLevel: text("current_math_level"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -597,6 +599,7 @@ export const insertChildSchema = createInsertSchema(children)
     currentLexileRange: z.string().nullable().default(null),
     currentReadingGradeLevel: z.string().nullable().default(null),
     currentBookList: z.string().nullable().default(null),
+    currentMathLevel: z.string().nullable().default(null),
   });
 export type InsertChild = z.infer<typeof insertChildSchema>;
 export type Child = typeof children.$inferSelect;
