@@ -213,11 +213,23 @@ type SelectedItem =
   | { type: 'birthday'; data: BirthdayEvent }
   | null;
 
+const GRID_COLS_BY_COUNT: Record<number, string> = {
+  1: "md:grid-cols-1",
+  2: "md:grid-cols-2",
+  3: "md:grid-cols-3",
+  4: "md:grid-cols-4",
+  5: "md:grid-cols-5",
+  6: "md:grid-cols-6",
+  7: "md:grid-cols-7",
+};
+
 function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true }: WeeklyCalendarProps) {
   const [, navigate] = useLocation();
   const [selectedItem, setSelectedItem] = useState<SelectedItem>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailBlock, setDetailBlock] = useState<WeekPlanBlockDetail | null>(null);
+  /** Mentors usually teach Mon/Wed/Fri — hide blank day columns by default. */
+  const [showEmptyDays, setShowEmptyDays] = useState(false);
 
   const handleItemClick = (item: SelectedItem) => {
     setSelectedItem(item);
@@ -334,6 +346,21 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
   };
 
   const weekDates = getWeekDates();
+
+  const dayHasContent = (dateStr: string) => {
+    return (
+      getSchedulesForDay(dateStr).length > 0 ||
+      getEventsForDay(dateStr).length > 0 ||
+      getHolidaysForDay(dateStr).length > 0 ||
+      getBirthdaysForDay(dateStr).length > 0
+    );
+  };
+
+  const teachingDays = weekDates.filter((day) => dayHasContent(day.date));
+  const offDays = weekDates.filter((day) => !dayHasContent(day.date));
+  const collapseEmpty = !showEmptyDays && teachingDays.length > 0;
+  const visibleDays = collapseEmpty ? teachingDays : weekDates;
+  const gridColsClass = GRID_COLS_BY_COUNT[Math.min(7, Math.max(1, visibleDays.length))] || "md:grid-cols-7";
 
   if (isLoading) {
     return <EducatorLoadingState message="Loading your weekly schedule..." />;
@@ -497,8 +524,54 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
         </div>
       </div>
 
-      <div className="no-print grid grid-cols-1 md:grid-cols-7 gap-4">
-          {weekDates.map((day) => {
+      {collapseEmpty && offDays.length > 0 && (
+        <div
+          className="no-print flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border bg-muted/40 px-3 py-2"
+          data-testid="calendar-off-days-bar"
+        >
+          <p className="text-sm text-muted-foreground">
+            Off days hidden:{" "}
+            <span className="font-medium text-foreground">
+              {offDays.map((d) => d.dayAbbrev).join(", ")}
+            </span>
+            <span className="sr-only">
+              ({offDays.map((d) => `${d.dayName} ${d.dateNum}`).join(", ")})
+            </span>
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11 shrink-0"
+            onClick={() => setShowEmptyDays(true)}
+            data-testid="button-toggle-empty-days"
+          >
+            Show empty days
+          </Button>
+        </div>
+      )}
+
+      {showEmptyDays && teachingDays.length > 0 && offDays.length > 0 && (
+        <div className="no-print flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11"
+            onClick={() => setShowEmptyDays(false)}
+            data-testid="button-toggle-empty-days"
+          >
+            Hide empty days
+          </Button>
+        </div>
+      )}
+
+      <div
+        className={`no-print grid grid-cols-1 gap-4 ${gridColsClass}`}
+        data-testid="calendar-week-grid"
+        data-visible-days={visibleDays.length}
+      >
+          {visibleDays.map((day) => {
             const daySchedules = getSchedulesForDay(day.date);
             const dayEvents = getEventsForDay(day.date);
             const dayHolidays = getHolidaysForDay(day.date);
@@ -509,13 +582,16 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
             return (
               <Card 
                 key={day.date} 
-                className={`${day.isToday ? 'border-primary border-2' : ''} ${isHoliday ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}
+                className={`${day.isToday ? 'border-primary border-2' : ''} ${isHoliday ? 'bg-amber-50 dark:bg-amber-900/10' : ''} ${!hasContent ? 'opacity-70' : ''}`}
                 data-testid={`calendar-day-${day.dayIndex}`}
+                data-has-content={hasContent ? "true" : "false"}
               >
                 <CardHeader className={`pb-2 ${day.isToday ? 'bg-primary/10' : ''} ${isHoliday ? 'bg-amber-100 dark:bg-amber-900/20' : ''}`}>
-                  <CardTitle className="text-sm font-medium flex flex-col items-center">
-                    <span className="text-xs text-muted-foreground">{day.dayAbbrev}</span>
-                    <span className={`text-lg ${day.isToday ? 'text-primary font-bold' : ''}`}>
+                  <CardTitle className="text-sm font-medium flex flex-col items-center gap-0.5">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {day.dayAbbrev}
+                    </span>
+                    <span className={`text-2xl leading-none ${day.isToday ? 'text-primary font-bold' : 'font-semibold'}`}>
                       {day.dateNum}
                     </span>
                     {day.isToday && (
@@ -622,20 +698,20 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                             <button
                               key={block.id}
                               type="button"
-                              className={`schedule-print-block w-full text-left pl-1.5 pr-1 py-1 rounded-sm border-l-[3px] ${BLOCK_TYPE_BORDER[type] || "border-l-slate-300"} ${BLOCK_TYPE_BG[type] || "bg-slate-50"} hover:brightness-[0.98] transition-colors print:pl-1 print:pr-0.5 print:py-0.5 print:rounded-none`}
+                              className={`schedule-print-block w-full text-left pl-2 pr-1.5 py-1.5 rounded-sm border-l-[3px] ${BLOCK_TYPE_BORDER[type] || "border-l-slate-300"} ${BLOCK_TYPE_BG[type] || "bg-slate-50"} hover:brightness-[0.98] transition-colors print:pl-1 print:pr-0.5 print:py-0.5 print:rounded-none`}
                               data-testid="schedule-plan-block"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openPlanBlockDetail(schedule, block);
                               }}
                             >
-                              <div className="flex items-center gap-1 text-[9px] text-slate-500 leading-none mb-0.5 print:text-[7.5px] print:mb-0">
-                                <Clock className="h-2 w-2 shrink-0 print:hidden" />
+                              <div className="flex items-center gap-1 text-[10px] text-slate-500 leading-none mb-0.5 print:text-[7.5px] print:mb-0">
+                                <Clock className="h-2.5 w-2.5 shrink-0 print:hidden" />
                                 <span>
                                   {formatTime(block.startTime)} – {formatTime(block.endTime)}
                                 </span>
                               </div>
-                              <p className="text-[10px] font-medium text-slate-800 leading-snug line-clamp-2 print:text-[8px] print:leading-tight print:line-clamp-2">
+                              <p className="text-xs font-medium text-slate-800 leading-snug line-clamp-2 print:text-[8px] print:leading-tight print:line-clamp-2">
                                 {block.title}
                               </p>
                             </button>
@@ -656,8 +732,8 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                   })}
 
                   {!hasContent && (
-                    <p className="text-xs text-muted-foreground text-center py-2">
-                      No events
+                    <p className="text-xs text-muted-foreground text-center py-4" data-testid="calendar-day-empty">
+                      No classes or events
                     </p>
                   )}
                 </CardContent>

@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-09-08 (Mentor weekly calendar: collapse empty days)
+
+- `/educator/weekly-calendar` hides days with no classes/events/holidays/birthdays by default and widens teaching-day columns. Off-days bar lists hidden day abbrevs; **Show empty days** restores the full 7-column week. Print already used teaching days only.
+- E2E: `educator-weekly-schedule-plans.spec.ts` asserts collapse + toggle (`requireLinkedSeed`).
+
 ## 2026-09-08 (Math level on student profile)
 
 - `children.current_math_level` + assessment type **Math Level** (migration `264`). Staff can view/enter Dimensions-style levels (e.g. `3A`) on school-admin and educator student profiles via `/api/math-level/*`.

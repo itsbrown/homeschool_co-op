@@ -15,7 +15,7 @@ Legacy `client/src/components/dashboards/EducatorDashboard.tsx` (`GET /api/educa
 | `/educator/session/:id` | Active session + `AttendanceTracker` |
 | `/educator/students` | Assigned students (`GET /api/educator/my-students`) |
 | `/educator/assessments` | Record scores, progress log, Lexile |
-| `/educator/weekly-calendar` | Schedule overlay |
+| `/educator/weekly-calendar` | Schedule overlay — **teaching days only by default**; empty days collapsed with “Show empty days” toggle |
 | `/educator/my-hours` | Hours + assigned classes |
 | `/educator/notifications` | In-app parent notices |
 | `/educator/settings` | Profile (first/last/phone) |
