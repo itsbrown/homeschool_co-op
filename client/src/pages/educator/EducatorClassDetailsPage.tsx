@@ -28,6 +28,7 @@ import { formatDate, formatClassSchedule } from "@/lib/utils";
 
 import { DayTypeBadge } from "@/components/roster/DayTypeBadge";
 import { RosterBirthday } from "@/components/roster/RosterBirthday";
+import StudentLevelsSheet, { StudentLevelChips } from "@/components/educator/StudentLevelsSheet";
 import {
   formatRosterDayTypeSummary,
   rosterDayTypeLabel,
@@ -94,6 +95,9 @@ interface StudentData {
   emergencyContactPhone?: string;
   emergencyContactRelationship?: string;
   enrollmentDate?: string;
+  currentLexileRange?: string | null;
+  currentReadingGradeLevel?: string | null;
+  currentMathLevel?: string | null;
 }
 
 interface StudentsResponse {
@@ -326,6 +330,7 @@ export default function EducatorClassDetailsPage() {
                         <TableHead>Parent Phone</TableHead>
                         <TableHead>Emergency Contact</TableHead>
                         <TableHead>Enrollment Date</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -336,6 +341,11 @@ export default function EducatorClassDetailsPage() {
                               <User className="h-4 w-4 mr-2 text-gray-400" />
                               {student.firstName} {student.lastName}
                             </div>
+                            <StudentLevelChips
+                              currentLexileRange={student.currentLexileRange}
+                              currentReadingGradeLevel={student.currentReadingGradeLevel}
+                              currentMathLevel={student.currentMathLevel}
+                            />
                           </TableCell>
                           <TableCell>
                             <RosterBirthday
@@ -388,6 +398,16 @@ export default function EducatorClassDetailsPage() {
                             )}
                           </TableCell>
                           <TableCell>{formatDate(student.enrollmentDate)}</TableCell>
+                          <TableCell>
+                            <StudentLevelsSheet
+                              childId={student.id}
+                              childName={`${student.firstName} ${student.lastName}`}
+                              classId={classId}
+                              currentLexileRange={student.currentLexileRange}
+                              currentReadingGradeLevel={student.currentReadingGradeLevel}
+                              currentMathLevel={student.currentMathLevel}
+                            />
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

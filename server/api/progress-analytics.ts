@@ -5,6 +5,7 @@ import { requireSchoolContext } from "../middleware/require-school-context";
 import {
   buildSchoolLiteracyAnalytics,
   buildChildProgressAnalytics,
+  buildMissingLevelsWorklist,
   verifyParentOwnsChild,
 } from "../lib/progress-analytics";
 
@@ -13,6 +14,11 @@ const router = Router();
 const schoolQuerySchema = z.object({
   schoolYear: z.string().optional(),
   sessionId: z.coerce.number().optional(),
+  locationId: z.coerce.number().optional(),
+});
+
+const missingLevelsQuerySchema = z.object({
+  missing: z.enum(["lexile", "math", "either"]).optional(),
   locationId: z.coerce.number().optional(),
 });
 
@@ -31,6 +37,29 @@ router.get("/school", supabaseAuth, requireSchoolContext, async (req: Request, r
   }
 });
 
+router.get(
+  "/school/missing-levels",
+  supabaseAuth,
+  requireSchoolContext,
+  async (req: Request, res: Response) => {
+    try {
+      const schoolId = Number((req as any).schoolId);
+      const role = (req as any).user?.role || (req as any).user?.activeRole;
+      if (!["schoolAdmin", "admin", "director", "superAdmin"].includes(role)) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      const parsed = missingLevelsQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid query", errors: parsed.error.errors });
+      }
+      const data = await buildMissingLevelsWorklist(schoolId, parsed.data);
+      res.json(data);
+    } catch (e) {
+      console.error("progress analytics missing-levels:", e);
+      res.status(500).json({ message: "Failed to load missing levels worklist" });
+    }
+  },
+);
 router.get("/child/:childId", supabaseAuth, async (req: Request, res: Response) => {
   try {
     const childId = parseInt(req.params.childId, 10);

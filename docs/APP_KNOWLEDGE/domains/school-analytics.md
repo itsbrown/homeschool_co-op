@@ -1,15 +1,15 @@
 # School analytics
 
-**Last updated:** 2026-07-02
+**Last updated:** 2026-09-09
 
-Unified school-admin analytics: **app engagement**, **cart abandonment**, and **student progress** (literacy charts). Parent-facing progress charts use the same progress analytics service with parent scoping.
+Unified school-admin analytics: **app engagement**, **cart abandonment**, and **student progress** (Lexile trends/bands, Math Level distribution, and placement coverage). Parent-facing progress charts use the same progress analytics service with parent scoping.
 
 ## Routes
 
 | Audience | Route | Notes |
 |----------|-------|-------|
 | School admin | `/school-admin/analytics` | Tabs: Engagement, Cart Abandonment, Student Progress |
-| School admin | `/school-admin/assessments` → **Progress insights** | Literacy cohort charts + social PNG export |
+| School admin | `/school-admin/assessments` → **Progress insights** | Shared placement KPIs/worklist, charts, and social PNG export |
 | Parent | `/parent/progress` → **Charts** tab | Child reading/math time-series |
 | Legacy | My School → Statistics | `/api/analytics/school/*` (enrollment breakdown) |
 
@@ -39,9 +39,21 @@ Lanes: `member_cart`, `public_store`. Each attempt has a `correlation_id` (UUID)
 | GET | `/api/school-analytics/engagement` | School admin / director |
 | GET | `/api/school-analytics/cart-abandonment` | School admin / director |
 | GET | `/api/progress/analytics/school` | School context |
+| GET | `/api/progress/analytics/school/missing-levels` | School admin / director; actionable placement worklist |
 | GET | `/api/progress/analytics/child/:childId` | Parent (own child) or staff |
+| GET/POST | `/api/lexile/*` | Staff Lexile history, entry, import, and insights |
+| GET/POST | `/api/math-level/*` | Staff Math Level history and entry |
 
-Shared filters (query params): `from`, `to`, `locationId`, `grade`, `gender`, `ageBand`, `teacherId`.
+Engagement/cart filters use `from`, `to`, `locationId`, `grade`, `gender`, `ageBand`, and `teacherId`. Progress school analytics uses `schoolYear`, `sessionId`, and `locationId`; missing levels uses `missing=lexile|math|either` and `locationId`.
+
+## Placement analytics
+
+- `ProgressInsightsTab` is one shared component mounted in both `/school-admin/assessments` and the Student Progress tab of `/school-admin/analytics`.
+- Lexile coverage reads `children.current_lexile_range`; reading coverage also uses `current_reading_grade_level` and reading assessment history.
+- Math coverage and `mathLevelDistribution` read categorical `children.current_math_level` values such as `3A`.
+- Jurisdiction/proficiency bands apply only to normalized Lexile/reading data; do not place Math Level labels into those bands.
+- Coverage KPI cards open `/api/progress/analytics/school/missing-levels`; worklist actions deep-link to `/schools/students/:childId` for entry.
+- School-admin and educator profiles use matching Lexile/Math Level entry cards. Parent placement displays are read-only.
 
 ## Demographic dimensions
 
@@ -100,6 +112,11 @@ Engagement and cart reports slice by **child demographics** (primary enrolled ch
 | `e2e/school-analytics-engagement.spec.ts` | Playwright + `setup-cart-scenario` |
 | `e2e/school-analytics-cart-abandonment.spec.ts` | Playwright |
 | `e2e/parent-progress-charts.spec.ts` | Playwright + `setup-progress-scenario` |
+| `e2e/school-admin-lexile-profile.spec.ts` | Admin Lexile profile entry |
+| `e2e/school-admin-math-level-profile.spec.ts` | Admin Math Level profile entry |
+| `e2e/parent-placement-levels.spec.ts` | Parent read-only placement snapshots |
+| `e2e/educator-levels-sheet.spec.ts` | Educator combined Lexile/Math entry |
+| `e2e/school-admin-progress-insights-placement.spec.ts` | Coverage KPI, worklist, and Math distribution |
 
 ## Related domains
 
@@ -112,3 +129,5 @@ Engagement and cart reports slice by **child demographics** (primary enrolled ch
 - `useAnalytics` alone does not persist events — `ActivityTelemetry` must be mounted in `App.tsx`.
 - Cart funnel `correlation_id` should stay stable per checkout attempt (client `telemetryClient.ts`; public store uses `public-store-{orderId}`).
 - Progress child API returns 403 if parent does not own the child.
+- `student_assessments.session_id` references `assessment_sessions`, not program `sessions`; manual Lexile/Math entry leaves it null.
+- Math Level is categorical; sorting or banding labels numerically produces misleading analytics.

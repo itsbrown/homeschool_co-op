@@ -101,12 +101,12 @@ router.post('/entry', supabaseAuth, requireSchoolContext, requireLexileRole, asy
       return res.status(404).json({ message: 'Student not found in your school' });
     }
 
-    const assessment = await storage.recordLexileAssessment(
+    const result = await storage.recordLexileAssessment(
       childId, schoolId, userId,
       { readingGradeLevel, lexileRange, bookList, notes }
     );
 
-    res.json({ success: true, assessment });
+    res.json({ success: true, assessment: result });
   } catch (error) {
     console.error('Error saving lexile entry:', error);
     res.status(500).json({ message: 'Failed to save lexile entry' });

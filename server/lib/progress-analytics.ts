@@ -162,13 +162,28 @@ export async function buildSchoolLiteracyAnalytics(
 
   const proficiencyTotal = bandCounts.below + bandCounts.at + bandCounts.above || 1;
 
+  const scopedChildren = childRows.filter((c) => !childFilter.length || childFilter.includes(c.id));
+  const withLexileData = scopedChildren.filter((c) => !!parseLexileRange(c.currentLexileRange)).length;
+  const withMathLevel = scopedChildren.filter((c) => !!c.currentMathLevel?.trim()).length;
+  const mathLevelDist = new Map<string, number>();
+  for (const c of scopedChildren) {
+    const level = c.currentMathLevel?.trim();
+    if (!level) continue;
+    mathLevelDist.set(level, (mathLevelDist.get(level) || 0) + 1);
+  }
+  const mathLevelDistribution = Array.from(mathLevelDist.entries())
+    .map(([level, count]) => ({ level, count }))
+    .sort((a, b) => b.count - a.count || a.level.localeCompare(b.level));
+
   return {
     schoolYear,
     coverage: {
       totalStudents,
       withReadingData: withData,
-      withLexileData: childRows.filter((c) => parseLexileRange(c.currentLexileRange)).length,
+      withLexileData,
+      withMathLevel,
     },
+    mathLevelDistribution,
     headline: {
       improvedPct: withData > 0 ? Math.round((improved / withData) * 100) : 0,
       medianLexileDelta: null,
@@ -186,6 +201,72 @@ export async function buildSchoolLiteracyAnalytics(
     gradeDistribution: Array.from(gradeDist.entries()).map(([gradeLevel, count]) => ({ gradeLevel, count })),
     cohortTrend: monthlyTrends.map((m) => ({ period: m.month, medianLexile: null, medianGrade: null, count: m.count })),
     generatedAt: new Date().toISOString(),
+  };
+}
+
+export type MissingLevelKind = "lexile" | "math" | "either";
+
+export async function buildMissingLevelsWorklist(
+  schoolId: number,
+  options: { missing?: MissingLevelKind; locationId?: number } = {},
+) {
+  const db = await getDb();
+  const missing = options.missing || "either";
+
+  const childRows = await db.select().from(children).where(eq(children.schoolId, schoolId));
+  const scoped = options.locationId
+    ? childRows.filter((c) => c.locationId === options.locationId)
+    : childRows;
+
+  const locationIds = [
+    ...new Set(scoped.map((c) => c.locationId).filter((id): id is number => id != null)),
+  ];
+  const locationNameById = new Map<number, string>();
+  if (locationIds.length > 0) {
+    const { locations } = await import("../../shared/schema");
+    const locRows = await db
+      .select({ id: locations.id, name: locations.name })
+      .from(locations)
+      .where(inArray(locations.id, locationIds));
+    for (const loc of locRows) locationNameById.set(loc.id, loc.name);
+  }
+
+  const rows = [];
+  for (const child of scoped) {
+    const missingLexile = !parseLexileRange(child.currentLexileRange) && !child.currentReadingGradeLevel?.trim();
+    const missingMath = !child.currentMathLevel?.trim();
+    const missingFlags: Array<"lexile" | "math"> = [];
+    if (missingLexile) missingFlags.push("lexile");
+    if (missingMath) missingFlags.push("math");
+
+    if (missingFlags.length === 0) continue;
+    if (missing === "lexile" && !missingLexile) continue;
+    if (missing === "math" && !missingMath) continue;
+
+    rows.push({
+      childId: child.id,
+      firstName: child.firstName,
+      lastName: child.lastName,
+      gradeLevel: child.gradeLevel,
+      campus:
+        child.locationId != null ? locationNameById.get(child.locationId) ?? null : null,
+      locationId: child.locationId,
+      missing: missingFlags,
+      currentLexileRange: child.currentLexileRange,
+      currentReadingGradeLevel: child.currentReadingGradeLevel,
+      currentMathLevel: child.currentMathLevel,
+    });
+  }
+
+  rows.sort((a, b) =>
+    `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`),
+  );
+
+  return {
+    missing,
+    totalStudents: scoped.length,
+    count: rows.length,
+    students: rows,
   };
 }
 

@@ -514,7 +514,10 @@ router.get('/parent/my-children', supabaseAuth, async (req: Request, res: Respon
           id: child.id,
           firstName: child.firstName,
           lastName: child.lastName,
-          gradeLevel: child.gradeLevel
+          gradeLevel: child.gradeLevel,
+          currentLexileRange: child.currentLexileRange,
+          currentReadingGradeLevel: child.currentReadingGradeLevel,
+          currentMathLevel: child.currentMathLevel,
         },
         assessments: enrichedAssessments.sort((a, b) => 
           new Date(b.assessmentDate).getTime() - new Date(a.assessmentDate).getTime()

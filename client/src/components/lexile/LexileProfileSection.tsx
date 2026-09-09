@@ -1,15 +1,41 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  BookMarked, TrendingUp, BookOpen, Brain, CheckCircle, AlertCircle,
-  ChevronDown, ChevronUp, BarChart2, Info, Clock,
-} from 'lucide-react';
-import { format } from 'date-fns';
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  BookMarked,
+  TrendingUp,
+  BookOpen,
+  Brain,
+  CheckCircle,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  BarChart2,
+  Info,
+  Clock,
+  Loader2,
+  Save,
+} from "lucide-react";
+import { format } from "date-fns";
 
 interface LexileInsight {
   gradeComparison: string;
@@ -28,12 +54,32 @@ interface AssessmentRecord {
   source: string;
 }
 
+const entrySchema = z
+  .object({
+    readingGradeLevel: z.string().max(80).optional(),
+    lexileRange: z.string().max(80).optional(),
+    bookList: z.string().max(2000).optional(),
+    notes: z.string().max(2000).optional(),
+  })
+  .refine(
+    (data) =>
+      !!(data.readingGradeLevel?.trim() || data.lexileRange?.trim()),
+    {
+      message: "Enter a reading grade level and/or Lexile range",
+      path: ["lexileRange"],
+    },
+  );
+
+type EntryValues = z.infer<typeof entrySchema>;
+
 interface Props {
   childId: number;
   currentLexileRange?: string | null;
   currentReadingGradeLevel?: string | null;
   currentBookList?: string | null;
   showAIInsights?: boolean;
+  /** When true, show Save form for staff (default true). */
+  allowEdit?: boolean;
 }
 
 export default function LexileProfileSection({
@@ -42,36 +88,117 @@ export default function LexileProfileSection({
   currentReadingGradeLevel,
   currentBookList,
   showAIInsights = true,
+  allowEdit = true,
 }: Props) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [showHistory, setShowHistory] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
+  const [showEntry, setShowEntry] = useState(false);
+  const [localLexile, setLocalLexile] = useState(currentLexileRange ?? null);
+  const [localGrade, setLocalGrade] = useState(currentReadingGradeLevel ?? null);
+  const [localBooks, setLocalBooks] = useState(currentBookList ?? null);
 
-  const hasCurrentData = currentLexileRange || currentReadingGradeLevel || currentBookList;
+  useEffect(() => {
+    setLocalLexile(currentLexileRange ?? null);
+    setLocalGrade(currentReadingGradeLevel ?? null);
+    setLocalBooks(currentBookList ?? null);
+  }, [currentLexileRange, currentReadingGradeLevel, currentBookList]);
+
+  const hasCurrentData = !!(localLexile || localGrade || localBooks);
 
   const { data: insight, isLoading: insightLoading, error: insightError } = useQuery<LexileInsight>({
-    queryKey: ['/api/lexile/insights/student', childId],
+    queryKey: ["/api/lexile/insights/student", childId],
     enabled: showInsights && showAIInsights && !!childId,
     retry: false,
   });
 
   const { data: history = [], isLoading: historyLoading } = useQuery<AssessmentRecord[]>({
-    queryKey: ['/api/lexile/history', childId],
+    queryKey: ["/api/lexile/history", childId],
     enabled: showHistory && !!childId,
     retry: false,
   });
 
-  if (!hasCurrentData && !showAIInsights) return null;
+  const form = useForm<EntryValues>({
+    resolver: zodResolver(entrySchema),
+    defaultValues: {
+      readingGradeLevel: currentReadingGradeLevel || "",
+      lexileRange: currentLexileRange || "",
+      bookList: currentBookList || "",
+      notes: "",
+    },
+  });
+
+  const openEntry = () => {
+    const next = !showEntry;
+    setShowEntry(next);
+    if (next) {
+      form.reset({
+        readingGradeLevel: localGrade || "",
+        lexileRange: localLexile || "",
+        bookList: localBooks || "",
+        notes: "",
+      });
+    }
+  };
+
+  const mutation = useMutation({
+    mutationFn: async (data: EntryValues) => {
+      const response = await apiRequest("POST", "/api/lexile/entry", {
+        childId,
+        readingGradeLevel: data.readingGradeLevel?.trim() || undefined,
+        lexileRange: data.lexileRange?.trim() || undefined,
+        bookList: data.bookList?.trim() || undefined,
+        notes: data.notes?.trim() || undefined,
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to save Lexile entry");
+      }
+      return response.json() as Promise<{
+        success: boolean;
+        assessment?: {
+          child?: {
+            currentLexileRange?: string | null;
+            currentReadingGradeLevel?: string | null;
+            currentBookList?: string | null;
+          };
+        };
+      }>;
+    },
+    onSuccess: (result, variables) => {
+      const child = result.assessment?.child;
+      setLocalLexile(child?.currentLexileRange ?? variables.lexileRange?.trim() ?? null);
+      setLocalGrade(
+        child?.currentReadingGradeLevel ?? variables.readingGradeLevel?.trim() ?? null,
+      );
+      setLocalBooks(child?.currentBookList ?? variables.bookList?.trim() ?? null);
+      toast({ title: "Saved", description: "Reading level recorded for this student." });
+      queryClient.invalidateQueries({ queryKey: ["/api/lexile/students"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lexile/history", childId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lexile/insights/student", childId] });
+      setShowEntry(false);
+      setShowHistory(true);
+    },
+    onError: (error: Error) => {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    },
+  });
+
+  if (!hasCurrentData && !showAIInsights && !allowEdit) return null;
 
   return (
-    <Card>
+    <Card data-testid="lexile-profile-section">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <CardTitle className="flex items-center gap-2">
             <BookMarked className="h-5 w-5 text-blue-600" />
             Reading Level (Lexile)
           </CardTitle>
           {!hasCurrentData && (
-            <Badge variant="secondary" className="text-xs">No data recorded</Badge>
+            <Badge variant="secondary" className="text-xs">
+              No data recorded
+            </Badge>
           )}
         </div>
       </CardHeader>
@@ -79,27 +206,33 @@ export default function LexileProfileSection({
         {hasCurrentData ? (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              {currentLexileRange && (
-                <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-md border border-blue-200">
+              {localLexile && (
+                <div
+                  className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-md border border-blue-200"
+                  data-testid="badge-current-lexile-range"
+                >
                   <BarChart2 className="h-4 w-4" />
-                  <span className="text-sm font-medium">Lexile Range: {currentLexileRange}</span>
+                  <span className="text-sm font-medium">Lexile Range: {localLexile}</span>
                 </div>
               )}
-              {currentReadingGradeLevel && (
-                <div className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-200">
+              {localGrade && (
+                <div
+                  className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1.5 rounded-md border border-green-200"
+                  data-testid="badge-current-reading-grade"
+                >
                   <TrendingUp className="h-4 w-4" />
-                  <span className="text-sm font-medium">Grade Level: {currentReadingGradeLevel}</span>
+                  <span className="text-sm font-medium">Grade Level: {localGrade}</span>
                 </div>
               )}
             </div>
 
-            {currentBookList && (
+            {localBooks && (
               <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
                 <p className="text-xs font-medium text-amber-700 flex items-center gap-1 mb-1">
                   <BookOpen className="h-3.5 w-3.5" />
                   Current Book List
                 </p>
-                <p className="text-sm text-amber-800 leading-relaxed">{currentBookList}</p>
+                <p className="text-sm text-amber-800 leading-relaxed">{localBooks}</p>
               </div>
             )}
           </div>
@@ -110,17 +243,147 @@ export default function LexileProfileSection({
           </p>
         )}
 
-        {/* Assessment History Timeline */}
+        {allowEdit && (
+          <div className="pt-2 border-t">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 -ml-2"
+              onClick={openEntry}
+              data-testid="button-toggle-lexile-entry"
+            >
+              {showEntry ? "Cancel" : hasCurrentData ? "Update reading level" : "Enter reading level"}
+              {showEntry ? (
+                <ChevronUp className="h-3 w-3 ml-1" />
+              ) : (
+                <ChevronDown className="h-3 w-3 ml-1" />
+              )}
+            </Button>
+
+            {showEntry && (
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit((data) => mutation.mutate(data))}
+                  className="mt-3 space-y-3"
+                >
+                  <FormField
+                    control={form.control}
+                    name="readingGradeLevel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Reading grade level</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="e.g. 4.5 or 4th Grade"
+                            style={{ fontSize: "16px" }}
+                            disabled={mutation.isPending}
+                            data-testid="input-lexile-grade"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="lexileRange"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Lexile range</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="e.g. 420L–650L"
+                            style={{ fontSize: "16px" }}
+                            disabled={mutation.isPending}
+                            data-testid="input-lexile-range"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Enter at least a grade level or Lexile range.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="bookList"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Book list (optional)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            placeholder="Books the student is reading or recommended titles"
+                            rows={2}
+                            disabled={mutation.isPending}
+                            data-testid="input-lexile-books"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Notes (optional)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            placeholder="Assessment notes, date taken, etc."
+                            rows={2}
+                            disabled={mutation.isPending}
+                            data-testid="input-lexile-notes"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={mutation.isPending}
+                    className="bg-blue-600 hover:bg-blue-700"
+                    data-testid="button-save-lexile"
+                  >
+                    {mutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" /> Save reading level
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </Form>
+            )}
+          </div>
+        )}
+
         <div className="pt-2 border-t">
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 -ml-2"
-            onClick={() => setShowHistory(v => !v)}
+            onClick={() => setShowHistory((v) => !v)}
+            data-testid="button-toggle-lexile-history"
           >
             <Clock className="h-4 w-4 mr-2" />
-            {showHistory ? 'Hide' : 'Show'} Assessment History
-            {showHistory ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />}
+            {showHistory ? "Hide" : "Show"} Assessment History
+            {showHistory ? (
+              <ChevronUp className="h-3 w-3 ml-1" />
+            ) : (
+              <ChevronDown className="h-3 w-3 ml-1" />
+            )}
           </Button>
 
           {showHistory && (
@@ -129,35 +392,41 @@ export default function LexileProfileSection({
                 <div className="space-y-2">
                   <Skeleton className="h-12 w-full" />
                   <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
                 </div>
               )}
 
               {!historyLoading && history.length === 0 && (
-                <p className="text-sm text-muted-foreground py-2">No assessment records found yet.</p>
+                <p className="text-sm text-muted-foreground py-2">
+                  No assessment records found yet.
+                </p>
               )}
 
               {!historyLoading && history.length > 0 && (
-                <div className="relative">
+                <div className="relative" data-testid="lexile-history-list">
                   <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-blue-100" />
                   <div className="space-y-3">
-                    {history.map((entry, i) => (
+                    {history.map((entry) => (
                       <div key={entry.id} className="flex gap-3 pl-9 relative">
                         <div className="absolute left-3 top-2 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white shadow-sm" />
                         <div className="flex-1 bg-blue-50 border border-blue-100 rounded-lg p-3">
                           <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
-                            <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 bg-white">
+                            <Badge
+                              variant="outline"
+                              className="text-xs border-blue-300 text-blue-700 bg-white"
+                            >
                               <BookMarked className="h-3 w-3 mr-1" />
                               Lexile Reading Level
                             </Badge>
                             <span className="text-xs text-muted-foreground flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {format(new Date(entry.assessmentDate), 'MMM d, yyyy')}
+                              {format(new Date(entry.assessmentDate), "MMM d, yyyy")}
                             </span>
                           </div>
                           <p className="text-sm font-medium text-blue-800">{entry.score}</p>
                           {entry.notes && (
-                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{entry.notes}</p>
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                              {entry.notes}
+                            </p>
                           )}
                         </div>
                       </div>
@@ -169,18 +438,22 @@ export default function LexileProfileSection({
           )}
         </div>
 
-        {/* AI Insights */}
         {showAIInsights && (
           <div className="pt-2 border-t">
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="text-purple-600 hover:text-purple-700 hover:bg-purple-50 -ml-2"
-              onClick={() => setShowInsights(v => !v)}
+              onClick={() => setShowInsights((v) => !v)}
             >
               <Brain className="h-4 w-4 mr-2" />
-              {showInsights ? 'Hide' : 'Show'} AI Reading Insights
-              {showInsights ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />}
+              {showInsights ? "Hide" : "Show"} AI Reading Insights
+              {showInsights ? (
+                <ChevronUp className="h-3 w-3 ml-1" />
+              ) : (
+                <ChevronDown className="h-3 w-3 ml-1" />
+              )}
             </Button>
 
             {showInsights && (
@@ -216,19 +489,25 @@ export default function LexileProfileSection({
                       <div className="space-y-3 bg-purple-50 rounded-lg border border-purple-100 p-3">
                         {insight.gradeComparison && (
                           <div>
-                            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">Grade Comparison</p>
+                            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">
+                              Grade Comparison
+                            </p>
                             <p className="text-sm">{insight.gradeComparison}</p>
                           </div>
                         )}
                         {insight.interpretation && (
                           <div>
-                            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">Interpretation</p>
+                            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">
+                              Interpretation
+                            </p>
                             <p className="text-sm">{insight.interpretation}</p>
                           </div>
                         )}
                         {insight.nextGoals && insight.nextGoals.length > 0 && (
                           <div>
-                            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">Next Goals</p>
+                            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">
+                              Next Goals
+                            </p>
                             <ul className="space-y-1">
                               {insight.nextGoals.map((goal, i) => (
                                 <li key={i} className="flex items-start gap-2 text-sm">
@@ -241,10 +520,16 @@ export default function LexileProfileSection({
                         )}
                         {insight.additionalBooks && insight.additionalBooks.length > 0 && (
                           <div>
-                            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">Recommended Books</p>
+                            <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">
+                              Recommended Books
+                            </p>
                             <div className="flex flex-wrap gap-1">
                               {insight.additionalBooks.map((book, i) => (
-                                <Badge key={i} variant="outline" className="text-xs border-purple-200 text-purple-700">
+                                <Badge
+                                  key={i}
+                                  variant="outline"
+                                  className="text-xs border-purple-200 text-purple-700"
+                                >
                                   <BookOpen className="h-3 w-3 mr-1" />
                                   {book}
                                 </Badge>

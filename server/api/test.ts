@@ -4466,6 +4466,57 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
       })
       .returning();
 
+    if (req.body?.withPlacementLevels === true) {
+      const currentLexileRange = '600L-700L';
+      const currentReadingGradeLevel = '3.5';
+      const currentMathLevel = '3A';
+      const updatedChild = await storage.updateChild(child.id, {
+        currentLexileRange,
+        currentReadingGradeLevel,
+        currentMathLevel,
+      });
+      if (!updatedChild) {
+        throw new Error('Failed to set placement levels on seeded child');
+      }
+
+      const [mathType] = await db
+        .insert(assessmentTypes)
+        .values({
+          schoolId: school.id,
+          name: `Math Level ${uniqueId}`,
+          category: 'math',
+          scoreFormat: 'text',
+          isActive: true,
+          sortOrder: 1,
+        })
+        .returning();
+
+      await Promise.all([
+        storage.createStudentAssessment({
+          schoolId: school.id,
+          childId: child.id,
+          assessmentTypeId: readingType.id,
+          assessmentDate: new Date(),
+          score: currentReadingGradeLevel,
+          lexileScore: 650,
+          recordedBy: educator.id,
+          source: 'manual_entry',
+          sessionId: null,
+        }),
+        storage.createStudentAssessment({
+          schoolId: school.id,
+          childId: child.id,
+          assessmentTypeId: mathType.id,
+          assessmentDate: new Date(),
+          score: currentMathLevel,
+          notes: 'E2E placement seed',
+          recordedBy: educator.id,
+          source: 'manual_entry',
+          sessionId: null,
+        }),
+      ]);
+    }
+
     let educatorSupabaseLinked = false;
     let parentSupabaseLinked = false;
     let adminSupabaseLinked = false;
@@ -4539,6 +4590,9 @@ router.post('/setup-progress-scenario', async (req: Request, res: Response) => {
           firstName: child.firstName,
           lastName: child.lastName,
           gradeLevel: child.gradeLevel,
+          currentLexileRange: req.body?.withPlacementLevels === true ? '600L-700L' : null,
+          currentReadingGradeLevel: req.body?.withPlacementLevels === true ? '3.5' : null,
+          currentMathLevel: req.body?.withPlacementLevels === true ? '3A' : null,
         },
         class: { id: progressClass.id, title: progressClass.title },
         assessmentType: { id: readingType.id, name: readingType.name },

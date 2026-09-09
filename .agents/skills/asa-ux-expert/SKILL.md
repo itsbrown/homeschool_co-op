@@ -143,6 +143,13 @@ See `asa-design-system` for touch target minimums (`h-11`/`h-12`) and `asa-front
 - **Cards** when each item is a self-contained unit with rich content (image, description, multiple actions)
 - **On mobile**: Tables with 4+ columns → convert to stacked cards or use horizontal scroll with `overflow-x-auto`
 
+## Assessment & Placement Entry
+
+- **Enter where you view** — When a student profile has no placement data, show the entry CTA in that empty-state card instead of sending staff to a separate workflow.
+- **One interaction model** — Keep Lexile and Math Level aligned: empty state → inline entry → save → current badge + history.
+- **Staff write, parents read** — School admins and educators enter levels; parent Progress and Assessments surfaces remain read-only.
+- **KPI to worklist** — Every Progress Insights coverage card must open a filtered missing-level worklist with a direct student-profile action.
+
 ## Common Pitfalls
 
 - **Registration form loses child medical notes on validation error** → `ChildRegistrationPage` re-renders and clears uncontrolled fields → ensure all fields use `react-hook-form` controlled values with `defaultValues` so data persists through validation cycles
