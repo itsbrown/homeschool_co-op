@@ -1,5 +1,32 @@
 # App knowledge changelog
 
+## 2026-09-09 (School admin assessments shell + All Assessments)
+
+- `/school-admin/assessments` now uses `SchoolAdminLayout` (UnifiedSchoolAdminSidebar) instead of legacy `AppShell`/`Sidebar`. All Assessments stopped using bare `fetch` (no auth) and loads via the default query client; list API also returns `assessmentType`. E2E: `school-admin-assessments-all-tab.spec.ts`.
+
+## 2026-09-09 (Recent Assessments child names)
+
+- `GET /api/assessments/students` now returns `child` / `childName`. Educator Recent Assessments was resolving names only from My Students, so Lexile/Math cards for non-roster (or school-search) kids showed **Unknown**. E2E: `educator-assessments-record.spec.ts` asserts the seeded child name on Recent.
+
+## 2026-09-09 (Attendance roster placement chips)
+
+- Day-of session roster (`GET /api/educator/sessions/:id/roster`) returns `currentLexileRange`, `currentReadingGradeLevel`, `currentMathLevel`. `AttendanceTracker` shows compact `StudentLevelChips` under the student name (Present/Late taps unchanged). E2E: `attendance-roster-levels.spec.ts`.
+
+## 2026-09-09 (Assessments UX Full v1)
+
+- Added `asa-progress-analytics` with placement snapshots/history, API authorization, dual-mounted Progress Insights, Lexile-only bands, categorical Math distribution, and the assessment-session FK invariant.
+- Documented enter-where-viewed parity for Lexile and Math Level, staff-write/parent-read-only boundaries, and actionable coverage KPI worklists.
+- Cataloged linked-seed Playwright coverage: `school-admin-lexile-profile`, `school-admin-math-level-profile`, `parent-placement-levels`, `educator-levels-sheet`, and `school-admin-progress-insights-placement`.
+
+## 2026-09-09 (Parent placement levels)
+
+- Parent Progress and Assessments now show shared read-only badges for the child snapshot fields `current_lexile_range`, `current_reading_grade_level`, and `current_math_level`; staff write controls remain absent.
+- `setup-progress-scenario` supports `withPlacementLevels` for linked-parent E2E coverage in `e2e/parent-placement-levels.spec.ts`.
+
+## 2026-09-09 (Educator roster level entry)
+
+- Educator My Students and class Students rosters now return current Lexile range, reading grade level, and Math Level. The roster **Levels** Sheet records reading/math placement through the existing manual-entry APIs and refreshes compact chips. E2E: `educator-levels-sheet.spec.ts` (`requireLinkedSeed`).
+
 ## 2026-09-08 (Math/Lexile save FK: program session ≠ assessment session)
 
 - Prod 500 on Math Level save for enrolled kids: `recordMathLevelAssessment` / `recordLexileAssessment` wrote `program_enrollments.session_id` (`sessions.id`) into `student_assessments.session_id`, which FKs `assessment_sessions`. Fix: leave assessment `session_id` null on manual Lexile/Math Level entry. `resolveActiveSessionIdForChild` remains for progress logs only.

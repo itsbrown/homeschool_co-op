@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, BookOpen, TrendingUp, Calendar, User } from "lucide-react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import { PlacementLevelsStrip } from "@/components/progress-charts/PlacementLevelsStrip";
 import { safeFormatDate } from "@/utils/safeFormatDate";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
@@ -29,6 +30,9 @@ interface ChildWithAssessments {
     firstName: string;
     lastName: string;
     gradeLevel: string | null;
+    currentLexileRange: string | null;
+    currentReadingGradeLevel: string | null;
+    currentMathLevel: string | null;
   };
   assessments: Assessment[];
 }
@@ -197,6 +201,11 @@ function ChildAssessmentTab({ data }: { data: ChildWithAssessments }) {
   
   return (
     <div className="space-y-6">
+      <PlacementLevelsStrip
+        currentLexileRange={child.currentLexileRange}
+        currentReadingGradeLevel={child.currentReadingGradeLevel}
+        currentMathLevel={child.currentMathLevel}
+      />
       <AssessmentSummary assessments={assessments} />
       
       <Card>

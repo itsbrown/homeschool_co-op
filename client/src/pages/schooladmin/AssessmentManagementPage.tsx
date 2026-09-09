@@ -35,7 +35,7 @@ import AssessmentSessionsTab from '@/components/admin/AssessmentSessionsTab';
 import ProgressInsightsTab from '@/components/admin/ProgressInsightsTab';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import AppShell from '@/components/layout/AppShell';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface AssessmentType {
@@ -82,6 +82,7 @@ interface StudentAssessment {
   source: string;
   recordedBy: number;
   child?: { firstName: string; lastName: string };
+  childName?: string | null;
   assessmentType?: { name: string };
   curriculumBook?: { name: string } | null;
   recorder?: { firstName: string; lastName: string };
@@ -173,17 +174,23 @@ export default function AssessmentManagementPage() {
     enabled: !!user?.email,
   });
   
+  const assessmentsQueryParams = new URLSearchParams();
+  if (assessmentFilters.childId && assessmentFilters.childId !== 'all-students') {
+    assessmentsQueryParams.append('childId', assessmentFilters.childId);
+  }
+  if (assessmentFilters.assessmentTypeId && assessmentFilters.assessmentTypeId !== 'all-types') {
+    assessmentsQueryParams.append('assessmentTypeId', assessmentFilters.assessmentTypeId);
+  }
+  if (assessmentFilters.locationId && assessmentFilters.locationId !== 'all-locations') {
+    assessmentsQueryParams.append('locationId', assessmentFilters.locationId);
+  }
+  const assessmentsQuerySuffix = assessmentsQueryParams.toString();
+  const assessmentsQueryUrl = assessmentsQuerySuffix
+    ? `/api/assessments/students?${assessmentsQuerySuffix}`
+    : '/api/assessments/students';
+
   const { data: allStudentAssessments = [], isLoading: assessmentsLoading } = useQuery<StudentAssessment[]>({
-    queryKey: ['/api/assessments/students', assessmentFilters.childId, assessmentFilters.assessmentTypeId, assessmentFilters.locationId],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (assessmentFilters.childId && assessmentFilters.childId !== 'all-students') params.append('childId', assessmentFilters.childId);
-      if (assessmentFilters.assessmentTypeId && assessmentFilters.assessmentTypeId !== 'all-types') params.append('assessmentTypeId', assessmentFilters.assessmentTypeId);
-      if (assessmentFilters.locationId && assessmentFilters.locationId !== 'all-locations') params.append('locationId', assessmentFilters.locationId);
-      const response = await fetch(`/api/assessments/students?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch assessments');
-      return response.json();
-    },
+    queryKey: [assessmentsQueryUrl],
     enabled: !!user?.email && activeTab === 'all',
   });
   
@@ -431,19 +438,11 @@ export default function AssessmentManagementPage() {
   };
 
   return (
-    <AppShell>
-      <div className="container mx-auto py-6 px-4">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="page-title">
-              <GraduationCap className="h-6 w-6" />
-              Assessment Management
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Define assessment types and curriculum materials for student progress tracking
-            </p>
-          </div>
-        </div>
+    <SchoolAdminLayout pageTitle="Assessment Management">
+      <div className="container mx-auto py-2 px-1 md:px-2">
+        <p className="text-muted-foreground mb-6" data-testid="page-title">
+          Define assessment types and curriculum materials for student progress tracking
+        </p>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-4">
@@ -642,10 +641,10 @@ export default function AssessmentManagementPage() {
                                 {format(new Date(assessment.assessmentDate), 'MMM d, yyyy')}
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-testid={`text-admin-assessment-child-${assessment.id}`}>
                               {assessment.child 
                                 ? `${assessment.child.firstName} ${assessment.child.lastName}`
-                                : `Child #${assessment.childId}`}
+                                : assessment.childName || `Child #${assessment.childId}`}
                             </TableCell>
                             <TableCell>
                               {assessment.assessmentType?.name || `Type #${assessment.assessmentTypeId}`}
@@ -984,7 +983,7 @@ export default function AssessmentManagementPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }
 

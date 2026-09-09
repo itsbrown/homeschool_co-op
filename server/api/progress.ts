@@ -529,6 +529,7 @@ router.get('/parent/my-children', supabaseAuth, async (req: Request, res: Respon
         gradeLevel: child.gradeLevel,
         currentLexileRange: child.currentLexileRange,
         currentReadingGradeLevel: child.currentReadingGradeLevel,
+        currentMathLevel: child.currentMathLevel,
         currentBookList: child.currentBookList,
       },
       current: summary[child.id]?.current ?? [],

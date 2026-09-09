@@ -9,6 +9,7 @@ import { Loader2, TrendingUp, BookOpen, FileDown, CheckCircle2, Circle } from 'l
 import { ProgressHeadlineCard } from '@/components/progress-charts/ProgressHeadlineCard';
 import { ChildReadingProgressChart } from '@/components/progress-charts/ChildReadingProgressChart';
 import { ChildMathProgressChart } from '@/components/progress-charts/ChildMathProgressChart';
+import { PlacementLevelsStrip } from '@/components/progress-charts/PlacementLevelsStrip';
 import { Button } from '@/components/ui/button';
 import { downloadProgressReportPdf } from '@/lib/downloadProgressReport';
 import { useToast } from '@/hooks/use-toast';
@@ -162,17 +163,24 @@ export default function ParentProgressPage() {
             </div>
 
             {activeChild && (
-              <Card className="border-emerald-200 bg-emerald-50/30">
-                <CardHeader>
-                  <CardTitle className="text-lg">Progress summary</CardTitle>
-                  <CardDescription>
-                    {activeChild.child.firstName} {activeChild.child.lastName} • {activeChild.child.gradeLevel}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ProgressSummaryCard childId={activeChild.child.id} />
-                </CardContent>
-              </Card>
+              <>
+                <PlacementLevelsStrip
+                  currentLexileRange={activeChild.child.currentLexileRange}
+                  currentReadingGradeLevel={activeChild.child.currentReadingGradeLevel}
+                  currentMathLevel={activeChild.child.currentMathLevel}
+                />
+                <Card className="border-emerald-200 bg-emerald-50/30">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Progress summary</CardTitle>
+                    <CardDescription>
+                      {activeChild.child.firstName} {activeChild.child.lastName} • {activeChild.child.gradeLevel}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ProgressSummaryCard childId={activeChild.child.id} />
+                  </CardContent>
+                </Card>
+              </>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

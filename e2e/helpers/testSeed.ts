@@ -320,7 +320,15 @@ export type SetupProgressScenarioResponse = {
     admin?: { id: number; email: string; password: string };
     educator: { id: number; email: string; password: string };
     parent: { id: number; email: string; password: string };
-    child: { id: number; firstName: string; lastName: string; gradeLevel: string };
+    child: {
+      id: number;
+      firstName: string;
+      lastName: string;
+      gradeLevel: string;
+      currentLexileRange?: string | null;
+      currentReadingGradeLevel?: string | null;
+      currentMathLevel?: string | null;
+    };
     class?: { id: number; title: string };
     assessmentType?: { id: number; name: string };
     schoolYear: string;
@@ -336,6 +344,7 @@ export async function postSetupProgressScenario(
     linkSupabaseAuth?: boolean;
     linkSupabaseAuthAdmin?: boolean;
     withCompleteRubric?: boolean;
+    withPlacementLevels?: boolean;
   } = {},
 ): Promise<{ response: APIResponse; json: SetupProgressScenarioResponse | null }> {
   const response = await request.post("/api/test/setup-progress-scenario", {

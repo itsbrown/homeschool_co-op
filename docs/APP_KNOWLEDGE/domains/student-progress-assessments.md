@@ -1,6 +1,6 @@
 # Student progress & assessments
 
-**Last updated:** 2026-09-08
+**Last updated:** 2026-09-09
 
 ## Two lanes
 
@@ -15,9 +15,10 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 
 | Role | Route | Notes |
 |------|-------|-------|
-| Parent | `/parent/progress` | Hub: **Charts** (reading/math API), overview, this session, AI summary |
-| Parent | `/parent/assessments` | Reading charts + Lexile history |
+| Parent | `/parent/progress` | Hub: read-only current Lexile/reading grade + Math Level, **Charts** (reading/math API), overview, this session, AI summary |
+| Parent | `/parent/assessments` | Read-only current Lexile/reading grade + Math Level, reading charts + assessment history |
 | Educator | `/educator/assessments` | Default mentor nav. Tabs: record assessment, **Progress** (log form), Lexile. See [educator-ui.md](./educator-ui.md). |
+| Educator | `/educator/students`, class Students tab | Compact reading/math chips + **Levels** Sheet; posts manual entries to `/api/lexile/entry` and `/api/math-level/entry`. |
 | School admin | `/schools/students/:id` | Profile: Lexile + **Math Level** (enter/update + history) |
 | Educator | Student detail | Lexile + **Math Level** entry |
 | School admin | `/school-admin/assessments` | Types/books + **Progress catalog** + **Sessions & reports** + **Progress insights** |
@@ -34,6 +35,16 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 - **AI:** `GET /api/progress/insights/summary/:childId` (parent) and `GET /api/progress/insights/staff/summary/:childId` (staff) share `child_progress_insights` cache via `server/lib/progress-context-bundle.ts`. Parent concierge appends cached summary when fresh (&lt;24h).
 - **Reports:** NY IHIP quarterly template (`template=ny-ihip-quarterly`): preview JSON, draft PDF, `POST .../generate` → immutable `quarterly_progress_reports` snapshot; audit events in `audit_logs`; parents download via `snapshotId` only.
 
+## Placement entry and analytics contract
+
+- **Enter where viewed:** Empty Lexile and Math Level cards on staff student profiles expose their own entry CTA; both use the same inline entry → save → current badge + history model.
+- **Role boundary:** School admins and educators write through `/api/lexile/entry` and `/api/math-level/entry`; parent Progress and Assessments render `children.current_*` snapshots read-only.
+- **Dual-source analytics:** Current coverage comes from `children.current_lexile_range`, `current_reading_grade_level`, and `current_math_level`; dated series come from reading/math `assessment_types` plus `student_assessments`.
+- **Different aggregations:** Jurisdiction/proficiency bands are Lexile-only. Math Level values are categorical labels and feed `mathLevelDistribution`.
+- **Actionable KPIs:** `ProgressInsightsTab` coverage cards open `/api/progress/analytics/school/missing-levels`; each worklist row links to the student profile for entry.
+- **Shared surface:** `ProgressInsightsTab` mounts under both `/school-admin/assessments` and `/school-admin/analytics`.
+- **Assessment list names:** `GET /api/assessments/students` enriches each row with `child` / `childName` and `assessmentType`. Educator Recent Assessments and school-admin **All Assessments** must use the authenticated TanStack default fetcher (not bare `fetch`). The assessments page uses `SchoolAdminLayout` / `UnifiedSchoolAdminSidebar`, not legacy `AppShell`/`Sidebar`.
+
 ## Tests
 
 | File | Type |
@@ -47,8 +58,14 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 | `server/tests/integration/progress-api.test.ts` | DB smoke (`TEST_DATABASE_URL`) |
 | `server/tests/integration/progress-analytics-school.test.ts` | Progress analytics school + child APIs |
 | `server/tests/parse-lexile-range.test.ts` | Lexile parser unit tests |
+| `e2e/school-admin-assessments-all-tab.spec.ts` | Unified admin sidebar + All Assessments lists child names (`withPlacementLevels`, linked admin) |
+| `e2e/educator-assessments-record.spec.ts` | Record tab + Recent shows real child name (not Unknown); Progress tab (`requireLinkedSeed`) |
+| `e2e/school-admin-lexile-profile.spec.ts` | Admin enter/view Lexile from the student profile empty state |
 | `e2e/school-admin-math-level-profile.spec.ts` | Admin enter/view Math Level on `/schools/students/:id` (`setup-progress-scenario` + `linkSupabaseAuthAdmin`) |
+| `e2e/educator-levels-sheet.spec.ts` | Educator My Students Levels Sheet saves Lexile + Math Level (`setup-progress-scenario`, linked educator Supabase auth) |
 | `e2e/parent-progress-charts.spec.ts` | Parent Charts tab (`setup-progress-scenario`, Supabase) |
+| `e2e/parent-placement-levels.spec.ts` | Parent read-only placement badges on Progress + Assessments (`setup-progress-scenario` with `withPlacementLevels`, Supabase) |
+| `e2e/school-admin-progress-insights-placement.spec.ts` | Admin Math coverage KPI, missing-level worklist, and categorical distribution |
 
 **Run validation bundle:**
 
@@ -74,6 +91,7 @@ RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your
 - Progress log without active enrolled session → 400 / UI “no active session” alert.
 - Manual Lexile / Math Level: never put program `sessions.id` on `student_assessments.session_id` (FK → `assessment_sessions`); enrolled kids 500 otherwise.
 - `ParentProgressPage` **Charts** tab uses `/api/progress/analytics/child/:childId`; detailed reading history remains on `/parent/assessments`.
+- Parent placement values come from `children.current_lexile_range`, `current_reading_grade_level`, and `current_math_level`; parent APIs expose these fields read-only and never mount staff entry controls.
 - Admin progress catalog uses same `/api/progress/subjects` as educators; subject **create** is admin-only.
 
 ## NY | Progress report (IHIP-aligned)
@@ -94,6 +112,7 @@ RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your
 - `client/src/components/math/MathLevelProfileSection.tsx` — profile card + inline entry
 - `server/migrations/264-children-math-level.sql` — `current_math_level` + assessment type
 - `client/src/components/educator/ProgressLogForm.tsx`, `ProgressLogTab.tsx`, `ProgressQuickLogDialog.tsx`
+- `client/src/components/educator/StudentLevelsSheet.tsx` — roster-level reading/math entry Sheet + compact chips
 - `client/src/pages/parent/ParentProgressPage.tsx`
 - `client/src/components/admin/ProgressCatalogTab.tsx`, `AssessmentSessionsTab.tsx`
 - Reference PDF: `docs/templates/` (copy ASA source PDF when committed)

@@ -322,6 +322,21 @@ async function syncAssessmentToProgress(assessment: StudentAssessment): Promise<
 
 // ---------- Lexile ----------
 
+async function ensureLexileAssessmentType(schoolId: number) {
+  const types = await getAssessmentTypesBySchoolId(schoolId);
+  const existing = types.find((t) => t.name === "Lexile Reading Level");
+  if (existing) return existing;
+  return createAssessmentType({
+    schoolId,
+    name: "Lexile Reading Level",
+    description: "Tracks student Lexile reading range and grade-equivalent level",
+    category: "reading",
+    scoreFormat: "level",
+    isActive: true,
+    sortOrder: 100,
+  });
+}
+
 export async function recordLexileAssessment(
   childId: number,
   schoolId: number,
@@ -340,8 +355,7 @@ export async function recordLexileAssessment(
     .where(and(eq(children.id, childId), eq(children.schoolId, schoolId)))
     .returning();
 
-  const types = await getAssessmentTypesBySchoolId(schoolId);
-  const lexileType = types.find((t) => t.name === "Lexile Reading Level");
+  const lexileType = await ensureLexileAssessmentType(schoolId);
   let assessment: StudentAssessment | undefined;
   if (lexileType) {
     const score = data.readingGradeLevel || data.lexileRange || "updated";

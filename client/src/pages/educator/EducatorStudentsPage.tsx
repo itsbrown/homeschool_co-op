@@ -21,6 +21,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/utils";
 import { StudentSafetyBadges, StudentSafetySheet, type StudentSafetyProfile } from "@/components/educator/StudentSafetySheet";
+import StudentLevelsSheet, { StudentLevelChips } from "@/components/educator/StudentLevelsSheet";
 import { DayTypeBadge } from "@/components/roster/DayTypeBadge";
 import { RosterBirthday } from "@/components/roster/RosterBirthday";
 
@@ -230,6 +231,11 @@ export default function EducatorStudentsPage() {
                         <div className="font-semibold">
                           {student.firstName} {student.lastName}
                         </div>
+                        <StudentLevelChips
+                          currentLexileRange={student.currentLexileRange}
+                          currentReadingGradeLevel={student.currentReadingGradeLevel}
+                          currentMathLevel={student.currentMathLevel}
+                        />
                         <div className="mt-2">
                           <StudentSafetyBadges
                             student={{
@@ -328,6 +334,14 @@ export default function EducatorStudentsPage() {
                               View
                             </Button>
                           </Link>
+                          <StudentLevelsSheet
+                            childId={student.id}
+                            childName={`${student.firstName} ${student.lastName}`}
+                            classId={student.classId}
+                            currentLexileRange={student.currentLexileRange}
+                            currentReadingGradeLevel={student.currentReadingGradeLevel}
+                            currentMathLevel={student.currentMathLevel}
+                          />
                         </div>
                       </TableCell>
                     </TableRow>
