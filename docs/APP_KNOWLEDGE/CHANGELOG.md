@@ -1,5 +1,13 @@
 # App knowledge changelog
 
+## 2026-09-09 (School admin assessments shell + All Assessments)
+
+- `/school-admin/assessments` now uses `SchoolAdminLayout` (UnifiedSchoolAdminSidebar) instead of legacy `AppShell`/`Sidebar`. All Assessments stopped using bare `fetch` (no auth) and loads via the default query client; list API also returns `assessmentType`. E2E: `school-admin-assessments-all-tab.spec.ts`.
+
+## 2026-09-09 (Recent Assessments child names)
+
+- `GET /api/assessments/students` now returns `child` / `childName`. Educator Recent Assessments was resolving names only from My Students, so Lexile/Math cards for non-roster (or school-search) kids showed **Unknown**. E2E: `educator-assessments-record.spec.ts` asserts the seeded child name on Recent.
+
 ## 2026-09-09 (Attendance roster placement chips)
 
 - Day-of session roster (`GET /api/educator/sessions/:id/roster`) returns `currentLexileRange`, `currentReadingGradeLevel`, `currentMathLevel`. `AttendanceTracker` shows compact `StudentLevelChips` under the student name (Present/Late taps unchanged). E2E: `attendance-roster-levels.spec.ts`.

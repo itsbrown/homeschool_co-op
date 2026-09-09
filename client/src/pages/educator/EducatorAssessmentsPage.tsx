@@ -80,6 +80,8 @@ interface StudentAssessment {
   notes: string | null;
   recordedBy: number;
   createdAt: string;
+  childName?: string | null;
+  child?: { id: number; firstName: string; lastName: string } | null;
 }
 
 export default function EducatorAssessmentsPage() {
@@ -231,8 +233,12 @@ export default function EducatorAssessmentsPage() {
     return assessmentTypes.find(t => t.id === typeId)?.name || 'Unknown';
   };
 
-  const getChildName = (childId: number) => {
-    const child = children.find(c => c.id === childId);
+  const getChildName = (assessment: StudentAssessment) => {
+    if (assessment.childName?.trim()) return assessment.childName.trim();
+    if (assessment.child?.firstName || assessment.child?.lastName) {
+      return `${assessment.child.firstName ?? ''} ${assessment.child.lastName ?? ''}`.trim();
+    }
+    const child = children.find((c) => c.id === assessment.childId);
     return child ? `${child.firstName} ${child.lastName}` : 'Unknown';
   };
 
@@ -416,7 +422,9 @@ export default function EducatorAssessmentsPage() {
                             <BookOpen className="h-5 w-5 text-emerald-600" />
                           </div>
                           <div>
-                            <p className="font-medium">{getChildName(assessment.childId)}</p>
+                            <p className="font-medium" data-testid={`text-assessment-child-${assessment.id}`}>
+                              {getChildName(assessment)}
+                            </p>
                             <p className="text-sm text-muted-foreground">
                               {getAssessmentTypeName(assessment.assessmentTypeId)}
                               {(assessment as any).lesson != null && ` • Lesson ${(assessment as any).lesson}`}

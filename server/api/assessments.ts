@@ -7,9 +7,13 @@ import {
   insertStudentAssessmentSchema,
   insertAssessmentSessionSchema,
   scoreFormatEnum,
-  assessmentCategoryEnum
+  assessmentCategoryEnum,
+  children,
+  assessmentTypes,
 } from '../../shared/schema';
 import { z } from 'zod';
+import { inArray } from 'drizzle-orm';
+import { getDb } from '../db';
 
 /**
  * Calculate Lexile score from grade level score
@@ -326,7 +330,47 @@ router.get('/students', supabaseAuth, requireSchoolContext, async (req: Request,
     if (childId) filters.childId = parseInt(childId as string);
     
     const assessments = await storage.getStudentAssessmentsBySchoolId(schoolId, filters);
-    res.json(assessments);
+    const uniqueChildIds = [...new Set(assessments.map((a) => a.childId).filter(Boolean))];
+    const uniqueTypeIds = [...new Set(assessments.map((a) => a.assessmentTypeId).filter(Boolean))];
+    const childById = new Map<number, { id: number; firstName: string; lastName: string }>();
+    const typeById = new Map<number, { id: number; name: string }>();
+    if (uniqueChildIds.length > 0 || uniqueTypeIds.length > 0) {
+      const db = await getDb();
+      if (uniqueChildIds.length > 0) {
+        const rows = await db
+          .select({
+            id: children.id,
+            firstName: children.firstName,
+            lastName: children.lastName,
+          })
+          .from(children)
+          .where(inArray(children.id, uniqueChildIds));
+        for (const row of rows) childById.set(row.id, row);
+      }
+      if (uniqueTypeIds.length > 0) {
+        const rows = await db
+          .select({
+            id: assessmentTypes.id,
+            name: assessmentTypes.name,
+          })
+          .from(assessmentTypes)
+          .where(inArray(assessmentTypes.id, uniqueTypeIds));
+        for (const row of rows) typeById.set(row.id, row);
+      }
+    }
+
+    res.json(
+      assessments.map((assessment) => {
+        const child = childById.get(assessment.childId) ?? null;
+        const assessmentType = typeById.get(assessment.assessmentTypeId) ?? null;
+        return {
+          ...assessment,
+          child,
+          childName: child ? `${child.firstName} ${child.lastName}`.trim() : null,
+          assessmentType,
+        };
+      }),
+    );
   } catch (error) {
     console.error('Error fetching student assessments:', error);
     res.status(500).json({ message: 'Failed to fetch student assessments' });

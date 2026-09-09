@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { loginEducatorFromSeed, educatorSupabaseLinked } from "./helpers/educatorAuth";
+import { loginEducatorFromSeed } from "./helpers/educatorAuth";
+import { requireLinkedSeed } from "./helpers/requireLinkedSeed";
 import { postSetupProgressScenario } from "./helpers/testSeed";
 
 test.describe.configure({ mode: "serial", timeout: 120_000 });
@@ -12,14 +13,7 @@ test.describe("educator assessments record tab", () => {
     const { response, json } = await postSetupProgressScenario(request, {
       linkSupabaseAuth: true,
     });
-    test.skip(
-      !response.ok(),
-      `seed failed (${response.status()}): ${json?.error ?? json?.details ?? "see server logs"}`,
-    );
-    test.skip(!json?.success || !json.data?.educator?.email, "seed returned no educator credentials");
-    test.skip(!educatorSupabaseLinked(json.data!), "Supabase auth was not linked");
-
-    const seed = json.data!;
+    const seed = requireLinkedSeed(response, json, { need: "Supabase" });
     await loginEducatorFromSeed(page, seed.educator.email, seed.educator.password);
 
     const studentsApi = page.waitForResponse(
@@ -65,6 +59,10 @@ test.describe("educator assessments record tab", () => {
     expect(saveRes.ok(), `save assessment ${saveRes.status()}: ${await saveRes.text()}`).toBeTruthy();
     await page.getByTestId("tab-recent").click();
     await expect(page.getByText("85").first()).toBeVisible({ timeout: 15_000 });
+    const childLabel = `${seed.child.firstName} ${seed.child.lastName}`.trim();
+    await expect(
+      page.getByTestId(/text-assessment-child-/).filter({ hasText: childLabel }).first(),
+    ).toBeVisible({ timeout: 15_000 });
 
     await page.getByTestId("tab-progress").click();
     await expect(page.getByTestId("select-progress-subject")).toBeVisible({ timeout: 15_000 });

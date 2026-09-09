@@ -43,6 +43,7 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 - **Different aggregations:** Jurisdiction/proficiency bands are Lexile-only. Math Level values are categorical labels and feed `mathLevelDistribution`.
 - **Actionable KPIs:** `ProgressInsightsTab` coverage cards open `/api/progress/analytics/school/missing-levels`; each worklist row links to the student profile for entry.
 - **Shared surface:** `ProgressInsightsTab` mounts under both `/school-admin/assessments` and `/school-admin/analytics`.
+- **Assessment list names:** `GET /api/assessments/students` enriches each row with `child` / `childName` and `assessmentType`. Educator Recent Assessments and school-admin **All Assessments** must use the authenticated TanStack default fetcher (not bare `fetch`). The assessments page uses `SchoolAdminLayout` / `UnifiedSchoolAdminSidebar`, not legacy `AppShell`/`Sidebar`.
 
 ## Tests
 
@@ -57,6 +58,8 @@ Mounted in `server/app-init.ts`. Storage in `server/lib/assessment-progress-db.t
 | `server/tests/integration/progress-api.test.ts` | DB smoke (`TEST_DATABASE_URL`) |
 | `server/tests/integration/progress-analytics-school.test.ts` | Progress analytics school + child APIs |
 | `server/tests/parse-lexile-range.test.ts` | Lexile parser unit tests |
+| `e2e/school-admin-assessments-all-tab.spec.ts` | Unified admin sidebar + All Assessments lists child names (`withPlacementLevels`, linked admin) |
+| `e2e/educator-assessments-record.spec.ts` | Record tab + Recent shows real child name (not Unknown); Progress tab (`requireLinkedSeed`) |
 | `e2e/school-admin-lexile-profile.spec.ts` | Admin enter/view Lexile from the student profile empty state |
 | `e2e/school-admin-math-level-profile.spec.ts` | Admin enter/view Math Level on `/schools/students/:id` (`setup-progress-scenario` + `linkSupabaseAuthAdmin`) |
 | `e2e/educator-levels-sheet.spec.ts` | Educator My Students Levels Sheet saves Lexile + Math Level (`setup-progress-scenario`, linked educator Supabase auth) |
