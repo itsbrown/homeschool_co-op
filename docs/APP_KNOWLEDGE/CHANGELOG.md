@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-09 (Attendance roster placement chips)
+
+- Day-of session roster (`GET /api/educator/sessions/:id/roster`) returns `currentLexileRange`, `currentReadingGradeLevel`, `currentMathLevel`. `AttendanceTracker` shows compact `StudentLevelChips` under the student name (Present/Late taps unchanged). E2E: `attendance-roster-levels.spec.ts`.
+
 ## 2026-09-09 (Assessments UX Full v1)
 
 - Added `asa-progress-analytics` with placement snapshots/history, API authorization, dual-mounted Progress Insights, Lexile-only bands, categorical Math distribution, and the assessment-session FK invariant.

@@ -23,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { EducatorLoadingState, EducatorErrorState } from './EducatorErrorBoundary';
 import { StudentSafetyBadges, StudentSafetySheet, type StudentSafetyProfile } from './StudentSafetySheet';
+import { StudentLevelChips } from '@/components/educator/StudentLevelsSheet';
 import { DayTypeBadge } from '@/components/roster/DayTypeBadge';
 import { RosterBirthday } from '@/components/roster/RosterBirthday';
 import { countRosterDayTypes, formatRosterDayTypeSummary } from '@shared/roster-day-type';
@@ -36,6 +37,9 @@ interface RosterStudent {
   gradeLevel?: string;
   birthdate?: string | null;
   dayType?: string | null;
+  currentLexileRange?: string | null;
+  currentReadingGradeLevel?: string | null;
+  currentMathLevel?: string | null;
   attendanceId?: number;
   status?: AttendanceStatus;
   checkInTime?: string;
@@ -100,6 +104,9 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
       gradeLevel: item.gradeLevel,
       birthdate: item.birthdate ?? null,
       dayType: item.dayType ?? null,
+      currentLexileRange: item.currentLexileRange ?? null,
+      currentReadingGradeLevel: item.currentReadingGradeLevel ?? null,
+      currentMathLevel: item.currentMathLevel ?? null,
       attendanceId: item.attendance?.id,
       status: item.attendance?.status,
       checkInTime: item.attendance?.checkInTime,
@@ -375,6 +382,11 @@ export function AttendanceTracker({ sessionId, isSessionActive }: AttendanceTrac
                       <div className="font-medium">
                         {student.firstName} {student.lastName}
                       </div>
+                      <StudentLevelChips
+                        currentLexileRange={student.currentLexileRange}
+                        currentReadingGradeLevel={student.currentReadingGradeLevel}
+                        currentMathLevel={student.currentMathLevel}
+                      />
                       {student.gradeLevel && (
                         <div className="text-xs text-muted-foreground">
                           {student.gradeLevel}

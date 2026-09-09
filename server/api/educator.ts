@@ -2388,6 +2388,9 @@ router.get('/sessions/:sessionId/roster', async (req, res) => {
           childLastName: child?.lastName,
           gradeLevel: child?.gradeLevel,
           birthdate: child?.birthdate ?? null,
+          currentLexileRange: child?.currentLexileRange ?? null,
+          currentReadingGradeLevel: child?.currentReadingGradeLevel ?? null,
+          currentMathLevel: child?.currentMathLevel ?? null,
           enrollmentId: enrollment.id,
           attendance: attendance ? {
             id: attendance.id,

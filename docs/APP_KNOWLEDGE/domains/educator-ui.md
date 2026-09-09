@@ -54,6 +54,7 @@ Director Academics (when `showAcademics`): **Weekly Templates** → `/schools/sc
 - **Two (or more) assigned classes:** day-of attendance is **per session/class** and does not merge. My Students / assessments / notification targeting **union** enrollments across assignments (one row per enrollment; same child in two classes appears twice on My Students). Notification parent counts unique emails. `canManageStudents` staff see a location list instead of assignment rosters.
 - **Half day vs full day** is not on the class seat. It lives on the child’s v2 session-tuition enrollment (`sessionId` set, no class link). Roster APIs join via `shared/roster-day-type.ts` using `classes.sessionId`. Surfaces: class Students tab, My Students, attendance tracker, school-admin class roster. Summary: `1 Full Day · 1 Half Day`. Custom Mon/Fri names fall back from `className` only when `dayType` / `variantId` are empty.
 - **Birthday** on those same roster surfaces comes from `children.birthdate`. Display via `shared/student-birthday.ts` (`Jun 1, 2015` + age) so YYYY-MM-DD is not shifted by UTC. Attendance roster must return `birthdate` (class/my-students already did).
+- **Placement levels:** My Students, class Students, and **day-of attendance** show compact `StudentLevelChips` (Reading / Math) from `children.current_*`. Edit via Levels sheet (My Students / class) or student profile — not on the Present/Late row. Session roster API must return Lexile + Math Level fields.
 - **Safety on roster:** session roster, class students, and My Students include allergies / medical / special needs plus emergency contact. Priority: parent user emergency fields → `emergency_contacts` → `children.emergencyContact`. Blank and “none” / “n/a” do not show Allergy/Medical badges. Helper: `shared/educator-student-safety.ts`. Day-of UI: `StudentSafetySheet` (Info does not mark attendance).
 
 ## Cache
@@ -76,6 +77,7 @@ TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/ap
 | `e2e/educator-mentor-loop.spec.ts` | Classes, students, hours, notifications, settings |
 | `e2e/educator-roster-day-type.spec.ts` | Class roster + My Students + attendance show Half Day / Full Day and birthday |
 | `e2e/attendance-educator-mark.spec.ts` | Start → roster → Info sheet → All present → rematch Late (null notes) → end |
+| `e2e/attendance-roster-levels.spec.ts` | Day-of roster shows Reading/Math level chips |
 | `e2e/educator-assessments-record.spec.ts` | Record tab `my-students` + save score |
 | `e2e/educator-invite-login.spec.ts` | Staff invite → accept password → auto `/educator/dashboard` |
 | `e2e/educator-weekly-schedule-plans.spec.ts` | Published plan overlay |
