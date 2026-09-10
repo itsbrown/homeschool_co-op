@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-09 (Super-admin premium features 404)
+
+- School Edit toggles (`doorCodes`, Public Store, CFO) call `GET`/`PUT /api/superadmin/schools/:id/features`, but those handlers were never mounted in `registerRoutes`. Express returned HTML `Cannot PUT` and the page toasted “Update failed”. Mount `/features` **before** `/:schoolId`. `updateSchoolFeatures` now Drizzle-updates + merges so a partial payload cannot wipe stored flags.
+
 ## 2026-09-09 (School admin assessments shell + All Assessments)
 
 - `/school-admin/assessments` now uses `SchoolAdminLayout` (UnifiedSchoolAdminSidebar) instead of legacy `AppShell`/`Sidebar`. All Assessments stopped using bare `fetch` (no auth) and loads via the default query client; list API also returns `assessmentType`. E2E: `school-admin-assessments-all-tab.spec.ts`.

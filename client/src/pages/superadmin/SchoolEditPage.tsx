@@ -83,20 +83,24 @@ export default function SchoolEditPage() {
   }, [featuresData, featuresInitialized]);
 
   const updateFeaturesMutation = useMutation({
-    mutationFn: (features: Record<string, boolean>) => {
-      return apiRequest("PUT", `/superadmin/schools/${schoolId}/features`, { features });
+    mutationFn: async (features: Record<string, boolean>) => {
+      const response = await apiRequest("PUT", `/superadmin/schools/${schoolId}/features`, { features });
+      return (await response.json()) as { features?: Record<string, boolean> };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data?.features) {
+        setLocalFeatures(data.features);
+      }
       toast({
         title: "Features updated",
         description: "The school's premium features have been updated successfully.",
       });
       queryClient.invalidateQueries({ queryKey: [`/api/superadmin/schools/${schoolId}/features`] });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Update failed",
-        description: "There was an error updating the features. Please try again.",
+        description: error.message || "There was an error updating the features. Please try again.",
         variant: "destructive",
       });
     },
