@@ -442,6 +442,7 @@ export default function SchoolEditPage() {
                           </div>
                         </div>
                         <Switch
+                          data-testid="switch-feature-public-store"
                           checked={localFeatures.publicStore || false}
                           onCheckedChange={(checked) => handleFeatureToggle('publicStore', checked)}
                           disabled={updateFeaturesMutation.isPending}
@@ -461,6 +462,7 @@ export default function SchoolEditPage() {
                           </div>
                         </div>
                         <Switch
+                          data-testid="switch-feature-door-codes"
                           checked={localFeatures.doorCodes || false}
                           onCheckedChange={(checked) => handleFeatureToggle('doorCodes', checked)}
                           disabled={updateFeaturesMutation.isPending}
@@ -480,6 +482,7 @@ export default function SchoolEditPage() {
                           </div>
                         </div>
                         <Switch
+                          data-testid="switch-feature-financial-reports"
                           checked={localFeatures.financialReports || false}
                           onCheckedChange={(checked) => handleFeatureToggle('financialReports', checked)}
                           disabled={updateFeaturesMutation.isPending}

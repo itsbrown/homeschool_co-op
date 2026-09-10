@@ -68,6 +68,7 @@ Apply **additive** SQL only when columns/tables are missing:
 | `server/migrations/255-store-affiliate-products.sql` | Public store Amazon affiliate columns on `store_products` — apply **before or with** deploy; Drizzle selects `product_kind` / `affiliate_url` / `asin` / `affiliate_metadata` for all merch |
 | `server/migrations/259-staff-invitations.sql` | Staff Invite → accept (`staff_invitations` + `position` / `invited_by`). Apply **before or with** deploy. Boot `ensureStaffInvitationsSchema` is idempotent; if it logs non-fatal failure, run this SQL. Never `db:push`. |
 | `server/migrations/261-store-product-pickup-only.sql` | Owned merch `pickup_only`. Idempotent; already applied on prod 2026-08-21 with the Orthography notebook SKU. |
+| `server/migrations/263-family-access-codes.sql` | Family door codes (`locations.door_codes_enabled`, `family_access_codes`). Boot `ensureFamilyAccessCodesSchema` is idempotent; run by hand if the non-fatal boot log fires. |
 | `server/migrations/262-require-member-id.sql` | `sessions.require_member_id` / `classes.require_member_id` (default false). Replit boot `init-db.ts` ALTER IF NOT EXISTS should add it; run this SQL only if 42703. Do not flip the admin toggle until auditing null `users.member_id`. |
 | `server/migrations/264-children-math-level.sql` | `children.current_math_level` + **Math Level** assessment type. Apply **before or with** deploy of student-profile Math Level card. Boot `ensureMathLevelSchema` / `init-db` are idempotent. Never `db:push`. |
 
