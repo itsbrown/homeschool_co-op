@@ -257,12 +257,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateSchoolFeatures(schoolId: number, features: Record<string, boolean>): Promise<void> {
     const db = await getDb();
-    await db.execute(sql`
-      UPDATE schools
-      SET enabled_features = ${JSON.stringify(features)}::jsonb,
-          updated_at = NOW()
-      WHERE id = ${schoolId}
-    `);
+    const merged = normalizeSchoolFeatures({
+      ...(await this.getSchoolFeatures(schoolId)),
+      ...features,
+    });
+    await db
+      .update(schools)
+      .set({ enabledFeatures: merged, updatedAt: new Date() })
+      .where(eq(schools.id, schoolId));
   }
 
   async getSchoolByCode(registrationCode: string): Promise<School | undefined> {

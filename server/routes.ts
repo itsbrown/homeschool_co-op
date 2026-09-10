@@ -1955,8 +1955,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ai/enrollment-assistant', jwtCheck, handleEnrollmentMessage);
 
   // SuperAdmin routes
-  const { getSuperAdminSchools, getSuperAdminSchoolDetails, updateSuperAdminSchool } = await import('./api/superadmin-schools');
+  const {
+    getSuperAdminSchools,
+    getSuperAdminSchoolDetails,
+    updateSuperAdminSchool,
+    getSchoolFeatures,
+    updateSchoolFeatures,
+  } = await import('./api/superadmin-schools');
   app.get('/api/superadmin/schools', jwtCheck, requireRole(['superAdmin']), getSuperAdminSchools);
+  // /:schoolId/features must be registered before /:schoolId
+  app.get('/api/superadmin/schools/:schoolId/features', jwtCheck, requireRole(['superAdmin']), getSchoolFeatures);
+  app.put('/api/superadmin/schools/:schoolId/features', jwtCheck, requireRole(['superAdmin']), updateSchoolFeatures);
   app.get('/api/superadmin/schools/:schoolId', jwtCheck, requireRole(['superAdmin']), getSuperAdminSchoolDetails);
   app.patch('/api/superadmin/schools/:schoolId', jwtCheck, requireRole(['superAdmin']), updateSuperAdminSchool);
 

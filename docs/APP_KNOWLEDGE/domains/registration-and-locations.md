@@ -74,6 +74,7 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 | Returning members should enroll before new school-code families | Enrollment Open is visible to any logged-in parent | Set **Members only (member ID)** (`sessions.require_member_id` / `classes.require_member_id`, migration `262`). Not the public-store `members_only` fee flag. Audit null `users.member_id` before enabling in prod. |
 | `/schools/students` stuck on “Loading students…” | `GET /api/school-admin/students` N+1 (all users × `getUserRolesByUserId`) or sync loading full tables | Use v5 set-based query in `school-admin.ts`; RoleSwitcher console warns are unrelated |
 | Door codes tab missing on Location Management | School feature `doorCodes` is off (default) | Super-admin School Edit → Family door codes, then Edit location checkbox (`name="doorCodesEnabled"` native checkbox for FormData) |
+| Super-admin premium feature toggle “Update failed” | `getSchoolFeatures` / `updateSchoolFeatures` existed but were never mounted | `registerRoutes` must `GET`/`PUT /api/superadmin/schools/:schoolId/features` **before** `/:schoolId` |
 | Access-codes list 404 / empty | TanStack `queryKey` array joined as path `/access-codes/:id` | Use `` [`/api/school-admin/access-codes?locationId=${id}`] `` |
 | Family & Billing tab missing door-code card | Unified profile `viewFamily` needs `user_roles` parent at that school; `users.role` is not enough | Seed/insert `user_roles` (`role='parent'`, `school_id`) |
 

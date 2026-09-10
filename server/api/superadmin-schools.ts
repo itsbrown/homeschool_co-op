@@ -146,12 +146,20 @@ export const updateSchoolFeatures = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid features object' });
     }
     
-    console.log(`🔄 SuperAdmin: Updating features for school ${schoolId}:`, features);
-    
-    await storage.updateSchoolFeatures(parseInt(schoolId), features);
-    
+    const booleanFeatures: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(features as Record<string, unknown>)) {
+      if (typeof value === 'boolean') {
+        booleanFeatures[key] = value;
+      }
+    }
+
+    console.log(`🔄 SuperAdmin: Updating features for school ${schoolId}:`, booleanFeatures);
+
+    await storage.updateSchoolFeatures(parseInt(schoolId), booleanFeatures);
+    const saved = await storage.getSchoolFeatures(parseInt(schoolId));
+
     console.log(`✅ SuperAdmin: Updated features for school ${schoolId} successfully`);
-    res.json({ success: true, features });
+    res.json({ success: true, features: saved });
   } catch (error) {
     console.error('❌ Error updating school features:', error);
     res.status(500).json({ 
