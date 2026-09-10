@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-10 (E2E must click Super-admin feature toggles)
+
+- Door-code E2E seeded `enabled_features.doorCodes` in SQL and never opened School Edit, so unmounted `PUT /api/superadmin/schools/:id/features` shipped. New gate: `e2e/superadmin-school-features.spec.ts` (`requireLinkedSeed`). Operator enable paths must assert the real mutation is 2xx.
+
 ## 2026-09-09 (Super-admin premium features 404)
 
 - School Edit toggles (`doorCodes`, Public Store, CFO) call `GET`/`PUT /api/superadmin/schools/:id/features`, but those handlers were never mounted in `registerRoutes`. Express returned HTML `Cannot PUT` and the page toasted “Update failed”. Mount `/features` **before** `/:schoolId`. `updateSchoolFeatures` now Drizzle-updates + merges so a partial payload cannot wipe stored flags.

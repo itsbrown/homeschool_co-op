@@ -4083,10 +4083,12 @@ router.post('/setup-family-access-code-scenario', async (req: Request, res: Resp
     const { seedFamilyAccessCodeScenario } = await import('../tests/helpers/seedFamilyAccessCodeScenario');
     const seed = await seedFamilyAccessCodeScenario(new TestDatabase(), {
       assignCode: req.body?.assignCode !== false,
+      doorCodesFeature: req.body?.doorCodesFeature !== false,
     });
 
     let adminSupabaseLinked = false;
     let parentSupabaseLinked = false;
+    let superAdminSupabaseLinked = false;
     if (req.body?.linkSupabaseAuthAdmin === true) {
       try {
         adminSupabaseLinked = await linkSeedUserToSupabase({
@@ -4115,6 +4117,20 @@ router.post('/setup-family-access-code-scenario', async (req: Request, res: Resp
         console.error('linkSupabaseAuthParent failed:', e);
       }
     }
+    if (req.body?.linkSupabaseAuthSuperAdmin === true) {
+      try {
+        superAdminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.superAdmin.id,
+          email: seed.superAdmin.email,
+          password: seed.superAdmin.password,
+          role: 'superAdmin',
+          schoolId: seed.school.id,
+          displayName: 'Door Code Super Admin',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthSuperAdmin failed:', e);
+      }
+    }
 
     res.json({
       success: true,
@@ -4122,7 +4138,8 @@ router.post('/setup-family-access-code-scenario', async (req: Request, res: Resp
         ...seed,
         adminSupabaseLinked,
         parentSupabaseLinked,
-        supabaseLinked: parentSupabaseLinked || adminSupabaseLinked,
+        superAdminSupabaseLinked,
+        supabaseLinked: parentSupabaseLinked || adminSupabaseLinked || superAdminSupabaseLinked,
       },
     });
   } catch (error) {

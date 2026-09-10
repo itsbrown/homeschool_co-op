@@ -10,6 +10,7 @@ import { normalizeSchoolFeatures } from "../../lib/school-features";
 
 export type FamilyAccessCodeSeedResult = {
   admin: { id: number; email: string; password: string };
+  superAdmin: { id: number; email: string; password: string };
   parent: { id: number; email: string; password: string };
   parentB: { id: number; email: string; password: string };
   school: { id: number; name: string };
@@ -25,13 +26,19 @@ export type FamilyAccessCodeSeedResult = {
 
 export async function seedFamilyAccessCodeScenario(
   testDb: TestDatabase,
-  options: { adminPassword?: string; parentPassword?: string; assignCode?: boolean } = {},
+  options: {
+    adminPassword?: string;
+    parentPassword?: string;
+    assignCode?: boolean;
+    doorCodesFeature?: boolean;
+  } = {},
 ): Promise<FamilyAccessCodeSeedResult> {
   await ensureFamilyAccessCodesSchema();
 
   const uniqueId = nanoid(8).toLowerCase();
   const adminPassword = options.adminPassword ?? "TestPassword123!";
   const parentPassword = options.parentPassword ?? "TestPassword123!";
+  const doorCodesFeature = options.doorCodesFeature !== false;
 
   const admin = await testDb.createTestUser({
     email: `door_admin_${uniqueId}@test.com`,
@@ -56,9 +63,20 @@ export async function seedFamilyAccessCodeScenario(
   await db
     .update(schools)
     .set({
-      enabledFeatures: { ...normalizeSchoolFeatures(schoolRow?.enabledFeatures), doorCodes: true },
+      enabledFeatures: {
+        ...normalizeSchoolFeatures(schoolRow?.enabledFeatures),
+        doorCodes: doorCodesFeature,
+      },
     })
     .where(eq(schools.id, school.id));
+
+  const superAdmin = await testDb.createTestUser({
+    email: `door_superadmin_${uniqueId}@test.com`,
+    username: `doorsuperadmin_${uniqueId}`,
+    name: "Door Code Super Admin",
+    role: "superAdmin",
+    password: adminPassword,
+  });
 
   const keyedCampus = await testDb.createTestLocation(school.id, {
     name: "Brighton",
@@ -115,6 +133,7 @@ export async function seedFamilyAccessCodeScenario(
 
   for (const roleRow of [
     { userId: admin.id, role: "schoolAdmin" as const, schoolId: school.id, isPrimary: true },
+    { userId: superAdmin.id, role: "superAdmin" as const, schoolId: null, isPrimary: true },
     { userId: parent.id, role: "parent" as const, schoolId: school.id, isPrimary: true },
     { userId: parentB.id, role: "parent" as const, schoolId: school.id, isPrimary: true },
     { userId: otherAdmin.id, role: "schoolAdmin" as const, schoolId: otherSchool.id, isPrimary: true },
@@ -141,6 +160,7 @@ export async function seedFamilyAccessCodeScenario(
 
   return {
     admin: { id: admin.id, email: admin.email, password: adminPassword },
+    superAdmin: { id: superAdmin.id, email: superAdmin.email, password: adminPassword },
     parent: { id: parent.id, email: parent.email, password: parentPassword },
     parentB: { id: parentB.id, email: parentB.email, password: parentPassword },
     school: { id: school.id, name: school.name },

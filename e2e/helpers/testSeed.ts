@@ -701,7 +701,9 @@ export type SetupFamilyAccessCodeScenarioResponse = {
     supabaseLinked?: boolean;
     adminSupabaseLinked?: boolean;
     parentSupabaseLinked?: boolean;
+    superAdminSupabaseLinked?: boolean;
     admin: { id: number; email: string; password: string };
+    superAdmin: { id: number; email: string; password: string };
     parent: { id: number; email: string; password: string };
     parentB: { id: number; email: string; password: string };
     school: { id: number; name: string };
@@ -719,7 +721,9 @@ export async function postSetupFamilyAccessCodeScenario(
     linkSupabaseAuth?: boolean;
     linkSupabaseAuthAdmin?: boolean;
     linkSupabaseAuthParent?: boolean;
+    linkSupabaseAuthSuperAdmin?: boolean;
     assignCode?: boolean;
+    doorCodesFeature?: boolean;
   } = {},
 ): Promise<{ response: APIResponse; json: SetupFamilyAccessCodeScenarioResponse | null }> {
   const response = await request.post("/api/test/setup-family-access-code-scenario", {

@@ -67,6 +67,8 @@ Specs that call `/api/test/setup-*-scenario` with `linkSupabaseAuth` and then lo
 
 - **New seed/login specs** must use [`e2e/helpers/requireLinkedSeed.ts`](../../e2e/helpers/requireLinkedSeed.ts). Throw (fail) if the seed HTTP fails or `supabaseLinked !== true`.
 - **After writing the spec, run it:** `npm run test:e2e -- e2e/<file>.spec.ts`. Report passed / failed / **skipped**. If skipped, the work is not done (fix `.env` / `.env.e2e`, or say blocked).
+- **Operator enable path is a gate.** If staff turn a feature on in the UI (Super-admin School Edit, Location Management checkbox, etc.), seed-login E2E must click that control and assert the real `PUT`/`PATCH` is **2xx**. Seeding `enabled_features` in SQL is not enough — that is how unmounted `/api/superadmin/schools/:id/features` shipped.
+- **Do not `login` a second user on the same page.** `/login` leaves immediately when a Supabase session exists, so `getByLabel("Email")` hangs. Use `browser.newContext()` or `page.goto("/logout")` first.
 - **Dev only.** `DATABASE_URL` comes from `.env` (Railway **clone**, not live prod Postgres). Playwright also loads `.env.e2e` (test Stripe / Supabase keys). **Never** `.env.prod` or `with-prod-env.mjs`.
 - Worktrees do not copy gitignored env files — symlink `.env` and `.env.e2e` from the main checkout.
 - Laptop without keys: `E2E_ALLOW_SKIP=1` (ignored when `CI=true`). Do not use this to green a feature gate.
