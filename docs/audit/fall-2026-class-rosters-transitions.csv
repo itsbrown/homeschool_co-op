@@ -15,3 +15,5 @@ as_of,change,class,child,child_id,from_seat,to_seat,from_status,to_status,from_p
 2026-09-09,pending_removed,Seekers | Brighton | F2026,Stella Valvano,259,not on roster,,pending_payment,,"$1,500 unpaid",,Rudie Valentino,rudie_valentino@yahoo.com
 2026-09-11,pending_removed,Seekers | Brighton | F2026,Vanessa Khit,130,not on roster,,pending_payment,,"$1,500 unpaid",,Olga Khig,olgakhit21@yahoo.com
 2026-09-11,pending_removed,Tycoons | Brighton | F2026,Lemuel Khit,131,not on roster,,pending_payment,,"$1,500 unpaid",,Olga Khig,olgakhit21@yahoo.com
+2026-09-12,pending_to_enrolled,Macaronis | Brighton | F2026,Blaire Thomas,85,not on roster,grade,pending_payment,enrolled,"$1,500 unpaid",—,Alanna Thomas,atierson2@gmail.com
+2026-09-12,pending_to_enrolled,Macaronis | Brighton | F2026,Hailey Thomas,86,not on roster,grade,pending_payment,enrolled,"$1,500 unpaid",—,Alanna Thomas,atierson2@gmail.com
