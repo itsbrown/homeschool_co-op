@@ -24,11 +24,18 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   Plus, Copy, Sparkles, Search, CheckCircle2, Edit, History, Trash2,
   ChevronRight, Calendar, Clock, Loader2, ExternalLink, AlertTriangle,
-  ThumbsUp, Lightbulb, X, Download, Upload, HelpCircle, Hammer, MoreHorizontal
+  ThumbsUp, Lightbulb, X, Download, Upload, HelpCircle, Hammer, MoreHorizontal,
+  Printer
 } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
 import { useScheduleBuilderTour } from "@/components/tutorials/useScheduleBuilderTour";
 import { ScheduleBlocksCsvImportDialog } from "@/components/schedule/ScheduleBlocksCsvImportDialog";
+import { AsaWeeklySchedulePrintSheet } from "@/components/schedule/AsaWeeklySchedulePrintSheet";
+import {
+  buildAsaPrintColumnsFromWeekPlan,
+  formatWeekOfRange,
+  shortPrintTitle,
+} from "@/lib/asa-weekly-schedule-print";
 
 const DAY_NAMES: Record<number, string> = {
   0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday",
@@ -518,8 +525,20 @@ export default function WeekPlannerPage() {
   }
 
   const activeDays = Object.keys(blocksByDay).map(Number).sort();
-
   const selectedTemplate = templates.find((s) => s.id === templateId);
+  const printColumns = buildAsaPrintColumnsFromWeekPlan(
+    activeDays.map((dayOfWeek) => ({
+      dayOfWeek,
+      slots: (blocksByDay[dayOfWeek] || []).map(({ skeletonBlock, weekBlock }) => ({
+        startTime: skeletonBlock.startTime,
+        title: weekBlock?.title || skeletonBlock.defaultTitle || "",
+        objectives: weekBlock?.objectives,
+        lessonLink: weekBlock?.lessonLink ?? null,
+      })),
+    })),
+  );
+  const printTitle = shortPrintTitle(selectedWeekData ? selectedTemplate?.name : undefined);
+  const printWeekRange = formatWeekOfRange(selectedWeekData?.weekStartDate);
   const nextWeekNumber = sortedWeekPlans.length > 0 ? sortedWeekPlans[sortedWeekPlans.length - 1].weekNumber + 1 : 1;
   const aiAvailable = aiStatus?.available ?? false;
 
@@ -652,7 +671,7 @@ export default function WeekPlannerPage() {
                         )}
                       </div>
                       <div
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 no-print"
                         data-tutorial="week-planner-publish-area"
                         data-testid="week-planner-publish-area"
                       >
@@ -663,6 +682,15 @@ export default function WeekPlannerPage() {
                           className="hidden"
                           onChange={handleCsvFileChange}
                         />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.print()}
+                          data-testid="week-planner-print"
+                        >
+                          <Printer className="h-4 w-4 mr-1" />
+                          Print
+                        </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -743,6 +771,13 @@ export default function WeekPlannerPage() {
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              data-testid="week-planner-print-menu"
+                              onClick={() => window.print()}
+                            >
+                              <Printer className="h-4 w-4 mr-2" />
+                              Print
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={handleCsvDownload}>
                               <Download className="h-4 w-4 mr-2" />
                               Download CSV
@@ -914,6 +949,11 @@ export default function WeekPlannerPage() {
                     </CardContent>
                   </Card>
                 )}
+                <AsaWeeklySchedulePrintSheet
+                  title={printTitle}
+                  weekRange={printWeekRange}
+                  columns={printColumns}
+                />
               </div>
             ) : templateId && (
               <Card>

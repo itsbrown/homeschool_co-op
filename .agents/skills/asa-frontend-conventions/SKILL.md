@@ -131,6 +131,7 @@ const mutation = useMutation({
 - **iOS Safari auto-zooms on input focus** → input `fontSize` is below 16px → add `style={{ fontSize: '16px' }}` to date/select inputs
 - **Educator login looks empty / wrong classes** → post-login `/dashboard` for `educator` / `mentor` / `teacher` must redirect to `/educator/dashboard` (`GET /api/educator/dashboard` + assignments). Legacy `components/dashboards/EducatorDashboard.tsx` (`GET /api/educator/classes?email=`) is **admin/superAdmin only**. Do not extend it for mentors.
 - **Director Weekly Templates** → `/schools/schedule-builder` (also `/educator/templates` redirect). Mentors without school-admin permission may see `ForbiddenPage`.
+- **School admin weekly print must match staff** → do not print the Week Planner editor chrome. Use `AsaWeeklySchedulePrintSheet` (`window.print()`). Mentor Schedule and Week Planner share that sheet.
 - **Educator cache looks stale after start/end session** → `invalidateQueries({ queryKey: ['/api/educator'] })` does not match `['/api/educator/dashboard']`. Use `invalidateEducatorSessionQueries()` in `client/src/lib/educator-queries.ts`.
 - **Dashboard “Today’s Classes” lists every assignment** → `GET /api/educator/dashboard` `todayClasses` must be weekday meetings (`classMeetsOnWeekday`). Empty schedule days are not today. One-tap Start uses `createAndStartEducatorSession()`.
 - **Attendance “did not save” 400 on status tap** → roster `notes` is `null`; `JSON.stringify` keeps it and Zod `z.string().optional()` rejects null. Omit null notes (same class of bug as assessment `lesson`/`notes`). There is no Submit button — tap saves immediately.
@@ -212,3 +213,5 @@ Two separate pages list classes for parents, each using a **different API endpoi
 - `client/src/hooks/use-toast.ts` — toast notification hook
 - `client/src/index.css` — CSS variables, theme colors, iOS workarounds
 - `client/src/lib/utils.ts` — `formatDate()`, `formatClassSchedule()`, utility functions
+- `client/src/components/schedule/AsaWeeklySchedulePrintSheet.tsx` — staff/admin weekly schedule print sheet
+- `client/src/lib/asa-weekly-schedule-print.ts` — print time keys, week range, Week Planner column builder
