@@ -227,6 +227,12 @@ export const NAV_REGISTRY: NavRegistryItem[] = [
   },
   { title: 'Educators', href: '/schools/educators', group: 'People', required: 'canManageStaff' },
   { title: 'Students', href: '/schools/students', group: 'People', required: 'canManageStudents' },
+  {
+    title: 'Emergency Contacts',
+    href: '/schools/emergency-contacts',
+    group: 'People',
+    required: 'canManageStudents',
+  },
   { title: 'Users', href: '/schools/users', group: 'People', required: 'canManageStaff' },
 
   {
@@ -390,6 +396,12 @@ export const NAV_API_SAMPLES: ApiSample[] = [
     path: '/api/school-admin/students',
     required: 'canManageStudents',
     description: 'People / students',
+  },
+  {
+    method: 'GET',
+    path: '/api/school-admin/emergency-contacts',
+    required: 'canManageStudents',
+    description: 'People / emergency contacts',
   },
   {
     method: 'GET',

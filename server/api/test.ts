@@ -4152,6 +4152,54 @@ router.post('/setup-class-allergy-scenario', async (req: Request, res: Response)
 });
 
 /**
+ * POST /api/test/setup-emergency-contact-list-scenario
+ * School admin + two current classes, each with one seated child and a
+ * distinct emergency-contact source (user table vs emergency_contacts row).
+ */
+router.post('/setup-emergency-contact-list-scenario', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+    }
+
+    const { seedEmergencyContactListScenario } = await import('../tests/helpers/seedEmergencyContactListScenario');
+    const seed = await seedEmergencyContactListScenario(new TestDatabase());
+
+    let adminSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthAdmin === true) {
+      try {
+        adminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.admin.id,
+          email: seed.admin.email,
+          password: seed.admin.password,
+          role: 'schoolAdmin',
+          schoolId: seed.school.id,
+          displayName: 'Emergency List Admin',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthAdmin failed (emergency contact list):', e);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...seed,
+        adminSupabaseLinked,
+        supabaseLinked: adminSupabaseLinked,
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-emergency-contact-list-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup emergency contact list scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
  * POST /api/test/setup-family-access-code-scenario
  * School + keyed campus, two parents, optional assigned door code.
  */

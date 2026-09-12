@@ -34,6 +34,7 @@ import imageServicesRouter from "./api/image-services";
 import ocrTestRouter from "./api/ocr-test";
 import schoolsRouter from "./api/schools";
 import schoolAdminRouter from "./api/school-admin";
+import emergencyContactListsRouter from "./api/emergency-contact-lists";
 import educatorRouter from "./api/educator";
 import roleInvitationsRouter from "./api/role-invitations";
 import parentRouter from "./api/parent";
@@ -2686,6 +2687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.use("/api/schools", schoolsRouter);
   app.use("/api/school-admin", familyAccessCodesAdminRouter);
+  app.use("/api/school-admin", emergencyContactListsRouter);
   app.use("/api/school-admin", schoolAdminRouter);
   app.use("/api/educator", educatorRouter);
   app.use("/api/supply-lists", supplyListsRouter);

@@ -37,13 +37,15 @@ export default function SchoolAdminLayout({ children, pageTitle }: SchoolAdminLa
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <UnifiedSchoolAdminSidebar />
+    <div className="flex h-screen bg-gray-100 print:block print:h-auto print:bg-white">
+      <div className="print:hidden">
+        <UnifiedSchoolAdminSidebar />
+      </div>
       
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden print:overflow-visible">
         {/* Page header - with padding to account for mobile hamburger menu */}
-        <header className="bg-white shadow-sm z-10">
+        <header className="bg-white shadow-sm z-10 print:hidden">
           <div className="px-4 md:px-4 pl-16 md:pl-4 py-3 flex items-center justify-between">
             <h1 className="text-2xl font-semibold text-gray-800">{pageTitle}</h1>
             
@@ -71,7 +73,7 @@ export default function SchoolAdminLayout({ children, pageTitle }: SchoolAdminLa
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 bg-gray-50">
+        <main className="flex-1 overflow-y-auto p-4 bg-gray-50 print:overflow-visible print:p-0 print:bg-white">
           {children}
         </main>
       </div>

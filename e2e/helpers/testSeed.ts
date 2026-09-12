@@ -755,6 +755,46 @@ export async function postSetupClassAllergyScenario(
   return { response, json };
 }
 
+export type SetupEmergencyContactListScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    adminSupabaseLinked?: boolean;
+    admin: { id: number; email: string; password: string };
+    school: { id: number; name: string };
+    classA: { id: number; title: string };
+    classB: { id: number; title: string };
+    childA: { id: number; firstName: string; lastName: string };
+    childB: { id: number; firstName: string; lastName: string };
+    contacts: {
+      userTable: { name: string; phone: string };
+      extra: { name: string; phone: string };
+    };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupEmergencyContactListScenario(
+  request: APIRequestContext,
+  body: { linkSupabaseAuthAdmin?: boolean } = {},
+): Promise<{ response: APIResponse; json: SetupEmergencyContactListScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-emergency-contact-list-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupEmergencyContactListScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupEmergencyContactListScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export async function postSetupFamilyAccessCodeScenario(
   request: APIRequestContext,
   body: {

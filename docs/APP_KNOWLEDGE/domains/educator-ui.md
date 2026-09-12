@@ -10,7 +10,7 @@ Legacy `client/src/components/dashboards/EducatorDashboard.tsx` (`GET /api/educa
 |-------|---------|
 | `/educator/dashboard` | Classes that **meet today** + one-tap Start (`GET /api/educator/dashboard`) |
 | `/educator/my-classes` | Assigned classes; start session |
-| `/educator/classes/:id` | Class details + Start Session CTA |
+| `/educator/classes/:id` | Class details + Start Session CTA + **Emergency Contacts** tab (print/CSV) |
 | `/educator/classes/:id/start-session` | Create + start `class_sessions` |
 | `/educator/session/:id` | Active session + `AttendanceTracker` |
 | `/educator/students` | Assigned students (`GET /api/educator/my-students`) |
@@ -80,6 +80,7 @@ TanStack `staleTime: Infinity`. `queryClient.invalidateQueries({ queryKey: ['/ap
 | `e2e/attendance-roster-levels.spec.ts` | Day-of roster shows Reading/Math level chips |
 | `e2e/educator-assessments-record.spec.ts` | Record tab `my-students` + save score |
 | `e2e/educator-invite-login.spec.ts` | Staff invite → accept password → auto `/educator/dashboard` |
+| `e2e/school-admin-emergency-contacts.spec.ts` | School-wide + per-class emergency contact lists; class-details tab |
 | `e2e/educator-weekly-schedule-plans.spec.ts` | Published plan overlay |
 | `e2e/quarterly-progress-report-wizard.spec.ts` | NY IHIP wizard |
 

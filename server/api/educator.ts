@@ -798,6 +798,54 @@ router.get('/classes/:id/students', async (req, res) => {
   }
 });
 
+// GET /api/educator/classes/:id/emergency-contacts — printable class contact list
+router.get('/classes/:id/emergency-contacts', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found' });
+    }
+
+    const classId = parseInt(req.params.id);
+    if (isNaN(classId)) {
+      return res.status(400).json({ error: 'Invalid class ID' });
+    }
+
+    const assignments = await storage.getEducatorClassAssignmentsByEducatorId(userId);
+    const isAssigned = assignments.some((a) => a.classId === classId);
+    const classInfo = await storage.getClassById(classId);
+    if (!classInfo) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    if (!isAssigned) {
+      const educator = await storage.getUser(userId);
+      const isInstructor = educator && (
+        classInfo.instructorId === educator.id ||
+        classInfo.instructorName === educator.name
+      );
+      if (!isInstructor) {
+        return res.status(403).json({ error: 'You do not have access to this class' });
+      }
+    }
+    if (!classInfo.schoolId) {
+      return res.status(400).json({ error: 'Class is not linked to a school' });
+    }
+
+    const { loadSchoolEmergencyContactLists } = await import('../lib/emergency-contact-lists');
+    const payload = await loadSchoolEmergencyContactLists({
+      schoolId: classInfo.schoolId,
+      classId,
+    });
+    res.json({
+      ...payload,
+      classList: payload.classes[0] ?? null,
+    });
+  } catch (error) {
+    console.error('[EducatorDashboard] Error fetching class emergency contacts:', error);
+    res.status(500).json({ error: 'Failed to fetch class emergency contacts' });
+  }
+});
+
 // GET /api/educator/sessions - Get educator's sessions with optional filters
 router.get('/sessions', async (req, res) => {
   try {
