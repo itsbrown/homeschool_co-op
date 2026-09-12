@@ -4,6 +4,7 @@ import { sendWaitlistJoinedEmail, sendWaitlistPromotedEmail } from "../lib/email
 import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
 import { legacyCanCreateClassesAllowed } from "@shared/permissions";
 import { attachAccessScope } from "../middleware/access-scope";
+import { childHasSevereClassroomAllergy } from "@shared/class-allergy-alerts";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import {
   MEMBERS_ONLY_ENROLLMENT_NOTICE,
@@ -216,7 +217,7 @@ router.get('/:id/roster', async (req, res) => {
         lastName: child?.lastName,
         dateOfBirth: child?.birthdate,
         enrollmentStatus: e.status,
-        hasSevereAllergies: !!(child?.hasSevereAllergies || (Array.isArray(child?.allergies) && child.allergies.some((a: string) => String(a).toLowerCase().includes('severe')))),
+        hasSevereAllergies: childHasSevereClassroomAllergy(child ?? {}),
         ...(includeParentInfo ? { parentName: parent?.name || '', parentEmail: parent?.email || '' } : {}),
       };
     }));

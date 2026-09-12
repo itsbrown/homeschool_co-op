@@ -45,6 +45,12 @@ notification_recipients:
   errorMessage   → delivery failure reason
 ```
 
+### Class allergy alerts (automatic)
+- **Parse** free-text `children.allergies` with `shared/class-allergy-alerts.ts`. Peanut / tree nut / sesame always notify classmates. Other foods only if the text marks them severe (anaphylaxis, EpiPen).
+- **Never name the student** in subject, body, or dashboard copy.
+- **Live reminder:** `GET /api/parent/class-allergy-alerts` (parent dashboard + class details).
+- **One-time notice:** `server/lib/class-allergy-alerts.ts` sends `type: both` when a new restriction appears (allergy save, enrollment confirm, Grade Placement). Campaign key `class_allergy_alert`.
+
 ### Target Types
 | Target | Audience |
 |--------|----------|
@@ -145,6 +151,7 @@ new → acknowledged → investigating → resolved
 - **Notification not delivered** → created notification but no recipient records → must create `notification_recipients` entries for each target user
 - **Unread count stale** → notification read but badge still shows → invalidate `['/api/notifications']` query after marking as read
 - **PII in error logs** → sensitive data stored in `requestBody` → sanitize request bodies before passing to error telemetry
+- **Allergy blast names a child** → class allergy copy must never include student names; use `classroomAllergyReminderCopy` and `GET /api/parent/class-allergy-alerts`
 
 ## Best Practices
 
@@ -174,3 +181,5 @@ new → acknowledged → investigating → resolved
 - `server/services/web-push.ts` — web push notification service
 - `server/api/push-subscriptions.ts` — push subscription management
 - `shared/schema.ts` — `notifications`, `notificationRecipients`, `errorLogs` tables
+- `shared/class-allergy-alerts.ts` / `server/lib/class-allergy-alerts.ts` — classroom allergy parse + parent notify
+- `GET /api/parent/class-allergy-alerts` — dashboard reminder payload

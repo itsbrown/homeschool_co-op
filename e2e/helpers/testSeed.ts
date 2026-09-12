@@ -715,6 +715,46 @@ export type SetupFamilyAccessCodeScenarioResponse = {
   details?: string;
 };
 
+export type SetupClassAllergyScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    parentBSupabaseLinked?: boolean;
+    parentA: { id: number; email: string; password: string };
+    parentB: { id: number; email: string; password: string };
+    class: { id: number; title: string };
+    childA: { id: number; firstName: string; lastName: string; allergies: string };
+    childB: { id: number; firstName: string; lastName: string };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupClassAllergyScenario(
+  request: APIRequestContext,
+  body: {
+    linkSupabaseAuth?: boolean;
+    linkSupabaseAuthParent?: boolean;
+    linkSupabaseAuthParentB?: boolean;
+    notify?: boolean;
+  } = {},
+): Promise<{ response: APIResponse; json: SetupClassAllergyScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-class-allergy-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupClassAllergyScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupClassAllergyScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}
+
 export async function postSetupFamilyAccessCodeScenario(
   request: APIRequestContext,
   body: {

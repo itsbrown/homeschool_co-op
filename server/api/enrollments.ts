@@ -584,6 +584,17 @@ router.post('/confirm', async (req: any, res) => {
     });
 
     console.log(`✅ Successfully confirmed ${idsToConfirm.length} enrollments for ${userEmail}`);
+
+    const { fireAndForgetClassAllergyNotify, notifyClassAfterChildSeated } = await import(
+      "../lib/class-allergy-alerts"
+    );
+    for (const enrollment of enrollmentsToConfirm) {
+      const classId = enrollment.marketplaceClassId ?? enrollment.classId ?? null;
+      fireAndForgetClassAllergyNotify(
+        notifyClassAfterChildSeated({ childId: enrollment.childId, classId }),
+        "enrollment confirm",
+      );
+    }
     
     res.json({ 
       success: true,

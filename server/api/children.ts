@@ -225,6 +225,20 @@ router.patch("/:id", jwtCheck, isParent, async (req: Request, res: Response) => 
     if (!updatedChild) {
       return res.status(404).json({ message: "Child not found" });
     }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "allergies")) {
+      const { fireAndForgetClassAllergyNotify, notifyClassesAfterAllergyChange } = await import(
+        "../lib/class-allergy-alerts"
+      );
+      fireAndForgetClassAllergyNotify(
+        notifyClassesAfterAllergyChange({
+          childId,
+          previousAllergies: existingChild.allergies,
+          nextAllergies: updatedChild.allergies,
+        }),
+        "parent allergy update",
+      );
+    }
     
     console.log(`✅ Child ${childId} updated successfully:`, updatedChild);
     

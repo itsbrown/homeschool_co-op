@@ -15,6 +15,11 @@ import {
   PARENT_SUPPLY_LIST_QUERY_KEY,
   type ParentSupplyListResponse,
 } from "@/lib/parent-supply-list";
+import {
+  PARENT_CLASS_ALLERGY_ALERTS_QUERY_KEY,
+  type ParentClassAllergyAlertsResponse,
+} from "@/lib/parent-class-allergy-alerts";
+import { ClassAllergyAlertBanner } from "@/components/dashboards/ClassAllergyAlertBanner";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/components/SupabaseProvider";
@@ -614,6 +619,10 @@ export default function ParentDashboard() {
     queryKey: PARENT_SUPPLY_LIST_QUERY_KEY,
     enabled: !!user && !!session,
   });
+  const { data: classAllergyAlerts } = useQuery<ParentClassAllergyAlertsResponse>({
+    queryKey: PARENT_CLASS_ALLERGY_ALERTS_QUERY_KEY,
+    enabled: !!user && !!session,
+  });
   const openSessions = openSessionsPayload?.sessions ?? [];
   const closedNotices = openSessionsPayload?.closedNotices ?? [];
   const membersOnlyNotices = openSessionsPayload?.membersOnlyNotices ?? [];
@@ -847,6 +856,7 @@ export default function ParentDashboard() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
+          <ClassAllergyAlertBanner alerts={classAllergyAlerts?.alerts} />
           {!dismissPaymentDueAlert && actionableInstallmentCount > 0 && (
             <Alert variant="destructive" className="relative pr-12">
               <AlertCircle className="h-4 w-4" />

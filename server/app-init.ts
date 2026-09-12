@@ -55,6 +55,7 @@ import progressRouter from "./api/progress";
 import progressInsightsRouter from "./api/progress-insights";
 import progressAnalyticsRouter from "./api/progress-analytics";
 import supplyListsRouter, { parentSupplyListRouter } from "./api/supply-lists";
+import { parentClassAllergyAlertsRouter } from "./api/class-allergy-alerts";
 import schoolAnalyticsRouter from "./api/school-analytics";
 import telemetryActivityRouter from "./api/telemetry-activity";
 import analyticsRouter from "./api/analytics";
@@ -234,6 +235,7 @@ export async function initializeApp(app: Express, httpServer: Server): Promise<v
   app.use("/api/progress/analytics", progressAnalyticsRouter);
   app.use("/api/supply-lists", supplyListsRouter);
   app.use("/api/parent/supply-list", parentSupplyListRouter);
+  app.use("/api/parent/class-allergy-alerts", parentClassAllergyAlertsRouter);
   app.use("/api/school-analytics", schoolAnalyticsRouter);
   app.use("/api/telemetry", telemetryActivityRouter);
   app.use("/api/analytics", analyticsRouter);

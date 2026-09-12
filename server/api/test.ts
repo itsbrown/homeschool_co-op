@@ -4070,6 +4070,88 @@ router.post('/setup-supply-list-scenario', async (req: Request, res: Response) =
 });
 
 /**
+ * POST /api/test/setup-class-allergy-scenario
+ * Two parents in one class; child A has a peanut allergy.
+ */
+router.post('/setup-class-allergy-scenario', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+    }
+
+    const { seedClassAllergyScenario } = await import('../tests/helpers/seedClassAllergyScenario');
+    const seed = await seedClassAllergyScenario(new TestDatabase(), {
+      notify: req.body?.notify !== false,
+    });
+
+    let adminSupabaseLinked = false;
+    let parentASupabaseLinked = false;
+    let parentBSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthAdmin === true) {
+      try {
+        adminSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.admin.id,
+          email: seed.admin.email,
+          password: seed.admin.password,
+          role: 'schoolAdmin',
+          schoolId: seed.school.id,
+          displayName: 'Allergy Admin',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthAdmin failed (allergy scenario):', e);
+      }
+    }
+    if (req.body?.linkSupabaseAuthParentA === true || req.body?.linkSupabaseAuth === true) {
+      try {
+        parentASupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.parentA.id,
+          email: seed.parentA.email,
+          password: seed.parentA.password,
+          role: 'parent',
+          schoolId: seed.school.id,
+          displayName: 'Allergy Parent A',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthParentA failed (allergy scenario):', e);
+      }
+    }
+    if (req.body?.linkSupabaseAuthParent === true || req.body?.linkSupabaseAuthParentB === true || req.body?.linkSupabaseAuth === true) {
+      try {
+        parentBSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.parentB.id,
+          email: seed.parentB.email,
+          password: seed.parentB.password,
+          role: 'parent',
+          schoolId: seed.school.id,
+          displayName: 'Allergy Parent B',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthParentB failed (allergy scenario):', e);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...seed,
+        adminSupabaseLinked,
+        parentASupabaseLinked,
+        parentBSupabaseLinked,
+        parentSupabaseLinked: parentBSupabaseLinked,
+        supabaseLinked: parentBSupabaseLinked,
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-class-allergy-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup class allergy scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
  * POST /api/test/setup-family-access-code-scenario
  * School + keyed campus, two parents, optional assigned door code.
  */

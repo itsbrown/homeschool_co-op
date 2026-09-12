@@ -39,6 +39,7 @@ import roleInvitationsRouter from "./api/role-invitations";
 import parentRouter from "./api/parent";
 import familyAccessCodesAdminRouter, { parentAccessCodeRouter } from "./api/family-access-codes";
 import supplyListsRouter, { parentSupplyListRouter } from "./api/supply-lists";
+import { parentClassAllergyAlertsRouter } from "./api/class-allergy-alerts";
 import creditsRouter from "./api/credits";
 import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
 import { handleEnrollmentMessage } from "./api/enrollment-assistant";
@@ -2689,6 +2690,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/educator", educatorRouter);
   app.use("/api/supply-lists", supplyListsRouter);
   app.use("/api/parent/supply-list", parentSupplyListRouter);
+  app.use("/api/parent/class-allergy-alerts", parentClassAllergyAlertsRouter);
   app.use("/api/parent", parentAccessCodeRouter);
   app.use("/api/parent", parentRouter);
   app.use("/api/credits", creditsRouter);

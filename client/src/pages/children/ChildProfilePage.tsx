@@ -753,6 +753,7 @@ function HealthSafetyCard({
       queryClient.invalidateQueries({ queryKey: [`/api/children/${childId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/students", childId] });
       queryClient.invalidateQueries({ queryKey: [`/api/school-admin/students/${childId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/parent/class-allergy-alerts"] });
     },
     onError: (error: unknown) => {
       toast({
@@ -807,6 +808,10 @@ function HealthSafetyCard({
                 style={{ fontSize: "16px" }}
                 data-testid="textarea-child-allergies"
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Severe food allergies such as peanuts are shared with other families in the class
+                so they can pack safely. Your child&apos;s name is never shown.
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium" htmlFor="child-medical">

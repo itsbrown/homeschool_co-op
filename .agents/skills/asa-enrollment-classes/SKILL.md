@@ -239,6 +239,10 @@ School-admin observability (not a separate roster product):
 - School-admin Students list (`GET /api/school-admin/students`): `classes[]` via `loadClassEnrollmentRowsForChildren` + `buildCurrentClassesByChildId` (not `getEnrollmentsByChildIds` — mem fallback on schema drift)
 - Domain doc: `docs/APP_KNOWLEDGE/domains/grade-placement.md`
 
+## Class allergy alerts
+
+When a seated child (`enrolled` / `pending_admin_approval`) has a classroom-restriction allergy (peanut, tree nut, sesame, or another food marked severe), every parent in that class gets an in-app + email notice and a live dashboard reminder. **Never include the child's name.** Parse with `shared/class-allergy-alerts.ts`; send via `notifyClassesAfterAllergyChange` / `notifyClassAfterChildSeated`. Dashboard: `GET /api/parent/class-allergy-alerts`.
+
 ## Supply lists (class + session)
 
 Parents see a household shopping list from active enrollments (`enrolled`, `pending_admin_approval`) — same status filter as educator views. Items live on `classes.id` / `sessions.id`, not `school_classes`. Optional `store_product_id` points at shop products (Amazon URLs stay **Buy on Amazon**; other vendor URLs **View product**; owned merch without a URL **View in shop**). Class/session **Supplies** can **Import CSV** (Google Sheets current-tab download); Amazon URLs become/reuse affiliate `store_products` by school+ASIN — never stored as URLs on the row. See `docs/APP_KNOWLEDGE/domains/supply-lists.md`.
@@ -293,6 +297,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - `shared/schema.ts` — `programEnrollments`, `schoolClassEnrollments`, `schoolClasses`, `classes` tables
 - `server/dbStorage.ts` — `getEnrollmentsByClassId` (`classId` OR `marketplaceClassId`)
 - `docs/APP_KNOWLEDGE/domains/educator-ui.md` — mentor roster + session loop
+- `shared/class-allergy-alerts.ts` / `server/lib/class-allergy-alerts.ts` — class-wide severe allergy notify + dashboard
 - `docs/APP_KNOWLEDGE/domains/supply-lists.md` — household supply lists from class/session items
 - `server/lib/import-supply-list-csv.ts` — admin CSV import (affiliate reuse/create by school+ASIN; PA-API optional)
 - `client/src/pages/schools/SessionsManagementPage.tsx` — session config + fill summary
