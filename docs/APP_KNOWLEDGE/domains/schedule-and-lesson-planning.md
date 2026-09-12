@@ -5,7 +5,7 @@ Operational truth for **class weekly templates / week plans**, educator calendar
 ## Product loop
 
 1. **Weekly Templates** — `/schools/schedule-builder` → skeletons + recurring time blocks (`weekly_skeletons`, `skeleton_blocks`). Bind **`classId`** to marketplace `classes.id` (not title-as-value). CSV import uses `ScheduleBlocksCsvImportDialog` (map → preview → confirm); `POST .../skeletons/:id/blocks/import-csv` accepts optional FormData `mapping` JSON. Requires `express-fileupload` on `/api/schedule-builder`.
-2. **Week Planner** — `/schools/week-planner` → per-week plans + block content (`week_plans`, `week_plan_blocks`); optional `/api/schedule-ai/*`. Week-card **Actions** menu includes **Build** (create `week_plan_blocks` for empty skeleton slots from template defaults), Publish/Complete, CSV, Clone, AI, Delete. CSV import reuses the same dialog in `mode="week-plan"` (map → preview → confirm); `POST .../week-plans/:id/blocks/import-csv` accepts optional `mapping`, resolves slots by day+start_time → `skeletonBlockId`, and accepts template-shaped CSVs (`default_title` → title).
+2. **Week Planner** — `/schools/week-planner` → per-week plans + block content (`week_plans`, `week_plan_blocks`); optional `/api/schedule-ai/*`. Week-card **Print** (and Actions → Print) uses the same ASA Time × teaching-day sheet as mentor **Schedule**. **Actions** also includes **Build** (create `week_plan_blocks` for empty skeleton slots from template defaults), Publish/Complete, CSV, Clone, AI, Delete. CSV import reuses the same dialog in `mode="week-plan"` (map → preview → confirm); `POST .../week-plans/:id/blocks/import-csv` accepts optional `mapping`, resolves slots by day+start_time → `skeletonBlockId`, and accepts template-shaped CSVs (`default_title` → title).
 3. **Publish** — parents see week lessons as **Week** mode on `/schedule` (bookmark `/parent/weekly-schedule` redirects there) via enrollment-scoped my-week; educators see published blocks on **Schedule** (`/educator/weekly-calendar` via `/api/educator/schedules/week` `planBlocks`) and can still browse/print on `/educator/week-plans`. `/educator/schedule` redirects to `/educator/weekly-calendar`.
 
 Adjacent: `/schedule` is the parent Calendar hub (class days + school events + week lessons + ICS subscribe). `/schools/calendar` is the school-admin event publisher. `/lessons` + AI generators remain separate.
@@ -89,7 +89,7 @@ Steps: templates → class bind → blocks/CSV → Week Planner → New Week →
 |----|----------|
 | `POST /api/test/setup-schedule-builder-scenario` | Admin/educator/parent, Seekers+Yankee classes (+ `schedule` jsonb + educator assignment), skeletons/`classId`, published+draft weeks, completion, attendance, optional Supabase link |
 | Jest | `schedule-builder-mount`, `schedule-builder-seed`, `schedule-builder-api` (incl. week-plan CSV import), `progress-scheduled-lessons`, `school-admin-academics-kpi`, `school-admin-attendance`, `schedule-day-index` |
-| Playwright | `parent-family-calendar` (incl. school-event day-sheet details), `parent-dashboard-upcoming-events` (7-day mix + outside-window exclusion), `parent-calendar-redirects`, `school-admin-calendar`, `parent-weekly-schedule` (redirect + print root), `schedule-builder-publish`, `schedule-template-csv-import`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `educator-weekly-schedule-plans`, plus mentor loop specs in [educator-ui.md](./educator-ui.md) |
+| Playwright | `parent-family-calendar` (incl. school-event day-sheet details), `parent-dashboard-upcoming-events` (7-day mix + outside-window exclusion), `parent-calendar-redirects`, `school-admin-calendar`, `parent-weekly-schedule` (redirect + print root), `schedule-builder-publish`, `school-admin-week-planner-print`, `schedule-template-csv-import`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `educator-weekly-schedule-plans`, plus mentor loop specs in [educator-ui.md](./educator-ui.md) |
 
 Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: [student-progress-assessments.md](./student-progress-assessments.md).
 
@@ -108,6 +108,7 @@ Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: 
 | Dashboard Upcoming Events only shows one class day | Card used `/api/schedule` class days only, capped to 7 days | Merge `GET /api/calendar-events/parent/events` for the same 7-day window; school events past day 7 belong on `/schedule` |
 | Parent day sheet only shows school event title | School rows rendered badge + title | Show description, All day or start–end, venue; human type label (`Holiday` not `holiday`) |
 | E2E `schedule-csv-done` / `schedule-csv-mapping-next` click times out | First-visit tour prompt (`schedule-tour-prompt`) Radix overlay intercepts the custom CSV portal; CI often hits this on Done (tour fires during import), fast local runs on Next | Seed `schedule_builder_tour_seen`; dismiss prompt when CSV opens; force-click Done after success. Skip `networkidle`. |
+| School admin print does not match staff handouts | Week Planner used to print the editor UI (or had no Print). Mentor **Schedule** (`/educator/weekly-calendar`) is the ASA branded Time × day sheet. | Use **Print** on the selected week in Week Planner — same `AsaWeeklySchedulePrintSheet` as staff |
 
 ## Key files
 
@@ -121,6 +122,7 @@ Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: 
 | Mentor week API | `server/api/educator.ts` `GET /schedules/week` |
 | Day index | `shared/schedule-day-index.ts` |
 | Block detail | `client/src/components/schedule/WeekPlanBlockDetailSheet.tsx` |
+| Shared print sheet | `client/src/components/schedule/AsaWeeklySchedulePrintSheet.tsx`, `client/src/lib/asa-weekly-schedule-print.ts` |
 | KPI UI | `AttendanceManagementPage.tsx` (Lesson plans tab) |
 | Tutorial | `tutorialDefinitions.ts` (`schedule-builder`), `useScheduleBuilderTour.ts`, HelpTutorials school-admin list |
 | API | `server/api/schedule-builder.ts`, `progress.ts`, `school-admin.ts` (academics/kpi) |

@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-12 (School admin week planner print)
+
+- School-admin Week Planner **Print** uses the same ASA Time × teaching-day sheet as mentor Schedule (`AsaWeeklySchedulePrintSheet`). E2E: `npm run test:e2e -- e2e/school-admin-week-planner-print.spec.ts`.
+
 ## 2026-09-12 (Class allergy alerts for parents)
 
 - Severe classroom allergies (peanut / tree nut / sesame always; other foods only if the text says severe / anaphylaxis / EpiPen) notify every parent in that class (in-app + email) and stay on the parent dashboard. Student names are never included. Triggers: allergy save on `PATCH /api/children/:id` or school-admin student PUT, enrollment confirm, Grade Placement seat. Live reminder: `GET /api/parent/class-allergy-alerts`. E2E: `npm run test:e2e -- e2e/parent-class-allergy-alert.spec.ts`.
