@@ -1,5 +1,5 @@
 import React from "react";
-import { useRoute, useLocation } from "wouter";
+import { useRoute, useLocation, Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,14 +18,20 @@ import {
   DollarSign,
   User,
   Edit,
-  UserCheck
+  UserCheck,
+  Download,
+  Printer,
+  Phone
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate, formatClassSchedule } from "@/lib/utils";
 import { SupplyListEditor } from "@/components/admin/SupplyListEditor";
+import { EmergencyContactTable } from "@/components/admin/EmergencyContactTable";
+import { downloadEmergencyContactCsv } from "@/lib/emergency-contact-list";
 import { DayTypeBadge } from "@/components/roster/DayTypeBadge";
 import { RosterBirthday } from "@/components/roster/RosterBirthday";
 import { formatRosterDayTypeSummary } from "@shared/roster-day-type";
+import type { EmergencyContactListsPayload } from "@shared/emergency-contact-resolve";
 
 export default function SchoolClassDetailsPage() {
   const [, navigate] = useLocation();
@@ -65,6 +71,14 @@ export default function SchoolClassDetailsPage() {
     },
     enabled: !!classId,
   });
+
+  const { data: emergencyData, isLoading: emergencyLoading } = useQuery<
+    EmergencyContactListsPayload & { classList?: EmergencyContactListsPayload["classes"][number] | null }
+  >({
+    queryKey: ["/api/school-admin/classes", classId, "emergency-contacts"],
+    enabled: !!classId,
+  });
+  const classEmergencyRows = emergencyData?.classList?.students ?? emergencyData?.schoolList ?? [];
 
   if (classLoading) {
     return (
@@ -259,6 +273,9 @@ export default function SchoolClassDetailsPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="students">Students ({students.length})</TabsTrigger>
             <TabsTrigger value="schedule">Schedule</TabsTrigger>
+            <TabsTrigger value="emergency" data-testid="tab-class-emergency-contacts">
+              Emergency Contacts
+            </TabsTrigger>
             <TabsTrigger value="supplies" data-testid="tab-class-supplies">Supplies</TabsTrigger>
           </TabsList>
 
@@ -392,6 +409,70 @@ export default function SchoolClassDetailsPage() {
                       This class doesn't have any students enrolled yet.
                     </p>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="emergency" className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Phone className="h-5 w-5" />
+                    Emergency Contacts
+                  </CardTitle>
+                  <CardDescription>
+                    Students currently seated in this class. Parent phone is included when an emergency number is missing.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.print()}
+                    disabled={classEmergencyRows.length === 0}
+                    data-testid="button-print-class-emergency-contacts"
+                  >
+                    <Printer className="mr-2 h-4 w-4" />
+                    Print
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      downloadEmergencyContactCsv(
+                        classEmergencyRows,
+                        `${classData.title || "class"}_emergency_contacts`,
+                        { includeClassColumn: false },
+                      )
+                    }
+                    disabled={classEmergencyRows.length === 0}
+                    data-testid="button-export-class-emergency-csv"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/schools/emergency-contacts?classId=${classId}`}>
+                      Whole school list
+                    </Link>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {emergencyLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                ) : (
+                  <EmergencyContactTable
+                    rows={classEmergencyRows}
+                    showClass={false}
+                    emptyLabel="No emergency contacts yet — seat students first."
+                    testId="table-class-emergency-contacts"
+                  />
                 )}
               </CardContent>
             </Card>

@@ -109,6 +109,7 @@ Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: 
 | Parent day sheet only shows school event title | School rows rendered badge + title | Show description, All day or start–end, venue; human type label (`Holiday` not `holiday`) |
 | E2E `schedule-csv-done` / `schedule-csv-mapping-next` click times out | First-visit tour prompt (`schedule-tour-prompt`) Radix overlay intercepts the custom CSV portal; CI often hits this on Done (tour fires during import), fast local runs on Next | Seed `schedule_builder_tour_seen`; dismiss prompt when CSV opens; force-click Done after success. Skip `networkidle`. |
 | School admin print does not match staff handouts | Week Planner used to print the editor UI (or had no Print). Mentor **Schedule** (`/educator/weekly-calendar`) is the ASA branded Time × day sheet. | Use **Print** on the selected week in Week Planner — same `AsaWeeklySchedulePrintSheet` as staff |
+| E2E `getByText('Draft: Pending Publish')` strict-mode 2 matches | Print sheet is `display:none` but still in the DOM with the same block titles | Scope to editor `p` / `data-testid`, or `getByTestId('schedule-print-root')` for print assertions |
 
 ## Key files
 

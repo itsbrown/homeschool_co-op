@@ -48,7 +48,9 @@ test.describe("schedule builder publish", () => {
     // Auto-select may already fetch this plan; prefer the block control as the ready signal.
     await draftChip.click();
     await expect(editBlock).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText("Draft: Pending Publish")).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.locator("p").filter({ hasText: "Draft: Pending Publish" }),
+    ).toBeVisible({ timeout: 15_000 });
 
     await editBlock.click();
     await page.getByPlaceholder("Block title").fill("E2E Published Lesson");

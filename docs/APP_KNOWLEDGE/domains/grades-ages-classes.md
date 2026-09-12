@@ -39,6 +39,7 @@ How child grade/age relate to classes and enrollment **today**.
 | Parent children | `client/src/pages/ChildrenPage.tsx` | Grade on card; class title from `/api/children/:id/enrollments` |
 | Parent student profile | `client/src/pages/children/ChildProfilePage.tsx` | Health & Safety **Add / Edit** saves allergies via `PATCH /api/children/:id` (parents) or `PUT /api/school-admin/students/:id` (admins). Peanut / tree nut / sesame (and other foods marked severe) notify classmates and show a parent dashboard reminder — never the student's name. |
 | School admin Students | `client/src/pages/schools/StudentsPage.tsx` | Classes column from `GET /api/school-admin/students` → `classes[]` (current seats via `buildCurrentClassesByChildId`) |
+| School admin Emergency Contacts | `client/src/pages/schools/EmergencyContactsPage.tsx` | Whole-school + per-class printable lists from current class seats (`GET /api/school-admin/emergency-contacts`). Staff-only PII. |
 | Edit / register student | `client/src/pages/schools/StudentRegistrationPage.tsx` | Grade options from `GRADE_LEVEL_OPTIONS` (labels); auto from DOB (age − 5 as of Dec 31); invalidate students queries after save |
 
 ## Pitfalls
@@ -66,4 +67,6 @@ How child grade/age relate to classes and enrollment **today**.
 - `e2e/parent-class-allergy-alert.spec.ts` — classmate parent sees banner + inbox (`setup-class-allergy-scenario`)
 - `server/api/classes.ts` — enroll (no grade check)
 - `server/api/school-admin.ts` — `GET/PUT /students/:id`, `GET /classes/:id/roster`
+- `shared/emergency-contact-resolve.ts` / `server/lib/emergency-contact-lists.ts` / `server/api/emergency-contact-lists.ts` — school + class emergency lists (print/CSV)
+- `e2e/school-admin-emergency-contacts.spec.ts` — People → Emergency Contacts + class tab (`setup-emergency-contact-list-scenario`)
 - `.agents/skills/asa-enrollment-classes/SKILL.md` — enrollment lifecycle

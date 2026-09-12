@@ -2,7 +2,11 @@
 
 ## 2026-09-12 (School admin week planner print)
 
-- School-admin Week Planner **Print** uses the same ASA Time × teaching-day sheet as mentor Schedule (`AsaWeeklySchedulePrintSheet`). E2E: `npm run test:e2e -- e2e/school-admin-week-planner-print.spec.ts`.
+- School-admin Week Planner **Print** uses the same ASA Time × teaching-day sheet as mentor Schedule (`AsaWeeklySchedulePrintSheet`). E2E: `npm run test:e2e -- e2e/school-admin-week-planner-print.spec.ts`. Hidden print-sheet titles still match Playwright `getByText` — scope Week Planner assertions to the editor (`p`, `data-testid`) or `schedule-print-root`.
+
+## 2026-09-12 (School + class emergency contact lists)
+
+- School-admin **People → Emergency Contacts** (`/schools/emergency-contacts`) prints/exports a whole-school list and one sheet per current class. Seats are `enrolled` / `pending_admin_approval` on current `classes` only. Contact priority is unchanged: parent user fields → `emergency_contacts` → `children.emergencyContact`. Mentors get the same class sheet on `/educator/classes/:id` Emergency Contacts. E2E: `npm run test:e2e -- e2e/school-admin-emergency-contacts.spec.ts`.
 
 ## 2026-09-12 (Class allergy alerts for parents)
 
