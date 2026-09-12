@@ -78,7 +78,7 @@ children.parentId → users.id (parent)
 children.parentEmail → quick lookup field (denormalized)
 emergency_contacts.userId → users.id → separate emergency contacts table (supports multiple)
 ```
-**Emergency contact priority**: User table fields first → `emergency_contacts` table fallback → `children.emergencyContact` legacy fallback.
+**Emergency contact priority**: User table fields first → `emergency_contacts` table fallback → `children.emergencyContact` legacy fallback. School-wide and per-class printable lists use the same resolver (`shared/emergency-contact-resolve.ts`) on current seated students only.
 
 ### Enrollments
 ```

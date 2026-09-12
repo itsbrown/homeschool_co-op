@@ -20,7 +20,8 @@ import {
   Download,
   Phone,
   AlertCircle,
-  PlayCircle
+  PlayCircle,
+  Printer
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -29,6 +30,9 @@ import { formatDate, formatClassSchedule } from "@/lib/utils";
 import { DayTypeBadge } from "@/components/roster/DayTypeBadge";
 import { RosterBirthday } from "@/components/roster/RosterBirthday";
 import StudentLevelsSheet, { StudentLevelChips } from "@/components/educator/StudentLevelsSheet";
+import { EmergencyContactTable } from "@/components/admin/EmergencyContactTable";
+import { downloadEmergencyContactCsv } from "@/lib/emergency-contact-list";
+import type { EmergencyContactListsPayload } from "@shared/emergency-contact-resolve";
 import {
   formatRosterDayTypeSummary,
   rosterDayTypeLabel,
@@ -122,6 +126,14 @@ export default function EducatorClassDetailsPage() {
     enabled: !!classId,
   });
 
+  const { data: emergencyData, isLoading: emergencyLoading } = useQuery<
+    EmergencyContactListsPayload & { classList?: EmergencyContactListsPayload["classes"][number] | null }
+  >({
+    queryKey: ["/api/educator/classes", classId, "emergency-contacts"],
+    enabled: !!classId,
+  });
+  const classEmergencyRows = emergencyData?.classList?.students ?? emergencyData?.schoolList ?? [];
+
   if (classLoading) {
     return (
       <div className="container mx-auto p-6">
@@ -209,6 +221,9 @@ export default function EducatorClassDetailsPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="students" data-testid="tab-class-students">Students ({studentsData?.students?.length || 0})</TabsTrigger>
+          <TabsTrigger value="emergency" data-testid="tab-educator-emergency-contacts">
+            Emergency Contacts
+          </TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
         </TabsList>
 
@@ -419,6 +434,63 @@ export default function EducatorClassDetailsPage() {
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No Students Enrolled</h3>
                   <p className="text-gray-600">This class doesn't have any enrolled students yet.</p>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="emergency">
+          <Card>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle>Emergency Contacts</CardTitle>
+                <CardDescription>
+                  Printable list for this class. Keep with your attendance folder.
+                </CardDescription>
+              </div>
+              {classEmergencyRows.length > 0 && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.print()}
+                    data-testid="button-print-educator-emergency-contacts"
+                  >
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      downloadEmergencyContactCsv(
+                        classEmergencyRows,
+                        `${classData.title || "class"}_emergency_contacts`,
+                        { includeClassColumn: false },
+                      )
+                    }
+                    data-testid="button-export-educator-emergency-csv"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </Button>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              {emergencyLoading ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <EmergencyContactTable
+                  rows={classEmergencyRows}
+                  showClass={false}
+                  emptyLabel="No students enrolled in this class yet."
+                  testId="table-educator-emergency-contacts"
+                />
               )}
             </CardContent>
           </Card>

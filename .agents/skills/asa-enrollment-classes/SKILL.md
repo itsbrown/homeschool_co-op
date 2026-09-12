@@ -225,6 +225,7 @@ School-admin observability (not a separate roster product):
 - **Enrollments** (`/schools/enrollments`): `GET /api/school-admin/enrollments` returns `sessionId`, `dayType`, `variantId`, `waitlistPosition`, `childId` for Day Type column, half/full + session filters, and CSV export
 - **Teacher / class roster:** class seats do not store day type. Join the child’s session-tuition row (`shared/roster-day-type.ts`) onto `GET /api/educator/classes/:id/students`, `GET /api/educator/my-students`, `GET /api/educator/sessions/:id/roster`, and `GET /api/school-admin/classes/:id/roster`. Prefer `dayType` then `variantId`; parse `className` only as a last resort (Mon/Fri custom labels)
 - **Roster birthday:** `children.birthdate` on those same APIs (attendance roster must include it). Display with `shared/student-birthday.ts` / `RosterBirthday` — never `new Date("YYYY-MM-DD")` (UTC shift)
+- **Emergency contact lists:** school-admin People → Emergency Contacts (`GET /api/school-admin/emergency-contacts`) and class/educator sheets. Current classes only; roster statuses `enrolled` + `pending_admin_approval`. Resolve contacts with `shared/emergency-contact-resolve.ts` (user fields → `emergency_contacts` → child legacy). A child in two classes appears once on the school list and once on each class sheet.
 - Do **not** parse day type from denormalized `className` — use `dayType` / `variantId`
 - Do **not** confuse enrollment `sessions` with educator attendance `class_sessions`
 
@@ -291,6 +292,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - `server/api/admin-educators.ts` — school-admin lead mentor / class assignments (`POST /api/admin/educators/class-assignments`); must be mounted in `server/routes.ts`
 - `server/services/grade-placement-sync.ts` — Grade Placement preview/sync
 - `shared/roster-day-type.ts` / `shared/student-birthday.ts` / `shared/current-class-enrollment.ts` — roster day type join; birthday display; current class seats
+- `shared/emergency-contact-resolve.ts` / `server/lib/emergency-contact-lists.ts` — school-wide + per-class emergency contact lists (print/CSV)
 - `shared/grade-levels.ts` / `shared/session-payment-eligibility.ts` — placement helpers
 - `server/lib/prorate-calculator.ts` — proration date math
 - `server/utils/cart-pricing.ts` — pricing calculations for enrollments
