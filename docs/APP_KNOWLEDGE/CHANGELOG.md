@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-12 (Class allergy alerts for parents)
+
+- Severe classroom allergies (peanut / tree nut / sesame always; other foods only if the text says severe / anaphylaxis / EpiPen) notify every parent in that class (in-app + email) and stay on the parent dashboard. Student names are never included. Triggers: allergy save on `PATCH /api/children/:id` or school-admin student PUT, enrollment confirm, Grade Placement seat. Live reminder: `GET /api/parent/class-allergy-alerts`. E2E: `npm run test:e2e -- e2e/parent-class-allergy-alert.spec.ts`.
+
 ## 2026-09-10 (E2E must click Super-admin feature toggles)
 
 - Door-code E2E seeded `enabled_features.doorCodes` in SQL and never opened School Edit, so unmounted `PUT /api/superadmin/schools/:id/features` shipped. New gate: `e2e/superadmin-school-features.spec.ts` (`requireLinkedSeed`). Operator enable paths must assert the real mutation is 2xx.

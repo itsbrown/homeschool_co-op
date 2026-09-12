@@ -4089,6 +4089,20 @@ router.put('/students/:id', supabaseAuth, async (req: any, res) => {
 
     const updatedStudent = await storage.updateChild(studentId, patch as any);
 
+    if (Object.prototype.hasOwnProperty.call(patch, "allergies") && updatedStudent) {
+      const { fireAndForgetClassAllergyNotify, notifyClassesAfterAllergyChange } = await import(
+        "../lib/class-allergy-alerts"
+      );
+      fireAndForgetClassAllergyNotify(
+        notifyClassesAfterAllergyChange({
+          childId: studentId,
+          previousAllergies: existingStudent.allergies,
+          nextAllergies: updatedStudent.allergies,
+        }),
+        "admin allergy update",
+      );
+    }
+
     // Keep school_students.grade in sync when present (affiliation copy).
     if (patch.gradeLevel) {
       try {

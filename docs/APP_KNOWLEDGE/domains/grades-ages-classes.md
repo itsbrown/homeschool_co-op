@@ -37,7 +37,7 @@ How child grade/age relate to classes and enrollment **today**.
 | Parent catalog filter | `client/src/components/registration/ProgramList.tsx` | `program.gradeLevels.includes(filter)` — browse filter only |
 | Parent profile (admin) | `client/src/pages/schools/ParentProfilePage.tsx` | Child cards: grade + birthdate; class titles on **Enrollments** tab via `enrollment.className` |
 | Parent children | `client/src/pages/ChildrenPage.tsx` | Grade on card; class title from `/api/children/:id/enrollments` |
-| Parent student profile | `client/src/pages/children/ChildProfilePage.tsx` | Health & Safety **Add / Edit** saves allergies via `PATCH /api/children/:id` (parents) or `PUT /api/school-admin/students/:id` (admins) |
+| Parent student profile | `client/src/pages/children/ChildProfilePage.tsx` | Health & Safety **Add / Edit** saves allergies via `PATCH /api/children/:id` (parents) or `PUT /api/school-admin/students/:id` (admins). Peanut / tree nut / sesame (and other foods marked severe) notify classmates and show a parent dashboard reminder — never the student's name. |
 | School admin Students | `client/src/pages/schools/StudentsPage.tsx` | Classes column from `GET /api/school-admin/students` → `classes[]` (current seats via `buildCurrentClassesByChildId`) |
 | Edit / register student | `client/src/pages/schools/StudentRegistrationPage.tsx` | Grade options from `GRADE_LEVEL_OPTIONS` (labels); auto from DOB (age − 5 as of Dec 31); invalidate students queries after save |
 
@@ -60,6 +60,10 @@ How child grade/age relate to classes and enrollment **today**.
 - `shared/grade-levels.ts` — normalize, `gradeAsOfDate` (Dec 31), age−5 helpers, `GRADE_LEVEL_OPTIONS`
 - `server/scripts/apply-fall-move-up-grades-production.ts` — Fall class seats, move-up only, no placement sync
 - `shared/child-profile-patch.ts` — allergy text coerce + child update whitelist
+- `shared/class-allergy-alerts.ts` — parse classroom-restriction allergens (peanut always; dairy/egg only if “severe”)
+- `server/lib/class-allergy-alerts.ts` — live parent alerts + notify on allergy change / class seat
+- `GET /api/parent/class-allergy-alerts` — dashboard / class-detail reminder (no student names)
+- `e2e/parent-class-allergy-alert.spec.ts` — classmate parent sees banner + inbox (`setup-class-allergy-scenario`)
 - `server/api/classes.ts` — enroll (no grade check)
 - `server/api/school-admin.ts` — `GET/PUT /students/:id`, `GET /classes/:id/roster`
 - `.agents/skills/asa-enrollment-classes/SKILL.md` — enrollment lifecycle

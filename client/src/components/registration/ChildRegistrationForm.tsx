@@ -476,6 +476,10 @@ export default function ChildRegistrationForm({
                           data-testid="textarea-allergies"
                         />
                       </FormControl>
+                      <FormDescription>
+                        Severe food allergies such as peanuts are shared with other families in
+                        the class so they can pack safely. Your child&apos;s name is never shown.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

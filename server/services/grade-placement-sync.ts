@@ -152,6 +152,7 @@ export async function runGradePlacementForClass(
   let alreadyEnrolled = 0;
   let removed = 0;
   let blocked = 0;
+  const placedChildIds: number[] = [];
 
   const existingPlacementRows = await db
     .select()
@@ -448,6 +449,7 @@ export async function runGradePlacementForClass(
       });
     }
     placed += 1;
+    placedChildIds.push(row.childId);
     results.push(reason(row.childId, childName, gradeForMatch, "placed"));
   }
 
@@ -471,6 +473,18 @@ export async function runGradePlacementForClass(
     }
     removed += 1;
     results.push(reason(row.childId, row.childName, null, "removed"));
+  }
+
+  if (!dryRun && placedChildIds.length > 0) {
+    const { fireAndForgetClassAllergyNotify, notifyClassAfterChildSeated } = await import(
+      "../lib/class-allergy-alerts"
+    );
+    for (const childId of placedChildIds) {
+      fireAndForgetClassAllergyNotify(
+        notifyClassAfterChildSeated({ childId, classId }),
+        "grade placement",
+      );
+    }
   }
 
   const estimatedRoster = alreadyEnrolled + alreadyPlaced + placed;

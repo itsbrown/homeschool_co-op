@@ -11,6 +11,11 @@ import {
   supplyListProductAction,
   type ParentSupplyListResponse,
 } from "@/lib/parent-supply-list";
+import {
+  PARENT_CLASS_ALLERGY_ALERTS_QUERY_KEY,
+  type ParentClassAllergyAlertsResponse,
+} from "@/lib/parent-class-allergy-alerts";
+import { ClassAllergyAlertBanner } from "@/components/dashboards/ClassAllergyAlertBanner";
 import { StoreOutboundProductLink } from "@/components/store/StoreOutboundProductLink";
 import { DimensionsMathBooksSection } from "@/components/parent/DimensionsMathBooksSection";
 import { SupplyItemBadges } from "@/components/parent/SupplyItemBadges";
@@ -81,6 +86,11 @@ export default function ParentClassDetailsPage() {
       if (!response.ok) throw new Error("Failed to fetch class");
       return response.json();
     },
+    enabled: !!classId,
+  });
+
+  const { data: classAllergyAlerts } = useQuery<ParentClassAllergyAlertsResponse>({
+    queryKey: PARENT_CLASS_ALLERGY_ALERTS_QUERY_KEY,
     enabled: !!classId,
   });
 
@@ -158,6 +168,10 @@ export default function ParentClassDetailsPage() {
   return (
     <ParentAppShell>
       <div className="space-y-6 p-6">
+        <ClassAllergyAlertBanner
+          alerts={classAllergyAlerts?.alerts}
+          classId={classId ? Number(classId) : undefined}
+        />
         {/* Header */}
         <div className="flex items-center justify-between">
           <Button 

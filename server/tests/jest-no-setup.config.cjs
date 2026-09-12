@@ -20,6 +20,7 @@ module.exports = {
     '<rootDir>/server/tests/stuck-parent-manual-installments.test.ts',
     '<rootDir>/server/tests/unit/grade-levels.test.ts',
     '<rootDir>/server/tests/unit/child-profile-patch.test.ts',
+    '<rootDir>/server/tests/unit/class-allergy-alerts.test.ts',
     '<rootDir>/server/tests/unit/session-payment-eligibility.test.ts',
     '<rootDir>/server/tests/unit/current-class-enrollment.test.ts',
   ],
