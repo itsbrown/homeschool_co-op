@@ -45,6 +45,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 | [runbooks/public-mentor-application-form.md](./runbooks/public-mentor-application-form.md) | Mentor form: seed, clone/provision, public URL |
 | [runbooks/checkout-payment-e2e-audit.md](./runbooks/checkout-payment-e2e-audit.md) | Member-cart payment options matrix + Playwright specs |
 | [CHANGELOG.md](./CHANGELOG.md) | Knowledge updates by date |
+| [Live Fall 2026 roster](https://github.com/itsbrown/homeschool_co-op/blob/docs/fall-2026-class-rosters/docs/audit/fall-2026-class-rosters-summary.md) | Daily unique Monday headcount + CSV on `docs/fall-2026-class-rosters` — not the stale file on `main` |
 
 ### Existing project docs (authoritative for depth)
 

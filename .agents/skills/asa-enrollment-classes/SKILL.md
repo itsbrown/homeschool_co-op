@@ -281,6 +281,10 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 - Don't paste Amazon URLs onto `supply_items` — link `store_product_id` (CSV import reuses/creates affiliate products by school+ASIN)
 - Don't look up class price via `programId` when computing `remainingBalance` — use `enrollment.totalCost` directly (see Common Pitfalls above)
 
+## Fall 2026 GitHub roster snapshot
+
+Daily 08:00 ET through 2026-09-21: `export-fall-2026-class-rosters.ts` via `.github/workflows/fall-2026-roster-snapshot.yml`. **Live files are on `docs/fall-2026-class-rosters`**, not `main` (branch protection). Headcount = unique Monday morning children (Macaronis / Yankee / Tycoons / Seekers / Pioneers). Do not use CSV row count or `main`'s stale copy. Lions is afternoon and does not add unique Monday kids.
+
 ## Key Files
 - `shared/member-id-enrollment-gate.ts` — `requireMemberId` self-enroll helper (`users.member_id`)
 - `server/api/enrollments.ts` — enrollment CRUD, confirm, unenroll, bulk cancel

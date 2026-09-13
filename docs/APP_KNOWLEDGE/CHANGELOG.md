@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-13 (GitHub roster 77 vs 94)
+
+- **77** was the stale CSV on `main` (old Brighton enrolled rows plus leftover Greece/Patriots). Daily job already writes **94 unique Monday morning children** to [`docs/fall-2026-class-rosters`](https://github.com/itsbrown/homeschool_co-op/blob/docs/fall-2026-class-rosters/docs/audit/fall-2026-class-rosters.csv). `main` cannot be overwritten by the bot. New `fall-2026-class-rosters-summary.md` prints the unique headcount. Open the snapshot branch, not `main`.
+
 ## 2026-09-12 (School admin week planner print)
 
 - School-admin Week Planner **Print** uses the same ASA Time × teaching-day sheet as mentor Schedule (`AsaWeeklySchedulePrintSheet`). E2E: `npm run test:e2e -- e2e/school-admin-week-planner-print.spec.ts`. Hidden print-sheet titles still match Playwright `getByText` — scope Week Planner assertions to the editor (`p`, `data-testid`) or `schedule-print-root`.

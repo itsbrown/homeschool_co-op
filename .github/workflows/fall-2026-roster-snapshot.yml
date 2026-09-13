@@ -1,6 +1,6 @@
 # Daily Fall 2026 class roster snapshot through 2026-09-21 (America/New_York).
-# Overwrites docs/audit/fall-2026-class-rosters.csv and appends pending→enrolled
-# rows to docs/audit/fall-2026-class-rosters-transitions.csv.
+# Overwrites docs/audit/fall-2026-class-rosters.csv + -summary.md and appends
+# pending→enrolled rows to docs/audit/fall-2026-class-rosters-transitions.csv.
 #
 # Commits land on docs/fall-2026-class-rosters (not main). main is protected
 # (required review + payments check), so GITHUB_TOKEN cannot push CSV there.
@@ -78,6 +78,7 @@ jobs:
           if git rev-parse --verify "origin/$SNAPSHOT_BRANCH" >/dev/null 2>&1; then
             git checkout "origin/$SNAPSHOT_BRANCH" -- \
               docs/audit/fall-2026-class-rosters.csv \
+              docs/audit/fall-2026-class-rosters-summary.md \
               docs/audit/fall-2026-class-rosters-transitions.csv || true
           fi
 
@@ -101,18 +102,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           roster=$(mktemp)
+          summary=$(mktemp)
           transitions=$(mktemp)
           cp docs/audit/fall-2026-class-rosters.csv "$roster"
+          cp docs/audit/fall-2026-class-rosters-summary.md "$summary"
           cp docs/audit/fall-2026-class-rosters-transitions.csv "$transitions"
           git fetch origin "$SNAPSHOT_BRANCH:$SNAPSHOT_BRANCH" || git branch "$SNAPSHOT_BRANCH"
           git checkout "$SNAPSHOT_BRANCH"
           mkdir -p docs/audit
           cp "$roster" docs/audit/fall-2026-class-rosters.csv
+          cp "$summary" docs/audit/fall-2026-class-rosters-summary.md
           cp "$transitions" docs/audit/fall-2026-class-rosters-transitions.csv
-          git add docs/audit/fall-2026-class-rosters.csv docs/audit/fall-2026-class-rosters-transitions.csv
+          git add \
+            docs/audit/fall-2026-class-rosters.csv \
+            docs/audit/fall-2026-class-rosters-summary.md \
+            docs/audit/fall-2026-class-rosters-transitions.csv
           if git diff --cached --quiet; then
             echo "No roster changes"
             exit 0
           fi
-          git commit -m "Refresh Fall 2026 class rosters (${{ steps.window.outputs.today }})."
+          monday=$(python3 -c "import re,sys; t=open('docs/audit/fall-2026-class-rosters-summary.md').read(); m=re.search(r'Monday morning Brighton \(unique\)\*\* \| \*\*(\d+)', t); print(m.group(1) if m else '?')")
+          git commit -m "Refresh Fall 2026 class rosters (${{ steps.window.outputs.today }}): ${monday} Monday morning children."
           git push origin "$SNAPSHOT_BRANCH"
