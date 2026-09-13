@@ -31,10 +31,16 @@ const LAST_SNAPSHOT_DAY = '2026-09-21';
 const DRY_RUN = process.argv.includes('--dry-run');
 const FORCE = process.argv.includes('--force');
 const OUT = path.resolve(process.cwd(), 'docs/audit/fall-2026-class-rosters.csv');
+const SUMMARY_OUT = path.resolve(process.cwd(), 'docs/audit/fall-2026-class-rosters-summary.md');
 const TRANSITIONS_OUT = path.resolve(
   process.cwd(),
   'docs/audit/fall-2026-class-rosters-transitions.csv',
 );
+const MONDAY_MORNING_CLASS_IDS = new Set([74, 64, 66, 68, 70]);
+const LIVE_CSV_URL =
+  'https://github.com/itsbrown/homeschool_co-op/blob/docs/fall-2026-class-rosters/docs/audit/fall-2026-class-rosters.csv';
+const LIVE_SUMMARY_URL =
+  'https://github.com/itsbrown/homeschool_co-op/blob/docs/fall-2026-class-rosters/docs/audit/fall-2026-class-rosters-summary.md';
 
 function todayNyDate(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -585,10 +591,19 @@ async function main() {
     appendTransitions(prior, rows, AS_OF_DAY);
   }
 
-  const byClass = new Map<string, { enrolled: number; pending: number; full: number; half: number }>();
+  const byClass = new Map<
+    string,
+    { enrolled: number; pending: number; full: number; half: number; classId: number }
+  >();
   for (const r of rows) {
     const key = r.classTitle;
-    const cur = byClass.get(key) || { enrolled: 0, pending: 0, full: 0, half: 0 };
+    const cur = byClass.get(key) || {
+      enrolled: 0,
+      pending: 0,
+      full: 0,
+      half: 0,
+      classId: r.classId,
+    };
     if (r.seat === 'not on roster') cur.pending += 1;
     else cur.enrolled += 1;
     if (r.dayType.startsWith('full')) cur.full += 1;
@@ -596,7 +611,48 @@ async function main() {
     byClass.set(key, cur);
   }
 
+  const mondayKids = new Set(
+    rows
+      .filter((r) => MONDAY_MORNING_CLASS_IDS.has(r.classId) && r.seat !== 'not on roster')
+      .map((r) => r.childId),
+  );
+  const onRosterKids = new Set(rows.filter((r) => r.seat !== 'not on roster').map((r) => r.childId));
+
+  if (!DRY_RUN) {
+    const classLines = [...byClass.entries()].map(([title, n]) => {
+      const morning = MONDAY_MORNING_CLASS_IDS.has(n.classId) ? 'Monday morning' : 'other';
+      return `| ${title.replace(/ \| /g, ' / ')} | ${n.enrolled} | ${n.pending} | ${n.full} | ${n.half} | ${morning} |`;
+    });
+    const summary = `# Fall 2026 class roster snapshot
+
+**As of:** ${AS_OF_DAY} (America/New_York)
+
+## Headcount (use this, not the CSV row count)
+
+| What | Children |
+|---|---|
+| **Monday morning Brighton (unique)** | **${mondayKids.size}** |
+| Any Fall 2026 class seat (unique) | ${onRosterKids.size} |
+| CSV rows (class seats + unpaid not-yet-seated) | ${rows.length} |
+
+Monday morning classes: Macaronis, Yankee Doodle, Tycoons, Seekers, Pioneers. Lions is afternoon (starts 2026-09-21) and does **not** add extra unique Monday children — those students are already on a morning list (Fullers are afternoon-only but still seated on Pioneers/Seekers).
+
+Do **not** treat \`main\`'s copy of the CSV as live. Daily overwrite lands on [\`docs/fall-2026-class-rosters\`](${LIVE_CSV_URL}). Summary: [this file on the snapshot branch](${LIVE_SUMMARY_URL}).
+
+## Per class
+
+| Class | On roster | Unpaid not seated | Full day | Half day | Band |
+|---|---:|---:|---:|---:|---|
+${classLines.join('\n')}
+
+On roster = \`enrolled\` / \`pending_admin_approval\` / \`waitlist\` class seat. Unpaid not seated = Fall session \`pending_payment\` with a balance and no class seat yet (auto-place preview only).
+`;
+    fs.writeFileSync(SUMMARY_OUT, summary);
+  }
+
   console.log(`Wrote ${rows.length} rows → ${OUT} (as_of=${AS_OF_DAY})`);
+  console.log(`Monday morning unique children: ${mondayKids.size}`);
+  console.log(`Any class-seat unique children: ${onRosterKids.size}`);
   for (const [title, n] of byClass) {
     console.log(
       `  ${title}: on roster ${n.enrolled} | pending ${n.pending} | full ${n.full} | half ${n.half}`,
