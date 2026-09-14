@@ -15,7 +15,7 @@ import {
   PARENT_CLASS_ALLERGY_ALERTS_QUERY_KEY,
   type ParentClassAllergyAlertsResponse,
 } from "@/lib/parent-class-allergy-alerts";
-import { ClassAllergyAlertBanner } from "@/components/dashboards/ClassAllergyAlertBanner";
+import { ClassAllergyRestrictionChip } from "@/components/dashboards/ClassAllergyRestrictionChip";
 import { StoreOutboundProductLink } from "@/components/store/StoreOutboundProductLink";
 import { DimensionsMathBooksSection } from "@/components/parent/DimensionsMathBooksSection";
 import { SupplyItemBadges } from "@/components/parent/SupplyItemBadges";
@@ -168,10 +168,6 @@ export default function ParentClassDetailsPage() {
   return (
     <ParentAppShell>
       <div className="space-y-6 p-6">
-        <ClassAllergyAlertBanner
-          alerts={classAllergyAlerts?.alerts}
-          classId={classId ? Number(classId) : undefined}
-        />
         {/* Header */}
         <div className="flex items-center justify-between">
           <Button 
@@ -189,10 +185,16 @@ export default function ParentClassDetailsPage() {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100" data-testid="text-class-title">
             {classData.title}
           </h1>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
             <Badge variant={classData.category === "academic" ? "default" : "secondary"} data-testid="badge-category">
               {classData.categoryName || classData.category}
             </Badge>
+            {classId ? (
+              <ClassAllergyRestrictionChip
+                alerts={classAllergyAlerts?.alerts}
+                classId={Number(classId)}
+              />
+            ) : null}
           </div>
         </div>
 

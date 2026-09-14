@@ -46,9 +46,9 @@ notification_recipients:
 ```
 
 ### Class allergy alerts (automatic)
-- **Parse** free-text `children.allergies` with `shared/class-allergy-alerts.ts`. Peanut / tree nut / sesame always notify classmates. Other foods only if the text marks them severe (anaphylaxis, EpiPen).
-- **Never name the student** in subject, body, or dashboard copy.
-- **Live reminder:** `GET /api/parent/class-allergy-alerts` (parent dashboard + class details).
+- **Parse** free-text `children.allergies` with `shared/class-allergy-alerts.ts`. Peanut / tree nut / sesame always notify classmates. Other foods only if the text marks them severe (anaphylaxis, EpiPen). Parent copy lists named foods from the note when present (e.g. pistachios, cashews, hazelnuts under tree nuts).
+- **Never name the student** in subject, body, or dashboard copy. The viewing parent’s own children may be named on the household card.
+- **Live reminder:** `GET /api/parent/class-allergy-alerts` (one household card on Parent Home; class details chip).
 - **One-time notice:** `server/lib/class-allergy-alerts.ts` sends `type: both` when a new restriction appears (allergy save, enrollment confirm, Grade Placement). Campaign key `class_allergy_alert`.
 
 ### Target Types
