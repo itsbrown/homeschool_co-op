@@ -2514,6 +2514,9 @@ async function runMigrations() {
     await db.execute(sql`
       ALTER TABLE classes ADD COLUMN IF NOT EXISTS session_id INTEGER REFERENCES sessions(id);
     `);
+    await db.execute(sql`
+      ALTER TABLE classes ADD COLUMN IF NOT EXISTS auto_place_day_type TEXT;
+    `);
     console.log('✅ Migration completed: session_id column added to classes table');
 
     // Add session_id column to program_enrollments table

@@ -5263,6 +5263,7 @@ router.post('/setup-grade-placement-scenario', async (req: Request, res: Respons
     await db.execute(sql`
       ALTER TABLE classes ADD COLUMN IF NOT EXISTS session_id INTEGER REFERENCES sessions(id);
       ALTER TABLE classes ADD COLUMN IF NOT EXISTS auto_place_by_grade BOOLEAN NOT NULL DEFAULT false;
+      ALTER TABLE classes ADD COLUMN IF NOT EXISTS auto_place_day_type TEXT;
       ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS placement_source TEXT;
     `);
 
@@ -5355,6 +5356,16 @@ router.post('/setup-grade-placement-scenario', async (req: Request, res: Respons
       schoolId: school.id,
       locationId: campus.id,
     });
+    const halfDayChild = await storage.createChild({
+      parentId: parent.id,
+      parentEmail,
+      firstName: 'Halfday',
+      lastName: `Paid${uniqueId}`,
+      birthdate: '2016-05-01',
+      gradeLevel: '1st Grade',
+      schoolId: school.id,
+      locationId: campus.id,
+    });
 
     await db.insert(schoolStudents).values([
       {
@@ -5367,6 +5378,13 @@ router.post('/setup-grade-placement-scenario', async (req: Request, res: Respons
       {
         schoolId: school.id,
         childId: unpaidChild.id,
+        locationId: campus.id,
+        grade: '1st Grade',
+        status: 'active',
+      },
+      {
+        schoolId: school.id,
+        childId: halfDayChild.id,
         locationId: campus.id,
         grade: '1st Grade',
         status: 'active',
@@ -5420,6 +5438,31 @@ router.post('/setup-grade-placement-scenario', async (req: Request, res: Respons
         status: 'pending_payment',
         enrollmentVersion: 'v2',
         dayType: 'full_day',
+      })
+      .returning();
+
+    const [halfDaySessionEnroll] = await db
+      .insert(programEnrollments)
+      .values({
+        schoolId: school.id,
+        classType: 'marketplace',
+        marketplaceClassId: null,
+        classId: null,
+        sessionId: sessionRow.id,
+        locationId: campus.id,
+        childId: halfDayChild.id,
+        childName: `${halfDayChild.firstName} ${halfDayChild.lastName}`,
+        className: `${sessionRow.name} - Half Day`,
+        parentId: parent.id,
+        parentEmail,
+        totalCost: 15000,
+        totalPaid: 5000,
+        remainingBalance: 10000,
+        depositRequired: 0,
+        paymentStatus: 'partial_payment',
+        status: 'enrolled',
+        enrollmentVersion: 'v2',
+        dayType: 'half_day',
       })
       .returning();
 
@@ -5491,11 +5534,17 @@ router.post('/setup-grade-placement-scenario', async (req: Request, res: Respons
             firstName: unpaidChild.firstName,
             lastName: unpaidChild.lastName,
           },
+          halfDayPaid: {
+            id: halfDayChild.id,
+            firstName: halfDayChild.firstName,
+            lastName: halfDayChild.lastName,
+          },
         },
         class: { id: cls.id, title: cls.title },
         sessionEnrollments: {
           paidId: paidSessionEnroll.id,
           unpaidId: unpaidSessionEnroll.id,
+          halfDayPaidId: halfDaySessionEnroll.id,
         },
         syncResult: {
           placed: syncResult.placed,

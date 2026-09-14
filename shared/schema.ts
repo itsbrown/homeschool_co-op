@@ -1786,6 +1786,8 @@ export const classes = pgTable("classes", {
   sessionId: integer("session_id").references(() => sessions.id),
   /** When true, sync places session-paid students whose grade matches gradeLevels */
   autoPlaceByGrade: boolean("auto_place_by_grade").default(false).notNull(),
+  /** Optional Grade Placement filter: full_day | half_day | null (both) */
+  autoPlaceDayType: text("auto_place_day_type"),
   startDate: date("start_date"), // Keep as date type for compatibility
   endDate: date("end_date"), // Keep as date type for compatibility
   schedule: jsonb("schedule").default(null), // JSON object with schedule details - supports variants for school_admin
@@ -1857,6 +1859,7 @@ export const insertClassSchema = createInsertSchema(classes)
     locationId: z.number().optional(),
     sessionId: z.number().optional().nullable(),
     autoPlaceByGrade: z.boolean().optional().default(false),
+    autoPlaceDayType: z.enum(["full_day", "half_day"]).nullable().optional(),
     gradeLevels: z.array(z.string()).optional(),
     capacity: z.number().optional(),
     schedule: z.any().optional(),

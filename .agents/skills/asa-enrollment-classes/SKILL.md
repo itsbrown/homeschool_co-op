@@ -231,9 +231,9 @@ School-admin observability (not a separate roster product):
 
 ## Grade Placement (auto-place by grade)
 
-- Class fields: `sessionId`, `autoPlaceByGrade`, `gradeLevels`, `locationId` (all required to enable Auto-place)
+- Class fields: `sessionId`, `autoPlaceByGrade`, `gradeLevels`, `locationId` (all required to enable Auto-place). Optional `autoPlaceDayType` (`full_day` / `half_day`) filters session tuition; null = both. School Admin **Place only**.
 - Sync creates free `program_enrollments` with `placementSource: 'grade'` — never cancel paid/manual rows
-- Eligibility: campus match (`school_students` → `children` → **parent** `location_id`) + `hasPaidTowardSession` (session tuition ledger) + normalized grade (`shared/grade-levels.ts`)
+- Eligibility: campus match (`school_students` → `children` → **parent** `location_id`) + `hasPaidTowardSession` (session tuition ledger) + normalized grade (`shared/grade-levels.ts`) + optional day-type filter
 - Preview/sync: `GET/POST .../classes/:id/grade-placement-preview|sync-grade-placements`
 - Exclude placement seats from cart; block parent unenroll for `placementSource === 'grade'`
 - Parent **Class:** / enrollments UI: current class seats only (`shared/current-class-enrollment.ts`)

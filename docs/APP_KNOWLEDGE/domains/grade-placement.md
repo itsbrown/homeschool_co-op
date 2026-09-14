@@ -18,6 +18,8 @@ Auto-place students onto class rosters by **campus + academic session payment + 
 3. `hasPaidTowardSession` on a v2 / null-class session enrollment for `class.sessionId`
 4. Normalized grade ∈ `class.gradeLevels`
 
+**Optional gate:** `classes.auto_place_day_type` = `full_day` | `half_day` | null. Null (default) places both. School Admin Edit Class **Place only** persists this so Save / Re-sync skip the other day type (`wrong_day_type`). Unspecified session day type does **not** match a filter. Cubs #83 and Logic Hall #82 (full-day afternoon) use **`full_day`**. Afternoon-only half-day (Fullers `metadata.afternoonOnly`) is not this column — add those seats by hand.
+
 **Not gates:** membership-only payment, unused family credits, autopay/collections late flags, `school_students.status` alone.
 
 Helper: [`shared/session-payment-eligibility.ts`](../../../shared/session-payment-eligibility.ts)  
@@ -28,7 +30,7 @@ Sync: [`server/services/grade-placement-sync.ts`](../../../server/services/grade
 
 - `GET /api/school-admin/classes/:id/grade-placement-preview` — dry-run + reason codes
 - `POST /api/school-admin/classes/:id/sync-grade-placements` — apply
-- Class create/PATCH/PUT accept `sessionId`, `autoPlaceByGrade` and sync when relevant
+- Class create/PATCH/PUT accept `sessionId`, `autoPlaceByGrade`, `autoPlaceDayType` and sync when relevant
 
 ## Parent surfaces
 
@@ -49,12 +51,13 @@ Sync: [`server/services/grade-placement-sync.ts`](../../../server/services/grade
 
 ## Migration
 
-[`server/migrations/254-grade-placement.sql`](../../../server/migrations/254-grade-placement.sql)
+[`server/migrations/254-grade-placement.sql`](../../../server/migrations/254-grade-placement.sql)  
+[`server/migrations/263-class-auto-place-day-type.sql`](../../../server/migrations/263-class-auto-place-day-type.sql) (`classes.auto_place_day_type`)
 
 ## Tests
 
-- Jest unit: `grade-levels`, `session-payment-eligibility`
-- Jest integration: `grade-placement-sync.test.ts`
-- Playwright: `grade-placement-auto-place`, `grade-placement-parent-card`
+- Jest unit: `grade-levels`, `session-payment-eligibility`, `roster-day-type`
+- Jest integration: `grade-placement-sync.test.ts` (including full-day-only filter)
+- Playwright: `grade-placement-auto-place` (Place only on Edit Class), `grade-placement-parent-card`
 - Seed: `POST /api/test/setup-grade-placement-scenario`
 - Edit-class preview (`text-placement-preview`) only renders when `watchAutoPlace && placementPreview?.summaryLabel`. The switch is disabled until location, session, and grades hydrate. E2E must wait for the switch to be **enabled**, then click only if `data-state` is not `checked`.

@@ -112,3 +112,22 @@ export function formatRosterDayTypeSummary(counts: {
 }): string {
   return `${counts.fullDay} Full Day · ${counts.halfDay} Half Day`;
 }
+
+/** Class `auto_place_day_type`: only `full_day` / `half_day` stick. Anything else is “any”. */
+export function coerceAutoPlaceDayType(value: unknown): RosterDayType | null {
+  if (value === "full_day" || value === "half_day") return value;
+  return null;
+}
+
+export function sessionMatchesAutoPlaceDayType(
+  enrollment: {
+    dayType?: string | null;
+    variantId?: string | null;
+    className?: string | null;
+  },
+  required: string | null | undefined,
+): boolean {
+  const want = coerceAutoPlaceDayType(required);
+  if (!want) return true;
+  return resolveEnrollmentDayType(enrollment) === want;
+}
