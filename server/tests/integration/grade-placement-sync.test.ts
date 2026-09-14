@@ -55,6 +55,7 @@ describeWithDb('Integration: grade placement sync', () => {
     expect(roster.status).toBe(200);
     const ids = roster.body.students.map((s: any) => s.id);
     expect(ids).toContain(seed.children.paid.id);
+    expect(ids).toContain(seed.children.halfDayPaid.id);
     expect(ids).not.toContain(seed.children.unpaid.id);
     const paidRow = roster.body.students.find((s: any) => s.id === seed.children.paid.id);
     expect(paidRow.placementSource).toBe('grade');
@@ -82,5 +83,43 @@ describeWithDb('Integration: grade placement sync', () => {
     expect(sessionTuition.placementSource == null || sessionTuition.placementSource !== 'grade').toBe(
       true,
     );
+  });
+
+  it('full-day-only filter places paid full-day and blocks paid half-day', async () => {
+    const put = await request(app)
+      .put(`/api/school-admin/classes/${seed.class.id}`)
+      .set('x-test-user-email', seed.admin.email)
+      .send({
+        autoPlaceByGrade: true,
+        autoPlaceDayType: 'full_day',
+      });
+    expect(put.status).toBe(200);
+    expect(put.body.autoPlaceDayType).toBe('full_day');
+
+    const preview = await request(app)
+      .get(`/api/school-admin/classes/${seed.class.id}/grade-placement-preview`)
+      .set('x-test-user-email', seed.admin.email);
+    expect(preview.status).toBe(200);
+    expect(
+      preview.body.results.some(
+        (r: any) =>
+          r.childId === seed.children.halfDayPaid.id && r.reasonCode === 'wrong_day_type',
+      ),
+    ).toBe(true);
+    expect(
+      preview.body.results.some(
+        (r: any) =>
+          r.childId === seed.children.paid.id &&
+          (r.reasonCode === 'placed' || r.reasonCode === 'already_placed'),
+      ),
+    ).toBe(true);
+
+    const roster = await request(app)
+      .get(`/api/school-admin/classes/${seed.class.id}/roster`)
+      .set('x-test-user-email', seed.admin.email);
+    expect(roster.status).toBe(200);
+    const ids = roster.body.students.map((s: any) => s.id);
+    expect(ids).toContain(seed.children.paid.id);
+    expect(ids).not.toContain(seed.children.halfDayPaid.id);
   });
 });

@@ -7,6 +7,8 @@ import {
   pickSessionTuitionForChild,
   resolveEnrollmentDayType,
   rosterDayTypeLabel,
+  coerceAutoPlaceDayType,
+  sessionMatchesAutoPlaceDayType,
 } from "../../../shared/roster-day-type";
 
 describe("roster-day-type", () => {
@@ -92,5 +94,21 @@ describe("roster-day-type", () => {
     const counts = countRosterDayTypes(["full_day", "half_day", "full_day", null]);
     expect(counts).toEqual({ fullDay: 2, halfDay: 1, unspecified: 1 });
     expect(formatRosterDayTypeSummary(counts)).toBe("2 Full Day · 1 Half Day");
+  });
+
+  it("coerces class auto-place day type and matches session tuition", () => {
+    expect(coerceAutoPlaceDayType("full_day")).toBe("full_day");
+    expect(coerceAutoPlaceDayType("any")).toBeNull();
+    expect(coerceAutoPlaceDayType(null)).toBeNull();
+    expect(sessionMatchesAutoPlaceDayType({ dayType: "half_day" }, null)).toBe(true);
+    expect(sessionMatchesAutoPlaceDayType({ dayType: "half_day" }, "full_day")).toBe(
+      false,
+    );
+    expect(sessionMatchesAutoPlaceDayType({ dayType: "full_day" }, "full_day")).toBe(
+      true,
+    );
+    expect(sessionMatchesAutoPlaceDayType({ className: "Fall 2026 - Half Day" }, "half_day")).toBe(
+      true,
+    );
   });
 });

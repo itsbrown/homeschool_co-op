@@ -53,6 +53,16 @@ import {
   mapPositionToRole as mapStaffPositionToRole,
 } from '../lib/staff-invitations';
 import { canAdoptUserSchoolId, staffInvitePath } from '@shared/staff-invitations';
+import { coerceAutoPlaceDayType } from "@shared/roster-day-type";
+
+function autoPlaceDayTypeFromBody(
+  body: Record<string, unknown>,
+): "full_day" | "half_day" | null | undefined {
+  if (!Object.prototype.hasOwnProperty.call(body, "autoPlaceDayType")) {
+    return undefined;
+  }
+  return coerceAutoPlaceDayType(body.autoPlaceDayType);
+}
 
 // Rate limiter for permission updates - prevent bulk abuse
 const permissionUpdateLimiter = rateLimit({
@@ -985,6 +995,10 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
         req.body.autoPlaceByGrade !== undefined
           ? req.body.autoPlaceByGrade === true
           : existingClass.autoPlaceByGrade,
+      autoPlaceDayType:
+        autoPlaceDayTypeFromBody(req.body) !== undefined
+          ? autoPlaceDayTypeFromBody(req.body) ?? null
+          : existingClass.autoPlaceDayType,
       instructorName: instructorName,
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
@@ -1004,6 +1018,7 @@ router.put("/classes/:id", supabaseAuth, async (req: any, res) => {
     let gradePlacementSync = null;
     if (
       req.body.autoPlaceByGrade !== undefined ||
+      req.body.autoPlaceDayType !== undefined ||
       req.body.gradeLevels !== undefined ||
       req.body.locationId !== undefined ||
       req.body.sessionId !== undefined ||
@@ -1131,6 +1146,10 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
         req.body.autoPlaceByGrade !== undefined
           ? req.body.autoPlaceByGrade === true
           : existingClass.autoPlaceByGrade,
+      autoPlaceDayType:
+        autoPlaceDayTypeFromBody(req.body) !== undefined
+          ? autoPlaceDayTypeFromBody(req.body) ?? null
+          : existingClass.autoPlaceDayType,
       instructorName: instructorName,
       instructorId: instructorId,
       price: req.body.price !== undefined ? req.body.price : existingClass.price,
@@ -1150,6 +1169,7 @@ router.patch("/classes/:id", supabaseAuth, async (req: any, res) => {
     let gradePlacementSync = null;
     const placementFieldsChanged =
       req.body.autoPlaceByGrade !== undefined ||
+      req.body.autoPlaceDayType !== undefined ||
       req.body.gradeLevels !== undefined ||
       req.body.locationId !== undefined ||
       req.body.sessionId !== undefined;
@@ -3036,6 +3056,7 @@ router.post(
       locationId: req.body.locationId,
       sessionId: req.body.sessionId != null ? Number(req.body.sessionId) : null,
       autoPlaceByGrade: req.body.autoPlaceByGrade === true,
+      autoPlaceDayType: coerceAutoPlaceDayType(req.body.autoPlaceDayType),
       price: price,
       instructorName: req.body.instructorName,
       instructorId,

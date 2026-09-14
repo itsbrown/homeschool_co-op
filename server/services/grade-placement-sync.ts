@@ -16,6 +16,10 @@ import {
 } from "../../shared/schema";
 import { gradesMatch, normalizeGradeLevel } from "../../shared/grade-levels";
 import { hasPaidTowardSession } from "../../shared/session-payment-eligibility";
+import {
+  coerceAutoPlaceDayType,
+  resolveEnrollmentDayType,
+} from "../../shared/roster-day-type";
 
 export type GradePlacementReasonCode =
   | "placed"
@@ -29,7 +33,8 @@ export type GradePlacementReasonCode =
   | "terminal_session"
   | "wishlist_or_waitlist"
   | "session_inactive"
-  | "class_misconfigured";
+  | "class_misconfigured"
+  | "wrong_day_type";
 
 export const GRADE_PLACEMENT_REASON_LABELS: Record<GradePlacementReasonCode, string> = {
   placed: "Placed by grade",
@@ -44,6 +49,7 @@ export const GRADE_PLACEMENT_REASON_LABELS: Record<GradePlacementReasonCode, str
   wishlist_or_waitlist: "On waitlist or location wishlist",
   session_inactive: "Session is completed or cancelled",
   class_misconfigured: "Class missing location, session, or grades",
+  wrong_day_type: "Session day type doesn’t match this class",
 };
 
 export type GradePlacementChildResult = {
@@ -101,6 +107,16 @@ function summarize(result: Omit<GradePlacementSyncResult, "summaryLabel">): Grad
   if (result.alreadyEnrolled) parts.push(`${result.alreadyEnrolled} already enrolled`);
   if (result.overCapacity) parts.push("over capacity");
   return { ...result, summaryLabel: parts.join(" · ") };
+}
+
+function firstPaidSessionMatchingDayType(
+  sessionRows: ProgramEnrollment[],
+  required: string | null | undefined,
+): ProgramEnrollment | undefined {
+  const want = coerceAutoPlaceDayType(required);
+  const paid = sessionRows.filter((e) => hasPaidTowardSession(e));
+  if (!want) return paid[0];
+  return paid.find((e) => resolveEnrollmentDayType(e) === want);
 }
 
 function isClassConfiguredForAutoPlace(cls: Class): boolean {
@@ -389,10 +405,20 @@ export async function runGradePlacementForClass(
       continue;
     }
 
-    const paidSession = sessionRows.find((e) => hasPaidTowardSession(e));
-    if (!paidSession) {
+    const anyPaidSession = sessionRows.find((e) => hasPaidTowardSession(e));
+    if (!anyPaidSession) {
       blocked += 1;
       results.push(reason(row.childId, childName, gradeForMatch, "unpaid_session"));
+      continue;
+    }
+
+    const paidSession = firstPaidSessionMatchingDayType(
+      sessionRows,
+      cls.autoPlaceDayType,
+    );
+    if (!paidSession) {
+      blocked += 1;
+      results.push(reason(row.childId, childName, gradeForMatch, "wrong_day_type"));
       continue;
     }
 

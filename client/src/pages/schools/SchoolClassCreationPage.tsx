@@ -42,6 +42,7 @@ const classFormSchema = z.object({
   locationId: z.coerce.number().int().min(1, "Location is required"),
   sessionId: z.coerce.number().int().optional().nullable(),
   autoPlaceByGrade: z.boolean().default(false),
+  autoPlaceDayType: z.enum(["any", "full_day", "half_day"]).default("any"),
   instructorName: z.string().optional(), // Legacy field - educators now managed via ClassEducatorAssignments
   status: z.string().min(1, "Please select a status"),
   isAdminOnly: z.boolean().default(false),
@@ -89,6 +90,7 @@ export default function SchoolClassCreationPage() {
       locationId: 0,
       sessionId: null,
       autoPlaceByGrade: false,
+      autoPlaceDayType: "any",
       instructorName: "",
       status: "upcoming",
       isAdminOnly: false,
@@ -145,6 +147,7 @@ export default function SchoolClassCreationPage() {
   const watchLocationId = form.watch("locationId");
   const watchSessionId = form.watch("sessionId");
   const watchAutoPlace = form.watch("autoPlaceByGrade");
+  const watchAutoPlaceDayType = form.watch("autoPlaceDayType");
   const watchGradeLevels = form.watch("gradeLevels");
   const canAutoPlace =
     !!watchLocationId &&
@@ -161,6 +164,7 @@ export default function SchoolClassCreationPage() {
       watchSessionId,
       watchGradeLevels,
       watchAutoPlace,
+      watchAutoPlaceDayType,
     ],
     queryFn: async () => {
       const res = await apiRequest(
@@ -317,6 +321,10 @@ export default function SchoolClassCreationPage() {
         locationId: targetLocationId,
         sessionId: classData.sessionId ?? null,
         autoPlaceByGrade: classData.autoPlaceByGrade === true,
+        autoPlaceDayType:
+          classData.autoPlaceDayType === "full_day" || classData.autoPlaceDayType === "half_day"
+            ? classData.autoPlaceDayType
+            : "any",
         instructorName: instructorValue,
         status: classData.status || "upcoming",
         isAdminOnly: classData.isAdminOnly || false,
@@ -375,6 +383,7 @@ export default function SchoolClassCreationPage() {
     mutationFn: async (data: ClassFormValues) => {
       const res = await apiRequest("POST", "/api/school-admin/classes", {
         ...data,
+        autoPlaceDayType: data.autoPlaceDayType === "any" ? null : data.autoPlaceDayType,
         volunteerWaiverId,
       });
       return res.json();
@@ -439,6 +448,7 @@ export default function SchoolClassCreationPage() {
     mutationFn: async (data: ClassFormValues) => {
       const res = await apiRequest("PUT", `/api/school-admin/classes/${classId}`, {
         ...data,
+        autoPlaceDayType: data.autoPlaceDayType === "any" ? null : data.autoPlaceDayType,
         volunteerWaiverId,
       });
       return res.json();
@@ -757,6 +767,7 @@ export default function SchoolClassCreationPage() {
                           <FormDescription>
                             Students at this campus who have paid toward this session (card, credits, or payment plan)
                             and match the selected grades are added to the roster automatically (no payment).
+                            Use Place only so Save and Re-sync keep the same day-type filter.
                             {!canAutoPlace &&
                               " Set location, session, and grades before enabling."}
                           </FormDescription>
@@ -788,6 +799,37 @@ export default function SchoolClassCreationPage() {
                             data-testid="switch-auto-place-by-grade"
                           />
                         </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="autoPlaceDayType"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel>Place only</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          disabled={!watchAutoPlace && !canAutoPlace}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-auto-place-day-type">
+                              <SelectValue placeholder="Any day type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="any">Any day type (half and full)</SelectItem>
+                            <SelectItem value="full_day">Full day only</SelectItem>
+                            <SelectItem value="half_day">Half day only</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Afternoon enrichment like Logic Hall and Cubs is Full day only.
+                          This is stored on the class so Re-sync and Save do not add morning half-day seats.
+                        </FormDescription>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
