@@ -242,7 +242,7 @@ School-admin observability (not a separate roster product):
 
 ## Class allergy alerts
 
-When a seated child (`enrolled` / `pending_admin_approval`) has a classroom-restriction allergy (peanut, tree nut, sesame, or another food marked severe), every parent in that class gets an in-app + email notice and a live dashboard reminder. **Never include the child's name.** Parse with `shared/class-allergy-alerts.ts`; send via `notifyClassesAfterAllergyChange` / `notifyClassAfterChildSeated`. Dashboard: `GET /api/parent/class-allergy-alerts`.
+When a seated child (`enrolled` / `pending_admin_approval`) has a classroom-restriction allergy (peanut, tree nut, sesame, or another food marked severe), every parent in that class gets an in-app + email notice. Parent Home shows **one** household food-restriction card (own children + class rows; **Got it** until `householdAllergySignature` changes). Card copy lists named foods from the note when we have them (`tree nuts (pistachios, cashews, and hazelnuts)`); a bare “nut” uses common tree-nut examples. Class details uses a compact **No peanut** / **No tree nuts** chip. **Never include the allergic child's name.** The parent payload may name **their** children so they know which lunch to pack. Parse with `shared/class-allergy-alerts.ts`; send via `notifyClassesAfterAllergyChange` / `notifyClassAfterChildSeated`. Dashboard: `GET /api/parent/class-allergy-alerts`.
 
 ## Supply lists (class + session)
 

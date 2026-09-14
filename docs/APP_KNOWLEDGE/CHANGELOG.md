@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-14 (Parent allergy household card)
+
+- Parent Home is one **Classroom food restrictions** card (own children + class rows, **Got it** until the allergen signature changes). Class details uses a compact **No peanut** / **No tree nuts** chip. Card lists named foods from the note when present: Seekers-style **Do not pack tree nuts (pistachios, cashews, and hazelnuts).** A bare “nut allergy” uses common tree-nut examples. `GET /api/parent/class-allergy-alerts` includes `children[].firstName` for the viewing parent only. Never the allergic student’s name. E2E: `npm run test:e2e -- e2e/parent-class-allergy-alert.spec.ts`.
+
 ## 2026-09-12 (School admin week planner print)
 
 - School-admin Week Planner **Print** uses the same ASA Time × teaching-day sheet as mentor Schedule (`AsaWeeklySchedulePrintSheet`). E2E: `npm run test:e2e -- e2e/school-admin-week-planner-print.spec.ts`. Hidden print-sheet titles still match Playwright `getByText` — scope Week Planner assertions to the editor (`p`, `data-testid`) or `schedule-print-root`.

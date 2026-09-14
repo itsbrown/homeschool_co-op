@@ -1,7 +1,10 @@
 import { storage } from "../storage";
 import {
+  classAllergySummary,
   classroomAllergyReminderCopy,
   extractSevereAllergens,
+  mergeClassroomAllergens,
+  namedClassroomAllergens,
   newlyIntroducedAllergens,
   type ClassroomAllergen,
 } from "@shared/class-allergy-alerts";
@@ -15,6 +18,7 @@ export type ClassAllergyAlert = {
   classId: number;
   className: string;
   allergens: ClassroomAllergen[];
+  children: Array<{ firstName: string }>;
 };
 
 function enrollmentClassId(enrollment: {
@@ -68,42 +72,117 @@ export async function allergensFromOtherChildren(
   excludeChildId?: number | null,
 ): Promise<ClassroomAllergen[]> {
   const enrollments = await listActiveClassEnrollments(classId);
-  const byKey = new Map<string, ClassroomAllergen>();
+  let allergens: ClassroomAllergen[] = [];
   for (const enrollment of enrollments) {
     const childId = Number(enrollment.childId);
     if (!Number.isFinite(childId) || childId <= 0) continue;
     if (excludeChildId != null && childId === excludeChildId) continue;
     const child = await storage.getChildById(childId);
-    for (const allergen of extractSevereAllergens(child?.allergies)) {
-      byKey.set(allergen.key, allergen);
-    }
+    allergens = mergeClassroomAllergens(allergens, extractSevereAllergens(child?.allergies));
   }
-  return [...byKey.values()];
+  return allergens;
 }
 
 export async function severeAllergensForClass(classId: number): Promise<ClassroomAllergen[]> {
   return allergensFromOtherChildren(classId, null);
 }
 
+export async function mapSevereAllergensByClassIds(
+  classIds: number[],
+): Promise<Map<number, ClassroomAllergen[]>> {
+  const uniqueIds = [...new Set(classIds.filter((id) => Number.isFinite(id) && id > 0))];
+  const result = new Map<number, ClassroomAllergen[]>();
+  for (const id of uniqueIds) result.set(id, []);
+  if (uniqueIds.length === 0) return result;
+
+  const enrollmentsByClass = await Promise.all(
+    uniqueIds.map(async (classId) => ({
+      classId,
+      enrollments: await listActiveClassEnrollments(classId),
+    })),
+  );
+
+  const childIds = new Set<number>();
+  for (const { enrollments } of enrollmentsByClass) {
+    for (const enrollment of enrollments) {
+      const childId = Number(enrollment.childId);
+      if (Number.isFinite(childId) && childId > 0) childIds.add(childId);
+    }
+  }
+
+  const children = new Map<number, { allergies?: unknown }>();
+  await Promise.all(
+    [...childIds].map(async (childId) => {
+      const child = await storage.getChildById(childId);
+      if (child) children.set(childId, child);
+    }),
+  );
+
+  for (const { classId, enrollments } of enrollmentsByClass) {
+    let allergens: ClassroomAllergen[] = [];
+    for (const enrollment of enrollments) {
+      const child = children.get(Number(enrollment.childId));
+      allergens = mergeClassroomAllergens(allergens, extractSevereAllergens(child?.allergies));
+    }
+    result.set(classId, allergens);
+  }
+  return result;
+}
+
+export function allergyFieldsForClass(allergens: ClassroomAllergen[]) {
+  return classAllergySummary(allergens);
+}
+
 export async function listClassAllergyAlertsForParent(parentId: number): Promise<ClassAllergyAlert[]> {
   const enrollments = await storage.getProgramEnrollmentsByParent(parentId);
   const classIds = new Set<number>();
+  const parentChildIds = new Set<number>();
+  const seats: Array<{ classId: number; childId: number }> = [];
+
   for (const enrollment of enrollments) {
     if (!isActiveClassEnrollment(enrollment)) continue;
     const classId = enrollmentClassId(enrollment);
-    if (classId) classIds.add(classId);
+    if (!classId) continue;
+    classIds.add(classId);
+    const childId = Number(enrollment.childId);
+    if (!Number.isFinite(childId) || childId <= 0) continue;
+    parentChildIds.add(childId);
+    seats.push({ classId, childId });
+  }
+
+  const childFirstNames = new Map<number, string>();
+  await Promise.all(
+    [...parentChildIds].map(async (childId) => {
+      const child = await storage.getChildById(childId);
+      const firstName = String(child?.firstName || "").trim();
+      if (firstName) childFirstNames.set(childId, firstName);
+    }),
+  );
+
+  const childrenByClass = new Map<number, string[]>();
+  for (const seat of seats) {
+    const firstName = childFirstNames.get(seat.childId);
+    if (!firstName) continue;
+    const names = childrenByClass.get(seat.classId) ?? [];
+    if (!names.includes(firstName)) names.push(firstName);
+    childrenByClass.set(seat.classId, names);
   }
 
   const alerts: ClassAllergyAlert[] = [];
   for (const classId of classIds) {
-    const allergens = await severeAllergensForClass(classId);
+    const allergens = namedClassroomAllergens(await severeAllergensForClass(classId));
     if (allergens.length === 0) continue;
     const classItem = await storage.getClassById(classId);
     const className =
       String(classItem?.title || "").trim() ||
       enrollments.find((row) => enrollmentClassId(row) === classId)?.className ||
       "Class";
-    alerts.push({ classId, className, allergens });
+    alerts.push({
+      classId,
+      className,
+      allergens,
+      children: (childrenByClass.get(classId) ?? []).map((firstName) => ({ firstName })),
+    });
   }
 
   return alerts.sort((a, b) => a.className.localeCompare(b.className));
