@@ -821,3 +821,40 @@ export async function postSetupFamilyAccessCodeScenario(
   }
   return { response, json };
 }
+
+export type SetupMembershipAgreementScenarioResponse = {
+  success: boolean;
+  data?: {
+    supabaseLinked?: boolean;
+    parentSupabaseLinked?: boolean;
+    signedParentSupabaseLinked?: boolean;
+    parent: { email: string; password: string; id: number };
+    signedParent: { email: string; password: string; id: number };
+    school: { id: number; name: string; membershipAgreementVersion: string };
+  };
+  error?: string;
+  details?: string;
+};
+
+export async function postSetupMembershipAgreementScenario(
+  request: APIRequestContext,
+  body: {
+    linkSupabaseAuth?: boolean;
+    linkSupabaseAuthParent?: boolean;
+  } = {},
+): Promise<{ response: APIResponse; json: SetupMembershipAgreementScenarioResponse | null }> {
+  const response = await request.post("/api/test/setup-membership-agreement-scenario", {
+    headers: {
+      "X-Test-Token": testApiToken(),
+      "Content-Type": "application/json",
+    },
+    data: body,
+  });
+  let json: SetupMembershipAgreementScenarioResponse | null = null;
+  try {
+    json = (await response.json()) as SetupMembershipAgreementScenarioResponse;
+  } catch {
+    json = null;
+  }
+  return { response, json };
+}

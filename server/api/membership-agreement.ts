@@ -3,6 +3,12 @@ import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { insertMembershipAgreementSchema } from '../../shared/schema';
 import { z } from 'zod';
+import {
+  buildMembershipAgreementStatus,
+  membershipAgreementStatusForParent,
+  parentAuthCriteriaFromRequest,
+} from '../lib/membership-agreement-status';
+import { resolveParentDbUser } from '../lib/parent-auth-scope';
 
 const router = Router();
 
@@ -213,13 +219,33 @@ router.get('/parent/documents/:id', supabaseAuth, async (req: any, res) => {
   }
 });
 
+// Parent Home banner: infer school from the logged-in parent (no dashboard lock).
+router.get('/parent/agreements/status', supabaseAuth, async (req: any, res) => {
+  try {
+    const criteria = parentAuthCriteriaFromRequest(req);
+    if (!criteria.email && !criteria.supabaseId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { parentId, status } = await membershipAgreementStatusForParent(storage, criteria);
+    if (!parentId) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.json(status);
+  } catch (error: any) {
+    console.error('Error loading membership agreement status:', error);
+    return res.status(500).json({ message: 'Failed to check agreement status' });
+  }
+});
+
 // Check if parent has signed current agreement version
 router.get('/parent/agreements/check/:schoolId', supabaseAuth, async (req: any, res) => {
   try {
-    const userEmail = req.user?.email;
     const schoolId = parseInt(req.params.schoolId);
-    
-    if (!userEmail) {
+    const criteria = parentAuthCriteriaFromRequest(req);
+
+    if (!criteria.email && !criteria.supabaseId) {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
@@ -227,7 +253,7 @@ router.get('/parent/agreements/check/:schoolId', supabaseAuth, async (req: any, 
       return res.status(400).json({ message: 'Invalid school ID' });
     }
 
-    const user = await storage.getUserByEmail(userEmail);
+    const user = await resolveParentDbUser(storage, criteria);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -237,21 +263,7 @@ router.get('/parent/agreements/check/:schoolId', supabaseAuth, async (req: any, 
       return res.status(404).json({ message: 'School not found' });
     }
 
-    const currentVersion = school.membershipAgreementVersion || '1.0';
-    const hasSigned = await storage.hasSignedCurrentAgreement(user.id, schoolId, currentVersion);
-    
-    let latestAgreement = null;
-    if (hasSigned) {
-      latestAgreement = await storage.getLatestMembershipAgreementByParentAndSchool(user.id, schoolId);
-    }
-
-    return res.json({
-      hasSigned,
-      currentVersion,
-      latestSignedVersion: latestAgreement?.agreementVersion || null,
-      signedAt: latestAgreement?.signedAt || null,
-      requiresNewSignature: !hasSigned && (school.membershipAgreementTemplate !== null)
-    });
+    return res.json(await buildMembershipAgreementStatus(storage, user.id, school));
   } catch (error: any) {
     console.error('Error checking agreement status:', error);
     return res.status(500).json({ message: 'Failed to check agreement status' });

@@ -20,6 +20,7 @@ import {
   type ParentClassAllergyAlertsResponse,
 } from "@/lib/parent-class-allergy-alerts";
 import { ClassAllergyAlertBanner } from "@/components/dashboards/ClassAllergyAlertBanner";
+import { MembershipAgreementBanner } from "@/components/dashboards/MembershipAgreementBanner";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/components/SupabaseProvider";
@@ -41,6 +42,10 @@ import {
   shouldShowParentDoorCode,
   type ParentAccessCodeResponse,
 } from "@/lib/parent-access-code";
+import {
+  PARENT_MEMBERSHIP_AGREEMENT_STATUS_QUERY_KEY,
+  type ParentMembershipAgreementStatus,
+} from "@/lib/parent-membership-agreement";
 import { getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
 import { resolveEnrollmentOutstandingForOverview } from "@/utils/paymentOverviewTotals";
 import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
@@ -420,6 +425,12 @@ export default function ParentDashboard() {
 
   const { data: accessCodeData } = useQuery<ParentAccessCodeResponse>({
     queryKey: [...PARENT_ACCESS_CODE_QUERY_KEY],
+  });
+
+  const { data: membershipAgreementStatus } = useQuery<ParentMembershipAgreementStatus>({
+    queryKey: [...PARENT_MEMBERSHIP_AGREEMENT_STATUS_QUERY_KEY],
+    enabled: !!session,
+    refetchOnMount: "always",
   });
 
   // Mutation to update member ID
@@ -856,6 +867,7 @@ export default function ParentDashboard() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
+          <MembershipAgreementBanner status={membershipAgreementStatus} />
           <ClassAllergyAlertBanner alerts={classAllergyAlerts?.alerts} />
           {!dismissPaymentDueAlert && actionableInstallmentCount > 0 && (
             <Alert variant="destructive" className="relative pr-12">

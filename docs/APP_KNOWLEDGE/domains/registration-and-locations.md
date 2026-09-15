@@ -19,7 +19,14 @@ Parents register with a **school registration code**, pick a location when offer
 - **No auto-seed** “Main Campus” on wrong school (removed as source of cross-school pollution).
 - **Campus visibility** — parent Settings and student profile show `locationName`; `GET /api/users/profile`, `GET /api/school-admin/students/:id`, and `GET /api/parent-profile/:parentId` include campus fields.
 - **School admin students list** — `GET /api/school-admin/students` must stay set-based (memberships + `user_roles` + legacy `users.school_id`, batch children/locations). Never `getAllUsers()` + per-user `getUserRolesByUserId` (hangs `/schools/students` on real DBs). Sync (`POST …/students/sync`) must scope by `children.school_id` / `getSchoolStudentsBySchoolId`, not `getAllChildren` / `getAllSchoolStudents`.
+- **Membership agreement e-sign** — first-party, not DocuSign. School Settings stores `membership_agreement_template` + version. **Checkout still gates payment**; login and Parent Home are **not** blocked. Unsigned / stale-version parents see a persistent Home banner (`dashboard-membership-agreement`) until they sign — no dismiss. Sign is typed legal name + two checkboxes. Record in `membership_agreements` snapshots text, version, name, IP, user-agent, timestamp. Parents view/download from My Documents. `document_path` (PDF) is unused. Volunteer class waivers are a separate drawn-signature flow (`signed_waivers`). Saving a new template bumps version; checkout and the Home banner both re-require the current version. No auto-notify on save, no admin unsigned roster.
 - **No admin email on child registration** — signup / add-child does not notify school admins. Admins are notified when enrollment is **paid** (see [payments-and-billing.md](./payments-and-billing.md#school-admin-paid-enrollment-alert)).
+
+## Membership agreement (parent e-sign)
+
+PRD F-03-05 / F-11-05. Admin: School Settings → Create/Edit Agreement. Parent: `/membership-agreement?schoolId=` (return `/parent/home` from the dashboard banner, `/cart/checkout` from checkout). APIs: `GET /api/schools/:id/membership-agreement`, `GET /api/parent/agreements/status` (infers school), `POST /api/parent/agreements/sign`, `GET /api/parent/agreements/check/:schoolId`. Checkout gate is client-side (`requiresNewSignature` only if template is non-null). Default markdown exists in the API but does **not** gate checkout or the banner until an admin saves a template. Settings copy says prior signatures remain valid (old rows stay in My Documents); current version still required. To reach existing members, save the new template — they see the Home banner until they sign.
+
+**E2E:** `npm run test:e2e -- e2e/parent-membership-agreement.spec.ts` (`setup-membership-agreement-scenario`, `requireLinkedSeed`).
 
 ## Flow (happy path)
 
