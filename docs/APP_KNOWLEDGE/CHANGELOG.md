@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-15 (Parent Home membership-agreement reminder)
+
+- Unsigned / stale-version parents see a persistent Parent Home banner (`dashboard-membership-agreement`) until they sign. Login and the rest of the dashboard stay usable; no dismiss. `GET /api/parent/agreements/status` infers school. Checkout remains the payment gate. E2E: `npm run test:e2e -- e2e/parent-membership-agreement.spec.ts`.
+
 ## 2026-09-14 (Parent allergy household card)
 
 - Parent Home is one **Classroom food restrictions** card (own children + class rows, **Got it** until the allergen signature changes). Class details uses a compact **No peanut** / **No tree nuts** chip. Card lists named foods from the note when present: Seekers-style **Do not pack tree nuts (pistachios, cashews, and hazelnuts).** A bare “nut allergy” uses common tree-nut examples. `GET /api/parent/class-allergy-alerts` includes `children[].firstName` for the viewing parent only. Never the allergic student’s name. E2E: `npm run test:e2e -- e2e/parent-class-allergy-alert.spec.ts`.

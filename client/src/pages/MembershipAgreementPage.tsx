@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { PARENT_MEMBERSHIP_AGREEMENT_STATUS_QUERY_KEY } from '@/lib/parent-membership-agreement';
 import { useSupabase } from '@/components/SupabaseProvider';
 import { marked } from 'marked';
 
@@ -55,7 +56,7 @@ export default function MembershipAgreementPage() {
 
   const searchParams = new URLSearchParams(window.location.search);
   const schoolId = searchParams.get('schoolId');
-  const returnUrl = searchParams.get('return') || '/parent/dashboard';
+  const returnUrl = searchParams.get('return') || '/parent/home';
 
   const getAuthHeaders = (): HeadersInit => {
     const token = session?.access_token || localStorage.getItem('supabase_token');
@@ -103,10 +104,12 @@ export default function MembershipAgreementPage() {
     onSuccess: (data) => {
       toast({
         title: 'Agreement Signed Successfully',
-        description: 'Your membership agreement has been recorded. Proceeding to payment...',
+        description: 'Your membership agreement has been recorded.',
       });
       
       queryClient.invalidateQueries({ queryKey: ['agreement-status'] });
+      queryClient.invalidateQueries({ queryKey: [...PARENT_MEMBERSHIP_AGREEMENT_STATUS_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['/api/parent/agreements/check'] });
       queryClient.invalidateQueries({ queryKey: ['parent-documents'] });
       
       setTimeout(() => {
@@ -230,7 +233,7 @@ Downloaded on: ${new Date().toLocaleString()}
       title: 'Agreement Declined',
       description: 'You must sign the membership agreement to proceed with enrollment.',
     });
-    navigate('/parent/dashboard');
+    navigate('/parent/home');
   };
 
   if (!schoolId) {
@@ -242,7 +245,7 @@ Downloaded on: ${new Date().toLocaleString()}
             Invalid request. Please return to your dashboard and try again.
           </AlertDescription>
         </Alert>
-        <Button onClick={() => navigate('/parent/dashboard')} className="mt-4">
+        <Button onClick={() => navigate('/parent/home')} className="mt-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Return to Dashboard
         </Button>
@@ -275,7 +278,7 @@ Downloaded on: ${new Date().toLocaleString()}
             Failed to load membership agreement. Please try again later.
           </AlertDescription>
         </Alert>
-        <Button onClick={() => navigate('/parent/dashboard')} className="mt-4">
+        <Button onClick={() => navigate('/parent/home')} className="mt-4">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Return to Dashboard
         </Button>
@@ -316,6 +319,7 @@ Downloaded on: ${new Date().toLocaleString()}
             <Button
               onClick={() => {
                 queryClient.invalidateQueries({ queryKey: ['agreement-status'] });
+                queryClient.invalidateQueries({ queryKey: [...PARENT_MEMBERSHIP_AGREEMENT_STATUS_QUERY_KEY] });
                 navigate(returnUrl);
               }}
             >

@@ -4282,6 +4282,67 @@ router.post('/setup-family-access-code-scenario', async (req: Request, res: Resp
 });
 
 /**
+ * POST /api/test/setup-membership-agreement-scenario
+ * School with a membership agreement template, one unsigned parent, one already signed.
+ */
+router.post('/setup-membership-agreement-scenario', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+    }
+
+    const { seedMembershipAgreementScenario } = await import('../tests/helpers/seedMembershipAgreementScenario');
+    const seed = await seedMembershipAgreementScenario(new TestDatabase());
+
+    let parentSupabaseLinked = false;
+    let signedParentSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthParent === true || req.body?.linkSupabaseAuth === true) {
+      try {
+        parentSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.parent.id,
+          email: seed.parent.email,
+          password: seed.parent.password,
+          role: 'parent',
+          schoolId: seed.school.id,
+          displayName: 'Unsigned Parent',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthParent failed (membership agreement scenario):', e);
+      }
+      try {
+        signedParentSupabaseLinked = await linkSeedUserToSupabase({
+          dbUserId: seed.signedParent.id,
+          email: seed.signedParent.email,
+          password: seed.signedParent.password,
+          role: 'parent',
+          schoolId: seed.school.id,
+          displayName: 'Signed Parent',
+        });
+      } catch (e) {
+        console.error('linkSupabaseAuthSignedParent failed (membership agreement scenario):', e);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...seed,
+        parentSupabaseLinked,
+        signedParentSupabaseLinked,
+        supabaseLinked: parentSupabaseLinked,
+      },
+    });
+  } catch (error) {
+    console.error('❌ setup-membership-agreement-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup membership agreement scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
  * POST /api/test/fulfill-store-checkout
  * Simulates Stripe webhook fulfillment for a pending public-store checkout (E2E only).
  */

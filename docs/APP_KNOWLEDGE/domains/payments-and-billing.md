@@ -15,6 +15,7 @@ Parents pay via cart checkout (Stripe PaymentIntents). The server is authoritati
 - **Scheduled payments are created post–first successful payment**, not at cart abandon — see `asa-payment-patterns` skill.
 - **Cart abandonment analytics** — funnel events in `checkout_funnel_events` (member cart + public store); admin UI at `/school-admin/analytics`. See [school-analytics.md](./school-analytics.md).
 - **`total_paid` without corroboration is invalid** — if `total_paid > 0`, `payment_status = pending`, and there is no succeeded Stripe PI / `payments` row for that checkout, treat as **phantom ledger** (admin display and cart must not treat as cash collected). See incident: Kendra Crofoot 2026-06-25; plan: [`enrollment-ledger-stripe-parity.md`](../../plans/enrollment-ledger-stripe-parity.md) (**Phase 5 test matrix** = ship gates before medium-risk phases).
+- **Membership agreement before pay** — if the school has a saved `membership_agreement_template`, checkout disables payment until the parent has signed the current version. Parent Home shows a non-blocking reminder until they sign (does not lock login). See [registration-and-locations.md](./registration-and-locations.md#membership-agreement-parent-e-sign). Query keys: `['agreement-status', schoolId]` on checkout and `['/api/parent/agreements/status']` on Home — invalidate both after sign.
 
 ## Balance fields (program enrollments)
 
