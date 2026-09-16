@@ -28,6 +28,8 @@ PRD F-03-05 / F-11-05. Admin: School Settings → Create/Edit Agreement. Parent:
 
 **E2E:** `npm run test:e2e -- e2e/parent-membership-agreement.spec.ts` (`setup-membership-agreement-scenario`, `requireLinkedSeed`).
 
+Parents view signed snapshots and school PDFs on `/parent/documents` (Agreements / School Documents / Receipts). Date chips must use `safeFormatDate` — a bare `format()` in School Documents white-screens the page as soon as any published school doc exists (Family Safety + class handbooks). The Home banner API is `GET /api/parent/agreements/status`; if that route 404s, Replit has not pulled/restarted after the banner merge.
+
 ## Flow (happy path)
 
 1. Parent opens registration URL with code.
