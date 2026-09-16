@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-09-15 (My Documents crash + membership banner not on prod yet)
+
+- `/parent/documents` ErrorBoundary: School Documents tab used unbound `format()`; React evaluates every tab's children, so published docs (Family Safety + class PDFs) crash the whole page. Use `safeFormatDate`.
+- Membership Home banner is on `origin/main` (PR #119) but **not live**: prod `GET /api/parent/agreements/status` is 404. jocimarie (`users.id` 9) signed v2; school 2 is v3 — banner should show after Replit pull + Stop→Run.
+
 ## 2026-09-15 (Parent Home membership-agreement reminder)
 
 - Unsigned / stale-version parents see a persistent Parent Home banner (`dashboard-membership-agreement`) until they sign. Login and the rest of the dashboard stay usable; no dismiss. `GET /api/parent/agreements/status` infers school. Checkout remains the payment gate. E2E: `npm run test:e2e -- e2e/parent-membership-agreement.spec.ts`.

@@ -70,7 +70,8 @@ function formatCurrency(cents: number): string {
   return '$' + (cents / 100).toFixed(2);
 }
 
-function getFileIcon(mimeType: string) {
+function getFileIcon(mimeType: string | null | undefined) {
+  if (!mimeType) return <FileIcon className="h-6 w-6 text-gray-500" />;
   if (mimeType.startsWith('image/')) return <Image className="h-6 w-6 text-blue-500" />;
   if (mimeType === 'application/pdf') return <FileType className="h-6 w-6 text-red-500" />;
   if (mimeType.includes('word')) return <FileText className="h-6 w-6 text-blue-700" />;
@@ -367,7 +368,7 @@ export default function MyDocumentsPage() {
                                 {formatFileSize(doc.fileSize)}
                               </Badge>
                               <Badge variant="secondary" className="text-xs">
-                                {format(new Date(doc.createdAt), 'MMM d, yyyy')}
+                                {safeFormatDate(doc.createdAt, 'MMM d, yyyy')}
                               </Badge>
                             </div>
                           </div>

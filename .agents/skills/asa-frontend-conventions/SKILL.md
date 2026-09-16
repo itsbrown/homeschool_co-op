@@ -135,6 +135,7 @@ const mutation = useMutation({
 - **Educator cache looks stale after start/end session** → `invalidateQueries({ queryKey: ['/api/educator'] })` does not match `['/api/educator/dashboard']`. Use `invalidateEducatorSessionQueries()` in `client/src/lib/educator-queries.ts`.
 - **Dashboard “Today’s Classes” lists every assignment** → `GET /api/educator/dashboard` `todayClasses` must be weekday meetings (`classMeetsOnWeekday`). Empty schedule days are not today. One-tap Start uses `createAndStartEducatorSession()`.
 - **Attendance “did not save” 400 on status tap** → roster `notes` is `null`; `JSON.stringify` keeps it and Zod `z.string().optional()` rejects null. Omit null notes (same class of bug as assessment `lesson`/`notes`). There is no Submit button — tap saves immediately.
+- **My Documents white-screens once school docs exist** → `/parent/documents` School Documents tab called unbound `format()` (date-fns never imported). React evaluates every `TabsContent` child on render, so the page ErrorBoundary fires as soon as `GET /api/parent/school-documents` returns rows. Use `safeFormatDate` (already imported). Family Safety lives on the School Documents tab.
 
 ## Best Practices
 
