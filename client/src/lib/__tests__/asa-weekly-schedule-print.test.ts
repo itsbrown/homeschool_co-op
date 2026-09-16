@@ -4,6 +4,7 @@ import {
   formatPrintTime,
   formatWeekOfRange,
   isBreakishTitle,
+  joinPrintClassTitles,
   shortPrintTitle,
   toTimeKey,
 } from "../asa-weekly-schedule-print";
@@ -51,5 +52,15 @@ describe("asa weekly schedule print helpers", () => {
     expect(shortPrintTitle("Yankee Doodle | Brighton")).toBe("Yankee Doodle");
     expect(isBreakishTitle("Morning Arrival & Social Time")).toBe(true);
     expect(isBreakishTitle("Circle Time")).toBe(false);
+  });
+
+  it("joins morning and afternoon class titles for print", () => {
+    expect(
+      joinPrintClassTitles([
+        "Pioneers & Patriots | Brighton | F2026",
+        "Logic Hall | Brighton | F2026",
+        "Pioneers & Patriots | Brighton | F2026",
+      ]),
+    ).toBe("Pioneers & Patriots · Logic Hall");
   });
 });

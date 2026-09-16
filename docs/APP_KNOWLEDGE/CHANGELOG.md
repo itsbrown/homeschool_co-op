@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-16 (Mentor Schedule AM+PM same day)
+
+- Mentor **Schedule** hid Logic Hall on Sep 14–20 because class **#82** `start_date` is 2026-09-21, even though Week 1 (`week_plans` #6) is **published** for 2026-09-14. Jocelyn is assigned to Pioneers **#70** and Logic Hall **#82**. `/api/educator/schedules/week` now includes a class when a published plan exists for the selected week. Helper: `shared/educator-week-visibility.ts`.
+
 ## 2026-09-15 (Parent Home membership-agreement reminder)
 
 - Unsigned / stale-version parents see a persistent Parent Home banner (`dashboard-membership-agreement`) until they sign. Login and the rest of the dashboard stay usable; no dismiss. `GET /api/parent/agreements/status` infers school. Checkout remains the payment gate. E2E: `npm run test:e2e -- e2e/parent-membership-agreement.spec.ts`.
