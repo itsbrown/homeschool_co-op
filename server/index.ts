@@ -171,7 +171,7 @@ registerObjectStorageRoutes(app);
 if (isE2eObjectStorageStubEnabled()) {
   app.put(
     '/api/test/e2e-object-upload',
-    express.raw({ type: '*/*', limit: '5mb' }),
+    express.raw({ type: '*/*', limit: '50mb' }),
     (req, res) => {
       try {
         const objectPath = typeof req.query.objectPath === 'string' ? req.query.objectPath : '';

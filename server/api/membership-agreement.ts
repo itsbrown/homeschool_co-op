@@ -209,8 +209,11 @@ router.get('/parent/documents/:id', supabaseAuth, async (req: any, res) => {
       schoolName: school?.name || 'Unknown School',
       signedAt: agreement.signedAt,
       signatoryName: agreement.signatoryName,
+      signatoryEmail: user.email,
       agreementVersion: agreement.agreementVersion,
       agreementContent: agreement.agreementContent,
+      ipAddress: agreement.ipAddress,
+      userAgent: agreement.userAgent,
       membershipEnrollmentId: agreement.membershipEnrollmentId
     });
   } catch (error: any) {

@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-09-16 (Parent documents view + 50MB upload)
+
+- `/parent/documents/:id` “Unable to load document”: custom `queryFn` hit `GET /api/membership-agreement/:id` (404). Signed snapshot is `GET /api/parent/documents/:id` with `agreementContent`. Default TanStack fetcher.
+- School Documents tab crashed on published files via unbound `format()`. Use `safeFormatDate`.
+- School document max is **50MB**. Infer MIME from extension when the browser sends empty/`octet-stream`. Local disk stub PUT is 50MB.
+
 ## 2026-09-16 (Mentor Schedule AM+PM same day)
 
 - Mentor **Schedule** hid Logic Hall on Sep 14–20 because class **#82** `start_date` is 2026-09-21, even though Week 1 (`week_plans` #6) is **published** for 2026-09-14. Jocelyn is assigned to Pioneers **#70** and Logic Hall **#82**. `/api/educator/schedules/week` now includes a class when a published plan exists for the selected week. Helper: `shared/educator-week-visibility.ts`.

@@ -50,6 +50,18 @@ describe("unified upload categories", () => {
     expect(result.uploadURL).toContain("/api/test/e2e-object-upload");
   });
 
+  it("accepts a PDF when the browser reports octet-stream", async () => {
+    const result = await fileUploadService.getUploadUrl({
+      category: "documents",
+      filename: "handbook.pdf",
+      contentType: "application/octet-stream",
+      sizeBytes: 2048,
+      schoolId: 2,
+    });
+    expect(result.validation.valid).toBe(true);
+    expect(result.objectPath.startsWith("/objects/documents/")).toBe(true);
+  });
+
   it("rejects oversize uploads per category", async () => {
     const config = uploadCategories.documents;
     const result = await fileUploadService.getUploadUrl({

@@ -6,6 +6,7 @@ import {
   e2eObjectLocalPath,
   isE2eObjectStorageStubEnabled,
 } from "../lib/e2e-public-object-storage";
+import { DOCUMENT_MAX_SIZE_BYTES, inferUploadContentType } from "@shared/upload-content-type";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
@@ -44,7 +45,7 @@ export const uploadCategories: Record<string, UploadCategoryConfig> = {
     description: "School and organization logos",
   },
   documents: {
-    maxSizeBytes: 25 * 1024 * 1024,
+    maxSizeBytes: DOCUMENT_MAX_SIZE_BYTES,
     allowedTypes: DOCUMENT_ALLOWED_MIME_TYPES,
     folder: "documents",
     public: false,
@@ -186,18 +187,20 @@ class FileUploadService {
       return { valid: false, error: `File size exceeds maximum of ${maxMB}MB for ${options.category}` };
     }
 
+    const contentType = inferUploadContentType(options.filename, options.contentType);
+
     const isTypeAllowed = categoryConfig.allowedTypes.some((allowed) => {
       if (allowed.endsWith("/*")) {
         const baseType = allowed.replace("/*", "");
-        return options.contentType.startsWith(baseType);
+        return contentType.startsWith(baseType);
       }
-      return options.contentType === allowed;
+      return contentType === allowed;
     });
 
     if (!isTypeAllowed) {
       return {
         valid: false,
-        error: `File type ${options.contentType} not allowed for ${options.category}. Allowed: ${categoryConfig.allowedTypes.join(", ")}`,
+        error: `File type ${contentType} not allowed for ${options.category}. Allowed: ${categoryConfig.allowedTypes.join(", ")}`,
       };
     }
 
