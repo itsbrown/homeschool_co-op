@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { storage } from '../../storage';
 import { supabaseAuth } from '../../middleware/supabase-auth';
 import { fileUploadService, DOCUMENT_ALLOWED_MIME_TYPES } from '../../services/fileUploadService';
+import { DOCUMENT_MAX_SIZE_BYTES, DOCUMENT_MAX_SIZE_MB } from '@shared/upload-content-type';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
 import { sendNotificationEmails } from '../notifications';
 
@@ -352,7 +353,10 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    if (!objectPath.startsWith('/objects/documents/')) {
+    const isPrivateDocumentPath =
+      objectPath.startsWith('/objects/documents/') ||
+      objectPath.startsWith('/objects/.private/documents/');
+    if (!isPrivateDocumentPath) {
       return res.status(400).json({
         success: false,
         message: 'objectPath must be a private document storage path (/objects/documents/...)',
@@ -366,10 +370,10 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
       });
     }
 
-    if (sizeBytes > 25 * 1024 * 1024) {
+    if (sizeBytes > DOCUMENT_MAX_SIZE_BYTES) {
       return res.status(400).json({
         success: false,
-        message: 'File too large. Maximum size is 25MB.',
+        message: `File too large. Maximum size is ${DOCUMENT_MAX_SIZE_MB}MB.`,
       });
     }
 

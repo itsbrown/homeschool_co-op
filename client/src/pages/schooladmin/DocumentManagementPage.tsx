@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { uploadFile } from '@/lib/uploadClient';
+import { DOCUMENT_MAX_SIZE_BYTES, DOCUMENT_MAX_SIZE_MB } from '@shared/upload-content-type';
 import { useAuth } from '@/components/SupabaseProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -283,11 +284,14 @@ export default function DocumentManagementPage() {
         const title = single ? (uploadForm.title || baseName) : baseName;
 
         try {
-          const uploadResult = await uploadFile(file, { category: 'documents' });
+          const uploadResult = await uploadFile(file, {
+            category: 'documents',
+            schoolId: schoolData?.id,
+          });
           const response = await apiRequest('POST', '/api/schools/documents/upload', {
             objectPath: uploadResult.objectPath,
             fileName: file.name,
-            mimeType: file.type || uploadResult.mimeType,
+            mimeType: uploadResult.mimeType || file.type,
             sizeBytes: file.size,
             title,
             description: uploadForm.description,
@@ -527,8 +531,8 @@ export default function DocumentManagementPage() {
     );
   };
 
-  const MAX_FILE_SIZE_MB = 25;
-  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+  const MAX_FILE_SIZE_MB = DOCUMENT_MAX_SIZE_MB;
+  const MAX_FILE_SIZE_BYTES = DOCUMENT_MAX_SIZE_BYTES;
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -536,9 +540,14 @@ export default function DocumentManagementPage() {
 
     const validFiles: File[] = [];
     const oversized: string[] = [];
+    const unsupported: string[] = [];
+    const allowedExt = ['.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.gif'];
     for (const file of files) {
+      const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')).toLowerCase() : '';
       if (file.size > MAX_FILE_SIZE_BYTES) {
         oversized.push(file.name);
+      } else if (!allowedExt.includes(ext)) {
+        unsupported.push(file.name);
       } else {
         validFiles.push(file);
       }
@@ -548,6 +557,13 @@ export default function DocumentManagementPage() {
       toast({
         title: oversized.length === files.length ? "File too large" : "Some files skipped",
         description: `Maximum file size is ${MAX_FILE_SIZE_MB}MB. Skipped: ${oversized.join(', ')}`,
+        variant: "destructive",
+      });
+    }
+    if (unsupported.length > 0) {
+      toast({
+        title: unsupported.length === files.length ? "File type not supported" : "Some files skipped",
+        description: `Use PDF, Word, or an image (PNG, JPG, GIF). Skipped: ${unsupported.join(', ')}`,
         variant: "destructive",
       });
     }

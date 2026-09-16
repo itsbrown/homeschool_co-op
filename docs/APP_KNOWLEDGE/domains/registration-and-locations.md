@@ -24,9 +24,11 @@ Parents register with a **school registration code**, pick a location when offer
 
 ## Membership agreement (parent e-sign)
 
-PRD F-03-05 / F-11-05. Admin: School Settings → Create/Edit Agreement. Parent: `/membership-agreement?schoolId=` (return `/parent/home` from the dashboard banner, `/cart/checkout` from checkout). APIs: `GET /api/schools/:id/membership-agreement`, `GET /api/parent/agreements/status` (infers school), `POST /api/parent/agreements/sign`, `GET /api/parent/agreements/check/:schoolId`. Checkout gate is client-side (`requiresNewSignature` only if template is non-null). Default markdown exists in the API but does **not** gate checkout or the banner until an admin saves a template. Settings copy says prior signatures remain valid (old rows stay in My Documents); current version still required. To reach existing members, save the new template — they see the Home banner until they sign.
+PRD F-03-05 / F-11-05. Admin: School Settings → Create/Edit Agreement. Parent: `/membership-agreement?schoolId=` (return `/parent/home` from the dashboard banner, `/cart/checkout` from checkout). APIs: `GET /api/schools/:id/membership-agreement`, `GET /api/parent/agreements/status` (infers school), `POST /api/parent/agreements/sign`, `GET /api/parent/agreements/check/:schoolId`, `GET /api/parent/documents`, `GET /api/parent/documents/:id`. There is **no** `GET /api/membership-agreement/:id`. Checkout gate is client-side (`requiresNewSignature` only if template is non-null). Default markdown exists in the API but does **not** gate checkout or the banner until an admin saves a template. Settings copy says prior signatures remain valid (old rows stay in My Documents); current version still required. To reach existing members, save the new template — they see the Home banner until they sign.
 
 **E2E:** `npm run test:e2e -- e2e/parent-membership-agreement.spec.ts` (`setup-membership-agreement-scenario`, `requireLinkedSeed`).
+
+Parents view signed snapshots and school PDFs on `/parent/documents`. **View** on an agreement uses `queryKey: ['/api/parent/documents', id]` (default fetcher) and `agreementContent`. Date chips must use `safeFormatDate` — a bare `format()` in School Documents white-screens the page when any published school doc exists.
 
 ## Flow (happy path)
 
@@ -84,6 +86,8 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 | Super-admin premium feature toggle “Update failed” | `getSchoolFeatures` / `updateSchoolFeatures` existed but were never mounted | `registerRoutes` must `GET`/`PUT /api/superadmin/schools/:schoolId/features` **before** `/:schoolId`. E2E must click School Edit (`superadmin-school-features.spec.ts`); seeding `doorCodes` in SQL is not enough. |
 | Access-codes list 404 / empty | TanStack `queryKey` array joined as path `/access-codes/:id` | Use `` [`/api/school-admin/access-codes?locationId=${id}`] `` |
 | Family & Billing tab missing door-code card | Unified profile `viewFamily` needs `user_roles` parent at that school; `users.role` is not enough | Seed/insert `user_roles` (`role='parent'`, `school_id`) |
+| `/parent/documents/:id` “Unable to load document” | Custom `queryFn` to `GET /api/membership-agreement/:id` (404). Snapshot is `GET /api/parent/documents/:id` with `agreementContent` | Default fetcher + `queryKey: ['/api/parent/documents', id]` |
+| My Documents ErrorBoundary after school files exist | School Documents tab used unbound `format()`; React mounts every tab | `safeFormatDate` |
 
 ## Key files
 
@@ -106,6 +110,9 @@ npm run test:server -- --runInBand --testPathPatterns=production-path --forceExi
 - `server/api/family-access-codes.ts` — admin CRUD/import + `GET /api/parent/access-code`
 - `server/migrations/263-family-access-codes.sql` — `family_access_codes` + `locations.door_codes_enabled`
 - `server/migrations/locations-schema-align.sql` — prod-safe location columns
+- `server/api/membership-agreement.ts` — sign + `GET /api/parent/documents` / `:id`
+- `client/src/pages/parent/DocumentDetailPage.tsx` — signed snapshot view
+- `client/src/pages/parent/MyDocumentsPage.tsx` — Agreements / School Documents / Receipts
 
 ## Location activation threshold (planned — product locked 2026-05-26)
 

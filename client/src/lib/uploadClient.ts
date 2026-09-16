@@ -1,5 +1,6 @@
 import type { UppyFile } from "@uppy/core";
 import { apiRequest } from "@/lib/queryClient";
+import { inferUploadContentType } from "@shared/upload-content-type";
 
 export type UploadCategory =
   | "signatures"
@@ -35,10 +36,11 @@ async function requestUploadUrl(
   category: UploadCategory,
   schoolId?: number
 ): Promise<{ uploadURL: string; objectPath: string }> {
+  const contentType = inferUploadContentType(file.name, file.type);
   const response = await apiRequest("POST", "/api/unified-uploads/request-url", {
     name: file.name,
     size: file.size,
-    contentType: file.type || "application/octet-stream",
+    contentType,
     category,
     schoolId,
   }, { passthroughStatuses: [400, 500, 503] });
@@ -58,7 +60,7 @@ async function uploadToPresignedUrl(file: File, uploadURL: string): Promise<void
   const response = await fetch(uploadURL, {
     method: "PUT",
     body: file,
-    headers: { "Content-Type": file.type || "application/octet-stream" },
+    headers: { "Content-Type": inferUploadContentType(file.name, file.type) },
   });
 
   if (!response.ok) {
@@ -94,7 +96,7 @@ export async function uploadFile(file: File, options: UploadOptions): Promise<Up
   return {
     objectPath,
     url: objectPath,
-    mimeType: file.type || "application/octet-stream",
+    mimeType: inferUploadContentType(file.name, file.type),
     sizeBytes: file.size,
     filename: file.name,
   };
@@ -120,10 +122,11 @@ export function getUploadParametersFactory(category: UploadCategory, schoolId?: 
   return async (
     file: UppyFile<Record<string, unknown>, Record<string, unknown>>
   ): Promise<{ method: "PUT"; url: string; headers?: Record<string, string> }> => {
+    const contentType = inferUploadContentType(file.name ?? "", file.type);
     const response = await apiRequest("POST", "/api/unified-uploads/request-url", {
       name: file.name,
       size: file.size,
-      contentType: file.type || "application/octet-stream",
+      contentType,
       category,
       schoolId,
     });
@@ -136,7 +139,7 @@ export function getUploadParametersFactory(category: UploadCategory, schoolId?: 
     return {
       method: "PUT",
       url: data.uploadURL,
-      headers: { "Content-Type": file.type || "application/octet-stream" },
+      headers: { "Content-Type": inferUploadContentType(file.name ?? "", file.type) },
     };
   };
 }
