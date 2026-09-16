@@ -35,6 +35,7 @@ import {
   type WeekPlanBlockDetail,
 } from '@/components/schedule/WeekPlanBlockDetailSheet';
 import { AsaWeeklySchedulePrintSheet } from '@/components/schedule/AsaWeeklySchedulePrintSheet';
+import { joinPrintClassTitles } from '@/lib/asa-weekly-schedule-print';
 
 interface PlanBlockOverlay {
   id: number;
@@ -281,7 +282,10 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
 
   const getSchedulesForDay = (dateStr: string) => {
     if (!weekData?.schedules) return [];
-    return weekData.schedules.filter(s => s.calculatedDate === dateStr);
+    return weekData.schedules
+      .filter((s) => s.calculatedDate === dateStr)
+      .slice()
+      .sort((a, b) => String(a.startTime || "").localeCompare(String(b.startTime || "")));
   };
 
   const getEventsForDay = (dateStr: string): EventEntry[] => {
@@ -384,15 +388,15 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
       }
       return {
         day,
-        className: schedules[0]?.className || "",
+        className: joinPrintClassTitles(schedules.map((schedule) => schedule.className)),
         blocksByTime,
       };
     })
     .filter((col): col is NonNullable<typeof col> => col != null);
 
-  const printClassTitle =
-    printColumns.find((c) => c.className)?.className || "Weekly Schedule";
-  const printClassShort = printClassTitle.split("|")[0]?.trim() || printClassTitle;
+  const printClassShort = joinPrintClassTitles(
+    (weekData?.schedules || []).map((schedule) => schedule.className),
+  );
 
   return (
     <div className="space-y-6">
@@ -589,13 +593,13 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                     </div>
                   ))}
                   
-                  {daySchedules.map((schedule) => {
+                  {daySchedules.map((schedule, scheduleIndex) => {
                     const planBlocks = schedule.planBlocks || [];
                     const showEmpty = planBlocks.length === 0;
                     return (
                       <div
                         key={`class-${schedule.id}-${schedule.classId}-${schedule.dayOfWeek}-${schedule.startTime}`}
-                        className="space-y-1.5"
+                        className={`space-y-1.5${scheduleIndex > 0 ? " pt-2 mt-1 border-t border-slate-200" : ""}`}
                         data-testid="schedule-class-card"
                       >
                         <button

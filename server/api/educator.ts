@@ -13,6 +13,11 @@ import {
   skeletonDayToEducatorDay,
   skeletonSlotMatchesClassMeeting,
 } from "@shared/schedule-day-index";
+import {
+  educatorClassDayVisible,
+  educatorClassVisibleInWeek,
+  sortEducatorWeekSchedules,
+} from "@shared/educator-week-visibility";
 import { loadEducatorStudentSafetyByChildId } from "../lib/educator-student-safety";
 import { attachRosterDayTypes } from "../lib/roster-session-day-type";
 import { countRosterDayTypes } from "@shared/roster-day-type";
@@ -1845,18 +1850,57 @@ router.get('/schedules/week', async (req, res) => {
       }
     }
     
+    for (const item of classesToProcess) {
+      const resolvedSchoolId = item.schoolId ?? item.classInfo.schoolId ?? null;
+      if (resolvedSchoolId) {
+        schoolIds.add(resolvedSchoolId);
+        item.schoolId = resolvedSchoolId;
+      }
+    }
+
+    const assignedClassIds = Array.from(
+      new Set(
+        classesToProcess
+          .map(({ classInfo }) => classInfo.id)
+          .filter((id): id is number => typeof id === "number"),
+      ),
+    );
+    const publishedPlanClassIdsEarly = new Set<number>();
+    if (assignedClassIds.length > 0 && schoolIds.size > 0) {
+      try {
+        for (const schoolId of schoolIds) {
+          const publishedPlans = await storage.getPublishedWeekPlansForClassIds(
+            schoolId,
+            assignedClassIds,
+            weekStartDate,
+          );
+          for (const plan of publishedPlans) {
+            if (plan.classId != null) publishedPlanClassIdsEarly.add(plan.classId);
+          }
+        }
+      } catch (planErr) {
+        console.warn("[EducatorDashboard] Published plan lookup failed, continuing:", planErr);
+      }
+    }
+
     for (const { classInfo, assignmentId, schoolId } of classesToProcess) {
       if (schoolId) {
         schoolIds.add(schoolId);
       }
-      
-      // Check if class is active during this week (startDate/endDate)
+
       const classStartDate = classInfo.startDate ? new Date(classInfo.startDate).toISOString().split('T')[0] : null;
       const classEndDate = classInfo.endDate ? new Date(classInfo.endDate).toISOString().split('T')[0] : null;
-      
-      // Skip if class hasn't started or has ended
-      if (classStartDate && classStartDate > weekEndDate) continue;
-      if (classEndDate && classEndDate < weekStartDate) continue;
+      const hasPublishedPlan = publishedPlanClassIdsEarly.has(classInfo.id);
+
+      if (!educatorClassVisibleInWeek({
+        classStartDate,
+        classEndDate,
+        weekStartDate,
+        weekEndDate,
+        hasPublishedPlan,
+      })) {
+        continue;
+      }
       
       // Parse class.schedule — prefer family-schedule helper (jsonb variants + AM/PM → HH:MM).
       // Uses default-variant only so Half Day + Full Day do not double-book the day.
@@ -1906,8 +1950,14 @@ router.get('/schedules/week', async (req, res) => {
         entryDate.setDate(entryDate.getDate() + dayIndex);
         const calculatedDate = entryDate.toISOString().split('T')[0];
 
-        if (classStartDate && calculatedDate < classStartDate) continue;
-        if (classEndDate && calculatedDate > classEndDate) continue;
+        if (!educatorClassDayVisible({
+          classStartDate,
+          classEndDate,
+          calculatedDate,
+          hasPublishedPlan,
+        })) {
+          continue;
+        }
 
         classSchedules.push({
           id: assignmentId,
@@ -2101,7 +2151,7 @@ router.get('/schedules/week', async (req, res) => {
     res.json({
       weekStart: weekStartDate,
       weekEnd: weekEndDate,
-      schedules: classSchedules,
+      schedules: sortEducatorWeekSchedules(classSchedules),
       events: events,
       holidays: holidays
     });

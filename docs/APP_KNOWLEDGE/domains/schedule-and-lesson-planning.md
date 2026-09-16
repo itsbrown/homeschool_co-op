@@ -82,13 +82,14 @@ Steps: templates → class bind → blocks/CSV → Week Planner → New Week →
 - Educator `/api/educator/schedules/week` class slots: **Monday = 0**.
 - Shared helper: `shared/schedule-day-index.ts` (`skeletonDayToEducatorDay`, `skeletonSlotMatchesClassMeeting`).
 - Mentor overlay matches published blocks by **day** (class.schedule windows are coarse; skeleton blocks are fine-grained). Class times normalized via `extractFamilyScheduleTiming` (default-variant only).
+- Multiple assigned classes on the same day each get a meeting card (morning then afternoon). A **published** week plan for the selected week includes that class even when `classes.start_date` is later (Logic Hall #82 starts 2026-09-21 but Week 1 is published for 2026-09-14). Helpers: `shared/educator-week-visibility.ts`.
 
 ## Tests & seed
 
 | ID | Coverage |
 |----|----------|
 | `POST /api/test/setup-schedule-builder-scenario` | Admin/educator/parent, Seekers+Yankee classes (+ `schedule` jsonb + educator assignment), skeletons/`classId`, published+draft weeks, completion, attendance, optional Supabase link |
-| Jest | `schedule-builder-mount`, `schedule-builder-seed`, `schedule-builder-api` (incl. week-plan CSV import), `progress-scheduled-lessons`, `school-admin-academics-kpi`, `school-admin-attendance`, `schedule-day-index` |
+| Jest | `schedule-builder-mount`, `schedule-builder-seed`, `schedule-builder-api` (incl. week-plan CSV import), `progress-scheduled-lessons`, `school-admin-academics-kpi`, `school-admin-attendance`, `schedule-day-index`, `educator-week-visibility` |
 | Playwright | `parent-family-calendar` (incl. school-event day-sheet details), `parent-dashboard-upcoming-events` (7-day mix + outside-window exclusion), `parent-calendar-redirects`, `school-admin-calendar`, `parent-weekly-schedule` (redirect + print root), `schedule-builder-publish`, `school-admin-week-planner-print`, `schedule-template-csv-import`, `parent-progress-scheduled-lessons`, `school-admin-academics-kpi`, `educator-weekly-schedule-plans`, plus mentor loop specs in [educator-ui.md](./educator-ui.md) |
 
 Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: [student-progress-assessments.md](./student-progress-assessments.md).
@@ -103,6 +104,7 @@ Commands: [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md). Progress cross-link: 
 | Week Planner **Confirm Import** 500 / failed | Import built `{ dayOfWeek, startTime, data }` but `bulkUpdateWeekPlanBlocks` needs `skeletonBlockId` + flat fields | Resolve skeleton slot by day+start_time; pass correct shape (fixed 2026-07-14) |
 | Template CSV (`default_title`) on Week Planner looks wrong / empty titles | Week-plan columns use `title`; no mapper | Shared dialog maps `default_title` → title; server also falls back to `default_title` |
 | Educator Schedule “Unable to load” / `/schedules/week` 500 | Missing `getEducatorSchedulesForWeek` / events storage | Restored in `educator-schedules-db` + soft-fail `events-range-db`; overlay published plans via `schedule-day-index` |
+| Mentor Schedule shows only the morning band (Logic Hall missing) | `/api/educator/schedules/week` skipped classes whose `start_date` is after the week, even with a published week plan | Include assigned classes when a published plan exists for that `weekStart` (`educatorClassVisibleInWeek`). Jocelyn #9 is on Pioneers #70 and Logic Hall #82. |
 | POST `/api/calendar-events` 400 Validation error | `requireSchoolContext` sets `req.schoolId` as a **string**; drizzle-zod `insertEventSchema.schoolId` is integer | `Number(req.schoolId)` before parse/compare |
 | Parent Calendar empty / E2E miss school event chips | Month cell shows **one** school chip; switching users in the same Playwright context keeps admin auth; dashboard fetch storm can delay `/parent/events` | Isolated `browser.newPage()`; list view; `waitForResponse` on `/parent/events` |
 | Dashboard Upcoming Events only shows one class day | Card used `/api/schedule` class days only, capped to 7 days | Merge `GET /api/calendar-events/parent/events` for the same 7-day window; school events past day 7 belong on `/schedule` |

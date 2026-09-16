@@ -78,6 +78,18 @@ export function collectPrintTimeKeys(columns: AsaPrintColumn[]): string[] {
   return Array.from(new Set(columns.flatMap((col) => Array.from(col.blocksByTime.keys())))).sort();
 }
 
+/** Short class titles for a multi-class teaching day / print header. */
+export function joinPrintClassTitles(names: Array<string | null | undefined>): string {
+  const unique = [
+    ...new Set(
+      names
+        .map((name) => String(name || "").split("|")[0]?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ];
+  return unique.join(" · ") || "Weekly Schedule";
+}
+
 export type WeekPlanPrintSlot = {
   startTime: string;
   title: string;
