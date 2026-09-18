@@ -21,6 +21,10 @@ import {
 } from "@/lib/parent-class-allergy-alerts";
 import { ClassAllergyAlertBanner } from "@/components/dashboards/ClassAllergyAlertBanner";
 import { MembershipAgreementBanner } from "@/components/dashboards/MembershipAgreementBanner";
+import {
+  PARENT_DOCUMENTS_NAV_LABEL,
+  PARENT_DOCUMENTS_SCHOOL_HREF,
+} from "@/lib/parent-documents";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/components/SupabaseProvider";
@@ -919,6 +923,22 @@ export default function ParentDashboard() {
                 </Button>
               </CardHeader>
             </Card>
+          <Card data-testid="dashboard-important-documents-card">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FolderOpen className="h-5 w-5" />
+                  {PARENT_DOCUMENTS_NAV_LABEL}
+                </CardTitle>
+                <CardDescription>
+                  Parent binder, class handbooks, family safety, and signed agreements
+                </CardDescription>
+              </div>
+              <Button asChild data-testid="btn-view-important-documents">
+                <Link href={PARENT_DOCUMENTS_SCHOOL_HREF}>Open</Link>
+              </Button>
+            </CardHeader>
+          </Card>
           {childCount > 0 &&
             !enrollmentsLoading &&
             (enrollmentsData?.length ?? 0) === 0 &&
@@ -1581,22 +1601,22 @@ export default function ParentDashboard() {
             </CardContent>
           </Card>
 
-          {/* My Documents Card */}
+          {/* Important Documents Card */}
           <Card data-testid="card-my-documents">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <FolderOpen className="h-5 w-5" />
-                  My Documents
+                  {PARENT_DOCUMENTS_NAV_LABEL}
                 </CardTitle>
                 {documentsData?.documents && documentsData.documents.length > 0 && (
                   <Badge variant="secondary">
-                    {documentsData.documents.length} document{documentsData.documents.length !== 1 ? 's' : ''}
+                    {documentsData.documents.length} agreement{documentsData.documents.length !== 1 ? 's' : ''}
                   </Badge>
                 )}
               </div>
               <CardDescription>
-                View and download your signed agreements and important documents
+                School files are on the School Documents tab. Signed agreements are listed below.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1621,8 +1641,8 @@ export default function ParentDashboard() {
               ) : !documentsData?.documents || documentsData.documents.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground">
                   <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No documents yet.</p>
-                  <p className="text-xs">Signed agreements will appear here.</p>
+                  <p className="text-sm">No signed agreements yet.</p>
+                  <p className="text-xs">School handbooks and policies are still in Important Documents.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1655,15 +1675,13 @@ export default function ParentDashboard() {
                       </Button>
                     </div>
                   ))}
-                  {documentsData.documents.length > 3 && (
-                    <Button variant="link" asChild className="w-full">
-                      <Link href="/parent/documents">
-                        View all {documentsData.documents.length} documents →
-                      </Link>
-                    </Button>
-                  )}
                 </div>
               )}
+              <Button variant="link" asChild className="w-full mt-2" data-testid="link-open-important-documents">
+                <Link href={PARENT_DOCUMENTS_SCHOOL_HREF}>
+                  Open {PARENT_DOCUMENTS_NAV_LABEL} →
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

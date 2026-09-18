@@ -3,11 +3,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { FileText, FolderOpen, Loader2, Eye, Download, Receipt, FileType, Image, File as FileIcon } from "lucide-react";
 import { useAuth } from "@/components/SupabaseProvider";
 import { queryClient } from "@/lib/queryClient";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import {
+  PARENT_DOCUMENTS_NAV_LABEL,
+  PARENT_DOCUMENTS_PATH,
+  parseParentDocumentsTab,
+  type ParentDocumentsTab,
+} from "@/lib/parent-documents";
 import { safeFormatDate } from "@/utils/safeFormatDate";
 import { useToast } from "@/hooks/use-toast";
 
@@ -81,6 +87,13 @@ function getFileIcon(mimeType: string | null | undefined) {
 export default function MyDocumentsPage() {
   const { user, session } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const search = useSearch();
+  const activeTab = parseParentDocumentsTab(search);
+
+  const setActiveTab = (tab: string) => {
+    setLocation(`${PARENT_DOCUMENTS_PATH}?tab=${tab as ParentDocumentsTab}`);
+  };
 
   const { data: documentsData, isLoading: isLoadingAgreements, isError: isErrorAgreements } = useQuery<{ documents: ParentDocument[] }>({
     queryKey: ["/api/parent/documents"],
@@ -203,14 +216,14 @@ export default function MyDocumentsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
             <FolderOpen className="h-7 w-7" />
-            My Documents
+            {PARENT_DOCUMENTS_NAV_LABEL}
           </h1>
           <p className="text-muted-foreground mt-1">
-            View and download your agreements, school documents, and payment receipts
+            School handbooks, policies, signed agreements, and payment receipts
           </p>
         </div>
 
-        <Tabs defaultValue="agreements" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="agreements" data-testid="tab-agreements">
               Agreements
@@ -326,7 +339,7 @@ export default function MyDocumentsPage() {
               <CardHeader>
                 <CardTitle>School Documents</CardTitle>
                 <CardDescription>
-                  Important documents shared by your school including policies, handbooks, and forms
+                  Parent binder, class handbooks, family safety, and other files shared by the school
                 </CardDescription>
               </CardHeader>
               <CardContent>

@@ -14,6 +14,7 @@ import {
   isHouseholdAllergyDismissed,
   type ParentClassAllergyAlert,
 } from "@/lib/parent-class-allergy-alerts";
+import { PARENT_DOCUMENTS_SCHOOL_HREF } from "@/lib/parent-documents";
 
 const amberAlertClass =
   "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-50";
@@ -107,11 +108,11 @@ function HouseholdAllergyCard({
               Got it
             </Button>
             <Link
-              href="/parent/documents"
+              href={PARENT_DOCUMENTS_SCHOOL_HREF}
               className="text-sm font-medium underline underline-offset-2"
               data-testid="link-family-safety-documents"
             >
-              Family Safety in Documents
+              Family Safety in Important Documents
             </Link>
           </div>
         </AlertDescription>

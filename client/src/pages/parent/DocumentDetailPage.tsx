@@ -8,6 +8,7 @@ import { useAuth } from "@/components/SupabaseProvider";
 import { queryClient } from "@/lib/queryClient";
 import { useRef } from "react";
 import ParentAppShell from "@/components/layout/ParentAppShell";
+import { parentDocumentsHref } from "@/lib/parent-documents";
 import { safeFormatDate } from "@/utils/safeFormatDate";
 
 interface DocumentDetail {
@@ -128,9 +129,9 @@ Electronic Transactions Act (UETA).
       <div className="p-4 md:p-6 space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/parent/documents">
+            <Link href={parentDocumentsHref("agreements")}>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Documents
+              Back to Important Documents
             </Link>
           </Button>
         </div>
