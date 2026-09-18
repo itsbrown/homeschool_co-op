@@ -5,6 +5,7 @@ import { sendPaymentReceipt } from './email-service';
 import { createReceiptFromPayment } from '../services/receiptService';
 import { splitCentsEvenly } from '../api/billing';
 import { resolveScheduledPaymentEnrollmentIds } from './scheduled-payment-intent-metadata';
+import { parseBalanceIntentCredits, totalCentsForBalanceAllocation } from './balance-payment-metadata';
 import { ensureScheduledPaymentCreditsConsumed } from './ensure-scheduled-payment-credits-consumed';
 import { dataLayer } from '../services/dataLayer';
 
@@ -102,12 +103,14 @@ export async function finalizeSucceededScheduledPaymentIntent(
     paymentIntent.metadata as Record<string, string | undefined>,
   );
 
-  const originalAmount =
-    parseInt(String(paymentIntent.metadata.originalAmountCents || '0'), 10) || paymentIntent.amount;
-  const totalPaymentAmount = creditsAppliedCents > 0 ? originalAmount : paymentIntent.amount;
-  const totalCents = Number.isInteger(totalPaymentAmount)
-    ? totalPaymentAmount
-    : Math.round(Number(totalPaymentAmount)) || paymentIntent.amount;
+  const { originalAmountCents } = parseBalanceIntentCredits(
+    paymentIntent.metadata as Record<string, string | undefined>,
+  );
+  const totalCents = totalCentsForBalanceAllocation({
+    paymentIntentAmountCents: paymentIntent.amount,
+    creditsAppliedCents,
+    originalAmountCents,
+  });
 
   let childNameForPayment = 'Child';
   let classNameForPayment = 'Class';

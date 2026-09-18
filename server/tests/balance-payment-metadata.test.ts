@@ -8,6 +8,7 @@ import {
   computeMembershipWaterfallPortion,
   allocateVolunteerCreditsWaterfall,
   proportionalMembershipPortionCents,
+  thisPaymentGrossCents,
 } from '../lib/balance-payment-metadata';
 
 describe('balance-payment-metadata', () => {
@@ -32,6 +33,18 @@ describe('balance-payment-metadata', () => {
     });
     expect(total).toBe(400661);
     expect(enrollmentPoolCentsForBalanceIntent(total, 0)).toBe(400661);
+  });
+
+  it('caps plan-total originalAmountCents at this PI card + credits (Grace Mulcahy Fall)', () => {
+    expect(
+      totalCentsForBalanceAllocation({
+        paymentIntentAmountCents: 33250,
+        creditsAppliedCents: 10500,
+        originalAmountCents: 210000,
+      }),
+    ).toBe(43750);
+    expect(thisPaymentGrossCents(33250, 10500)).toBe(43750);
+    expect(thisPaymentGrossCents(199500, 10500)).toBe(210000);
   });
 
   it('falls back to PI + credits when original metadata missing', () => {

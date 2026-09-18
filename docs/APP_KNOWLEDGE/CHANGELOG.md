@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-18 (Credited biweekly first installment marked Fall paid)
+
+- `originalAmountCents` on installment 1 was the full cart. Fulfill allocated that gross and zeroed `effective_balance`; autopay skipped later dues. Cap allocation at PI.amount + credits; PI metadata original is this payment only. Grace #66 Fall leftover **$1,662.50** — `fix-grace-mulcahy-fall-biweekly-ledger-production.ts`.
+
 ## 2026-09-16 (Parent documents view + 50MB upload)
 
 - `/parent/documents/:id` “Unable to load document”: custom `queryFn` hit `GET /api/membership-agreement/:id` (404). Signed snapshot is `GET /api/parent/documents/:id` with `agreementContent`. Default TanStack fetcher.

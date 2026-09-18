@@ -15,7 +15,10 @@ import {
   type CheckoutPaymentPlanId,
 } from '@shared/checkout-payment-plan';
 import { resolveEnrollmentIdsFromScheduledRow } from '../lib/scheduled-payment-intent-metadata';
-import { allocateVolunteerCreditsWaterfall } from '../lib/balance-payment-metadata';
+import {
+  allocateVolunteerCreditsWaterfall,
+  thisPaymentGrossCents,
+} from '../lib/balance-payment-metadata';
 
 /** Read at call time — env is set in Jest beforeAll after this module may have loaded. */
 function skipStripeApiInTests(): boolean {
@@ -46,9 +49,12 @@ export interface PaymentPlanData {
     originalAmount?: number;
     discountAmount?: number;
   };
-  /** Volunteer credits applied to this checkout (card charge = totalAmount). */
+  /** Volunteer credits applied to this checkout PaymentIntent (card = first installment). */
   creditsAppliedCents?: number;
-  /** Gross cents owed before credits (enrollments + membership in cart). */
+  /**
+   * Plan-level gross before credits. Do not copy onto installment PI metadata —
+   * `originalAmountCents` on the PI must be first installment + credits only.
+   */
   originalAmountCents?: number;
   /** Parent user id for credit consumption on webhook success. */
   creditUserId?: number;
@@ -213,11 +219,9 @@ export class StripePaymentPlanService {
 
       if (appliedCredits > 0) {
         paymentMetadata.creditsAppliedCents = String(appliedCredits);
-        const gross =
-          data.originalAmountCents != null && data.originalAmountCents > 0
-            ? Math.floor(data.originalAmountCents)
-            : data.totalAmount + appliedCredits;
-        paymentMetadata.originalAmountCents = String(gross);
+        paymentMetadata.originalAmountCents = String(
+          thisPaymentGrossCents(firstPhase.amount, appliedCredits),
+        );
         if (data.creditUserId != null && data.creditUserId > 0) {
           paymentMetadata.userId = String(Math.floor(data.creditUserId));
         }
