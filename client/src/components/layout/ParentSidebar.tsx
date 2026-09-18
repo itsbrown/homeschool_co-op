@@ -308,6 +308,11 @@ export default function ParentSidebar() {
       icon: <Bell className="h-5 w-5" />,
     },
     {
+      href: "/parent/documents",
+      title: "Important Documents",
+      icon: <FolderOpen className="h-5 w-5" />,
+    },
+    {
       href: "/payments",
       title: "Payments",
       icon: <DollarSign className="h-5 w-5" />,
@@ -316,11 +321,6 @@ export default function ParentSidebar() {
       href: "/payment-methods",
       title: "Payment Methods",
       icon: <CreditCard className="h-5 w-5" />,
-    },
-    {
-      href: "/parent/documents",
-      title: "My Documents",
-      icon: <FolderOpen className="h-5 w-5" />,
     },
     {
       href: "/parent/progress",
@@ -508,6 +508,11 @@ export default function ParentSidebar() {
           icon: <Bell className="h-5 w-5" />,
         },
         {
+          href: "/parent/documents",
+          title: "Important Documents",
+          icon: <FolderOpen className="h-5 w-5" />,
+        },
+        {
           href: "/payments",
           title: "Payments",
           icon: <DollarSign className="h-5 w-5" />,
@@ -524,11 +529,6 @@ export default function ParentSidebar() {
               icon: <CreditCard className="h-5 w-5" />,
             },
           ],
-        },
-        {
-          href: "/parent/documents",
-          title: "My Documents",
-          icon: <FolderOpen className="h-5 w-5" />,
         },
         {
           href: "/parent/progress",

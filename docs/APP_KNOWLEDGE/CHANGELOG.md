@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-18 (Important Documents parent nav)
+
+- Staff/email name is **Important Documents**. Portal used **My Documents**, opened `/parent/documents` on Agreements, and Home only listed signed agreements — Yankee Doodle parent (Amie Graf) could log in and still miss the Parent Binder / class PDFs. Nav + page title + Home shortcut now say Important Documents; default tab is School Documents (`client/src/lib/parent-documents.ts`). E2E heading: `e2e/authenticated/parent-profile-routes.spec.ts`.
+
 ## 2026-09-16 (Parent documents view + 50MB upload)
 
 - `/parent/documents/:id` “Unable to load document”: custom `queryFn` hit `GET /api/membership-agreement/:id` (404). Signed snapshot is `GET /api/parent/documents/:id` with `agreementContent`. Default TanStack fetcher.

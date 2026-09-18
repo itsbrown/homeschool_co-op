@@ -47,7 +47,7 @@ const cases: { name: string; path: string; apis: string[]; expectText: RegExp }[
       "/api/parent/school-documents",
       "/api/parent/payment-receipts",
     ],
-    expectText: /My Documents/i,
+    expectText: /Important Documents/i,
   },
   {
     name: "assessments",
