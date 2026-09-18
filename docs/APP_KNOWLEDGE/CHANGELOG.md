@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-18 (Week Planner lesson teaching details)
+
+- Week Planner cards, print, mentor Schedule overlay, and parent/educator week grids now show **what is being taught** (description + objectives; materials on cards/detail). Title-only slots hid the week’s content. **Lesson** opens `WeekPlanBlockDetailSheet` (script, objectives, materials, homework, notes, links). Edit saves materials/homework. Helpers: `client/src/lib/week-plan-lesson-content.ts`. E2E: `school-admin-week-planner-print`, `educator-weekly-schedule-plans`.
+
 ## 2026-09-18 (Credited biweekly first installment marked Fall paid)
 
 - `originalAmountCents` on installment 1 was the full cart. Fulfill allocated that gross and zeroed `effective_balance`; autopay skipped later dues. Cap allocation at PI.amount + credits; PI metadata original is this payment only. Grace #66 Fall leftover **$1,662.50** — `fix-grace-mulcahy-fall-biweekly-ledger-production.ts`.

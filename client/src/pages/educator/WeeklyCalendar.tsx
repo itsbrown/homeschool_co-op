@@ -36,6 +36,7 @@ import {
 } from '@/components/schedule/WeekPlanBlockDetailSheet';
 import { AsaWeeklySchedulePrintSheet } from '@/components/schedule/AsaWeeklySchedulePrintSheet';
 import { joinPrintClassTitles } from '@/lib/asa-weekly-schedule-print';
+import { firstDescriptionParagraph, asTrimmedStrings } from '@/lib/week-plan-lesson-content';
 
 interface PlanBlockOverlay {
   id: number;
@@ -46,7 +47,10 @@ interface PlanBlockOverlay {
   description?: string | null;
   lessonLink?: string | null;
   notes?: string | null;
-  groups?: string[];
+  groups?: unknown;
+  materials?: string[];
+  homework?: string | null;
+  resources?: string[];
   startTime?: string;
   endTime?: string;
   dayOfWeek?: number;
@@ -335,6 +339,9 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
       groups: block.groups,
       notes: block.notes,
       lessonLink: block.lessonLink,
+      materials: block.materials,
+      homework: block.homework,
+      resources: block.resources,
       timeLabel: `${dayName} · ${formatTime(blockStart)} – ${formatTime(blockEnd)}`,
     });
   };
@@ -643,6 +650,16 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                               <p className="text-xs font-medium text-slate-800 leading-snug line-clamp-2 print:text-[8px] print:leading-tight print:line-clamp-2">
                                 {block.title}
                               </p>
+                              {(() => {
+                                const preview =
+                                  firstDescriptionParagraph(block.description, 120) ||
+                                  asTrimmedStrings(block.objectives)[0];
+                                return preview ? (
+                                  <p className="text-[9px] text-slate-600 leading-tight mt-0.5 line-clamp-2 print:hidden">
+                                    {preview}
+                                  </p>
+                                ) : null;
+                              })()}
                             </button>
                           );
                         })}
@@ -799,6 +816,11 @@ function WeeklyCalendarContent({ showBirthdays = false, showQuickActions = true 
                             </span>
                           </div>
                           <p className="text-sm font-medium leading-snug">{block.title}</p>
+                          {firstDescriptionParagraph(block.description, 140) && (
+                            <p className="text-[11px] text-slate-600 leading-snug mt-0.5 line-clamp-2">
+                              {firstDescriptionParagraph(block.description, 140)}
+                            </p>
+                          )}
                         </button>
                       );
                     })

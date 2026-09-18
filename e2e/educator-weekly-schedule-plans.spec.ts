@@ -58,6 +58,7 @@ test.describe("educator weekly schedule + published plans", () => {
 
     const planBlock = page.getByTestId("schedule-plan-block").filter({ hasText: planTitle });
     await expect(planBlock.first()).toBeVisible();
+    await expect(planBlock.first()).toContainText(/Outdoor observation/i);
 
     // Empty days are collapsed by default (Mon/Wed/Fri teaching pattern → fewer than 7 columns).
     const weekGrid = page.getByTestId("calendar-week-grid");
@@ -85,6 +86,8 @@ test.describe("educator weekly schedule + published plans", () => {
     await expect(page.getByTestId("schedule-block-detail")).toContainText(
       /Observe local plants|Learning Objectives/i,
     );
+    await expect(page.getByTestId("schedule-block-detail")).toContainText(/Outdoor observation/i);
+    await expect(page.getByTestId("schedule-block-materials")).toContainText(/Clipboards/i);
 
     await expect(page.getByTestId("educator-schedule-print")).toBeVisible();
     await expect(page.getByTestId("schedule-print-root")).toBeAttached();

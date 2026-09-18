@@ -1,3 +1,5 @@
+import { asTrimmedStrings, firstDescriptionParagraph } from "@/lib/week-plan-lesson-content";
+
 /** Shared ASA weekly-schedule print helpers (staff Schedule + school-admin Week Planner). */
 
 export const SKELETON_DAY_NAMES: Record<number, string> = {
@@ -19,6 +21,7 @@ export const PRINT_DAY_HEADERS = [
 
 export type AsaPrintBlock = {
   title: string;
+  description?: string | null;
   objectives?: string[] | null;
   lessonLink?: string | null;
 };
@@ -59,6 +62,25 @@ export function isBreakishTitle(title: string): boolean {
   return /recess|snack|break|lunch|clean\s*up|dismissal|arrival|transition/i.test(title);
 }
 
+/**
+ * Print subtitles: first description paragraph (what is being taught),
+ * then up to two unique objectives.
+ */
+export function printBlockSubtitles(
+  block: Pick<AsaPrintBlock, "title" | "description" | "objectives">,
+): string[] {
+  const descriptionLine = firstDescriptionParagraph(block.description, 160);
+  const objectives = asTrimmedStrings(block.objectives);
+  const lines: string[] = [];
+  if (descriptionLine) lines.push(descriptionLine);
+  for (const objective of objectives) {
+    if (objective === descriptionLine || lines.includes(objective)) continue;
+    lines.push(objective);
+    if (lines.length >= 3) break;
+  }
+  return lines;
+}
+
 export function shortPrintTitle(title: string | null | undefined, fallback = "Weekly Schedule"): string {
   const raw = (title || fallback).trim();
   return raw.split("|")[0]?.trim() || fallback;
@@ -93,6 +115,7 @@ export function joinPrintClassTitles(names: Array<string | null | undefined>): s
 export type WeekPlanPrintSlot = {
   startTime: string;
   title: string;
+  description?: string | null;
   objectives?: unknown;
   lessonLink?: string | null;
 };
@@ -101,11 +124,6 @@ export type WeekPlanPrintDay = {
   dayOfWeek: number;
   slots: WeekPlanPrintSlot[];
 };
-
-function asStringObjectives(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
-}
 
 /** Build teaching-day columns from Week Planner skeleton + plan slots (Sunday = 0). */
 export function buildAsaPrintColumnsFromWeekPlan(days: WeekPlanPrintDay[]): AsaPrintColumn[] {
@@ -120,7 +138,8 @@ export function buildAsaPrintColumnsFromWeekPlan(days: WeekPlanPrintDay[]): AsaP
         if (!title) continue;
         blocksByTime.set(key, {
           title,
-          objectives: asStringObjectives(slot.objectives),
+          description: slot.description ?? null,
+          objectives: asTrimmedStrings(slot.objectives),
           lessonLink: slot.lessonLink ?? null,
         });
       }

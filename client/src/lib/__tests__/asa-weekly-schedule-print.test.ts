@@ -5,6 +5,7 @@ import {
   formatWeekOfRange,
   isBreakishTitle,
   joinPrintClassTitles,
+  printBlockSubtitles,
   shortPrintTitle,
   toTimeKey,
 } from "../asa-weekly-schedule-print";
@@ -52,6 +53,26 @@ describe("asa weekly schedule print helpers", () => {
     expect(shortPrintTitle("Yankee Doodle | Brighton")).toBe("Yankee Doodle");
     expect(isBreakishTitle("Morning Arrival & Social Time")).toBe(true);
     expect(isBreakishTitle("Circle Time")).toBe(false);
+  });
+
+  it("prints the lesson description plus unique objectives so staff see what is taught", () => {
+    expect(printBlockSubtitles({ title: "Circle Time", objectives: ["Greet"] })).toEqual(["Greet"]);
+    expect(
+      printBlockSubtitles({
+        title: "Latin · Week 1 · familia",
+        description:
+          "Word of the Day: familia (family).\n\n10–32 Word Tree: anni / annu = year.",
+        objectives: [
+          "Say and use familia as Word of the Day.",
+          "Write the root anni/annu at the base of a word tree.",
+          "Play Quid hora est.",
+        ],
+      }),
+    ).toEqual([
+      "Word of the Day: familia (family).",
+      "Say and use familia as Word of the Day.",
+      "Write the root anni/annu at the base of a word tree.",
+    ]);
   });
 
   it("joins morning and afternoon class titles for print", () => {
