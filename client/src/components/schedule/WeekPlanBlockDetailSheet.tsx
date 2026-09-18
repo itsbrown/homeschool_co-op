@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,22 +9,28 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import {
+  BookOpen,
   CheckCircle2,
   Clock,
   ExternalLink,
+  Package,
   Target,
   Users,
 } from "lucide-react";
+import { asTrimmedStrings, formatGroupLabels } from "@/lib/week-plan-lesson-content";
 
 export type WeekPlanBlockDetail = {
   title: string;
   description?: string | null;
   blockType?: string;
   isCompleted?: boolean;
-  objectives?: string[];
-  groups?: string[];
+  objectives?: unknown;
+  groups?: unknown;
   notes?: string | null;
   lessonLink?: string | null;
+  materials?: unknown;
+  homework?: string | null;
+  resources?: unknown;
   /** e.g. "Monday · 9:00 AM – 10:00 AM" */
   timeLabel?: string;
 };
@@ -50,8 +57,30 @@ function blockTypeBadgeLg(blockType: string) {
   );
 }
 
+function DetailSection({
+  label,
+  icon,
+  children,
+}: {
+  label: string;
+  icon?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <div className="flex items-center gap-1.5 mb-2">
+        {icon}
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          {label}
+        </p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 /**
- * Shared read-only week-plan block detail sheet (educator Lesson Plans + Schedule).
+ * Shared read-only week-plan block detail sheet (educator Lesson Plans + Schedule + Week Planner).
  */
 export function WeekPlanBlockDetailSheet({
   open,
@@ -68,10 +97,14 @@ export function WeekPlanBlockDetailSheet({
   const description = block.description || "";
   const blockType = block.blockType || "flexible";
   const isCompleted = block.isCompleted || false;
-  const objectives = Array.isArray(block.objectives) ? block.objectives : [];
-  const groups = Array.isArray(block.groups) ? block.groups : [];
+  const objectives = asTrimmedStrings(block.objectives);
+  const groups = formatGroupLabels(block.groups);
+  const materials = asTrimmedStrings(block.materials);
+  const resources = asTrimmedStrings(block.resources);
   const lessonLink = block.lessonLink || "";
   const notes = block.notes || "";
+  const homework = block.homework || "";
+  const extraLinks = resources.filter((url) => url !== lessonLink);
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -106,45 +139,54 @@ export function WeekPlanBlockDetailSheet({
 
         <div className="space-y-6">
           {description && (
-            <section>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Description
-              </p>
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+            <DetailSection label="What we are teaching">
+              <p
+                className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap"
+                data-testid="schedule-block-description"
+              >
                 {description}
               </p>
-            </section>
+            </DetailSection>
           )}
 
           {objectives.length > 0 && (
-            <section>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Target className="h-3.5 w-3.5 text-purple-500" />
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Learning Objectives
-                </p>
-              </div>
-              <ul className="space-y-2">
-                {objectives.map((obj: string, i: number) => (
+            <DetailSection
+              label="Learning Objectives"
+              icon={<Target className="h-3.5 w-3.5 text-purple-500" />}
+            >
+              <ul className="space-y-2" data-testid="schedule-block-objectives">
+                {objectives.map((obj, i) => (
                   <li key={i} className="flex gap-2 text-sm text-slate-700">
                     <span className="text-purple-400 font-bold flex-shrink-0 mt-0.5">•</span>
                     <span>{obj}</span>
                   </li>
                 ))}
               </ul>
-            </section>
+            </DetailSection>
+          )}
+
+          {materials.length > 0 && (
+            <DetailSection
+              label="Materials"
+              icon={<Package className="h-3.5 w-3.5 text-emerald-500" />}
+            >
+              <ul className="space-y-1.5" data-testid="schedule-block-materials">
+                {materials.map((item, i) => (
+                  <li key={i} className="text-sm text-slate-700">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </DetailSection>
           )}
 
           {groups.length > 0 && (
-            <section>
-              <div className="flex items-center gap-1.5 mb-2">
-                <Users className="h-3.5 w-3.5 text-amber-500" />
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Groups
-                </p>
-              </div>
+            <DetailSection
+              label="Groups"
+              icon={<Users className="h-3.5 w-3.5 text-amber-500" />}
+            >
               <div className="flex flex-wrap gap-2">
-                {groups.map((g: string, i: number) => (
+                {groups.map((g, i) => (
                   <Badge
                     key={i}
                     className="px-2.5 py-1 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50 text-sm"
@@ -153,39 +195,59 @@ export function WeekPlanBlockDetailSheet({
                   </Badge>
                 ))}
               </div>
-            </section>
+            </DetailSection>
+          )}
+
+          {homework && (
+            <DetailSection
+              label="Homework"
+              icon={<BookOpen className="h-3.5 w-3.5 text-blue-500" />}
+            >
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                {homework}
+              </p>
+            </DetailSection>
           )}
 
           {notes && (
-            <section>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Notes
-              </p>
+            <DetailSection label="Teaching notes">
               <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-amber-50 border border-amber-100 rounded-md p-3">
                 {notes}
               </p>
-            </section>
+            </DetailSection>
           )}
 
-          {lessonLink && (
-            <section>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Resource
-              </p>
-              <Button asChild variant="outline" className="w-full justify-between">
-                <a href={lessonLink} target="_blank" rel="noopener noreferrer">
-                  <span>Open Lesson</span>
-                  <ExternalLink className="h-4 w-4 text-slate-400" />
-                </a>
-              </Button>
-            </section>
+          {(lessonLink || extraLinks.length > 0) && (
+            <DetailSection label="Resources">
+              <div className="space-y-2">
+                {lessonLink && (
+                  <Button asChild variant="outline" className="w-full justify-between">
+                    <a href={lessonLink} target="_blank" rel="noopener noreferrer">
+                      <span>Open Lesson</span>
+                      <ExternalLink className="h-4 w-4 text-slate-400" />
+                    </a>
+                  </Button>
+                )}
+                {extraLinks.map((url) => (
+                  <Button key={url} asChild variant="outline" className="w-full justify-between">
+                    <a href={url} target="_blank" rel="noopener noreferrer">
+                      <span className="truncate text-left">{url}</span>
+                      <ExternalLink className="h-4 w-4 text-slate-400 shrink-0" />
+                    </a>
+                  </Button>
+                ))}
+              </div>
+            </DetailSection>
           )}
 
           {!description &&
             !objectives.length &&
+            !materials.length &&
             !groups.length &&
+            !homework &&
             !notes &&
-            !lessonLink && (
+            !lessonLink &&
+            extraLinks.length === 0 && (
               <p className="text-sm text-slate-400 italic text-center py-4">
                 No additional details for this block.
               </p>

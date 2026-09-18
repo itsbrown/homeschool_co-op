@@ -5,7 +5,7 @@ Operational truth for **class weekly templates / week plans**, educator calendar
 ## Product loop
 
 1. **Weekly Templates** — `/schools/schedule-builder` → skeletons + recurring time blocks (`weekly_skeletons`, `skeleton_blocks`). Bind **`classId`** to marketplace `classes.id` (not title-as-value). CSV import uses `ScheduleBlocksCsvImportDialog` (map → preview → confirm); `POST .../skeletons/:id/blocks/import-csv` accepts optional FormData `mapping` JSON. Requires `express-fileupload` on `/api/schedule-builder`.
-2. **Week Planner** — `/schools/week-planner` → per-week plans + block content (`week_plans`, `week_plan_blocks`); optional `/api/schedule-ai/*`. Week-card **Print** (and Actions → Print) uses the same ASA Time × teaching-day sheet as mentor **Schedule**. **Actions** also includes **Build** (create `week_plan_blocks` for empty skeleton slots from template defaults), Publish/Complete, CSV, Clone, AI, Delete. CSV import reuses the same dialog in `mode="week-plan"` (map → preview → confirm); `POST .../week-plans/:id/blocks/import-csv` accepts optional `mapping`, resolves slots by day+start_time → `skeletonBlockId`, and accepts template-shaped CSVs (`default_title` → title).
+2. **Week Planner** — `/schools/week-planner` → per-week plans + block content (`week_plans`, `week_plan_blocks`); optional `/api/schedule-ai/*`. Week-card **Print** (and Actions → Print) uses the same ASA Time × teaching-day sheet as mentor **Schedule**. Cards show the lesson description, first objectives, and materials; **Lesson** opens `WeekPlanBlockDetailSheet` (script, objectives, materials, homework, notes, links). Edit also saves materials/homework. **Actions** also includes **Build** (create `week_plan_blocks` for empty skeleton slots from template defaults), Publish/Complete, CSV, Clone, AI, Delete. CSV import reuses the same dialog in `mode="week-plan"` (map → preview → confirm); `POST .../week-plans/:id/blocks/import-csv` accepts optional `mapping`, resolves slots by day+start_time → `skeletonBlockId`, and accepts template-shaped CSVs (`default_title` → title).
 3. **Publish** — parents see week lessons as **Week** mode on `/schedule` (bookmark `/parent/weekly-schedule` redirects there) via enrollment-scoped my-week; educators see published blocks on **Schedule** (`/educator/weekly-calendar` via `/api/educator/schedules/week` `planBlocks`) and can still browse/print on `/educator/week-plans`. `/educator/schedule` redirects to `/educator/weekly-calendar`.
 
 Adjacent: `/schedule` is the parent Calendar hub (class days + school events + week lessons + ICS subscribe). `/schools/calendar` is the school-admin event publisher. `/lessons` + AI generators remain separate.
@@ -42,7 +42,7 @@ Adjacent: `/schedule` is the parent Calendar hub (class days + school events + w
 
 `effectiveClassId = marketplaceClassId ?? classId`. Session-only enrollments with both null do **not** match skeletons — parent UI shows no class section for that child (empty).
 
-Canonical block fields: `title`, `description`, `isCompleted`, `completedAt`, `completedBy`. Week filter uses `weekStartDate`.
+Canonical block fields: `title`, `description`, `objectives`, `materials`, `homework`, `notes`, `lessonLink`, `resources`, `groups`, `isCompleted`, `completedAt`, `completedBy`. Week filter uses `weekStartDate`. Teaching preview helpers: `client/src/lib/week-plan-lesson-content.ts`.
 
 Block completion stays admin/Week Planner in v1 (sets `week_plan_blocks.is_completed` only — **does not** write `student_progress_log`).
 

@@ -2,6 +2,7 @@ import {
   collectPrintTimeKeys,
   formatPrintTime,
   isBreakishTitle,
+  printBlockSubtitles,
   PRINT_DAY_HEADERS,
   type AsaPrintColumn,
 } from "@/lib/asa-weekly-schedule-print";
@@ -73,9 +74,11 @@ export function AsaWeeklySchedulePrintSheet({
                             {block ? (
                               <div className="asa-print-cell-inner">
                                 <div className="asa-print-cell-title">{block.title}</div>
-                                {Array.isArray(block.objectives) && block.objectives[0] && (
-                                  <div className="asa-print-cell-sub">{block.objectives[0]}</div>
-                                )}
+                                {printBlockSubtitles(block).map((line) => (
+                                  <div key={line} className="asa-print-cell-sub">
+                                    {line}
+                                  </div>
+                                ))}
                                 {block.lessonLink && (
                                   <div className="asa-print-cell-link">{block.lessonLink}</div>
                                 )}

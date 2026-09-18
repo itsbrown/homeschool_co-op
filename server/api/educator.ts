@@ -2024,7 +2024,10 @@ router.get('/schedules/week', async (req, res) => {
       description?: string | null;
       lessonLink?: string | null;
       notes?: string | null;
-      groups?: string[];
+      groups?: unknown;
+      materials?: string[];
+      homework?: string | null;
+      resources?: string[];
       startTime?: string;
       endTime?: string;
       dayOfWeek?: number;
@@ -2059,7 +2062,13 @@ router.get('/schedules/week', async (req, res) => {
               const objectives = Array.isArray(wp?.objectives)
                 ? (wp!.objectives as string[])
                 : [];
-              const groups = Array.isArray(wp?.groups) ? (wp!.groups as string[]) : [];
+              const groups = wp?.groups ?? [];
+              const materials = Array.isArray(wp?.materials)
+                ? (wp!.materials as string[])
+                : [];
+              const resources = Array.isArray(wp?.resources)
+                ? (wp!.resources as string[])
+                : [];
               overlays.push({
                 id: wp?.id ?? skel.id,
                 title,
@@ -2070,6 +2079,9 @@ router.get('/schedules/week', async (req, res) => {
                 lessonLink: wp?.lessonLink ?? null,
                 notes: wp?.notes ?? null,
                 groups,
+                materials,
+                homework: wp?.homework ?? null,
+                resources,
                 startTime: skel.startTime,
                 endTime: skel.endTime,
                 dayOfWeek: skel.dayOfWeek,

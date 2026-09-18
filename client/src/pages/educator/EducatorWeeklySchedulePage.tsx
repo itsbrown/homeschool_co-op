@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
 import { WeekPlanBlockDetailSheet } from "@/components/schedule/WeekPlanBlockDetailSheet";
+import { asTrimmedStrings } from "@/lib/week-plan-lesson-content";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -168,10 +169,12 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
                       const description = planBlock?.description || skelBlock.defaultDescription || "";
                       const isCompleted = planBlock?.isCompleted || false;
                       const blockType = skelBlock.blockType || "flexible";
+                      const objectives = asTrimmedStrings(planBlock?.objectives).slice(0, 3);
                       const hasExtra =
-                        Array.isArray(planBlock?.objectives)
-                          ? (planBlock.objectives as string[]).length > 0
-                          : false;
+                        objectives.length > 0 ||
+                        asTrimmedStrings(planBlock?.materials).length > 0 ||
+                        Boolean(planBlock?.notes) ||
+                        Boolean(planBlock?.homework);
 
                       return (
                         <td
@@ -196,9 +199,18 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
                                 </p>
                               )}
                               {description && (
-                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 print:line-clamp-none">
+                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-3 print:line-clamp-none whitespace-pre-wrap">
                                   {description}
                                 </p>
+                              )}
+                              {objectives.length > 0 && (
+                                <ul className="mt-1 space-y-0.5">
+                                  {objectives.map((obj) => (
+                                    <li key={obj} className="text-[11px] text-slate-600 leading-snug">
+                                      • {obj}
+                                    </li>
+                                  ))}
+                                </ul>
                               )}
                               {hasExtra && (
                                 <span className="text-[10px] text-blue-500 group-hover:text-blue-700 flex items-center gap-0.5 mt-0.5 print:hidden">
@@ -274,10 +286,15 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
                           </p>
                         )}
                         {description && (
-                          <p className="text-xs text-slate-500 mt-0.5 text-left line-clamp-2">
+                          <p className="text-xs text-slate-500 mt-0.5 text-left line-clamp-3 whitespace-pre-wrap">
                             {description}
                           </p>
                         )}
+                        {asTrimmedStrings(planBlock?.objectives).slice(0, 2).map((obj) => (
+                          <p key={obj} className="text-[11px] text-slate-600 mt-0.5 text-left">
+                            • {obj}
+                          </p>
+                        ))}
                         <span className="text-[10px] text-blue-500 group-hover:text-blue-700 flex items-center gap-0.5 mt-1">
                           Tap for full details
                           <ChevronRight className="h-3 w-3" />
@@ -316,6 +333,9 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
                   : [],
                 notes: selectedBlock.planBlock?.notes || null,
                 lessonLink: selectedBlock.planBlock?.lessonLink || null,
+                materials: selectedBlock.planBlock?.materials,
+                homework: selectedBlock.planBlock?.homework || null,
+                resources: selectedBlock.planBlock?.resources,
                 timeLabel: `${DAY_NAMES[selectedBlock.dayIdx]} · ${formatTime(selectedBlock.skelBlock.startTime)} – ${formatTime(selectedBlock.skelBlock.endTime)}`,
               }
             : null

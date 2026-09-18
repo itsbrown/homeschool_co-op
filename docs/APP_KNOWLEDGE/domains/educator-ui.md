@@ -15,7 +15,7 @@ Legacy `client/src/components/dashboards/EducatorDashboard.tsx` (`GET /api/educa
 | `/educator/session/:id` | Active session + `AttendanceTracker` |
 | `/educator/students` | Assigned students (`GET /api/educator/my-students`) |
 | `/educator/assessments` | Record scores, progress log, Lexile |
-| `/educator/weekly-calendar` | Schedule overlay — **teaching days only by default**; empty days collapsed with “Show empty days” toggle. Same-day AM+PM assignments (Pioneers + Logic Hall) each get a card; published week plans override a later `classes.start_date`. |
+| `/educator/weekly-calendar` | Schedule overlay — **teaching days only by default**; empty days collapsed with “Show empty days” toggle. Same-day AM+PM assignments (Pioneers + Logic Hall) each get a card; published week plans override a later `classes.start_date`. Overlay blocks show a description/objective snippet; click opens `WeekPlanBlockDetailSheet` (script, objectives, materials, homework). |
 | `/educator/my-hours` | Hours + assigned classes |
 | `/educator/notifications` | In-app parent notices |
 | `/educator/settings` | Profile (first/last/phone) |

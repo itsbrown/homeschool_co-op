@@ -25,12 +25,20 @@ import {
   Plus, Copy, Sparkles, Search, CheckCircle2, Edit, History, Trash2,
   ChevronRight, Calendar, Clock, Loader2, ExternalLink, AlertTriangle,
   ThumbsUp, Lightbulb, X, Download, Upload, HelpCircle, Hammer, MoreHorizontal,
-  Printer
+  Printer, Target, Package, Eye
 } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
 import { useScheduleBuilderTour } from "@/components/tutorials/useScheduleBuilderTour";
 import { ScheduleBlocksCsvImportDialog } from "@/components/schedule/ScheduleBlocksCsvImportDialog";
 import { AsaWeeklySchedulePrintSheet } from "@/components/schedule/AsaWeeklySchedulePrintSheet";
+import {
+  WeekPlanBlockDetailSheet,
+  type WeekPlanBlockDetail,
+} from "@/components/schedule/WeekPlanBlockDetailSheet";
+import {
+  asTrimmedStrings,
+  lessonTeachingPreview,
+} from "@/lib/week-plan-lesson-content";
 import {
   buildAsaPrintColumnsFromWeekPlan,
   formatWeekOfRange,
@@ -79,6 +87,8 @@ interface BlockFormData {
   groups: { name: string; students: string; notes: string }[];
   lessonLink: string;
   notes: string;
+  materials: string[];
+  homework: string;
 }
 
 const emptyBlockForm: BlockFormData = {
@@ -88,7 +98,50 @@ const emptyBlockForm: BlockFormData = {
   groups: [],
   lessonLink: "",
   notes: "",
+  materials: [],
+  homework: "",
 };
+
+function normalizeEditGroups(raw: unknown): { name: string; students: string; notes: string }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((group) => {
+      if (typeof group === "string") {
+        return { name: group, students: "", notes: "" };
+      }
+      if (group && typeof group === "object") {
+        const rec = group as { name?: string; students?: string; notes?: string };
+        return {
+          name: String(rec.name || ""),
+          students: String(rec.students || ""),
+          notes: String(rec.notes || ""),
+        };
+      }
+      return { name: "", students: "", notes: "" };
+    })
+    .filter((group) => group.name);
+}
+
+function toBlockDetail(
+  skeletonBlock: SkeletonBlock,
+  weekBlock?: WeekPlanBlock,
+): WeekPlanBlockDetail {
+  const title = weekBlock?.title || skeletonBlock.defaultTitle || "";
+  return {
+    title,
+    description: weekBlock?.description || skeletonBlock.defaultDescription || null,
+    blockType: skeletonBlock.blockType || "flexible",
+    isCompleted: weekBlock?.isCompleted || false,
+    objectives: weekBlock?.objectives,
+    groups: weekBlock?.groups,
+    notes: weekBlock?.notes || null,
+    lessonLink: weekBlock?.lessonLink || null,
+    materials: weekBlock?.materials,
+    homework: weekBlock?.homework || null,
+    resources: weekBlock?.resources,
+    timeLabel: `${DAY_NAMES[skeletonBlock.dayOfWeek] || `Day ${skeletonBlock.dayOfWeek}`} · ${formatTime(skeletonBlock.startTime)} – ${formatTime(skeletonBlock.endTime)}`,
+  };
+}
 
 export default function WeekPlannerPage() {
   const { toast } = useToast();
@@ -112,6 +165,7 @@ export default function WeekPlannerPage() {
   const [deleteWeekId, setDeleteWeekId] = useState<number | null>(null);
   const [historyDialog, setHistoryDialog] = useState(false);
   const [historyBlockId, setHistoryBlockId] = useState<number | null>(null);
+  const [detailBlock, setDetailBlock] = useState<WeekPlanBlockDetail | null>(null);
   const [gapsDialog, setGapsDialog] = useState(false);
   const [gapsResult, setGapsResult] = useState<any>(null);
   const [csvImport, setCsvImport] = useState<{
@@ -336,6 +390,7 @@ export default function WeekPlannerPage() {
         title: suggestion.title || prev.title,
         description: suggestion.description || prev.description,
         objectives: suggestion.objectives || prev.objectives,
+        materials: suggestion.materials || prev.materials,
       }));
       toast({ title: "AI suggestions applied" });
     },
@@ -373,10 +428,12 @@ export default function WeekPlannerPage() {
     setBlockForm({
       title: block.title || "",
       description: block.description || "",
-      objectives: Array.isArray(block.objectives) ? (block.objectives as string[]) : [],
-      groups: Array.isArray(block.groups) ? (block.groups as any[]) : [],
+      objectives: asTrimmedStrings(block.objectives),
+      groups: normalizeEditGroups(block.groups),
       lessonLink: block.lessonLink || "",
       notes: block.notes || "",
+      materials: asTrimmedStrings(block.materials),
+      homework: block.homework || "",
     });
     setBlockEditDialog(true);
   };
@@ -389,6 +446,8 @@ export default function WeekPlannerPage() {
       groups: blockForm.groups.filter((g) => g.name),
       lessonLink: blockForm.lessonLink || null,
       notes: blockForm.notes || null,
+      materials: blockForm.materials.filter(Boolean),
+      homework: blockForm.homework || null,
     };
     if (editingBlockId) {
       updateBlockMutation.mutate({ id: editingBlockId, data: payload });
@@ -532,6 +591,7 @@ export default function WeekPlannerPage() {
       slots: (blocksByDay[dayOfWeek] || []).map(({ skeletonBlock, weekBlock }) => ({
         startTime: skeletonBlock.startTime,
         title: weekBlock?.title || skeletonBlock.defaultTitle || "",
+        description: weekBlock?.description || skeletonBlock.defaultDescription || null,
         objectives: weekBlock?.objectives,
         lessonLink: weekBlock?.lessonLink ?? null,
       })),
@@ -872,14 +932,48 @@ export default function WeekPlannerPage() {
                                 className="mt-0.5"
                               />
                               <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-medium truncate ${wb?.isCompleted ? "line-through" : ""}`}>
+                                <p className={`text-sm font-medium ${wb?.isCompleted ? "line-through" : ""}`}>
                                   {wb?.title || sb.defaultTitle}
                                 </p>
-                                {(wb?.description || sb.defaultDescription) && (
-                                  <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                                    {wb?.description || sb.defaultDescription}
-                                  </p>
-                                )}
+                                {(() => {
+                                  const preview = lessonTeachingPreview({
+                                    description: wb?.description || sb.defaultDescription,
+                                    objectives: wb?.objectives,
+                                    materials: wb?.materials,
+                                  });
+                                  const leftoverMaterials = asTrimmedStrings(wb?.materials).length - preview.materials.length;
+                                  return (
+                                    <>
+                                      {preview.descriptionPreview && (
+                                        <p
+                                          className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap line-clamp-4"
+                                          data-testid={`week-block-description-${wb?.id ?? `slot-${sb.id}`}`}
+                                        >
+                                          {preview.descriptionPreview}
+                                        </p>
+                                      )}
+                                      {preview.objectives.length > 0 && (
+                                        <ul className="mt-1.5 space-y-1" data-testid={`week-block-objectives-${wb?.id ?? `slot-${sb.id}`}`}>
+                                          {preview.objectives.map((obj) => (
+                                            <li key={obj} className="flex gap-1.5 text-xs text-slate-600">
+                                              <Target className="h-3 w-3 mt-0.5 shrink-0 text-emerald-600" />
+                                              <span className="line-clamp-2">{obj}</span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                      {preview.materials.length > 0 && (
+                                        <p className="text-[11px] text-slate-500 mt-1.5 flex items-start gap-1">
+                                          <Package className="h-3 w-3 mt-0.5 shrink-0" />
+                                          <span>
+                                            {preview.materials.join(" · ")}
+                                            {leftoverMaterials > 0 ? ` +${leftoverMaterials} more` : ""}
+                                          </span>
+                                        </p>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                                 {wb?.lessonLink && (
                                   <a href={wb.lessonLink} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 flex items-center gap-1 mt-1">
                                     <ExternalLink className="h-3 w-3" />
@@ -888,7 +982,17 @@ export default function WeekPlannerPage() {
                                 )}
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 pt-1 border-t">
+                            <div className="flex items-center gap-1 pt-1 border-t flex-wrap">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                data-testid={`week-block-details-${wb?.id ?? `slot-${sb.id}`}`}
+                                onClick={() => setDetailBlock(toBlockDetail(sb, wb))}
+                              >
+                                <Eye className="h-3 w-3 mr-1" />
+                                Lesson
+                              </Button>
                               {wb ? (
                                 <Button
                                   variant="ghost"
@@ -953,6 +1057,11 @@ export default function WeekPlannerPage() {
                   title={printTitle}
                   weekRange={printWeekRange}
                   columns={printColumns}
+                />
+                <WeekPlanBlockDetailSheet
+                  open={!!detailBlock}
+                  onClose={() => setDetailBlock(null)}
+                  block={detailBlock}
                 />
               </div>
             ) : templateId && (
@@ -1042,8 +1151,8 @@ export default function WeekPlannerPage() {
               <Textarea
                 value={blockForm.description}
                 onChange={(e) => setBlockForm({ ...blockForm, description: e.target.value })}
-                placeholder="Detailed description..."
-                rows={4}
+                placeholder="What is being taught this week — timed script, word of the day, product..."
+                rows={6}
               />
             </div>
             <div className="space-y-2">
@@ -1071,6 +1180,37 @@ export default function WeekPlannerPage() {
                   <Button
                     type="button" variant="ghost" size="sm"
                     onClick={() => setBlockForm({ ...blockForm, objectives: blockForm.objectives.filter((_, idx) => idx !== i) })}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Materials</Label>
+                <Button
+                  type="button" variant="ghost" size="sm"
+                  onClick={() => setBlockForm({ ...blockForm, materials: [...blockForm.materials, ""] })}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add
+                </Button>
+              </div>
+              {blockForm.materials.map((item, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    value={item}
+                    onChange={(e) => {
+                      const updated = [...blockForm.materials];
+                      updated[i] = e.target.value;
+                      setBlockForm({ ...blockForm, materials: updated });
+                    }}
+                    placeholder={`Material ${i + 1}`}
+                  />
+                  <Button
+                    type="button" variant="ghost" size="sm"
+                    onClick={() => setBlockForm({ ...blockForm, materials: blockForm.materials.filter((_, idx) => idx !== i) })}
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -1139,11 +1279,20 @@ export default function WeekPlannerPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Notes</Label>
+              <Label>Homework</Label>
+              <Textarea
+                value={blockForm.homework}
+                onChange={(e) => setBlockForm({ ...blockForm, homework: e.target.value })}
+                placeholder="Optional follow-up for families"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Teaching notes</Label>
               <Textarea
                 value={blockForm.notes}
                 onChange={(e) => setBlockForm({ ...blockForm, notes: e.target.value })}
-                placeholder="Additional notes..."
+                placeholder="Mentor-facing notes for this lesson"
                 rows={2}
               />
             </div>

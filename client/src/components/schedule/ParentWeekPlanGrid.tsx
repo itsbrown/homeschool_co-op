@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Printer, CalendarDays, CheckCircle2, Loader2, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
+import { asTrimmedStrings } from "@/lib/week-plan-lesson-content";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -134,6 +135,7 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
 
                     const title = planBlock?.title || skelBlock?.defaultTitle || "";
                     const description = planBlock?.description || skelBlock?.defaultDescription || "";
+                    const objectives = asTrimmedStrings(planBlock?.objectives).slice(0, 2);
                     const isCompleted = planBlock?.isCompleted || false;
                     const blockType = skelBlock?.blockType || "flexible";
 
@@ -158,9 +160,18 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
                               )}
                             </div>
                             {description && (
-                              <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 print:line-clamp-none">
+                              <p className="text-xs text-slate-500 mt-0.5 line-clamp-3 print:line-clamp-none whitespace-pre-wrap">
                                 {description}
                               </p>
+                            )}
+                            {objectives.length > 0 && (
+                              <ul className="mt-1 space-y-0.5">
+                                {objectives.map((obj) => (
+                                  <li key={obj} className="text-[11px] text-slate-600 leading-snug">
+                                    • {obj}
+                                  </li>
+                                ))}
+                              </ul>
                             )}
                             {blockType === "anchor" && (
                               <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0 border-blue-200 text-blue-600 print:border-blue-400">
@@ -202,6 +213,7 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
                   const planBlock = blocksBySkeletonBlockId.get(sb.id);
                   const title = planBlock?.title || sb.defaultTitle;
                   const description = planBlock?.description || sb.defaultDescription || "";
+                  const objectives = asTrimmedStrings(planBlock?.objectives).slice(0, 2);
                   const isCompleted = planBlock?.isCompleted || false;
 
                   return (
@@ -219,7 +231,16 @@ function ScheduleGrid({ weekPlan, skeleton, skeletonBlocks }: ScheduleGridProps)
                       </div>
                       <div className="text-sm font-medium text-slate-800 mt-1">{title}</div>
                       {description && (
-                        <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+                        <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-wrap">{description}</p>
+                      )}
+                      {objectives.length > 0 && (
+                        <ul className="mt-1 space-y-0.5">
+                          {objectives.map((obj) => (
+                            <li key={obj} className="text-[11px] text-slate-600 leading-snug">
+                              • {obj}
+                            </li>
+                          ))}
+                        </ul>
                       )}
                       {sb.blockType === "anchor" && (
                         <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0 border-blue-200 text-blue-600">
