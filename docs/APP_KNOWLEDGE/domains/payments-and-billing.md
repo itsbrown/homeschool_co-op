@@ -178,6 +178,7 @@ Pattern: dedicated script under `server/scripts/apply-*-credits-production.ts` (
 |--------|--------|-------|
 | `apply-kari-wing-credits-production.ts` | 90 | FIFO aide credits → enr 272, 415 |
 | `apply-jake-fabry-credits-production.ts` | 34 | Credit #34 ($810 spring comp) → enr 327–329 |
+| `fix-grace-mulcahy-fall-biweekly-ledger-production.ts` | 66 | Fall #656/#657 phantom full pay after first biweekly PI; leftover **$1,662.50**; restore SP 800/801; cancel leftover Stripe membership sub |
 
 Dry-run first: `--dry-run`.
 
@@ -342,3 +343,4 @@ When volunteer credits cover the full cart, `POST /api/stripe/create-payment-int
 | Collections Overview **Auto-pay on (0)** but parents have plans / `auto_pay_enabled` | Was: `loadParentInfo` used `db.execute().rows` (undefined under postgres-js); catch → all false | Fixed: select `users.autoPayEnabled` via drizzle in `loadParentInfo` |
 | Apply credits → “Checkout did not finish loading” | Credits cover cart → no `clientSecret`; recovery gate used pre-credit `actualPayableAmount` | Gate on `displayPayableAmount` + `!creditOnlyEligible` |
 | Promo code shows in cart but Stripe charges full tuition | create-PI snapshotted promo in UI only; sized PI from full outstanding; fulfill ignored promo comps | **Fixed (2026-08-11):** `compEnrollmentAmounts` + PI remaining − comps + fulfill cart-level comps; see skill Promo money path |
+| Parent says they still owe but Payments shows **$0** after credited biweekly checkout | `originalAmountCents` on installment 1 was the **full cart**. Fulfill allocated that gross → `effective_balance = 0`. Autopay then skipped/cancelled later dues. | **Fixed (2026-09-18):** cap allocation at PI.amount + credits; PI metadata original is this installment + credits. Grace Mulcahy **#66** leftover **$1,662.50**. Script: `fix-grace-mulcahy-fall-biweekly-ledger-production.ts`. Same pattern Alanna Thomas #70, Amy Misso #91 (not auto-corrected). |

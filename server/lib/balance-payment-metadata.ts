@@ -164,8 +164,30 @@ export function parseBalanceIntentCredits(
 }
 
 /**
+ * Card + credits for THIS PaymentIntent. Never the remaining plan total.
+ * Biweekly installment 1 used to stamp plan-level `originalAmountCents` on the PI;
+ * allocating that gross marked Fall seats paid after the first $332.50 charge
+ * (Grace Mulcahy #66, 2026-09-18).
+ */
+export function thisPaymentGrossCents(
+  paymentIntentAmountCents: number,
+  creditsAppliedCents: number,
+): number {
+  const pi =
+    Number.isInteger(paymentIntentAmountCents) && paymentIntentAmountCents > 0
+      ? paymentIntentAmountCents
+      : 0;
+  const credits =
+    Number.isInteger(creditsAppliedCents) && creditsAppliedCents > 0 ? creditsAppliedCents : 0;
+  return pi + credits;
+}
+
+/**
  * Total cents to allocate across enrollments + membership reservation when credits
  * partially cover a PaymentIntent (card amount is PI.amount; metadata carries the gross).
+ *
+ * Cap `originalAmountCents` at this PI's card + credits so a plan-total metadata
+ * value cannot pay off later installments on fulfill.
  */
 export function totalCentsForBalanceAllocation(args: {
   paymentIntentAmountCents: number;
@@ -179,10 +201,11 @@ export function totalCentsForBalanceAllocation(args: {
   if (!args.creditsAppliedCents || args.creditsAppliedCents <= 0) {
     return pi;
   }
+  const thisPayment = thisPaymentGrossCents(pi, args.creditsAppliedCents);
   if (args.originalAmountCents > 0) {
-    return args.originalAmountCents;
+    return Math.min(args.originalAmountCents, thisPayment);
   }
-  return pi + args.creditsAppliedCents;
+  return thisPayment;
 }
 
 /** Proportional membership slice (legacy); used only for post-payment regression detection. */

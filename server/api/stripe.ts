@@ -883,7 +883,6 @@ router.post('/create-payment-intent', supabaseAuth, async (req: any, res) => {
         ...(appliedVolunteerCreditsCents > 0
           ? {
               creditsAppliedCents: appliedVolunteerCreditsCents,
-              originalAmountCents: totalWithMembership,
               creditUserId: parent.id,
             }
           : {}),
