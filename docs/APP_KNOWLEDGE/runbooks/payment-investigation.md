@@ -89,6 +89,7 @@ Regression E2E: `e2e/membership-dashboard-after-combined-payment.spec.ts`
 - [ ] Listed **all succeeded** PIs for parent email (not only DB `stripe_customer_id`)
 - [ ] Checked PI metadata: `hasMembership`, `membershipAmount`, `enrollmentIds`
 - [ ] Compared to `payments`, `membership_enrollments`, `program_enrollments`
+- [ ] If cart is empty while kids are on the roster, check `audit_logs.action_type IN ('parent_cart_remove_enrollment','admin_delete_enrollment')`. Parent cart-remove hard-deletes `pending_payment` (no row left).
 - [ ] Only then recommended fix or parent-facing reply
 
 ## Related

@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-20 (Parent cart-remove audit)
+
+- Parent unenroll / cart-clear / legacy `DELETE /api/enrollments/:id` write `audit_logs` (`parent_cart_remove_enrollment`) with a seat snapshot. Admin hard-delete logs `admin_delete_enrollment`. Jennifer Brew Fall seats were hard-deleted with no row. Helper: `server/lib/enrollment-hard-delete-audit.ts` (`safeCreateAuditLog`). Production-path: `enrollment-hard-delete-audit.test.ts`.
+
 ## 2026-09-18 (Week Planner lesson teaching details)
 
 - Week Planner cards, print, mentor Schedule overlay, and parent/educator week grids now show **what is being taught** (description + objectives; materials on cards/detail). Title-only slots hid the week’s content. **Lesson** opens `WeekPlanBlockDetailSheet` (script, objectives, materials, homework, notes, links). Edit saves materials/homework. Helpers: `client/src/lib/week-plan-lesson-content.ts`. E2E: `school-admin-week-planner-print`, `educator-weekly-schedule-plans`.
