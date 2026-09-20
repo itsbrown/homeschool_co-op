@@ -63,12 +63,14 @@ waitlist        → enrolled           (spot opens up)
 - Deletes pending `scheduled_payments` for the enrollment, then deletes `program_enrollments` (FK-safe)
 - `CombinedStorage.deleteProgramEnrollment` must not fall back to mem-only delete when Postgres fails (would show success but list still reads from DB)
 - Used when removing items from cart
+- **Hard-deletes** the pending row. After a successful delete, `logEnrollmentHardDelete` writes `audit_logs.action_type = parent_cart_remove_enrollment` with a money/seat snapshot (`source=parent_unenroll`). Failed audit must not 500 the unenroll.
 
 ### Admin-Initiated
 - Endpoint: `DELETE /api/admin/enrollments/:id` (soft-cancel → `cancelled`; preserves payment history)
 - Used by school-admin **Manage Enrollments** (`ClassEnrollmentsPage`) and parent-profile unenroll
 - Do **not** use legacy `DELETE /api/enrollments/:id` for admin Remove — that path historically only hit mem/file storage and returned `404 Enrollment not found` for Postgres roster rows
 - `CombinedStorage.removeEnrollment` must delete from Postgres (`deleteProgramEnrollment`) when the row exists in DB
+- Admin hard-delete (`DELETE /api/admin/enrollments/:id` in `admin-enrollment-payment.ts`) logs `admin_delete_enrollment` via `logEnrollmentHardDelete`
 
 ### School-admin delete child (Parent Profile)
 - Endpoint: `DELETE /api/school-admin/children/:id` → `deleteSchoolAdminChild`
@@ -81,6 +83,7 @@ waitlist        → enrolled           (spot opens up)
 - Validates all enrollment IDs belong to the authenticated parent's children
 - Only cancels `pending_payment` enrollments
 - Atomic transaction — all succeed or all fail
+- After commit, one `parent_cart_remove_enrollment` audit row per deleted id (`source=parent_cancel_multiple`)
 
 ## Class Structure
 
@@ -283,6 +286,7 @@ Parents see a household shopping list from active enrollments (`enrolled`, `pend
 
 ## Key Files
 - `shared/member-id-enrollment-gate.ts` — `requireMemberId` self-enroll helper (`users.member_id`)
+- `server/lib/enrollment-hard-delete-audit.ts` — parent/admin hard-delete `audit_logs` snapshot
 - `server/api/enrollments.ts` — enrollment CRUD, confirm, unenroll, bulk cancel
 - `server/api/admin-enrollment-payment.ts` — admin payment management for enrollments
 - `server/api/admin-sessions.ts` — enrollment-period sessions CRUD + fill counts

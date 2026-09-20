@@ -8,6 +8,7 @@ import {
   PaymentReallocationError,
 } from '../services/PaymentReallocationService';
 import { resolveReallocateAmountCents } from '../utils/reallocatePaymentAmount';
+import { logEnrollmentHardDelete } from '../lib/enrollment-hard-delete-audit';
 
 const router = express.Router();
 
@@ -1009,6 +1010,17 @@ router.delete('/:enrollmentId', async (req: any, res) => {
     }
     
     await storage.deleteProgramEnrollment(enrollmentId);
+    await logEnrollmentHardDelete({
+      enrollment,
+      actor: {
+        id: user.id,
+        role: hasAdminRole ? 'admin' : 'schoolAdmin',
+        email: userEmail,
+      },
+      source: 'admin_delete',
+      ipAddress: req.ip || req.headers?.['x-forwarded-for'] || null,
+      userAgent: req.headers?.['user-agent'] || null,
+    });
     
     console.log(`✅ Successfully deleted enrollment ID ${enrollmentId}`);
     

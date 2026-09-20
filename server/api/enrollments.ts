@@ -5,8 +5,40 @@ import { programEnrollments } from "../../shared/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getStripeClient } from "../config/stripe";
 import { getChildrenForAuthenticatedParent } from "../lib/parent-auth-scope";
+import {
+  logEnrollmentHardDelete,
+  type EnrollmentHardDeleteSource,
+} from "../lib/enrollment-hard-delete-audit";
 
 const router = express.Router();
+
+function actorFromReq(req: any): { id?: unknown; role?: string | null; email?: string | null } {
+  return {
+    id: req.auth?.dbUserId ?? req.user?.id,
+    role: req.auth?.role ?? req.user?.role ?? req.user?.activeRole ?? "parent",
+    email: req.auth?.email ?? req.user?.email ?? null,
+  };
+}
+
+function requestAuditContext(req: any): { ipAddress?: string | null; userAgent?: string | null } {
+  return {
+    ipAddress: req.ip || req.headers?.["x-forwarded-for"] || null,
+    userAgent: req.headers?.["user-agent"] || null,
+  };
+}
+
+async function auditHardDelete(
+  enrollment: Parameters<typeof logEnrollmentHardDelete>[0]["enrollment"],
+  req: any,
+  source: EnrollmentHardDeleteSource,
+): Promise<void> {
+  await logEnrollmentHardDelete({
+    enrollment,
+    actor: actorFromReq(req),
+    source,
+    ...requestAuditContext(req),
+  });
+}
 
 /** Remove pending-payment enrollment rows and dependent scheduled installments (FK-safe). */
 async function deletePendingPaymentProgramEnrollment(enrollmentId: number): Promise<void> {
@@ -270,6 +302,7 @@ router.delete('/:enrollmentId/unenroll', async (req: any, res) => {
     }
 
     await deletePendingPaymentProgramEnrollment(enrollmentId);
+    await auditHardDelete(enrollment, req, "parent_unenroll");
 
     console.log(`✅ Successfully unenrolled from class: ${enrollment.className}`);
     
@@ -311,6 +344,7 @@ router.delete('/:enrollmentId', async (req: any, res) => {
     const success = await storage.removeEnrollment(enrollmentId);
     
     if (success) {
+      await auditHardDelete(enrollmentToRemove, req, "parent_legacy_delete");
       console.log(`✅ Successfully unenrolled enrollment ID: ${enrollmentId}`);
       res.json({ message: 'Unenrollment successful' });
     } else {
@@ -435,6 +469,10 @@ router.post('/cancel-multiple', async (req: any, res) => {
         
         console.log(`✅ Atomically deleted ${result.length} enrollments in single operation:`, result.map((r: { id: number }) => r.id));
       });
+
+      for (const { enrollment } of enrollmentsToCancel) {
+        await auditHardDelete(enrollment, req, "parent_cancel_multiple");
+      }
       
       // Transaction committed successfully - all enrollments cancelled
       const response = {
