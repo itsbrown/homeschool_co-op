@@ -4,6 +4,7 @@ import {
   PARENT_CART_REMOVE_ACTION,
   buildEnrollmentHardDeleteAuditLog,
   enrollmentHardDeleteSnapshot,
+  numericActorId,
 } from "../../lib/enrollment-hard-delete-audit";
 
 const row = {
@@ -66,6 +67,11 @@ describe("buildEnrollmentHardDeleteAuditLog", () => {
     });
     expect(log.actorId).toBeNull();
     expect(log.actorEmail).toBe("yetter.j8@gmail.com");
+  });
+
+  it("nulls a Supabase UUID on actor_id", () => {
+    expect(numericActorId("c13ef685-e8f4-4e05-8946-94e94f58fff8")).toBeNull();
+    expect(numericActorId(128)).toBe(128);
   });
 
   it("uses the admin action for office deletes", () => {

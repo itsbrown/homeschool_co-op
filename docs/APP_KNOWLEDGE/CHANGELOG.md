@@ -2,7 +2,7 @@
 
 ## 2026-09-20 (Parent cart-remove audit)
 
-- Parent unenroll / cart-clear / legacy `DELETE /api/enrollments/:id` write `audit_logs` (`parent_cart_remove_enrollment`) with a seat snapshot. Admin hard-delete logs `admin_delete_enrollment`. Jennifer Brew Fall seats were hard-deleted with no row. Helper: `server/lib/enrollment-hard-delete-audit.ts` (`safeCreateAuditLog`). Production-path: `enrollment-hard-delete-audit.test.ts`.
+- Parent unenroll / cart-clear / legacy `DELETE /api/enrollments/:id` write `audit_logs` (`parent_cart_remove_enrollment`) with a seat snapshot. Admin hard-delete logs `admin_delete_enrollment`. Jennifer Brew Fall seats were hard-deleted with no row. Helper: `server/lib/enrollment-hard-delete-audit.ts` (insert is try/catch; failed audit must not 500). Production-path: `enrollment-hard-delete-audit.test.ts`.
 
 ## 2026-09-18 (Week Planner lesson teaching details)
 

@@ -63,7 +63,7 @@ waitlist        → enrolled           (spot opens up)
 - Deletes pending `scheduled_payments` for the enrollment, then deletes `program_enrollments` (FK-safe)
 - `CombinedStorage.deleteProgramEnrollment` must not fall back to mem-only delete when Postgres fails (would show success but list still reads from DB)
 - Used when removing items from cart
-- **Hard-deletes** the pending row. After a successful delete, `logEnrollmentHardDelete` writes `audit_logs.action_type = parent_cart_remove_enrollment` with a money/seat snapshot (`source=parent_unenroll`). Failed audit must not 500 the unenroll (`safeCreateAuditLog`).
+- **Hard-deletes** the pending row. After a successful delete, `logEnrollmentHardDelete` writes `audit_logs.action_type = parent_cart_remove_enrollment` with a money/seat snapshot (`source=parent_unenroll`). Failed audit must not 500 the unenroll.
 
 ### Admin-Initiated
 - Endpoint: `DELETE /api/admin/enrollments/:id` (soft-cancel → `cancelled`; preserves payment history)

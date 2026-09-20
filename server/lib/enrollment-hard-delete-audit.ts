@@ -1,5 +1,11 @@
-import type { InsertAuditLog } from "../../shared/schema";
-import { numericActorId, safeCreateAuditLog } from "./audit-log-db";
+import { auditLogs, type InsertAuditLog } from "../../shared/schema";
+import { getDb } from "../db";
+
+/** Null a Supabase UUID so audit_logs.actor_id (integer) does not 500. */
+export function numericActorId(value: unknown): number | null {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
 
 export const PARENT_CART_REMOVE_ACTION = "parent_cart_remove_enrollment";
 export const ADMIN_ENROLLMENT_DELETE_ACTION = "admin_delete_enrollment";
@@ -94,5 +100,17 @@ export async function logEnrollmentHardDelete(opts: {
   ipAddress?: string | null;
   userAgent?: string | null;
 }): Promise<void> {
-  await safeCreateAuditLog(buildEnrollmentHardDeleteAuditLog(opts));
+  try {
+    const db = await getDb();
+    if (!db) {
+      console.error("[audit] skipped enrollment hard-delete log: no database");
+      return;
+    }
+    await db.insert(auditLogs).values({
+      ...buildEnrollmentHardDeleteAuditLog(opts),
+      actorId: numericActorId(opts.actor.id),
+    });
+  } catch (error) {
+    console.error("[audit] failed to write enrollment hard-delete log:", error);
+  }
 }
