@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-21 (Boot credit restamp removed)
+
+- `initializeDatabase` no longer adds used credits onto every open seat. That update was still on `main` after the Sep 12 note. It ignored `enrollment_ids` and repeated while `effective_balance` stayed at least as large as the credit. Test: `server/tests/init-db-no-boot-credit-repair.test.ts`. Ledger restore: `fix-boot-credit-restamp-ledgers-production.ts`. Publish the Reserved VM before the next restart or the old `dist` runs the update once more.
+
 ## 2026-09-21 (Document upload 503)
 
 - School-admin Documents register called `storage.getSchoolDocumentByFileName` but the method was never on `IStorage` / `dbStorage`. That throw became 503 `Service temporarily unavailable` (toast showed the raw JSON). Implemented the lookup (school + sanitized file name, non-archived). Toast now uses `parseApiErrorMessage`.
