@@ -3,11 +3,21 @@ import { getDb } from '../db';
 import {
   customFormFields,
   customFormSubmissions,
+  locations,
   schools,
   users,
   type CustomForm,
 } from '@shared/schema';
+import { resolveProfileNamesFromUser } from '@shared/auth-register';
+import {
+  inferAutoFillKey,
+  type FormPrefill,
+} from '@shared/form-autofill';
 import { sendEmail } from './email-service';
+
+const FALLBACK_CAMPUS_OPTIONS = ['Brighton', 'Batavia', 'Canandaigua', 'Victor'] as const;
+
+export type { FormPrefill } from '@shared/form-autofill';
 
 export type FormSettings = {
   requireAuth?: boolean;
@@ -234,4 +244,103 @@ export async function sendFormSubmissionNotifications(opts: {
       'form_submission_confirmation',
     );
   }
+}
+
+export type FormFieldAutoFillRow = {
+  id: number;
+  fieldConfig: unknown;
+  fieldType?: string | null;
+  label?: string | null;
+};
+
+export function getFieldAutoFill(
+  fieldConfig: unknown,
+  field?: { fieldType?: string | null; label?: string | null },
+): string | null {
+  return inferAutoFillKey({
+    fieldConfig,
+    fieldType: field?.fieldType,
+    label: field?.label,
+  });
+}
+
+export function applySubmitterAutoFill(opts: {
+  fields: FormFieldAutoFillRow[];
+  responseData: Record<string, unknown>;
+  prefill: FormPrefill;
+}): Record<string, unknown> {
+  const next = { ...opts.responseData };
+  for (const field of opts.fields) {
+    const key = inferAutoFillKey({
+      fieldConfig: field.fieldConfig,
+      fieldType: field.fieldType,
+      label: field.label,
+    });
+    if (!key) continue;
+    const value = opts.prefill[key];
+    if (value != null && String(value).trim() !== '') {
+      next[`field_${field.id}`] = value;
+    }
+  }
+  return next;
+}
+
+export async function buildSubmitterPrefill(user: {
+  id: number;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  name?: string | null;
+  memberId?: string | null;
+  phone?: string | null;
+  locationId?: number | null;
+}): Promise<FormPrefill> {
+  const names = resolveProfileNamesFromUser(user);
+  let locationName: string | null = null;
+  if (user.locationId) {
+    const db = await getDb();
+    const [campus] = await db
+      .select({ name: locations.name })
+      .from(locations)
+      .where(eq(locations.id, user.locationId))
+      .limit(1);
+    locationName = campus?.name ?? null;
+  }
+  return {
+    memberId: user.memberId?.trim() || null,
+    firstName: names.firstName,
+    lastName: names.lastName,
+    fullName: names.displayName,
+    email: user.email?.trim() || '',
+    phone: user.phone?.trim() || null,
+    location: locationName,
+  };
+}
+
+export async function enrichFieldsWithSchoolLocations<
+  T extends { fieldConfig: unknown },
+>(schoolId: number, fields: T[]): Promise<T[]> {
+  const needsLocations = fields.some((field) => {
+    const cfg = field.fieldConfig as { source?: string } | null;
+    return cfg?.source === 'school_locations';
+  });
+  if (!needsLocations) return fields;
+
+  const db = await getDb();
+  const rows = await db
+    .select({ name: locations.name })
+    .from(locations)
+    .where(and(eq(locations.schoolId, schoolId), eq(locations.isActive, true)))
+    .orderBy(locations.name);
+  const names = rows.map((r) => r.name).filter(Boolean);
+  const options = names.length > 0 ? names : [...FALLBACK_CAMPUS_OPTIONS];
+
+  return fields.map((field) => {
+    const cfg = (field.fieldConfig || {}) as Record<string, unknown>;
+    if (cfg.source !== 'school_locations') return field;
+    return {
+      ...field,
+      fieldConfig: { ...cfg, options },
+    };
+  });
 }

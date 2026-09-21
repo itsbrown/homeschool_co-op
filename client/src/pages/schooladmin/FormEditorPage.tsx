@@ -18,6 +18,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import FormSmartBuilderPanel from '@/components/forms/FormSmartBuilderPanel';
+import {
+  editorAutoFillValue,
+  FORM_AUTO_FILL_AUTOMATIC,
+  FORM_AUTO_FILL_EDITOR_OPTIONS,
+  FORM_AUTO_FILL_NONE,
+} from '@shared/form-autofill';
 
 interface FormField {
   id: number;
@@ -138,6 +144,42 @@ function SortableField({
               />
               <Label className="text-xs">Required</Label>
             </div>
+          </div>
+          <div>
+            <Label className="text-xs">Auto-fill from</Label>
+            <Select
+              value={editorAutoFillValue(field.fieldConfig)}
+              onValueChange={(value) => {
+                const nextConfig = { ...(field.fieldConfig || {}) };
+                if (value === FORM_AUTO_FILL_AUTOMATIC) {
+                  delete nextConfig.autoFill;
+                  onCommit({ fieldConfig: nextConfig });
+                  return;
+                }
+                if (value === FORM_AUTO_FILL_NONE) {
+                  onCommit({ fieldConfig: { ...nextConfig, autoFill: FORM_AUTO_FILL_NONE } });
+                  return;
+                }
+                onCommit({
+                  fieldConfig: {
+                    ...nextConfig,
+                    autoFill: value,
+                    ...(value === 'memberId' ? { readOnly: true } : {}),
+                  },
+                });
+              }}
+            >
+              <SelectTrigger className="h-9" data-testid={`select-field-autofill-${field.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FORM_AUTO_FILL_EDITOR_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {(field.fieldType === 'dropdown' || field.fieldType === 'radio' || field.fieldType === 'multi_checkbox') && (
             <div>

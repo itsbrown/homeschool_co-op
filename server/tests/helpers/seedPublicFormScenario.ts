@@ -24,9 +24,19 @@ export type PublicFormScenarioSeed = {
     fieldIds: { fullName: number; email: number };
     notificationEmail: string;
   };
+  parent: {
+    id: number;
+    email: string;
+    password: string;
+    memberId: string;
+    firstName: string;
+    lastName: string;
+    locationName: string;
+  };
 };
 
 const ADMIN_PASSWORD = 'TestPassword123!';
+const PARENT_PASSWORD = 'TestPassword123!';
 
 /**
  * Seeds public + members-only custom forms for Playwright / API tests.
@@ -56,6 +66,36 @@ export async function seedPublicFormScenario(
     status: 'active',
   });
   await storage.updateUser(admin.id, { schoolId: school.id });
+
+  const location = await testDb.createTestLocation(school.id, {
+    name: `Form Campus ${uniqueId}`,
+    code: `FC${uniqueId.slice(0, 4).toUpperCase()}`,
+    city: 'Rochester',
+    state: 'NY',
+  });
+
+  const parentEmail = `form_parent_${uniqueId}@test.com`;
+  const parentMemberId = `ASA-2026-${uniqueId.slice(0, 6).toUpperCase()}`;
+  const parent = await testDb.createTestUser({
+    email: parentEmail,
+    username: `formparent_${uniqueId}`,
+    name: 'Jordan Volunteer',
+    firstName: 'Jordan',
+    lastName: 'Volunteer',
+    role: 'parent',
+    schoolId: school.id,
+    locationId: location.id,
+    memberId: parentMemberId,
+    password: PARENT_PASSWORD,
+  });
+  await storage.updateUser(parent.id, {
+    password: await (await import('bcryptjs')).hash(PARENT_PASSWORD, 10),
+    firstName: 'Jordan',
+    lastName: 'Volunteer',
+    memberId: parentMemberId,
+    locationId: location.id,
+    schoolId: school.id,
+  });
 
   const publicSlug = `e2e-public-${uniqueId}`;
   const membersSlug = `e2e-members-${uniqueId}`;
@@ -278,6 +318,15 @@ export async function seedPublicFormScenario(
       title: notifyForm.title,
       fieldIds: { fullName: notifyName.id, email: notifyEmail.id },
       notificationEmail,
+    },
+    parent: {
+      id: parent.id,
+      email: parentEmail,
+      password: PARENT_PASSWORD,
+      memberId: parentMemberId,
+      firstName: 'Jordan',
+      lastName: 'Volunteer',
+      locationName: location.name,
     },
   };
 }
