@@ -24,6 +24,7 @@ module.exports = {
     '<rootDir>/server/tests/unit/session-payment-eligibility.test.ts',
     '<rootDir>/server/tests/unit/current-class-enrollment.test.ts',
     '<rootDir>/server/tests/unit/google-drive-curriculum.test.ts',
+    '<rootDir>/server/tests/init-db-no-boot-credit-repair.test.ts',
   ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {

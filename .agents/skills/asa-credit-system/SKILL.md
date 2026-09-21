@@ -182,6 +182,7 @@ volunteer_credits:
 
 ### Don't
 - Don't consume credits that are still in `pending` status — only `approved` and `partially_used` are usable
+- Don't add a boot-time credit repair in `initializeDatabase`. A used credit belongs only to that payment's `enrollment_ids`. The old parent-wide update restamped Grace, Jennifer, Amy, and Alanna on every restart. Test: `server/tests/init-db-no-boot-credit-repair.test.ts`.
 - Don't skip the hold/reservation step during checkout — it prevents concurrent double-spending
 - Don't use the legacy `volunteer_credits` table for new features — use the unified system
 - Don't forget to release credit holds when payments fail or are cancelled
