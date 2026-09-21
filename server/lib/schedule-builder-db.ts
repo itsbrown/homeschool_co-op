@@ -10,16 +10,19 @@ import {
   weekPlans,
   weekPlanBlocks,
   classes,
+  curriculumAssets,
   type WeeklySkeleton,
   type SkeletonBlock,
   type WeekPlan,
   type WeekPlanBlock,
+  type CurriculumAsset,
 } from "../../shared/schema";
 
 type InsertWeeklySkeleton = typeof weeklySkeletons.$inferInsert;
 type InsertSkeletonBlock = typeof skeletonBlocks.$inferInsert;
 type InsertWeekPlan = typeof weekPlans.$inferInsert;
 type InsertWeekPlanBlock = typeof weekPlanBlocks.$inferInsert;
+type InsertCurriculumAsset = typeof curriculumAssets.$inferInsert;
 
 export type WeekPlanBlockHistoryRow = {
   id: number;
@@ -303,6 +306,7 @@ export async function cloneWeekPlan(
         objectives: b.objectives,
         groups: b.groups,
         notes: b.notes,
+        curriculumAssetId: b.curriculumAssetId,
         isCompleted: false,
         updatedBy: userId,
       })),
@@ -405,8 +409,11 @@ export async function bulkUpdateWeekPlanBlocks(
     title?: string | null;
     description?: string | null;
     objectives?: string[] | null;
+    materials?: string[] | null;
+    homework?: string | null;
     lessonLink?: string | null;
     notes?: string | null;
+    curriculumAssetId?: number | null;
   }>,
   userId: number,
 ): Promise<void> {
@@ -422,8 +429,12 @@ export async function bulkUpdateWeekPlanBlocks(
           title: u.title ?? current.title,
           description: u.description ?? current.description,
           objectives: u.objectives ?? (current.objectives as string[]),
+          materials: u.materials ?? current.materials,
+          homework: u.homework ?? current.homework,
           lessonLink: u.lessonLink ?? current.lessonLink,
           notes: u.notes ?? current.notes,
+          curriculumAssetId:
+            u.curriculumAssetId !== undefined ? u.curriculumAssetId : current.curriculumAssetId,
         },
         userId,
       );
@@ -434,8 +445,11 @@ export async function bulkUpdateWeekPlanBlocks(
         title: u.title ?? null,
         description: u.description ?? null,
         objectives: u.objectives ?? [],
+        materials: u.materials ?? [],
+        homework: u.homework ?? null,
         lessonLink: u.lessonLink ?? null,
         notes: u.notes ?? null,
+        curriculumAssetId: u.curriculumAssetId ?? null,
         updatedBy: userId,
       });
     }
@@ -621,4 +635,84 @@ export async function getAcademicsLessonKpi(params: {
     byClass,
     incomplete,
   };
+}
+
+export async function setClassDriveFolderId(
+  classId: number,
+  schoolId: number,
+  folderId: string | null,
+): Promise<void> {
+  const db = await getDb();
+  await db
+    .update(classes)
+    .set({ driveFolderId: folderId, updatedAt: new Date() })
+    .where(and(eq(classes.id, classId), eq(classes.schoolId, schoolId)));
+}
+
+export async function getCurriculumAssetsByClassId(
+  classId: number,
+  schoolId: number,
+): Promise<CurriculumAsset[]> {
+  const db = await getDb();
+  return db
+    .select()
+    .from(curriculumAssets)
+    .where(and(eq(curriculumAssets.classId, classId), eq(curriculumAssets.schoolId, schoolId)))
+    .orderBy(asc(curriculumAssets.name));
+}
+
+export async function getCurriculumAssetById(id: number): Promise<CurriculumAsset | undefined> {
+  const db = await getDb();
+  const [row] = await db.select().from(curriculumAssets).where(eq(curriculumAssets.id, id)).limit(1);
+  return row;
+}
+
+export async function upsertCurriculumAsset(
+  data: InsertCurriculumAsset & { schoolId: number; classId: number; driveFileId: string; name: string },
+): Promise<CurriculumAsset> {
+  const db = await getDb();
+  const existing = await db
+    .select()
+    .from(curriculumAssets)
+    .where(
+      and(eq(curriculumAssets.classId, data.classId), eq(curriculumAssets.driveFileId, data.driveFileId)),
+    )
+    .limit(1);
+  const now = new Date();
+  if (existing[0]) {
+    const [row] = await db
+      .update(curriculumAssets)
+      .set({ ...data, updatedAt: now, indexedAt: now })
+      .where(eq(curriculumAssets.id, existing[0].id))
+      .returning();
+    return row;
+  }
+  const [row] = await db
+    .insert(curriculumAssets)
+    .values({ ...data, updatedAt: now, indexedAt: now })
+    .returning();
+  return row;
+}
+
+export async function getCurriculumAssetIdsUsedInClass(
+  classId: number,
+  excludeWeekPlanId?: number,
+): Promise<number[]> {
+  const db = await getDb();
+  const rows = await db
+    .select({
+      assetId: weekPlanBlocks.curriculumAssetId,
+      weekPlanId: weekPlans.id,
+    })
+    .from(weekPlanBlocks)
+    .innerJoin(weekPlans, eq(weekPlanBlocks.weekPlanId, weekPlans.id))
+    .innerJoin(weeklySkeletons, eq(weekPlans.skeletonId, weeklySkeletons.id))
+    .where(eq(weeklySkeletons.classId, classId));
+  const ids = new Set<number>();
+  for (const row of rows) {
+    if (!row.assetId) continue;
+    if (excludeWeekPlanId != null && row.weekPlanId === excludeWeekPlanId) continue;
+    ids.add(row.assetId);
+  }
+  return [...ids];
 }

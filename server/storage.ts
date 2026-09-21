@@ -8110,6 +8110,21 @@ export class MemStorage implements IStorage {
       getAcademicsLessonKpi(params: Parameters<DatabaseStorage['getAcademicsLessonKpi']>[0]) {
         return this.requireSbDb().getAcademicsLessonKpi(params);
       }
+      setClassDriveFolderId(classId: number, schoolId: number, folderId: string | null) {
+        return this.requireSbDb().setClassDriveFolderId(classId, schoolId, folderId);
+      }
+      getCurriculumAssetsByClassId(classId: number, schoolId: number) {
+        return this.requireSbDb().getCurriculumAssetsByClassId(classId, schoolId);
+      }
+      getCurriculumAssetById(id: number) {
+        return this.requireSbDb().getCurriculumAssetById(id);
+      }
+      upsertCurriculumAsset(data: Parameters<DatabaseStorage['upsertCurriculumAsset']>[0]) {
+        return this.requireSbDb().upsertCurriculumAsset(data);
+      }
+      getCurriculumAssetIdsUsedInClass(classId: number, excludeWeekPlanId?: number) {
+        return this.requireSbDb().getCurriculumAssetIdsUsedInClass(classId, excludeWeekPlanId);
+      }
 
       getChildByIdForSchool(childId: number, schoolId: number) {
         return this.requireApDb().getChildByIdForSchool(childId, schoolId);

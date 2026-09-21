@@ -37,6 +37,7 @@ description: >-
 | Auth, API tenancy | `asa-auth-patterns` |
 | Form Builder, public forms, mentor application | `domains/custom-forms-public-access.md` |
 | Educator / mentor `/educator/*` | `domains/educator-ui.md` |
+| Drive → Week Planner Generate | `asa-lesson-push` + [google-drive-service-account.md](../../docs/APP_KNOWLEDGE/runbooks/google-drive-service-account.md) |
 | Assessments, placement levels, progress charts | `domains/student-progress-assessments.md` + `domains/school-analytics.md` + `asa-progress-analytics` |
 | Assessment entry and coverage worklist UX | `asa-ux-expert` |
 
