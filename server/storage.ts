@@ -315,6 +315,7 @@ export interface IStorage {
 
   // School Documents methods
   getSchoolDocumentById(id: number): Promise<SchoolDocument | undefined>;
+  getSchoolDocumentByFileName(schoolId: number, fileName: string): Promise<SchoolDocument | undefined>;
   getSchoolDocumentsBySchoolId(schoolId: number): Promise<SchoolDocument[]>;
   getPublishedSchoolDocuments(schoolId: number): Promise<SchoolDocument[]>;
   createSchoolDocument(document: InsertSchoolDocument): Promise<SchoolDocument>;
@@ -7750,6 +7751,10 @@ export class MemStorage implements IStorage {
 
       async getSchoolDocumentByShareToken(shareToken: string): Promise<SchoolDocument | undefined> {
         return this.dbStorage.getSchoolDocumentByShareToken(shareToken);
+      }
+
+      async getSchoolDocumentByFileName(schoolId: number, fileName: string): Promise<SchoolDocument | undefined> {
+        return this.dbStorage.getSchoolDocumentByFileName(schoolId, fileName);
       }
 
       async getSchoolDocumentsBySchoolId(schoolId: number): Promise<SchoolDocument[]> {

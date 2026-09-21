@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, parseApiErrorMessage } from '@/lib/queryClient';
 import { uploadFile } from '@/lib/uploadClient';
 import { DOCUMENT_MAX_SIZE_BYTES, DOCUMENT_MAX_SIZE_MB } from '@shared/upload-content-type';
 import { useAuth } from '@/components/SupabaseProvider';
@@ -299,7 +299,7 @@ export default function DocumentManagementPage() {
             isPublished: uploadForm.isPublished,
             visibleToAll: uploadForm.visibleToAll,
             ...(uploadForm.expiresAt ? { expiresAt: uploadForm.expiresAt } : {}),
-          });
+          }, { passthroughStatuses: [400, 409, 500, 503] });
           const data = await response.json();
           if (!response.ok) {
             errors.push(`${file.name}: ${data.message || 'upload failed'}`);
@@ -309,7 +309,7 @@ export default function DocumentManagementPage() {
             createdDocumentIds.push(data.document.id);
           }
         } catch (err) {
-          errors.push(`${file.name}: ${err instanceof Error ? err.message : 'upload failed'}`);
+          errors.push(`${file.name}: ${parseApiErrorMessage(err, 'upload failed')}`);
         }
       }
 
