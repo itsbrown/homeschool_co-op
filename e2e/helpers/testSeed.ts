@@ -269,6 +269,17 @@ export type SetupPublicFormScenarioResponse = {
     school: { id: number; name: string };
     admin: { id: number; email: string; password: string };
     adminSupabaseLinked?: boolean;
+    parentSupabaseLinked?: boolean;
+    supabaseLinked?: boolean;
+    parent?: {
+      id: number;
+      email: string;
+      password: string;
+      memberId: string;
+      firstName: string;
+      lastName: string;
+      locationName: string;
+    };
     publicForm: {
       id: number;
       slug: string;

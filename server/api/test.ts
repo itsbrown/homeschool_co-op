@@ -4452,26 +4452,44 @@ router.post('/setup-public-form-scenario', async (req: Request, res: Response) =
     const seed = await seedPublicFormScenario(new TestDatabase());
 
     let adminSupabaseLinked = false;
-    if (req.body?.linkSupabaseAuthAdmin === true) {
+    let parentSupabaseLinked = false;
+    if (req.body?.linkSupabaseAuthAdmin === true || req.body?.linkSupabaseAuthParent === true) {
       const supabaseUrl = process.env.SUPABASE_URL;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       if (!supabaseUrl || !serviceKey) {
         return res.status(400).json({
-          error: 'linkSupabaseAuthAdmin requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
+          error: 'linkSupabaseAuth requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
         });
       }
-      try {
-        adminSupabaseLinked = await linkSeedUserToSupabase({
-          dbUserId: seed.admin.id,
-          email: seed.admin.email,
-          password: seed.admin.password,
-          role: 'schoolAdmin',
-          schoolId: seed.school.id,
-          displayName: 'Form E2E Admin',
-        });
-      } catch (e) {
-        console.error('linkSupabaseAuthAdmin failed (form scenario):', e);
-        adminSupabaseLinked = false;
+      if (req.body?.linkSupabaseAuthAdmin === true) {
+        try {
+          adminSupabaseLinked = await linkSeedUserToSupabase({
+            dbUserId: seed.admin.id,
+            email: seed.admin.email,
+            password: seed.admin.password,
+            role: 'schoolAdmin',
+            schoolId: seed.school.id,
+            displayName: 'Form E2E Admin',
+          });
+        } catch (e) {
+          console.error('linkSupabaseAuthAdmin failed (form scenario):', e);
+          adminSupabaseLinked = false;
+        }
+      }
+      if (req.body?.linkSupabaseAuthParent === true) {
+        try {
+          parentSupabaseLinked = await linkSeedUserToSupabase({
+            dbUserId: seed.parent.id,
+            email: seed.parent.email,
+            password: seed.parent.password,
+            role: 'parent',
+            schoolId: seed.school.id,
+            displayName: `${seed.parent.firstName} ${seed.parent.lastName}`,
+          });
+        } catch (e) {
+          console.error('linkSupabaseAuthParent failed (form scenario):', e);
+          parentSupabaseLinked = false;
+        }
       }
     }
 
@@ -4480,6 +4498,8 @@ router.post('/setup-public-form-scenario', async (req: Request, res: Response) =
       data: {
         ...seed,
         adminSupabaseLinked,
+        parentSupabaseLinked,
+        supabaseLinked: parentSupabaseLinked || adminSupabaseLinked,
       },
     });
   } catch (error) {

@@ -10,7 +10,12 @@ import { ObjectStorageService } from '../replit_integrations/object_storage';
 import {
   sendFormSubmissionNotifications,
   validateFormSubmission,
+  applySubmitterAutoFill,
+  buildSubmitterPrefill,
+  enrichFieldsWithSchoolLocations,
 } from '../lib/custom-form-submission';
+import { emptyFormPrefill } from '@shared/form-autofill';
+import { storage } from '../storage';
 
 const router = Router();
 
@@ -179,17 +184,23 @@ router.get('/forms/by-slug-auth/:slug', jwtCheck, async (req: any, res) => {
       return res.status(404).json({ message: 'Form not found' });
     }
     
-    // Check if user has access based on form access level
-    // For now, authenticated users can access members-only forms
-    // TODO: Add role-based access control if needed
-    
     const fields = await db
       .select()
       .from(customFormFields)
       .where(eq(customFormFields.formId, form.id))
       .orderBy(customFormFields.order);
+
+    const enrichedFields = await enrichFieldsWithSchoolLocations(form.schoolId, fields);
+
+    let prefill = emptyFormPrefill();
+    const dbUserId = req.auth?.dbUserId ?? req.user?.dbUser?.id;
+    if (typeof dbUserId === 'number') {
+      const submitter = await storage.getUser(dbUserId);
+      if (submitter) {
+        prefill = await buildSubmitterPrefill(submitter);
+      }
+    }
     
-    // Fetch school information for branding
     const [school] = await db
       .select({
         id: schools.id,
@@ -200,7 +211,7 @@ router.get('/forms/by-slug-auth/:slug', jwtCheck, async (req: any, res) => {
       .from(schools)
       .where(eq(schools.id, form.schoolId));
     
-    res.json({ ...form, fields, school: school || null });
+    res.json({ ...form, fields: enrichedFields, school: school || null, prefill });
   } catch (error) {
     console.error('Error fetching form by slug:', error);
     res.status(500).json({ message: 'Error fetching form' });
@@ -302,8 +313,26 @@ router.post('/forms/:formId/submit-auth', jwtCheck, async (req: any, res) => {
     }
 
     const honeypot = req.body?.honeypot ?? req.body?.website ?? null;
-    const responseData = (req.body?.responseData || {}) as Record<string, unknown>;
-    const submitterEmailRaw = req.body?.submitterEmail ?? req.auth?.email ?? null;
+    let responseData = (req.body?.responseData || {}) as Record<string, unknown>;
+    const dbUserId = req.auth?.dbUserId ?? req.user?.dbUser?.id ?? null;
+    const submitter = typeof dbUserId === 'number' ? await storage.getUser(dbUserId) : undefined;
+    let submitterName: string | null = req.body?.submitterName ?? null;
+    if (submitter) {
+      const prefill = await buildSubmitterPrefill(submitter);
+      const fields = await db
+        .select({
+          id: customFormFields.id,
+          fieldConfig: customFormFields.fieldConfig,
+          fieldType: customFormFields.fieldType,
+          label: customFormFields.label,
+        })
+        .from(customFormFields)
+        .where(eq(customFormFields.formId, form.id));
+      responseData = applySubmitterAutoFill({ fields, responseData, prefill });
+      const display = [prefill.firstName, prefill.lastName].filter(Boolean).join(' ').trim();
+      if (display) submitterName = display;
+    }
+    const submitterEmailRaw = req.body?.submitterEmail ?? req.auth?.email ?? submitter?.email ?? null;
     const submitterEmail =
       typeof submitterEmailRaw === 'string' ? submitterEmailRaw.trim().toLowerCase() : null;
     const ipAddress = req.ip || null;
@@ -323,7 +352,9 @@ router.post('/forms/:formId/submit-auth', jwtCheck, async (req: any, res) => {
       ...req.body,
       formId,
       responseData,
+      submittedBy: typeof dbUserId === 'number' ? dbUserId : null,
       submitterEmail,
+      submitterName,
       ipAddress,
       userAgent: req.headers['user-agent'],
     });
@@ -944,7 +975,7 @@ router.post('/forms/:formId/clone', async (req: any, res) => {
         slug: cloneSlug,
         isTemplate: req.body.saveAsTemplate || false,
         isActive: req.body.isActive ?? (isGlobalTemplate ? true : originalForm.isActive),
-        accessLevel: req.body.accessLevel ?? (isGlobalTemplate ? 'public' : originalForm.accessLevel),
+        accessLevel: req.body.accessLevel ?? originalForm.accessLevel,
         createdBy: req.auth.dbUserId,
         schoolId: targetSchoolId ?? originalForm.schoolId,
         createdAt: new Date(),

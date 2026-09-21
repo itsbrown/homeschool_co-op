@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { Control } from 'react-hook-form';
 import { uploadPublicFormAttachment } from '@/lib/publicFormUpload';
@@ -87,7 +87,7 @@ function FileUploadField({
     />
   );
 }
-import { useRoute, useLocation } from 'wouter';
+import { useRoute } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -104,6 +104,9 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { apiRequest } from '@/lib/queryClient';
 import { trackFormSubmission } from '@/lib/analytics';
 import { useToast } from '@/hooks/use-toast';
+import { loginPathWithReturnTo } from '@/lib/auth-return-to';
+import { useAuth } from '@/components/SupabaseProvider';
+import { inferAutoFillKey, isMemberIdAutoFill, type FormPrefill } from '@shared/form-autofill';
 import { CheckCircle2, Share2, Facebook, Mail, Linkedin, Link2, School } from 'lucide-react';
 import { SiX } from 'react-icons/si';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -133,9 +136,11 @@ interface CustomForm {
   title: string;
   slug: string;
   description: string | null;
+  accessLevel?: string;
   fields: FormFieldType[];
   settings: any;
   school?: SchoolInfo | null;
+  prefill?: FormPrefill;
 }
 
 function SocialShareButtons({ formTitle, formUrl, formDescription }: { formTitle: string; formUrl: string; formDescription?: string | null }) {
@@ -284,15 +289,20 @@ function SchoolBranding({ school }: { school: SchoolInfo }) {
 export default function DynamicFormPage() {
   const [, params] = useRoute('/forms/:slug');
   const { toast } = useToast();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [submitted, setSubmitted] = useState(false);
   const [honeypot, setHoneypot] = useState('');
   const slug = params?.slug || '';
   
   const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
 
-  const { data: form, isLoading } = useQuery<CustomForm>({
-    queryKey: [`/api/custom-forms/forms/by-slug/${slug}`],
-    enabled: !!slug,
+  const formQueryKey = isAuthenticated
+    ? ['/api/custom-forms/forms/by-slug-auth', slug]
+    : ['/api/custom-forms/forms/by-slug', slug];
+
+  const { data: form, isLoading, isError } = useQuery<CustomForm>({
+    queryKey: formQueryKey,
+    enabled: !!slug && !authLoading,
     staleTime: 0,
     refetchOnMount: 'always',
   });
@@ -413,9 +423,8 @@ export default function DynamicFormPage() {
     return z.object(shape);
   };
 
-  const form_hook = useForm({
-    resolver: form ? zodResolver(buildValidationSchema(form.fields)) : undefined,
-    defaultValues: form?.fields.reduce((acc, field) => {
+  const emptyValuesForFields = (fields: FormFieldType[]) =>
+    fields.reduce((acc, field) => {
       if (field.fieldType === 'checkbox') {
         acc[`field_${field.id}`] = false;
       } else if (field.fieldType === 'multi_checkbox') {
@@ -426,17 +435,43 @@ export default function DynamicFormPage() {
         acc[`field_${field.id}`] = '';
       }
       return acc;
-    }, {} as any) || {},
+    }, {} as Record<string, unknown>);
+
+  const valuesWithPrefill = (loaded: CustomForm) => {
+    const values = emptyValuesForFields(loaded.fields);
+    const prefill = loaded.prefill;
+    if (!prefill) return values;
+    for (const field of loaded.fields) {
+      const autoFill = inferAutoFillKey({
+        fieldType: field.fieldType,
+        label: field.label,
+        fieldConfig: field.fieldConfig,
+      });
+      if (!autoFill) continue;
+      const raw = prefill[autoFill];
+      if (raw != null && String(raw).trim() !== '') {
+        values[`field_${field.id}`] = String(raw);
+      }
+    }
+    return values;
+  };
+
+  const form_hook = useForm({
+    resolver: form ? zodResolver(buildValidationSchema(form.fields)) : undefined,
+    defaultValues: form ? valuesWithPrefill(form) : {},
   });
+
+  useEffect(() => {
+    if (!form) return;
+    form_hook.reset(valuesWithPrefill(form));
+    document.title = `${form.title} - American Seekers Academy`;
+  }, [form?.id]);
 
   const submitMutation = useMutation({
     mutationFn: async (data: any) => {
       if (!form?.id) {
         throw new Error('Form not loaded');
       }
-      
-      console.log('Submitting form data:', data);
-      console.log('Form ID:', form.id);
       
       const emailField = form.fields.find(f => f.fieldType === 'email');
       const nameFields = form.fields.filter(f => 
@@ -455,10 +490,11 @@ export default function DynamicFormPage() {
         submitterName,
         honeypot,
       };
-      
-      console.log('Payload:', payload);
-      
-      const response = await apiRequest('POST', `/api/custom-forms/forms/${form.id}/submit`, payload);
+
+      const path = isAuthenticated
+        ? `/api/custom-forms/forms/${form.id}/submit-auth`
+        : `/api/custom-forms/forms/${form.id}/submit`;
+      const response = await apiRequest('POST', path, payload);
       return response.json();
     },
     onSuccess: () => {
@@ -490,6 +526,13 @@ export default function DynamicFormPage() {
 
   const renderField = (field: FormFieldType) => {
     const fieldKey = `field_${field.id}`;
+    const autoFillKey = inferAutoFillKey({
+      fieldType: field.fieldType,
+      label: field.label,
+      fieldConfig: field.fieldConfig,
+    });
+    const fieldReadOnly =
+      Boolean(field.fieldConfig?.readOnly) || isMemberIdAutoFill(autoFillKey);
 
     switch (field.fieldType) {
       case 'text':
@@ -510,6 +553,9 @@ export default function DynamicFormPage() {
                     {...formField}
                     type={field.fieldType}
                     placeholder={field.placeholder || ''}
+                    readOnly={fieldReadOnly}
+                    className={fieldReadOnly ? 'bg-muted' : undefined}
+                    style={{ fontSize: '16px' }}
                     data-testid={`input-field-${field.id}`}
                   />
                 </FormControl>
@@ -607,13 +653,19 @@ export default function DynamicFormPage() {
                   {field.label}
                   {field.isRequired && <span className="text-destructive ml-1">*</span>}
                 </FormLabel>
-                <Select onValueChange={formField.onChange} defaultValue={formField.value}>
+                <Select
+                  onValueChange={formField.onChange}
+                  value={formField.value || undefined}
+                >
                   <FormControl>
-                    <SelectTrigger data-testid={`select-field-${field.id}`}>
+                    <SelectTrigger
+                      data-testid={`select-field-${field.id}`}
+                      style={{ fontSize: '16px' }}
+                    >
                       <SelectValue placeholder={field.placeholder || 'Select an option'} />
                     </SelectTrigger>
                   </FormControl>
-                  <SelectContent>
+                  <SelectContent position="item-aligned">
                     {field.fieldConfig?.options?.map((option: string) => (
                       <SelectItem key={option} value={option}>
                         {option}
@@ -640,9 +692,9 @@ export default function DynamicFormPage() {
                   {field.isRequired && <span className="text-destructive ml-1">*</span>}
                 </FormLabel>
                 <FormControl>
-                  <RadioGroup
+                    <RadioGroup
                     onValueChange={formField.onChange}
-                    defaultValue={formField.value}
+                    value={formField.value || undefined}
                     className="flex flex-col space-y-1"
                   >
                     {field.fieldConfig?.options?.map((option: string) => (
@@ -714,7 +766,7 @@ export default function DynamicFormPage() {
                               formField.onChange(current.filter((v: string) => v !== option));
                             }
                           }}
-                          data-testid={`checkbox-${field.id}-${option}`}
+                          data-testid={`checkbox-${field.id}-${option.replace(/\s+/g, '-').toLowerCase()}`}
                         />
                         <Label 
                           htmlFor={`${fieldKey}_${option}`}
@@ -755,7 +807,7 @@ export default function DynamicFormPage() {
     }
   };
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
@@ -764,13 +816,25 @@ export default function DynamicFormPage() {
   }
 
   if (!form) {
+    const membersHint = !isAuthenticated && isError;
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 px-4">
         <Card className="max-w-md">
           <CardHeader>
-            <CardTitle>Form Not Found</CardTitle>
-            <CardDescription>The form you're looking for doesn't exist or has been removed.</CardDescription>
+            <CardTitle>{membersHint ? 'Sign in to continue' : 'Form Not Found'}</CardTitle>
+            <CardDescription>
+              {membersHint
+                ? 'This form is for ASA members. Sign in so we can add your member ID, name, and campus.'
+                : "The form you're looking for doesn't exist or has been removed."}
+            </CardDescription>
           </CardHeader>
+          {membersHint && (
+            <CardContent>
+              <Button asChild className="w-full h-11" data-testid="button-form-sign-in">
+                <a href={loginPathWithReturnTo(`/forms/${slug}`)}>Sign in</a>
+              </Button>
+            </CardContent>
+          )}
         </Card>
       </div>
     );
@@ -803,7 +867,7 @@ export default function DynamicFormPage() {
               <div className="flex-1">
                 <CardTitle className="text-2xl" data-testid="text-form-title">{form.title}</CardTitle>
                 {form.description && (
-                  <CardDescription className="text-base mt-2">{form.description}</CardDescription>
+                  <CardDescription className="text-base mt-2 whitespace-pre-line">{form.description}</CardDescription>
                 )}
               </div>
               <SocialShareButtons formTitle={form.title} formUrl={currentUrl} formDescription={form.description} />

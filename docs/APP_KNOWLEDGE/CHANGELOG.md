@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-21 (Member form auto-fill)
+
+- Logged-in members auto-fill any Form Builder `/forms/:slug` page (public + members). Shared matcher [`shared/form-autofill.ts`](../../shared/form-autofill.ts) maps email / name / phone / member ID / campus from the parent row; Form Editor has **Auto-fill from** (`none` disables). `submit-auth` restamps matched identity fields. Guests stay blank. Playwright: `e2e/form-member-autofill.spec.ts`.
+
 ## 2026-09-20 (Parent cart-remove audit)
 
 - Parent unenroll / cart-clear / legacy `DELETE /api/enrollments/:id` write `audit_logs` (`parent_cart_remove_enrollment`) with a seat snapshot. Admin hard-delete logs `admin_delete_enrollment`. Jennifer Brew Fall seats were hard-deleted with no row. Helper: `server/lib/enrollment-hard-delete-audit.ts` (insert is try/catch; failed audit must not 500). Production-path: `enrollment-hard-delete-audit.test.ts`.

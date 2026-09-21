@@ -10,7 +10,8 @@ School-admin **Form Builder** forms that applicants can open **without logging i
 | Load form | `GET /api/custom-forms/forms/by-slug/:slug` — no auth; only **public** active forms |
 | Submit | `POST /api/custom-forms/forms/:formId/submit` — no auth; public forms only; honeypot + rate limit + required-field checks |
 | Resume / file field | `POST …/request-upload-url` + `confirm-upload` — no auth; `formAttachments` category |
-| Members-only forms | Same slug on public routes → **404**; use `by-slug-auth` + `submit-auth` with JWT |
+| Members-only forms | Same slug on public routes → **404**; guest `/forms/:slug` shows Sign in; after login `by-slug-auth` + `submit-auth` with JWT |
+| Logged-in auto-fill | `GET by-slug-auth` returns `prefill`; client + `submit-auth` use [`shared/form-autofill.ts`](../../../shared/form-autofill.ts) |
 | AI Smart Builder | `POST /api/form-builder-ai/chat` — school-admin JWT; draft only; apply via `POST …/apply-draft` |
 
 **Share link pattern:** `https://<host>/forms/<slug>` (school admin copies from Form Builder).
@@ -29,7 +30,7 @@ School-admin **Form Builder** forms that applicants can open **without logging i
 
 | Area | Files |
 |------|--------|
-| API | [`server/api/custom-forms.ts`](../../../server/api/custom-forms.ts), [`server/lib/custom-form-submission.ts`](../../../server/lib/custom-form-submission.ts) |
+| API | [`server/api/custom-forms.ts`](../../../server/api/custom-forms.ts), [`server/lib/custom-form-submission.ts`](../../../server/lib/custom-form-submission.ts), [`shared/form-autofill.ts`](../../../shared/form-autofill.ts) |
 | AI builder | [`server/api/form-builder-ai.ts`](../../../server/api/form-builder-ai.ts), [`FormSmartBuilderPanel.tsx`](../../../client/src/components/forms/FormSmartBuilderPanel.tsx) |
 | Public UI | [`DynamicFormPage.tsx`](../../../client/src/pages/DynamicFormPage.tsx) |
 | Admin | `FormBuilderPage.tsx`, `FormEditorPage.tsx`, `SubmissionsPage.tsx`, `PreviewFormPage.tsx` |
@@ -41,16 +42,19 @@ School-admin **Form Builder** forms that applicants can open **without logging i
 | Layer | Command / artifact |
 |-------|-------------------|
 | E2E public + upload | `npm run test:e2e -- e2e/public-custom-forms.spec.ts` |
+| E2E logged-in public form auto-fill | `npm run test:e2e -- e2e/form-member-autofill.spec.ts` |
 | E2E editor fields | `npm run test:e2e -- e2e/form-editor-fields.spec.ts` |
 | E2E notify + spam | `npm run test:e2e -- e2e/form-submission-notify-spam.spec.ts` |
 | E2E Smart Builder | `npm run test:e2e -- e2e/form-smart-builder.spec.ts` (`FORM_BUILDER_AI_MOCK=1`) |
 | E2E catalog | [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md) |
-| Test seed | `POST /api/test/setup-public-form-scenario` (+ optional `linkSupabaseAuthAdmin`) → [`seedPublicFormScenario.ts`](../../../server/tests/helpers/seedPublicFormScenario.ts) |
+| Test seed | `POST /api/test/setup-public-form-scenario` (+ optional `linkSupabaseAuthAdmin` / `linkSupabaseAuthParent`) → [`seedPublicFormScenario.ts`](../../../server/tests/helpers/seedPublicFormScenario.ts) |
 | Email assert | `GET /api/test/email-log?recipient=&type=` |
 
 **E2E upload stub:** When Playwright starts the dev server (`PLAYWRIGHT_WEB_SERVER=true`), `uploadBuffer` skips GCS so CI/local E2E does not need Replit object storage.
 
-**UI test ids:** `text-form-title`, `button-submit`, `form-submit-success`, `input-honeypot`, `button-add-field`, `input-field-label-{id}`, `form-smart-builder`, `button-apply-draft`, `input-notification-emails`.
+**UI test ids:** `text-form-title`, `button-submit`, `form-submit-success`, `input-honeypot`, `button-add-field`, `input-field-label-{id}`, `select-field-autofill-{id}`, `form-smart-builder`, `button-apply-draft`, `input-notification-emails`.
+
+Logged-in members (public or members forms) auto-fill from the parent profile via [`shared/form-autofill.ts`](../../../shared/form-autofill.ts). Heuristics match field type/label (`email`, `First Name`, `Full Name`, `Phone`, `Member ID`, `Campus`) unless the label looks like emergency/child/spouse/reference. Form Editor **Auto-fill from** sets `fieldConfig.autoFill` (`none` disables). Authenticated submit overwrites matched fields from the user row. Guests stay blank.
 
 ## Editor vs Save Form
 
@@ -111,6 +115,8 @@ Public by-slug query uses `staleTime: 0` + `refetchOnMount: 'always'`.
 | E2E field label PUT never fires | Playwright `fill()` does not blur | Blur (or Tab) after fill — see `e2e/form-editor-fields.spec.ts` |
 | Early radio submissions store `true` not option label | Older Form Builder radio submit path wrote boolean; later rows store labels (e.g. `"Batavia"`) | When counting by location, treat `true` as ambiguous; use free-text fields / known family context. Prod form id **2** *Batavia and Canandaigua Preliminary signups* has mixed shapes |
 | Admin notify email shows `field_90` instead of questions | Was: email dumped raw `responseData` keys | Fixed: load `custom_form_fields` and render labels via `buildFormSubmissionEmailSummary`. Submissions UI already mapped labels. Redeploy needed for prod emails. |
+| Members-only slug 404 then sign-in | Public `by-slug` hides `accessLevel: members` | Guest `/forms/:slug` shows Sign in; after login `by-slug-auth` loads the form |
+| Auto-fill wrote a child or emergency-contact field | Heuristic skipped those labels; field had no `autoFill` override | Rename the field or set Auto-fill from **Off** / a specific source in Form Editor |
 
 ## Related
 
