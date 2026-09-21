@@ -1371,6 +1371,22 @@ export class DatabaseStorage implements IStorage {
     return document;
   }
 
+  async getSchoolDocumentByFileName(schoolId: number, fileName: string): Promise<SchoolDocument | undefined> {
+    const db = await getDb();
+    const [document] = await db
+      .select()
+      .from(schoolDocuments)
+      .where(
+        and(
+          eq(schoolDocuments.schoolId, schoolId),
+          eq(schoolDocuments.fileName, fileName),
+          eq(schoolDocuments.isArchived, false),
+        ),
+      )
+      .limit(1);
+    return document;
+  }
+
   async getSchoolDocumentsBySchoolId(schoolId: number): Promise<SchoolDocument[]> {
     const db = await getDb();
     return await db

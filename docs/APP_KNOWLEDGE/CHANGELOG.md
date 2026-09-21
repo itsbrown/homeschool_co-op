@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-21 (Document upload 503)
+
+- School-admin Documents register called `storage.getSchoolDocumentByFileName` but the method was never on `IStorage` / `dbStorage`. That throw became 503 `Service temporarily unavailable` (toast showed the raw JSON). Implemented the lookup (school + sanitized file name, non-archived). Toast now uses `parseApiErrorMessage`.
+
 ## 2026-09-21 (Week Planner Drive Generate)
 
 - Lesson **Edit → Connect folder** saves `skeleton_blocks.drive_folder_id`, reindexes that folder, and **Generate lesson** exports the Google Doc (not the PDF) into title / description / objectives / materials. SQL: `server/migrations/265-week-planner-drive.sql`. Replit secret: `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`. Share folders with `asa-drive-reader@homeschool-platform-509218.iam.gserviceaccount.com`.

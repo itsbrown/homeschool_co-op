@@ -229,6 +229,7 @@ Note: this endpoint streams from object storage rather than returning a presigne
 - **KB file content empty** → assumed all files are in Object Storage or all are local → KB files exist in 3 formats (data URIs, `/uploads/`, Object Storage) — handle all three
 - **CSV mapping shows garbled RTF content** → user uploaded an RTF file (saved from Mac TextEdit) instead of a real CSV → validate file content before parsing: check for `{\rtf1` header (RTF), `PK` header (DOCX/XLSX), or `\xd0\xcf` (DOC) and show a clear error like "This file is in RTF format, not CSV. Please re-export as a .csv file."
 - **Parent document list returns too many or too few documents** → check both `visibleToAll` flag and notification-targeted lookup — both paths must be queried and merged; relying on only one path will produce incorrect results
+- **Document upload 503 `Service temporarily unavailable` after picking a file** → register calls `storage.getSchoolDocumentByFileName` for duplicate names. That method must exist on `IStorage` / `dbStorage` / CombinedStorage. A missing method throws and the route maps it to 503.
 
 ## Best Practices
 
