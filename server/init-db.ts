@@ -2627,6 +2627,7 @@ async function runMigrations() {
     await db.execute(sql`ALTER TABLE skeleton_blocks ADD COLUMN IF NOT EXISTS subject_area TEXT`);
     await db.execute(sql`ALTER TABLE skeleton_blocks ADD COLUMN IF NOT EXISTS created_by INTEGER`);
     await db.execute(sql`ALTER TABLE skeleton_blocks ADD COLUMN IF NOT EXISTS updated_by INTEGER`);
+    await db.execute(sql`ALTER TABLE skeleton_blocks ADD COLUMN IF NOT EXISTS drive_folder_id TEXT`);
 
     // skeleton_blocks: convert day_of_week from TEXT to INTEGER (safe on empty table)
     await db.execute(sql`
@@ -2657,6 +2658,41 @@ async function runMigrations() {
     await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS completed_by INTEGER`);
     await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP`);
     await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS notes TEXT`);
+
+    await db.execute(sql`ALTER TABLE classes ADD COLUMN IF NOT EXISTS drive_folder_id TEXT`);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS curriculum_assets (
+        id SERIAL PRIMARY KEY,
+        school_id INTEGER NOT NULL REFERENCES schools(id),
+        class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+        drive_file_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        mime_type TEXT,
+        web_view_link TEXT,
+        band TEXT,
+        unit TEXT,
+        session_no INTEGER,
+        title TEXT,
+        objectives TEXT[],
+        materials TEXT[],
+        minutes INTEGER,
+        subject TEXT,
+        asset_kind TEXT NOT NULL DEFAULT 'lesson',
+        content_hash TEXT,
+        indexed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS curriculum_assets_class_drive_file ON curriculum_assets (class_id, drive_file_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_curriculum_assets_school_class ON curriculum_assets (school_id, class_id)`);
+    await db.execute(sql`ALTER TABLE curriculum_assets ADD COLUMN IF NOT EXISTS drive_folder_id TEXT`);
+    await db.execute(sql`ALTER TABLE week_plan_blocks ADD COLUMN IF NOT EXISTS curriculum_asset_id INTEGER REFERENCES curriculum_assets(id) ON DELETE SET NULL`);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_week_plan_blocks_curriculum_asset
+      ON week_plan_blocks (curriculum_asset_id)
+      WHERE curriculum_asset_id IS NOT NULL
+    `);
 
     // week_plan_block_history: add missing columns
     await db.execute(sql`ALTER TABLE week_plan_block_history ADD COLUMN IF NOT EXISTS block_id INTEGER REFERENCES week_plan_blocks(id) ON DELETE CASCADE`);

@@ -31,5 +31,8 @@ vite.config.ts.*
 # Prod DB connection string for agent/manual investigation — NEVER commit
 .env.prod
 
+# Local Google Drive service-account key (see runbooks/google-drive-service-account.md)
+/secrets/
+
 # Jest integration DB probe (written by globalSetup)
 .jest-cache/

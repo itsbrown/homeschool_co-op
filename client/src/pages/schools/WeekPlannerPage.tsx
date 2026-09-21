@@ -25,9 +25,21 @@ import {
   Plus, Copy, Sparkles, Search, CheckCircle2, Edit, History, Trash2,
   ChevronRight, Calendar, Clock, Loader2, ExternalLink, AlertTriangle,
   ThumbsUp, Lightbulb, X, Download, Upload, HelpCircle, Hammer, MoreHorizontal,
-  Printer, Target, Package, Eye
+  Printer, Target, Package, Eye, FolderOpen, Unlink
 } from "lucide-react";
-import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock } from "@shared/schema";
+import type { WeekPlan, WeekPlanBlock, WeeklySkeleton, SkeletonBlock, CurriculumAsset } from "@shared/schema";
+import { withSnackHandwashingStatement } from "@shared/snack-handwashing";
+import {
+  MATCH_STATUS_LABEL,
+  blockLengthMinutes,
+  classBandFromClass,
+  isTeachingSkeletonBlock,
+  weekPlanBlockMatchStatus,
+  type CurriculumBand,
+  type CurriculumMatchStatus,
+  type ProposedCurriculumAttachment,
+} from "@shared/curriculum-drive";
+import { extractDriveFileId } from "@shared/lesson-push";
 import { useScheduleBuilderTour } from "@/components/tutorials/useScheduleBuilderTour";
 import { ScheduleBlocksCsvImportDialog } from "@/components/schedule/ScheduleBlocksCsvImportDialog";
 import { AsaWeeklySchedulePrintSheet } from "@/components/schedule/AsaWeeklySchedulePrintSheet";
@@ -80,6 +92,17 @@ function formatTime(t: string): string {
   return `${hr % 12 || 12}:${m} ${ampm}`;
 }
 
+function slotFolderPrefill(raw?: string | null): string {
+  const value = (raw || "").trim();
+  if (!value) return "";
+  try {
+    extractDriveFileId(value);
+    return value;
+  } catch {
+    return "";
+  }
+}
+
 interface BlockFormData {
   title: string;
   description: string;
@@ -89,6 +112,7 @@ interface BlockFormData {
   notes: string;
   materials: string[];
   homework: string;
+  curriculumAssetId: number | null;
 }
 
 const emptyBlockForm: BlockFormData = {
@@ -100,6 +124,7 @@ const emptyBlockForm: BlockFormData = {
   notes: "",
   materials: [],
   homework: "",
+  curriculumAssetId: null,
 };
 
 function normalizeEditGroups(raw: unknown): { name: string; students: string; notes: string }[] {
@@ -173,6 +198,15 @@ export default function WeekPlannerPage() {
     csvText: string;
   } | null>(null);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
+  const [drivePreview, setDrivePreview] = useState<{
+    usedFallback?: string | null;
+    message?: string;
+    blocks: ProposedCurriculumAttachment[];
+  } | null>(null);
+  const [swapBlock, setSwapBlock] = useState<WeekPlanBlock | null>(null);
+  const [linkDriveOpen, setLinkDriveOpen] = useState(false);
+  const [linkFolderInput, setLinkFolderInput] = useState("");
+  const [drivePanelMessage, setDrivePanelMessage] = useState<string | null>(null);
 
   const templateId = selectedTemplateId ? parseInt(selectedTemplateId) : null;
 
@@ -217,6 +251,18 @@ export default function WeekPlannerPage() {
 
   const { data: aiStatus } = useQuery<{ available: boolean }>({
     queryKey: ["/api/schedule-ai/status"],
+  });
+
+  const selectedTemplateForQuery = templates.find((s) => s.id === templateId);
+  const catalogClassId = selectedTemplateForQuery?.classId ?? null;
+  const { data: driveCatalog } = useQuery<{
+    classId: number;
+    driveFolderId: string | null;
+    classBand: CurriculumBand;
+    assets: CurriculumAsset[];
+  }>({
+    queryKey: ["/api/schedule-builder/classes", catalogClassId, "curriculum-assets"],
+    enabled: !!catalogClassId,
   });
 
   const { data: blockHistory = [] } = useQuery<any[]>({
@@ -364,20 +410,84 @@ export default function WeekPlannerPage() {
   const generateWeekMutation = useMutation({
     mutationFn: async (data: { skeletonId: number; weekNumber: number }) => {
       const res = await apiRequest("POST", "/api/schedule-ai/generate-week", data);
+      return res.json() as Promise<{
+        success?: boolean;
+        usedFallback?: string | null;
+        message?: string;
+        blocks?: ProposedCurriculumAttachment[];
+      }>;
+    },
+    onSuccess: (result) => {
+      if (result.usedFallback === "build") {
+        toast({
+          title: "No Drive lessons indexed",
+          description: "Use Build for template titles, or link a class Drive folder and reindex.",
+        });
+        setDrivePreview(null);
+        return;
+      }
+      setDrivePreview({
+        usedFallback: result.usedFallback,
+        message: result.message,
+        blocks: result.blocks || [],
+      });
+    },
+    onError: (err: any) => toast({ title: "Drive draft failed", description: err.message, variant: "destructive" }),
+  });
+
+  const applyDriveDraftMutation = useMutation({
+    mutationFn: async (data: { weekPlanId: number; blocks: ProposedCurriculumAttachment[] }) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/schedule-builder/week-plans/${data.weekPlanId}/apply-drive-draft`,
+        { blocks: data.blocks },
+      );
       return res.json();
     },
     onSuccess: async () => {
+      setDrivePreview(null);
       if (selectedWeekPlanId) {
         await queryClient.invalidateQueries({
           queryKey: ["/api/schedule-builder/week-plans", selectedWeekPlanId],
         });
       }
-      await queryClient.invalidateQueries({
-        queryKey: ["/api/schedule-builder/skeletons", templateId, "week-plans"],
-      });
-      toast({ title: "Week plan generated with AI" });
+      toast({ title: "Draft applied", description: "Week stays unpublished until you Publish." });
     },
-    onError: (err: any) => toast({ title: "AI generation failed", description: err.message, variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Apply draft failed", description: err.message, variant: "destructive" }),
+  });
+
+  const linkDriveMutation = useMutation({
+    mutationFn: async (data: { classId: number; folderUrl: string }) => {
+      const res = await apiRequest("POST", `/api/schedule-builder/classes/${data.classId}/drive/link`, {
+        folderUrl: data.folderUrl,
+      });
+      return res.json();
+    },
+    onSuccess: async () => {
+      if (catalogClassId) {
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/schedule-builder/classes", catalogClassId, "curriculum-assets"],
+        });
+      }
+      toast({ title: "Drive folder linked" });
+    },
+    onError: (err: any) => toast({ title: "Could not link folder", description: err.message, variant: "destructive" }),
+  });
+
+  const reindexDriveMutation = useMutation({
+    mutationFn: async (classId: number) => {
+      const res = await apiRequest("POST", `/api/schedule-builder/classes/${classId}/drive/reindex`);
+      return res.json();
+    },
+    onSuccess: async () => {
+      if (catalogClassId) {
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/schedule-builder/classes", catalogClassId, "curriculum-assets"],
+        });
+      }
+      toast({ title: "Drive folder reindexed" });
+    },
+    onError: (err: any) => toast({ title: "Reindex failed", description: err.message, variant: "destructive" }),
   });
 
   const suggestBlockMutation = useMutation({
@@ -397,6 +507,116 @@ export default function WeekPlannerPage() {
     onError: (err: any) => toast({ title: "AI suggestion failed", description: err.message, variant: "destructive" }),
   });
 
+  const generateLessonMutation = useMutation({
+    mutationFn: async (data: { skeletonId: number; weekNumber: number; skeletonBlockId: number }) => {
+      const res = await apiRequest("POST", "/api/schedule-ai/generate-week", data);
+      return res.json() as Promise<{
+        success?: boolean;
+        usedFallback?: string | null;
+        message?: string;
+        blocks?: ProposedCurriculumAttachment[];
+      }>;
+    },
+    onSuccess: (result) => {
+      if (result.usedFallback === "build") {
+        const message =
+          result.message || "Connect a folder on this lesson, then Generate again.";
+        setDrivePanelMessage(message);
+        toast({
+          title: "No Drive lesson for this slot",
+          description: message,
+        });
+        return;
+      }
+      const row =
+        result.blocks?.find((b) => b.skeletonBlockId === editingSkeletonBlockId) ??
+        result.blocks?.[0];
+      if (!row || (!row.curriculumAssetId && !row.title && !row.lessonLink)) {
+        const message =
+          "This period already has a matching file this term, or the folder has no file for it.";
+        setDrivePanelMessage(message);
+        toast({
+          title: "No unused Drive lesson for this slot",
+          description: message,
+        });
+        return;
+      }
+      setDrivePanelMessage(null);
+      setBlockForm((prev) => ({
+        ...prev,
+        title: row.title || prev.title,
+        description: row.description || prev.description,
+        objectives: row.objectives?.length ? row.objectives : prev.objectives,
+        materials: row.materials?.length ? row.materials : prev.materials,
+        homework: row.homework || prev.homework,
+        lessonLink: row.lessonLink || prev.lessonLink,
+        notes: row.notes || prev.notes,
+        curriculumAssetId: row.curriculumAssetId ?? prev.curriculumAssetId,
+      }));
+      toast({
+        title: "Lesson drafted from Drive",
+        description: "Review the fields, then Update Block. The week stays unpublished.",
+      });
+    },
+    onError: (err: any) => toast({ title: "Generate lesson failed", description: err.message, variant: "destructive" }),
+  });
+
+  const linkSlotDriveMutation = useMutation({
+    mutationFn: async (data: { skeletonBlockId: number; folderUrl: string }) => {
+      const linkRes = await apiRequest(
+        "POST",
+        `/api/schedule-builder/skeleton-blocks/${data.skeletonBlockId}/drive/link`,
+        { folderUrl: data.folderUrl },
+      );
+      const linked = await linkRes.json() as { driveFolderId?: string };
+      const reindexRes = await apiRequest(
+        "POST",
+        `/api/schedule-builder/skeleton-blocks/${data.skeletonBlockId}/drive/reindex`,
+        undefined,
+        { passthroughStatuses: [403, 503] },
+      );
+      const reindexBody = await reindexRes.json().catch(() => ({})) as { message?: string };
+      return { linked, reindexStatus: reindexRes.status, reindexMessage: reindexBody.message };
+    },
+    onSuccess: async ({ linked, reindexStatus, reindexMessage }) => {
+      if (templateId) {
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/schedule-builder/skeletons", templateId, "blocks"],
+        });
+      }
+      if (catalogClassId) {
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/schedule-builder/classes", catalogClassId, "curriculum-assets"],
+        });
+      }
+      if (linked.driveFolderId) setLinkFolderInput(linked.driveFolderId);
+      if (reindexStatus === 503 || reindexStatus === 403) {
+        const message =
+          reindexMessage ||
+          (reindexStatus === 503
+            ? "Folder saved on this lesson, but this computer cannot read Drive files yet. Install a Google Cloud service-account key, share the folder with that email, then Connect again."
+            : "Folder saved, but Drive refused the file list. Enable the Drive API and share the folder with the service-account email, then Connect again.");
+        setDrivePanelMessage(message);
+        toast({ title: "Folder saved — Drive not readable", description: message, variant: "destructive" });
+        return;
+      }
+      setDrivePanelMessage(null);
+      toast({
+        title: "Folder connected to this lesson",
+        description: "Generate lesson will use files from this folder only.",
+      });
+    },
+    onError: (err: any) => toast({ title: "Could not connect folder", description: err.message, variant: "destructive" }),
+  });
+
+  const connectFolderFromBlock = async () => {
+    if (!editingSkeletonBlockId || !linkFolderInput.trim()) return;
+    await linkSlotDriveMutation.mutateAsync({
+      skeletonBlockId: editingSkeletonBlockId,
+      folderUrl: linkFolderInput.trim(),
+    });
+  };
+
   const analyzeGapsMutation = useMutation({
     mutationFn: (data: { weekPlanId: number }) =>
       apiRequest("POST", "/api/schedule-ai/analyze-gaps", data),
@@ -414,6 +634,8 @@ export default function WeekPlannerPage() {
     setEditingBlockId(null);
     setEditingSkeletonBlockId(skeletonBlockId);
     const sb = skeletonBlocks.find((b) => b.id === skeletonBlockId);
+    setLinkFolderInput(slotFolderPrefill(sb?.driveFolderId));
+    setDrivePanelMessage(null);
     setBlockForm({
       ...emptyBlockForm,
       title: sb?.defaultTitle || "",
@@ -425,6 +647,9 @@ export default function WeekPlannerPage() {
   const openEditBlock = (block: WeekPlanBlock) => {
     setEditingBlockId(block.id);
     setEditingSkeletonBlockId(block.skeletonBlockId);
+    const sb = skeletonBlocks.find((row) => row.id === block.skeletonBlockId);
+    setLinkFolderInput(slotFolderPrefill(sb?.driveFolderId));
+    setDrivePanelMessage(null);
     setBlockForm({
       title: block.title || "",
       description: block.description || "",
@@ -434,6 +659,7 @@ export default function WeekPlannerPage() {
       notes: block.notes || "",
       materials: asTrimmedStrings(block.materials),
       homework: block.homework || "",
+      curriculumAssetId: block.curriculumAssetId ?? null,
     });
     setBlockEditDialog(true);
   };
@@ -448,6 +674,7 @@ export default function WeekPlannerPage() {
       notes: blockForm.notes || null,
       materials: blockForm.materials.filter(Boolean),
       homework: blockForm.homework || null,
+      curriculumAssetId: blockForm.curriculumAssetId,
     };
     if (editingBlockId) {
       updateBlockMutation.mutate({ id: editingBlockId, data: payload });
@@ -585,6 +812,31 @@ export default function WeekPlannerPage() {
 
   const activeDays = Object.keys(blocksByDay).map(Number).sort();
   const selectedTemplate = templates.find((s) => s.id === templateId);
+  const classBand: CurriculumBand =
+    driveCatalog?.classBand ||
+    classBandFromClass({ title: selectedTemplate?.name || selectedTemplate?.gradeLevel });
+  const assetsById = new Map((driveCatalog?.assets || []).map((asset) => [asset.id, asset]));
+  const assetUseCounts = new Map<number, number>();
+  for (const block of (selectedWeekData as { blocks?: WeekPlanBlock[] } | undefined)?.blocks || []) {
+    if (block.curriculumAssetId) {
+      assetUseCounts.set(block.curriculumAssetId, (assetUseCounts.get(block.curriculumAssetId) || 0) + 1);
+    }
+  }
+
+  function matchChipFor(sb: SkeletonBlock, wb?: WeekPlanBlock): CurriculumMatchStatus {
+    const asset = wb?.curriculumAssetId ? assetsById.get(wb.curriculumAssetId) : undefined;
+    return weekPlanBlockMatchStatus({
+      isTeachingSlot: isTeachingSkeletonBlock(sb),
+      curriculumAssetId: wb?.curriculumAssetId,
+      title: wb?.title,
+      classBand,
+      assetBand: asset?.band,
+      assetMinutes: asset?.minutes,
+      blockMinutes: blockLengthMinutes(sb.startTime, sb.endTime),
+      duplicateInTerm: !!(wb?.curriculumAssetId && (assetUseCounts.get(wb.curriculumAssetId) || 0) > 1),
+      assetMissing: !!(wb?.curriculumAssetId && !asset),
+    });
+  }
   const printColumns = buildAsaPrintColumnsFromWeekPlan(
     activeDays.map((dayOfWeek) => ({
       dayOfWeek,
@@ -751,6 +1003,26 @@ export default function WeekPlannerPage() {
                           <Printer className="h-4 w-4 mr-1" />
                           Print
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          data-testid="week-planner-draft-from-drive"
+                          disabled={!templateId || generateWeekMutation.isPending}
+                          onClick={() =>
+                            templateId &&
+                            generateWeekMutation.mutate({
+                              skeletonId: templateId,
+                              weekNumber: selectedWeekData.weekNumber,
+                            })
+                          }
+                        >
+                          {generateWeekMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          ) : (
+                            <FolderOpen className="h-4 w-4 mr-1" />
+                          )}
+                          Draft week from Drive
+                        </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -776,6 +1048,34 @@ export default function WeekPlannerPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem
+                              data-testid="week-planner-draft-from-drive-menu"
+                              onClick={() =>
+                                templateId &&
+                                generateWeekMutation.mutate({
+                                  skeletonId: templateId,
+                                  weekNumber: selectedWeekData.weekNumber,
+                                })
+                              }
+                              disabled={generateWeekMutation.isPending}
+                            >
+                              {generateWeekMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <FolderOpen className="h-4 w-4 mr-2" />
+                              )}
+                              Draft week from Drive
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setLinkFolderInput(driveCatalog?.driveFolderId || "");
+                                setLinkDriveOpen(true);
+                              }}
+                              disabled={!catalogClassId}
+                            >
+                              <FolderOpen className="h-4 w-4 mr-2" />
+                              Link Drive folder
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => handleBuildFromTemplate()}
                               disabled={isBuilding}
@@ -861,23 +1161,6 @@ export default function WeekPlannerPage() {
                               <>
                                 <DropdownMenuItem
                                   onClick={() =>
-                                    templateId &&
-                                    generateWeekMutation.mutate({
-                                      skeletonId: templateId,
-                                      weekNumber: selectedWeekData.weekNumber,
-                                    })
-                                  }
-                                  disabled={generateWeekMutation.isPending}
-                                >
-                                  {generateWeekMutation.isPending ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  ) : (
-                                    <Sparkles className="h-4 w-4 mr-2" />
-                                  )}
-                                  Generate with AI
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() =>
                                     analyzeGapsMutation.mutate({ weekPlanId: selectedWeekPlanId! })
                                   }
                                   disabled={analyzeGapsMutation.isPending}
@@ -936,8 +1219,12 @@ export default function WeekPlannerPage() {
                                   {wb?.title || sb.defaultTitle}
                                 </p>
                                 {(() => {
+                                  const fullDescription = withSnackHandwashingStatement(
+                                    wb?.title || sb.defaultTitle,
+                                    wb?.description || sb.defaultDescription,
+                                  );
                                   const preview = lessonTeachingPreview({
-                                    description: wb?.description || sb.defaultDescription,
+                                    description: fullDescription,
                                     objectives: wb?.objectives,
                                     materials: wb?.materials,
                                   });
@@ -975,11 +1262,24 @@ export default function WeekPlannerPage() {
                                   );
                                 })()}
                                 {wb?.lessonLink && (
-                                  <a href={wb.lessonLink} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 flex items-center gap-1 mt-1">
+                                  <a
+                                    href={wb.lessonLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 flex items-center gap-1 mt-1"
+                                    data-testid={`week-block-drive-link-${wb.id}`}
+                                  >
                                     <ExternalLink className="h-3 w-3" />
-                                    Lesson Link
+                                    {assetsById.get(wb.curriculumAssetId ?? -1)?.title || "Open Drive"}
                                   </a>
                                 )}
+                                <Badge
+                                  variant="outline"
+                                  className="mt-1 text-[10px]"
+                                  data-testid={`week-block-match-${wb?.id ?? `slot-${sb.id}`}`}
+                                >
+                                  {MATCH_STATUS_LABEL[matchChipFor(sb, wb)]}
+                                </Badge>
                               </div>
                             </div>
                             <div className="flex items-center gap-1 pt-1 border-t flex-wrap">
@@ -1017,6 +1317,34 @@ export default function WeekPlannerPage() {
                                 >
                                   <History className="h-3 w-3 mr-1" />
                                   History
+                                </Button>
+                              )}
+                              {wb && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  data-testid={`week-block-swap-${wb.id}`}
+                                  onClick={() => setSwapBlock(wb)}
+                                >
+                                  Swap
+                                </Button>
+                              )}
+                              {wb?.curriculumAssetId && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  data-testid={`week-block-detach-${wb.id}`}
+                                  onClick={() =>
+                                    updateBlockMutation.mutate({
+                                      id: wb.id,
+                                      data: { curriculumAssetId: null },
+                                    })
+                                  }
+                                >
+                                  <Unlink className="h-3 w-3 mr-1" />
+                                  Detach
                                 </Button>
                               )}
                               {aiAvailable && (
@@ -1142,6 +1470,72 @@ export default function WeekPlannerPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Drive folder for this lesson</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Paste this slot’s folder URL (Latin, AoA, Science…). Generate uses that folder only, and skips files already used this term.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  data-testid="week-block-drive-folder"
+                  value={linkFolderInput}
+                  onChange={(e) => setLinkFolderInput(e.target.value)}
+                  placeholder="https://drive.google.com/drive/folders/…"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="week-block-connect-folder"
+                  disabled={
+                    !editingSkeletonBlockId ||
+                    !linkFolderInput.trim() ||
+                    linkSlotDriveMutation.isPending
+                  }
+                  onClick={() => void connectFolderFromBlock()}
+                >
+                  {linkSlotDriveMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <FolderOpen className="h-4 w-4 mr-1" />
+                  )}
+                  Connect folder
+                </Button>
+              </div>
+              {drivePanelMessage && (
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  {drivePanelMessage}
+                </p>
+              )}
+              <Button
+                type="button"
+                data-testid="week-block-generate-lesson"
+                disabled={
+                  !templateId ||
+                  !editingSkeletonBlockId ||
+                  !selectedWeekData ||
+                  generateLessonMutation.isPending
+                }
+                onClick={() =>
+                  templateId &&
+                  editingSkeletonBlockId &&
+                  selectedWeekData &&
+                  generateLessonMutation.mutate({
+                    skeletonId: templateId,
+                    weekNumber: selectedWeekData.weekNumber,
+                    skeletonBlockId: editingSkeletonBlockId,
+                  })
+                }
+              >
+                {generateLessonMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-1" />
+                )}
+                Generate lesson
+              </Button>
+            </div>
             <div className="space-y-2">
               <Label>Title</Label>
               <Input value={blockForm.title} onChange={(e) => setBlockForm({ ...blockForm, title: e.target.value })} placeholder="Block title" />
@@ -1411,6 +1805,126 @@ export default function WeekPlannerPage() {
           )}
         </DialogContent>
       </Dialog>
+      <Dialog open={!!drivePreview} onOpenChange={(open) => { if (!open) setDrivePreview(null); }}>
+        <DialogContent className="max-w-lg max-h-[75vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Drive draft preview</DialogTitle>
+            <DialogDescription>
+              Review attachments before applying. The week stays draft until you Publish.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            {(drivePreview?.blocks || []).map((row) => {
+              const sb = skeletonBlocks.find((b) => b.id === row.skeletonBlockId);
+              return (
+                <div key={row.skeletonBlockId} className="border rounded p-2">
+                  <p className="font-medium">{row.title || sb?.defaultTitle || `Slot ${row.skeletonBlockId}`}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {MATCH_STATUS_LABEL[row.matchStatus]}
+                    {row.lessonLink ? " · Drive link attached" : ""}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDrivePreview(null)}>Cancel</Button>
+            <Button
+              data-testid="week-planner-apply-drive-draft"
+              disabled={!selectedWeekPlanId || applyDriveDraftMutation.isPending}
+              onClick={() =>
+                selectedWeekPlanId &&
+                drivePreview &&
+                applyDriveDraftMutation.mutate({
+                  weekPlanId: selectedWeekPlanId,
+                  blocks: drivePreview.blocks.filter((b) => b.curriculumAssetId || b.title),
+                })
+              }
+            >
+              {applyDriveDraftMutation.isPending ? "Applying…" : "Apply draft"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!swapBlock} onOpenChange={(open) => { if (!open) setSwapBlock(null); }}>
+        <DialogContent className="max-w-lg max-h-[75vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Swap Drive lesson</DialogTitle>
+            <DialogDescription>Pick another indexed file for this slot. The rest of the week is unchanged.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {(driveCatalog?.assets || [])
+              .filter((asset) => (asset.assetKind || "lesson") !== "guide")
+              .map((asset) => (
+                <Button
+                  key={asset.id}
+                  variant="outline"
+                  className="w-full justify-start h-auto py-2"
+                  data-testid={`week-block-swap-asset-${asset.id}`}
+                  onClick={() => {
+                    if (!swapBlock) return;
+                    updateBlockMutation.mutate({
+                      id: swapBlock.id,
+                      data: {
+                        curriculumAssetId: asset.id,
+                        title: asset.title || asset.name,
+                        lessonLink: asset.webViewLink,
+                        objectives: asset.objectives || [],
+                        materials: asset.materials || [],
+                      },
+                    });
+                    setSwapBlock(null);
+                  }}
+                >
+                  <span className="text-left">
+                    <span className="block text-sm">{asset.title || asset.name}</span>
+                    <span className="block text-xs text-muted-foreground">{asset.band || "unbanded"} · {asset.subject || "general"}</span>
+                  </span>
+                </Button>
+              ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={linkDriveOpen} onOpenChange={setLinkDriveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link class Drive folder</DialogTitle>
+            <DialogDescription>
+              Paste a Google Drive folder URL. Reindex lists files and stores card metadata only.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Folder URL or id</Label>
+            <Input
+              value={linkFolderInput}
+              onChange={(e) => setLinkFolderInput(e.target.value)}
+              placeholder="https://drive.google.com/drive/folders/…"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkDriveOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!catalogClassId || !linkFolderInput.trim() || linkDriveMutation.isPending}
+              onClick={() =>
+                catalogClassId &&
+                linkDriveMutation.mutate({ classId: catalogClassId, folderUrl: linkFolderInput.trim() })
+              }
+            >
+              {linkDriveMutation.isPending ? "Saving…" : "Save folder"}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!catalogClassId || reindexDriveMutation.isPending}
+              onClick={() => catalogClassId && reindexDriveMutation.mutate(catalogClassId)}
+            >
+              {reindexDriveMutation.isPending ? "Indexing…" : "Reindex"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ScheduleBlocksCsvImportDialog
         mode="week-plan"
         open={!!csvImport && !!selectedWeekPlanId}

@@ -4595,6 +4595,11 @@ export class DatabaseStorage implements IStorage {
   bulkUpdateWeekPlanBlocks = sbDb.bulkUpdateWeekPlanBlocks;
   getPublishedWeekPlansForClassIds = sbDb.getPublishedWeekPlansForClassIds;
   getAcademicsLessonKpi = sbDb.getAcademicsLessonKpi;
+  setClassDriveFolderId = sbDb.setClassDriveFolderId;
+  getCurriculumAssetsByClassId = sbDb.getCurriculumAssetsByClassId;
+  getCurriculumAssetById = sbDb.getCurriculumAssetById;
+  upsertCurriculumAsset = sbDb.upsertCurriculumAsset;
+  getCurriculumAssetIdsUsedInClass = sbDb.getCurriculumAssetIdsUsedInClass;
   getQuarterlyProgressMeta = apDb.getQuarterlyProgressMeta;
   upsertQuarterlyProgressMeta = apDb.upsertQuarterlyProgressMeta;
   getQuarterlySkillChecks = apDb.getQuarterlySkillChecks;

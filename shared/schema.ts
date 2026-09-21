@@ -1836,6 +1836,8 @@ export const classes = pgTable("classes", {
   curriculumId: integer("curriculum_id").references(() => curricula.id),
   coverImage: text("cover_image"),
   materials: jsonb("materials"),
+  /** Google Drive folder id for class curriculum (Director week draft). */
+  driveFolderId: text("drive_folder_id"),
 });
 
 export const insertClassSchema = createInsertSchema(classes)
@@ -1939,6 +1941,7 @@ export const skeletonBlocks = pgTable("skeleton_blocks", {
   subjectArea: text("subject_area"),
   defaultTitle: text("default_title"),
   defaultDescription: text("default_description"),
+  driveFolderId: text("drive_folder_id"),
   sortOrder: integer("sort_order").notNull().default(0),
   createdBy: integer("created_by").references(() => users.id),
   updatedBy: integer("updated_by").references(() => users.id),
@@ -1967,6 +1970,32 @@ export const weekPlans = pgTable("week_plans", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const curriculumAssets = pgTable("curriculum_assets", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").notNull().references(() => schools.id),
+  classId: integer("class_id").notNull().references(() => classes.id, { onDelete: "cascade" }),
+  driveFileId: text("drive_file_id").notNull(),
+  name: text("name").notNull(),
+  mimeType: text("mime_type"),
+  webViewLink: text("web_view_link"),
+  band: text("band"),
+  unit: text("unit"),
+  sessionNo: integer("session_no"),
+  title: text("title"),
+  objectives: text("objectives").array(),
+  materials: text("materials").array(),
+  minutes: integer("minutes"),
+  subject: text("subject"),
+  assetKind: text("asset_kind").notNull().default("lesson"),
+  driveFolderId: text("drive_folder_id"),
+  contentHash: text("content_hash"),
+  indexedAt: timestamp("indexed_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  classDriveFileUnique: uniqueIndex("curriculum_assets_class_drive_file").on(t.classId, t.driveFileId),
+}));
+
 export const weekPlanBlocks = pgTable("week_plan_blocks", {
   id: serial("id").primaryKey(),
   weekPlanId: integer("week_plan_id")
@@ -1993,6 +2022,7 @@ export const weekPlanBlocks = pgTable("week_plan_blocks", {
   completedBy: integer("completed_by").references(() => users.id),
   completedAt: timestamp("completed_at"),
   notes: text("notes"),
+  curriculumAssetId: integer("curriculum_asset_id").references(() => curriculumAssets.id, { onDelete: "set null" }),
   updatedBy: integer("updated_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -2018,11 +2048,18 @@ export const insertWeekPlanBlockSchema = createInsertSchema(weekPlanBlocks).omit
   createdAt: true,
   updatedAt: true,
 });
+export const insertCurriculumAssetSchema = createInsertSchema(curriculumAssets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  indexedAt: true,
+});
 
 export type WeeklySkeleton = typeof weeklySkeletons.$inferSelect;
 export type SkeletonBlock = typeof skeletonBlocks.$inferSelect;
 export type WeekPlan = typeof weekPlans.$inferSelect;
 export type WeekPlanBlock = typeof weekPlanBlocks.$inferSelect;
+export type CurriculumAsset = typeof curriculumAssets.$inferSelect;
 
 // Class Inclusions - tracks which classes are included in other classes (e.g., Full Day includes Woodshop, Art, Music)
 export const classInclusions = pgTable("class_inclusions", {

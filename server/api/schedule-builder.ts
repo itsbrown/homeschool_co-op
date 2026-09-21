@@ -33,6 +33,14 @@ import { fileUploadService } from "../services/fileUploadService";
 import { parse as csvParse } from "csv-parse/sync";
 import { stringify as csvStringify } from "csv-stringify/sync";
 import { UploadedFile } from "express-fileupload";
+import { extractDriveFileId } from "@shared/lesson-push";
+import { classBandFromClass, parseCurriculumFilename } from "@shared/curriculum-drive";
+import {
+  DriveListError,
+  DriveNotConfiguredError,
+  lessonFieldsFromDriveFile,
+  listDriveFolderFiles,
+} from "../lib/google-drive-curriculum";
 
 const DAY_NUMBER_TO_NAME: Record<number, string> = {
   0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday",
@@ -662,6 +670,49 @@ router.post(
   }
 );
 
+router.post(
+  "/week-plans/:id/apply-drive-draft",
+  supabaseAuth,
+  requireRole(ADMIN_ROLES),
+  logDirectorAccess,
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user?.id;
+      if (isNaN(id) || !userId) return res.status(400).json({ message: "Missing context" });
+      const plan = await storage.getWeekPlanById(id);
+      if (!plan) return res.status(404).json({ message: "Week plan not found" });
+      const schoolId = parseInt(req.schoolId);
+      if (plan.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const blocks = Array.isArray(req.body?.blocks) ? req.body.blocks : [];
+      if (blocks.length === 0) {
+        return res.status(400).json({ message: "blocks array required" });
+      }
+      const updates = blocks
+        .map((b: any) => ({
+          skeletonBlockId: Number(b.skeletonBlockId),
+          title: b.title ?? null,
+          description: b.description ?? null,
+          objectives: Array.isArray(b.objectives) ? b.objectives : [],
+          materials: Array.isArray(b.materials) ? b.materials : [],
+          homework: b.homework ?? null,
+          lessonLink: b.lessonLink ?? null,
+          notes: b.notes ?? null,
+          curriculumAssetId: b.curriculumAssetId ?? null,
+        }))
+        .filter((b: { skeletonBlockId: number }) => Number.isFinite(b.skeletonBlockId));
+      await storage.bulkUpdateWeekPlanBlocks(id, updates, userId);
+      const updated = await storage.getWeekPlanById(id);
+      const updatedBlocks = await storage.getWeekPlanBlocksByWeekPlanId(id);
+      res.json({ ...updated, blocks: updatedBlocks, status: updated?.status ?? plan.status });
+    } catch (error) {
+      console.error("Error applying Drive draft:", error);
+      res.status(500).json({ message: "Failed to apply Drive draft" });
+    }
+  }
+);
+
 // ============================================================
 // WEEK PLAN BLOCKS
 // ============================================================
@@ -1216,6 +1267,235 @@ router.post(
     } catch (error: any) {
       console.error("Error importing week plan CSV:", error);
       res.status(500).json({ message: "Failed to import CSV", error: error.message });
+    }
+  }
+);
+
+async function requireSchoolClass(classId: number, schoolId: number) {
+  const klass = await storage.getClassById(classId);
+  if (!klass) return { error: { status: 404 as const, message: "Class not found" } };
+  if (klass.schoolId !== schoolId) return { error: { status: 403 as const, message: "Access denied" } };
+  return { klass };
+}
+
+router.get(
+  "/classes/:classId/curriculum-assets",
+  supabaseAuth,
+  requireRole(ADMIN_ROLES),
+  logDirectorAccess,
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const classId = parseInt(req.params.classId);
+      const schoolId = parseInt(req.schoolId);
+      if (isNaN(classId) || isNaN(schoolId)) return res.status(400).json({ message: "Invalid class ID" });
+      const resolved = await requireSchoolClass(classId, schoolId);
+      if ("error" in resolved && resolved.error) {
+        return res.status(resolved.error.status).json({ message: resolved.error.message });
+      }
+      const assets = await storage.getCurriculumAssetsByClassId(classId, schoolId);
+      res.json({
+        classId,
+        driveFolderId: resolved.klass.driveFolderId ?? null,
+        classBand: classBandFromClass({
+          title: resolved.klass.title,
+          gradeLevels: resolved.klass.gradeLevels,
+        }),
+        assets,
+      });
+    } catch (error) {
+      console.error("Error listing curriculum assets:", error);
+      res.status(500).json({ message: "Failed to list curriculum assets" });
+    }
+  }
+);
+
+router.post(
+  "/classes/:classId/drive/link",
+  supabaseAuth,
+  requireRole(ADMIN_ROLES),
+  logDirectorAccess,
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const classId = parseInt(req.params.classId);
+      const schoolId = parseInt(req.schoolId);
+      if (isNaN(classId) || isNaN(schoolId)) return res.status(400).json({ message: "Invalid class ID" });
+      const resolved = await requireSchoolClass(classId, schoolId);
+      if ("error" in resolved && resolved.error) {
+        return res.status(resolved.error.status).json({ message: resolved.error.message });
+      }
+      const raw = String(req.body?.folderId || req.body?.folderUrl || "").trim();
+      if (!raw) return res.status(400).json({ message: "folderId or folderUrl required" });
+      const folderId = extractDriveFileId(raw);
+      await storage.setClassDriveFolderId(classId, schoolId, folderId);
+      const klass = await storage.getClassById(classId);
+      res.json({ classId, driveFolderId: klass?.driveFolderId ?? folderId });
+    } catch (error: any) {
+      console.error("Error linking Drive folder:", error);
+      res.status(400).json({ message: error.message || "Failed to link Drive folder" });
+    }
+  }
+);
+
+router.post(
+  "/classes/:classId/drive/reindex",
+  supabaseAuth,
+  requireRole(ADMIN_ROLES),
+  logDirectorAccess,
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const classId = parseInt(req.params.classId);
+      const schoolId = parseInt(req.schoolId);
+      if (isNaN(classId) || isNaN(schoolId)) return res.status(400).json({ message: "Invalid class ID" });
+      const resolved = await requireSchoolClass(classId, schoolId);
+      if ("error" in resolved && resolved.error) {
+        return res.status(resolved.error.status).json({ message: resolved.error.message });
+      }
+      const folderId = resolved.klass.driveFolderId;
+      if (!folderId) {
+        return res.status(400).json({ message: "Class has no Drive folder linked" });
+      }
+      const files = await listDriveFolderFiles(folderId);
+      const upserted = [];
+      for (const file of files) {
+        const parsed = parseCurriculumFilename(file.name);
+        const body = await lessonFieldsFromDriveFile(file.id, file.mimeType).catch(() => null);
+        const row = await storage.upsertCurriculumAsset({
+          schoolId,
+          classId,
+          driveFileId: file.id,
+          name: file.name,
+          mimeType: file.mimeType,
+          webViewLink: file.webViewLink,
+          band: parsed.band,
+          unit: parsed.unit,
+          sessionNo: parsed.sessionNo,
+          title: body?.title || parsed.title,
+          objectives: body?.objectives ?? [],
+          materials: body?.materials ?? [],
+          minutes: parsed.minutes,
+          subject: parsed.subject,
+          assetKind: parsed.assetKind,
+          driveFolderId: folderId,
+          contentHash: file.contentHash,
+        });
+        upserted.push(row);
+      }
+      res.json({ classId, driveFolderId: folderId, indexed: upserted.length, assets: upserted });
+    } catch (error: any) {
+      if (error instanceof DriveNotConfiguredError || error?.code === "DRIVE_NOT_CONFIGURED") {
+        return res.status(503).json({ code: "DRIVE_NOT_CONFIGURED", message: error.message });
+      }
+      if (error instanceof DriveListError || error?.code === "DRIVE_LIST_FAILED") {
+        return res.status(403).json({ code: "DRIVE_LIST_FAILED", message: error.message });
+      }
+      console.error("Error reindexing Drive folder:", error);
+      res.status(500).json({ message: error.message || "Failed to reindex Drive folder" });
+    }
+  }
+);
+
+router.post(
+  "/skeleton-blocks/:id/drive/link",
+  supabaseAuth,
+  requireRole(ADMIN_ROLES),
+  logDirectorAccess,
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const schoolId = parseInt(req.schoolId);
+      if (isNaN(id) || isNaN(schoolId)) return res.status(400).json({ message: "Invalid block ID" });
+      const block = await storage.getSkeletonBlockById(id);
+      if (!block) return res.status(404).json({ message: "Block not found" });
+      const skeleton = await storage.getWeeklySkeletonById(block.skeletonId);
+      if (!skeleton) return res.status(404).json({ message: "Skeleton not found" });
+      if (skeleton.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const raw = String(req.body?.folderId || req.body?.folderUrl || "").trim();
+      if (!raw) return res.status(400).json({ message: "folderId or folderUrl required" });
+      const folderId = extractDriveFileId(raw);
+      const updated = await storage.updateSkeletonBlock(id, {
+        driveFolderId: folderId,
+        updatedBy: req.user?.id,
+      });
+      res.json({
+        skeletonBlockId: id,
+        driveFolderId: updated?.driveFolderId ?? folderId,
+      });
+    } catch (error: any) {
+      console.error("Error linking lesson Drive folder:", error);
+      res.status(400).json({ message: error.message || "Failed to link Drive folder" });
+    }
+  }
+);
+
+router.post(
+  "/skeleton-blocks/:id/drive/reindex",
+  supabaseAuth,
+  requireRole(ADMIN_ROLES),
+  logDirectorAccess,
+  requireSchoolContext,
+  async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const schoolId = parseInt(req.schoolId);
+      if (isNaN(id) || isNaN(schoolId)) return res.status(400).json({ message: "Invalid block ID" });
+      const block = await storage.getSkeletonBlockById(id);
+      if (!block) return res.status(404).json({ message: "Block not found" });
+      const skeleton = await storage.getWeeklySkeletonById(block.skeletonId);
+      if (!skeleton) return res.status(404).json({ message: "Skeleton not found" });
+      if (skeleton.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
+      const classId = skeleton.classId;
+      if (!classId) {
+        return res.status(400).json({ message: "Bind this template to a class before indexing Drive" });
+      }
+      const folderId = block.driveFolderId;
+      if (!folderId) {
+        return res.status(400).json({ message: "This lesson has no Drive folder linked" });
+      }
+      const files = await listDriveFolderFiles(folderId);
+      const upserted = [];
+      for (const file of files) {
+        const parsed = parseCurriculumFilename(file.name);
+        const body = await lessonFieldsFromDriveFile(file.id, file.mimeType).catch(() => null);
+        const row = await storage.upsertCurriculumAsset({
+          schoolId,
+          classId,
+          driveFileId: file.id,
+          name: file.name,
+          mimeType: file.mimeType,
+          webViewLink: file.webViewLink,
+          band: parsed.band,
+          unit: parsed.unit,
+          sessionNo: parsed.sessionNo,
+          title: body?.title || parsed.title,
+          objectives: body?.objectives ?? [],
+          materials: body?.materials ?? [],
+          minutes: parsed.minutes,
+          subject: parsed.subject,
+          assetKind: parsed.assetKind,
+          driveFolderId: folderId,
+          contentHash: file.contentHash,
+        });
+        upserted.push(row);
+      }
+      res.json({
+        skeletonBlockId: id,
+        driveFolderId: folderId,
+        indexed: upserted.length,
+        assets: upserted,
+      });
+    } catch (error: any) {
+      if (error instanceof DriveNotConfiguredError || error?.code === "DRIVE_NOT_CONFIGURED") {
+        return res.status(503).json({ code: "DRIVE_NOT_CONFIGURED", message: error.message });
+      }
+      if (error instanceof DriveListError || error?.code === "DRIVE_LIST_FAILED") {
+        return res.status(403).json({ code: "DRIVE_LIST_FAILED", message: error.message });
+      }
+      console.error("Error reindexing lesson Drive folder:", error);
+      res.status(500).json({ message: error.message || "Failed to reindex Drive folder" });
     }
   }
 );

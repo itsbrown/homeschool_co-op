@@ -23,6 +23,7 @@ module.exports = {
     '<rootDir>/server/tests/unit/class-allergy-alerts.test.ts',
     '<rootDir>/server/tests/unit/session-payment-eligibility.test.ts',
     '<rootDir>/server/tests/unit/current-class-enrollment.test.ts',
+    '<rootDir>/server/tests/unit/google-drive-curriculum.test.ts',
   ],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
