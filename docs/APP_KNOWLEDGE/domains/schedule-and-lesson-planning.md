@@ -18,6 +18,8 @@ Adjacent: `/schedule` is the parent Calendar hub (class days + school events + w
 
 **Parent dashboard Upcoming Events:** KPI + card merge enrolled class days (`GET /api/schedule`) with school events in the **next 7 days**. List shows at most 5 rows; KPI is the full 7-day count. Events after day 7 still appear on `/schedule`. Helper: `client/src/lib/parent-upcoming-events.ts`. Day sheet for school events shows type label, description, all-day or start–end, and venue (read-only).
 
+**Family day sheet:** Month cells open `DayLessonsSheet` (`h-[90dvh]`, list is the only scroll region). Lessons come from `GET /api/schedule-builder/parent/my-week-plans` and `groupDayLessons` (skeleton Sunday = 0). Chips appear only when two or more children have lessons that day. Detail stays in the sheet via `WeekPlanBlockDetailBody`. Empty days stay closed. Playwright: `npm run test:e2e -- e2e/parent-family-schedule-day-sheet.spec.ts`.
+
 **Family ICS:** `POST /api/calendar/feed-token` mints `users.calendar_feed_token`. `GET /api/calendar/feed/:token` is unauthenticated (calendar apps cannot send Bearer). Do not ship a public numeric school-id ICS feed. All-day `DTEND` is exclusive (next calendar day).
 
 ## Runtime mounts

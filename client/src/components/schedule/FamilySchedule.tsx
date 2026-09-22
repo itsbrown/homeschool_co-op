@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, List, Grid3X3, Clock, MapPin, User, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, Grid3X3, Download } from "lucide-react";
 import {
   format,
   startOfMonth,
@@ -15,14 +15,14 @@ import {
 import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { normalizeParentChildrenResponse } from "@/lib/parent-children-api";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import ParentWeekPlanGrid, { getMondayWeekStart } from "@/components/schedule/ParentWeekPlanGrid";
+import { DayLessonsSheet } from "@/components/schedule/DayLessonsSheet";
+import { groupDayLessons, type DayLessonChildSource } from "@/lib/day-lessons";
 
 type HubView = "month" | "week" | "list";
 
@@ -73,20 +73,6 @@ interface SchoolEvent {
   locationId: number | null;
 }
 
-interface WeekPlanBlock {
-  title?: string | null;
-  dayOfWeek?: number;
-  isCompleted?: boolean;
-}
-
-interface ChildWeekEntry {
-  childId: number;
-  childName: string;
-  classTitle: string;
-  blocks?: WeekPlanBlock[];
-  skeletonBlocks?: Array<{ dayOfWeek: number; defaultTitle?: string | null }>;
-}
-
 function formatTime(timeString: string) {
   if (!timeString) return "";
   const [hours, minutes] = timeString.split(":").map(Number);
@@ -109,6 +95,8 @@ export default function FamilySchedule() {
   const [childFilter, setChildFilter] = useState("all");
   const [viewMode, setViewMode] = useState<HubView>(viewFromSearch);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetRequest, setSheetRequest] = useState(0);
 
   useEffect(() => {
     setViewMode(viewFromSearch());
@@ -134,7 +122,7 @@ export default function FamilySchedule() {
 
   const selectedWeekStart = selectedDay ? getMondayWeekStart(selectedDay) : getMondayWeekStart(currentDate);
   const weekPlansUrl = `/api/schedule-builder/parent/my-week-plans?weekStart=${encodeURIComponent(selectedWeekStart)}`;
-  const { data: weekPlans } = useQuery<{ children: ChildWeekEntry[] }>({
+  const { data: weekPlans } = useQuery<{ weekStart: string; children: DayLessonChildSource[] }>({
     queryKey: [weekPlansUrl],
     enabled: Boolean(selectedDay) || viewMode === "week",
   });
@@ -223,21 +211,25 @@ export default function FamilySchedule() {
 
   const dayClassEvents = selectedDay ? classEventsForDay(selectedDay) : [];
   const daySchoolEvents = selectedDay ? schoolEventsForDay(selectedDay) : [];
-  const dayLessonTitles = (weekPlans?.children || []).flatMap((entry) => {
-    const fromBlocks = (entry.blocks || []).flatMap((b) => {
-      const skel = (entry.skeletonBlocks || []).find((s: any) => s.id === (b as any).skeletonBlockId);
-      if (skel && skel.dayOfWeek === (selectedDay?.getDay() ?? -1)) {
-        return [b.title].filter(Boolean) as string[];
-      }
-      return [];
-    });
-    const fromSkeleton = (entry.skeletonBlocks || [])
-      .filter((b) => b.dayOfWeek === (selectedDay?.getDay() ?? -1))
-      .map((b) => b.defaultTitle)
-      .filter(Boolean) as string[];
-    const titles = fromBlocks.length ? fromBlocks : fromSkeleton;
-    return titles.map((title) => ({ childName: entry.childName, classTitle: entry.classTitle, title }));
-  });
+  const childFilterId = childFilter === "all" ? null : Number(childFilter);
+  const dayLessons = useMemo(
+    () =>
+      selectedDay
+        ? groupDayLessons(weekPlans?.children ?? [], selectedDay, { childId: childFilterId })
+        : { children: [], showChildChips: false, lessonCount: 0 },
+    [selectedDay, weekPlans, childFilterId],
+  );
+
+  useEffect(() => {
+    if (!selectedDay) return;
+    const hasMeetings = dayClassEvents.length > 0 || daySchoolEvents.length > 0;
+    if (hasMeetings) {
+      setSheetOpen(true);
+      return;
+    }
+    if (weekPlans?.weekStart !== getMondayWeekStart(selectedDay)) return;
+    setSheetOpen(dayLessons.lessonCount > 0);
+  }, [selectedDay, weekPlans, dayLessons.lessonCount, dayClassEvents.length, daySchoolEvents.length, sheetRequest]);
 
   return (
     <div className="space-y-6">
@@ -390,7 +382,10 @@ export default function FamilySchedule() {
                       !isSameMonth(day, currentDate) && "opacity-50",
                     )}
                     data-testid={`calendar-day-${format(day, "yyyy-MM-dd")}`}
-                    onClick={() => setSelectedDay(day)}
+                    onClick={() => {
+                      setSelectedDay(day);
+                      setSheetRequest((n) => n + 1);
+                    }}
                   >
                     <div className="text-xs mb-1">{format(day, "d")}</div>
                     <div className="space-y-0.5">
@@ -429,68 +424,31 @@ export default function FamilySchedule() {
         </Card>
       )}
 
-      <Dialog open={Boolean(selectedDay)} onOpenChange={(open) => !open && setSelectedDay(null)}>
-        <DialogContent data-testid="family-day-sheet">
-          <DialogHeader>
-            <DialogTitle>{selectedDay ? format(selectedDay, "EEEE, MMMM d") : "Day"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {dayClassEvents.length === 0 && daySchoolEvents.length === 0 && (
-              <p className="text-sm text-muted-foreground">No class days on this date.</p>
-            )}
-            {dayClassEvents.map((ev) => (
-              <div key={ev.id} className="border rounded-md p-3 space-y-1" data-testid="day-sheet-class">
-                <p className="font-medium">{ev.title}</p>
-                <p className="text-sm flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" />
-                  {formatTime(ev.startTime)} – {formatTime(ev.endTime)}
-                </p>
-                <p className="text-sm flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5" />
-                  {ev.location}
-                </p>
-                <p className="text-sm flex items-center gap-1">
-                  <User className="h-3.5 w-3.5" />
-                  {ev.childName}
-                  {ev.instructorName ? ` · ${ev.instructorName}` : ""}
-                </p>
-              </div>
-            ))}
-            {daySchoolEvents.map((ev) => (
-              <div key={ev.id} className="border rounded-md p-3 space-y-2" data-testid="day-sheet-school-event">
-                <Badge variant="outline">{EVENT_TYPE_LABELS[ev.eventType] || ev.eventType}</Badge>
-                <p className="font-medium">{ev.title}</p>
-                {ev.description ? <p className="text-sm whitespace-pre-wrap">{ev.description}</p> : null}
-                <p className="text-sm flex items-center gap-1 text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
-                  {schoolEventWhenLabel(ev)}
-                </p>
-                {ev.location ? (
-                  <p className="text-sm flex items-center gap-1 text-muted-foreground">
-                    <MapPin className="h-3.5 w-3.5" />
-                    {ev.location}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-            {dayLessonTitles.length > 0 && (
-              <div data-testid="day-sheet-lessons">
-                <p className="text-sm font-medium mb-1">This day’s lessons</p>
-                <ul className="text-sm space-y-1">
-                  {dayLessonTitles.map((row, i) => (
-                    <li key={`${row.title}-${i}`}>
-                      {row.title}{" "}
-                      <span className="text-muted-foreground">
-                        ({row.childName} · {row.classTitle})
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DayLessonsSheet
+        open={sheetOpen}
+        onOpenChange={(open) => {
+          setSheetOpen(open);
+          if (!open) setSelectedDay(null);
+        }}
+        date={selectedDay}
+        grouped={dayLessons}
+        classMeetings={dayClassEvents.map((ev) => ({
+          id: ev.id,
+          title: ev.title,
+          timeLabel: `${formatTime(ev.startTime)} – ${formatTime(ev.endTime)}`,
+          location: ev.location,
+          childName: ev.childName,
+          instructorName: ev.instructorName,
+        }))}
+        schoolEvents={daySchoolEvents.map((ev) => ({
+          id: String(ev.id),
+          title: ev.title,
+          description: ev.description,
+          whenLabel: schoolEventWhenLabel(ev),
+          location: ev.location,
+          typeLabel: EVENT_TYPE_LABELS[ev.eventType] || ev.eventType,
+        }))}
+      />
     </div>
   );
 }

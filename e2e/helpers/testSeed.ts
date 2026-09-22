@@ -414,6 +414,8 @@ export type SetupScheduleBuilderScenarioResponse = {
       seekersDraftBlockId: number;
       seekersTitle: string;
       yankeeTitle: string;
+      yankeeMonday?: { blockId: number; title: string } | null;
+      extraMonday?: Array<{ blockId: number; title: string }>;
     };
     attendance?: { sessionId: number; classId: number };
   };
@@ -423,7 +425,7 @@ export type SetupScheduleBuilderScenarioResponse = {
 
 export async function postSetupScheduleScenario(
   request: APIRequestContext,
-  body: { linkSupabaseAuth?: boolean } = {},
+  body: { linkSupabaseAuth?: boolean; sameDayBothChildren?: boolean; extraMondayBlocks?: number } = {},
 ): Promise<{ response: APIResponse; json: SetupScheduleBuilderScenarioResponse | null }> {
   const response = await request.post("/api/test/setup-schedule-builder-scenario", {
     headers: {

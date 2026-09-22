@@ -4850,12 +4850,21 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
     const bcrypt = await import('bcryptjs');
     const password = 'TestPassword123!';
 
+    const sameDayBothChildren = req.body?.sameDayBothChildren === true;
+    const extraMondayBlocks = Math.min(
+      24,
+      Math.max(0, Number(req.body?.extraMondayBlocks) || 0),
+    );
+
     const monday = (() => {
       const d = new Date();
       const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      d.setDate(diff);
-      return d.toISOString().slice(0, 10);
+      const diff = day === 0 ? -6 : 1 - day;
+      d.setDate(d.getDate() + diff);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
     })();
 
     const admin = await testDb.createTestUser({
@@ -5090,6 +5099,53 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
       updatedBy: admin.id,
     });
 
+    let yankeeMonday: { blockId: number; title: string } | null = null;
+    if (sameDayBothChildren) {
+      const mondayYankeeSkeleton = await storage.createSkeletonBlock({
+        skeletonId: skYankee.id,
+        dayOfWeek: 1,
+        startTime: '11:00',
+        endTime: '12:00',
+        blockType: 'curriculum',
+        defaultTitle: `Yankee Monday ${uniqueId}`,
+        sortOrder: 1,
+        createdBy: admin.id,
+      });
+      const mondayYankeeBlock = await storage.createWeekPlanBlock({
+        weekPlanId: planYankee.id,
+        skeletonBlockId: mondayYankeeSkeleton.id,
+        title: `Yankee Monday ${uniqueId}`,
+        description: 'Shared Monday lesson for the day sheet.',
+        isCompleted: false,
+        updatedBy: admin.id,
+      });
+      yankeeMonday = { blockId: mondayYankeeBlock.id, title: mondayYankeeBlock.title };
+    }
+
+    const extraMonday: Array<{ blockId: number; title: string }> = [];
+    for (let i = 1; i <= extraMondayBlocks; i++) {
+      const title = `Seekers Extra ${String(i).padStart(2, "0")}`;
+      const skeleton = await storage.createSkeletonBlock({
+        skeletonId: skSeekers.id,
+        dayOfWeek: 1,
+        startTime: '09:00',
+        endTime: '10:00',
+        blockType: 'curriculum',
+        defaultTitle: title,
+        sortOrder: i,
+        createdBy: admin.id,
+      });
+      const block = await storage.createWeekPlanBlock({
+        weekPlanId: planSeekers.id,
+        skeletonBlockId: skeleton.id,
+        title,
+        description: 'Extra Monday lesson so the day sheet has to scroll.',
+        isCompleted: false,
+        updatedBy: admin.id,
+      });
+      extraMonday.push({ blockId: block.id, title });
+    }
+
     // Draft plan (must not appear in parent published filter); includes a block for Week Planner E2E
     const draftPlan = await storage.createWeekPlan({
       skeletonId: skSeekers.id,
@@ -5314,6 +5370,8 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
           seekersDraftBlockId: draftBlock.id,
           seekersTitle: wpBlockSeekers.title,
           yankeeTitle: wpBlockYankee.title,
+          yankeeMonday,
+          extraMonday,
         },
         attendance: {
           sessionId: attendanceSession.id,

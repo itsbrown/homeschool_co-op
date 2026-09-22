@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-21 (Family Schedule day sheet)
+
+- Parent Calendar day click opens a bottom sheet capped at 90dvh. The header stays pinned; class meetings, school events, and lesson rows scroll inside the sheet. Lesson rows are the title only, grouped by child then class, and open the lesson detail in the same sheet. A day with no meetings, events, or published lessons does not open. Playwright: `e2e/parent-family-schedule-day-sheet.spec.ts`. No SQL.
+
 ## 2026-09-21 (Boot ledger repairs removed)
 
 - `initializeDatabase` no longer marks a membership paid from a "full payment" description, cancels installments because `remaining_balance` is 0, rewrites Marek #389/#390, deletes duplicate `stripe_payment_history` rows, or cancels a `pending_payment` membership when an enrolled row exists. Those statements matched no production rows. Checkout fulfillment and the comp endpoint already cover new payments and comps. Test: `server/tests/init-db-no-boot-credit-repair.test.ts`. Publish the Reserved VM before the next restart.
