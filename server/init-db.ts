@@ -2257,36 +2257,9 @@ async function runMigrations() {
       console.log('Constraint migration note:', constraintError instanceof Error ? constraintError.message : String(constraintError));
     }
     
-    // One-time fix: Update pending_payment memberships to enrolled for users with completed payments
-    // This fixes memberships that weren't updated due to the memberId conditional bug in webhook
-    console.log('Running migration: Fixing pending_payment memberships with completed payments...');
-    try {
-      const result = await db.execute(sql`
-        UPDATE membership_enrollments 
-        SET 
-          status = 'enrolled',
-          amount_paid = amount,
-          remaining_balance = 0,
-          balance_due = 0,
-          updated_at = NOW()
-        WHERE status = 'pending_payment'
-        AND (amount_paid = 0 OR amount_paid IS NULL)
-        AND parent_user_id IN (
-          SELECT DISTINCT parent_id FROM payments 
-          WHERE status = 'completed' 
-          AND description LIKE '%full payment%'
-        )
-        RETURNING id, parent_user_id;
-      `);
-      const updatedCount = Array.isArray(result) ? result.length : 0;
-      if (updatedCount > 0) {
-        console.log(`✅ Migration completed: Fixed ${updatedCount} pending_payment memberships to enrolled status`);
-      } else {
-        console.log('✅ Migration completed: No pending_payment memberships needed fixing');
-      }
-    } catch (fixError) {
-      console.log('Migration note (pending_payment fix):', fixError instanceof Error ? fixError.message : String(fixError));
-    }
+    // Removed 2026-09-21: do not mark a pending_payment membership paid because an
+    // older payments row looks like a full payment. Checkout records membership in
+    // membership-fulfill-from-cart-intent.ts. Do not restore a boot-time ledger repair.
     
     // Migration: Update payment_method constraint to include 'manual' and all valid methods
     console.log('Running migration: Updating payment_method constraint...');
@@ -2403,26 +2376,17 @@ async function runMigrations() {
         HAVING COUNT(*) > 1
       `);
       if ((dupCheck as any).rows && (dupCheck as any).rows.length > 0) {
-        console.warn('⚠️ Duplicate idempotency_keys found — removing duplicates before creating unique index:', (dupCheck as any).rows);
-        // Keep only the oldest row (MIN id) per idempotency_key, delete the rest
+        // Do not delete payment history on boot. A duplicate key means the unique
+        // index cannot be added until a person reconciles the rows.
+        console.warn('⚠️ Duplicate idempotency_keys found — leaving rows in place:', (dupCheck as any).rows);
+      } else {
         await db.execute(sql`
-          DELETE FROM stripe_payment_history
-          WHERE idempotency_key IS NOT NULL
-            AND id NOT IN (
-              SELECT MIN(id)
-              FROM stripe_payment_history
-              WHERE idempotency_key IS NOT NULL
-              GROUP BY idempotency_key
-            )
+          CREATE UNIQUE INDEX IF NOT EXISTS stripe_payment_history_idempotency_idx
+          ON stripe_payment_history (idempotency_key)
+          WHERE idempotency_key IS NOT NULL;
         `);
-        console.log('✅ Duplicate idempotency_key rows removed — proceeding to create unique index');
+        console.log('✅ Migration completed: unique index on stripe_payment_history.idempotency_key added');
       }
-      await db.execute(sql`
-        CREATE UNIQUE INDEX IF NOT EXISTS stripe_payment_history_idempotency_idx
-        ON stripe_payment_history (idempotency_key)
-        WHERE idempotency_key IS NOT NULL;
-      `);
-      console.log('✅ Migration completed: unique index on stripe_payment_history.idempotency_key added');
     } catch (idempotencyIdxError: any) {
       console.log('Migration note (idempotency_key unique index):', idempotencyIdxError.message || String(idempotencyIdxError));
     }
@@ -2951,27 +2915,10 @@ async function runMigrations() {
     console.log('effective_balance migration note:', effectiveBalanceError.message);
   }
 
-  // Data cleanup: cancel orphaned scheduled payments for fully-comped enrollments
-  // Idempotent — safe to run on every restart
-  try {
-    console.log('Running cleanup: Cancelling orphaned scheduled payments for fully-comped enrollments...');
-    const db = await getDb();
-    const cleanupResult = await db.execute(sql`
-      UPDATE scheduled_payments
-      SET status = 'cancelled', updated_at = NOW()
-      WHERE status IN ('pending', 'overdue')
-        AND enrollment_id IN (
-          SELECT id FROM program_enrollments
-          WHERE comp_percentage > 0 AND remaining_balance = 0
-        )
-    `);
-    const rowCount = (cleanupResult as any).rowCount ?? 0;
-    if (rowCount > 0) {
-      console.log(`Cleanup: ${rowCount} orphaned payment(s) cancelled`);
-    }
-  } catch (cleanupError: any) {
-    console.log('Cleanup note:', cleanupError.message);
-  }
+  // Removed 2026-09-21: do not cancel pending installments on boot when
+  // comp_percentage > 0 and remaining_balance = 0. remaining_balance can be 0
+  // while money is still owed. The comp endpoint cancels or reduces those
+  // installments when the comp is applied. Do not restore a boot-time ledger repair.
 
   // DISABLED 2026-09-12, removed from the boot path 2026-09-21.
   // This block used to add every used credit onto EVERY open enrollment for that
@@ -3158,60 +3105,12 @@ async function runMigrations() {
   `);
   console.log('✅ Migration completed: source column added to refunds table');
 
-  // One-time data correction: Amelia Marek enrollment #389
-  // The admin "Mark as Enrolled" action incorrectly set totalPaid = totalCost for a
-  // credit-only checkout where only $73.50 was applied. Correct to accurate values.
-  // Also corrects Olivia Marek enrollment #390 paymentStatus from 'completed' → 'partial_payment'.
-  // Safe to re-run: uses WHERE clauses that match only the incorrect state.
-  try {
-    await db.execute(sql`
-      UPDATE program_enrollments
-      SET
-        total_paid       = 7350,
-        remaining_balance = 82650,
-        payment_status   = 'partial_payment'
-      WHERE id = 389
-        AND total_paid = 90000
-        AND remaining_balance = 0
-    `);
-    await db.execute(sql`
-      UPDATE program_enrollments
-      SET payment_status = 'partial_payment'
-      WHERE id = 390
-        AND payment_status = 'completed'
-        AND remaining_balance > 0
-    `);
-    console.log('✅ Data correction applied: Marek enrollment #389/#390 payment fields verified/corrected');
-  } catch (marekCorrectionError: any) {
-    console.log('Data correction note (non-blocking):', marekCorrectionError.message);
-  }
+  // Removed 2026-09-21: do not rewrite program_enrollments #389/#390 on boot.
+  // Those seats no longer match the old wrong totals. Do not restore a boot-time ledger repair.
 
-  // One-time cleanup: Cancel orphaned pending_payment memberships where an enrolled record
-  // already exists for the same (parent_user_id, school_id, membership_year).
-  // These were left behind by the pre-#134 checkout path that created a second enrolled
-  // record instead of updating the registration-created pending_payment.
-  console.log('Running cleanup: Cancelling orphaned pending_payment membership records...');
-  try {
-    const result = await db.execute(sql`
-      UPDATE membership_enrollments
-      SET status = 'cancelled', updated_at = NOW()
-      WHERE status = 'pending_payment'
-      AND (parent_user_id, school_id, membership_year) IN (
-        SELECT parent_user_id, school_id, membership_year
-        FROM membership_enrollments
-        WHERE status = 'enrolled'
-      )
-      RETURNING id, parent_user_id
-    `);
-    const cancelledCount = Array.isArray(result) ? result.length : 0;
-    if (cancelledCount > 0) {
-      console.log(`✅ Cleanup completed: Cancelled ${cancelledCount} orphaned pending_payment membership record(s)`);
-    } else {
-      console.log('✅ Cleanup completed: No orphaned pending_payment membership records found');
-    }
-  } catch (cleanupError) {
-    console.log('Cleanup note (non-blocking):', cleanupError instanceof Error ? cleanupError.message : String(cleanupError));
-  }
+  // Removed 2026-09-21: do not cancel pending_payment memberships on boot when an
+  // enrolled row exists for the same parent, school, and year. The unique constraint
+  // below still blocks a second row. Do not restore a boot-time ledger repair.
 
   // Add unique constraint to prevent duplicate membership enrollments per parent/school/year
   console.log('Running migration: Adding unique constraint to membership_enrollments...');

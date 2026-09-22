@@ -15,4 +15,13 @@ describe('init-db must not mutate enrollment money on boot', () => {
     expect(src).toMatch(/DISABLED 2026-09-12/);
     expect(src).toMatch(/Do not restore a boot-time total_paid mutation/);
   });
+
+  it('does not rewrite ledgers, memberships, or payment history on boot', () => {
+    expect(src).not.toMatch(/description LIKE '%full payment%'/);
+    expect(src).not.toMatch(/DELETE FROM stripe_payment_history/);
+    expect(src).not.toMatch(/Cancelling orphaned scheduled payments/);
+    expect(src).not.toMatch(/total_paid\s*=\s*7350/);
+    expect(src).not.toMatch(/Cancelling orphaned pending_payment membership/);
+    expect(src).toMatch(/Do not restore a boot-time ledger repair/);
+  });
 });
