@@ -830,15 +830,19 @@ router.put('/member-id', jwtCheck, async (req: any, res) => {
 
     const { memberId } = req.body;
 
-    // Validate memberId format if provided
-    if (memberId !== null && memberId !== '') {
-      const { isValidMemberIdFormat } = await import('../utils/membership');
-      if (!isValidMemberIdFormat(memberId)) {
-        return res.status(400).json({ 
-          message: 'Invalid member ID format. Expected format: ASA-YEAR-XXXXXX (e.g., ASA-2025-X7K9M2)',
-          error: 'INVALID_FORMAT'
+    // Parents cannot mint or type in a Member ID. Payment and staff assign it.
+    if (memberId !== null && memberId !== "" && memberId !== undefined) {
+      const { isReservedMemberIdExample } = await import("../utils/membership");
+      if (isReservedMemberIdExample(memberId)) {
+        return res.status(400).json({
+          message: "That is the example Member ID, not a real one. Yours is assigned when membership is paid.",
+          error: "RESERVED_EXAMPLE",
         });
       }
+      return res.status(403).json({
+        message: "Member IDs are assigned when you pay for membership or by school staff. You cannot enter one yourself.",
+        error: "MEMBER_ID_NOT_SELF_ASSIGNABLE",
+      });
     }
 
     const user = await resolveParentDbUser(storage, {

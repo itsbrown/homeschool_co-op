@@ -235,27 +235,39 @@ export async function calculateMembershipDiscount(
   }
 }
 
+/** Docs / placeholder only — never persist this as a real member ID. */
+export const MEMBER_ID_FORMAT_EXAMPLE = "ASA-2025-X7K9M2";
+
+export function isReservedMemberIdExample(memberId: string | null | undefined): boolean {
+  return (memberId || "").trim().toUpperCase() === MEMBER_ID_FORMAT_EXAMPLE;
+}
+
 /**
  * Generates a unique membership ID in the format: ASA-YEAR-RANDOM
- * Example: ASA-2025-X7K9M2
- * 
+ * Example shape: ASA-2025-X7K9M2 (that exact string is reserved as a placeholder)
+ *
  * @returns A unique membership ID string
  */
 export function generateMemberId(): string {
-  const year = new Date().getFullYear();
-  const randomPart = randomBytes(3)
-    .toString('base64')
-    .replace(/[+/=]/g, '') // Remove non-alphanumeric characters
-    .toUpperCase()
-    .slice(0, 6); // Take 6 characters
-  
-  return `ASA-${year}-${randomPart}`;
+  for (let i = 0; i < 8; i++) {
+    const year = new Date().getFullYear();
+    let randomPart = "";
+    while (randomPart.length < 6) {
+      randomPart += randomBytes(8)
+        .toString("base64")
+        .replace(/[+/=]/g, "")
+        .toUpperCase();
+    }
+    const candidate = `ASA-${year}-${randomPart.slice(0, 6)}`;
+    if (!isReservedMemberIdExample(candidate)) return candidate;
+  }
+  throw new Error("Could not generate a unique member ID");
 }
 
 /**
  * Validates if a string is a valid membership ID format
  * Format: ASA-YEAR-RANDOM (e.g., ASA-2025-X7K9M2)
- * 
+ *
  * @param memberId The membership ID to validate
  * @returns true if valid format, false otherwise
  */
@@ -263,10 +275,15 @@ export function isValidMemberIdFormat(memberId: string): boolean {
   if (!memberId || typeof memberId !== 'string') {
     return false;
   }
-  
+
+  const normalized = memberId.trim().toUpperCase();
+  if (isReservedMemberIdExample(normalized)) {
+    return false;
+  }
+
   // Pattern: ASA-YYYY-XXXXXX where X is alphanumeric
   const pattern = /^ASA-\d{4}-[A-Z0-9]{6}$/;
-  return pattern.test(memberId.toUpperCase());
+  return pattern.test(normalized);
 }
 
 /**
