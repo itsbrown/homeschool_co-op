@@ -80,6 +80,8 @@ test.describe("parent dashboard upcoming events", () => {
     await expect(card).toContainText(seed.holiday!.title, { timeout: 30_000 });
     await expect(card).toContainText(insideTitle, { timeout: 30_000 });
     await expect(card).not.toContainText(outsideTitle);
+    await expect(card).not.toContainText(seed.classes.seekers.title);
+    await expect(card).not.toContainText(seed.classes.yankee.title);
 
     const kpiText = (await page.getByTestId("parent-upcoming-events-kpi").textContent()) || "0";
     expect(Number.parseInt(kpiText, 10)).toBeGreaterThanOrEqual(1);
