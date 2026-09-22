@@ -352,6 +352,7 @@ Previously, the cart display and payment processor used independent calculation 
 - Don't delete scheduled payments — use `cancelled` status instead
 - Don't assume enrollment financial fields match Stripe — enrollment fields are the source of truth for display
 - Don't use raw dollar values in any calculation or storage
+- Don't add a boot-time ledger repair in `initializeDatabase`. Membership checkout posts in `membership-fulfill-from-cart-intent.ts`. The comp endpoint cancels or reduces that seat's installments. A restart must not mark a membership paid, cancel an installment, rewrite `total_paid`, or delete `stripe_payment_history`. Test: `server/tests/init-db-no-boot-credit-repair.test.ts`.
 
 ### Stripe Integration Rules
 - Use Replit's Stripe integration for API key management

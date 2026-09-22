@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-09-21 (Boot ledger repairs removed)
+
+- `initializeDatabase` no longer marks a membership paid from a "full payment" description, cancels installments because `remaining_balance` is 0, rewrites Marek #389/#390, deletes duplicate `stripe_payment_history` rows, or cancels a `pending_payment` membership when an enrolled row exists. Those statements matched no production rows. Checkout fulfillment and the comp endpoint already cover new payments and comps. Test: `server/tests/init-db-no-boot-credit-repair.test.ts`. Publish the Reserved VM before the next restart.
+- A comp script that forgets to cancel installments is not a boot job. `processOneScheduledPayment` already skips and cancels when `effective_balance` is 0. It still charges the stored installment amount when a partial comp leaves that amount larger than what is owed. Close that in the charge path and by sharing the comp-button installment sync. `processAutoPayExecutionPath` still cancels when `remaining_balance <= 0`, which is the wrong column.
+
 ## 2026-09-21 (Boot credit restamp removed)
 
 - `initializeDatabase` no longer adds used credits onto every open seat. That update was still on `main` after the Sep 12 note. It ignored `enrollment_ids` and repeated while `effective_balance` stayed at least as large as the credit. Test: `server/tests/init-db-no-boot-credit-repair.test.ts`. Ledger restore: `fix-boot-credit-restamp-ledgers-production.ts`. Publish the Reserved VM before the next restart or the old `dist` runs the update once more.
