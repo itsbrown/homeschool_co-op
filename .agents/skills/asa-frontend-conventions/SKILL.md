@@ -66,6 +66,10 @@ const mutation = useMutation({
 
 ## Layout Shells
 
+### School admin (`SchoolAdminLayout`)
+- `/school-admin/*` pages use `SchoolAdminLayout` and `UnifiedSchoolAdminSidebar` (grouped nav).
+- Do not wrap those pages in `AppShell` — that mounts the legacy flat `Sidebar`.
+
 ### Educator Shell (`EducatorAppShell`)
 - Fixed desktop sidebar (64px width `lg:w-64`) with dark slate theme (`bg-slate-900`)
 - Mobile: Collapsible `Sheet` menu triggered by hamburger icon
