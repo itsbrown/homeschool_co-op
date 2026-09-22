@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-21 (Parent cannot type a Member ID)
+
+- Home **My Membership** is display + copy only. `PUT /api/parent/member-id` rejects self-assigned IDs (`MEMBER_ID_NOT_SELF_ASSIGNABLE`) and the docs example `ASA-2025-X7K9M2` (`RESERVED_EXAMPLE`). Format check in `isValidMemberIdFormat` also rejects that example.
+
 ## 2026-09-21 (School-admin documents shell)
 
 - `/school-admin/documents` uses `SchoolAdminLayout` (grouped sidebar). `AppShell` is the legacy flat sidebar. Assessments was already on `SchoolAdminLayout`. No SQL.

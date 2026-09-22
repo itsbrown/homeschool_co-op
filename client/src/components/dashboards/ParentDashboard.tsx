@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, Edit2, Save, X, Coins, Gift, ExternalLink, Share2, Megaphone, MapPin, ShoppingBag, KeyRound } from "lucide-react";
+import { PlusCircle, User, Calendar, BookOpen, Clock, DollarSign, Users, UserPlus, CreditCard, RefreshCw, FileText, FolderOpen, Loader2, Award, CheckCircle, AlertCircle, XCircle, Copy, X, Coins, Gift, ExternalLink, Share2, Megaphone, MapPin, ShoppingBag, KeyRound } from "lucide-react";
 import {
   formatSessionSignupCta,
   formatSessionStartDate,
@@ -50,7 +50,6 @@ import { getEnrollmentEffectiveBalance } from "@/utils/parentBalance";
 import { resolveEnrollmentOutstandingForOverview } from "@/utils/paymentOverviewTotals";
 import { enrollmentShouldExcludeFromCart } from "@shared/enrollment-cart-eligibility";
 import OnboardingTour from "@/components/onboarding/OnboardingTour";
-import { Input } from "@/components/ui/input";
 import { format, addDays } from "date-fns";
 import {
   mergeUpcomingEventsNext7Days,
@@ -278,8 +277,6 @@ export default function ParentDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [isSyncing, setIsSyncing] = useState(false);
   const [showTour, setShowTour] = useState(false);
-  const [isEditingMemberId, setIsEditingMemberId] = useState(false);
-  const [memberIdInput, setMemberIdInput] = useState("");
   const { toast } = useToast();
   const { cart } = useCart();
   const {
@@ -432,41 +429,6 @@ export default function ParentDashboard() {
     enabled: !!session,
     refetchOnMount: "always",
   });
-
-  // Mutation to update member ID
-  const updateMemberIdMutation = useMutation({
-    mutationFn: async (newMemberId: string) => {
-      const response = await apiRequest("PUT", "/api/parent/member-id", { memberId: newMemberId });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to update member ID');
-      }
-      return response.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/parent/member-id"] });
-      setIsEditingMemberId(false);
-      setMemberIdInput("");
-      toast({
-        title: "Member ID Saved",
-        description: data.hasMemberId 
-          ? "Your member ID has been saved." 
-          : "Member ID cleared.",
-      });
-    },
-    onError: (error: Error) => {
-      setMemberIdInput(memberIdData?.memberId || "");
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save member ID.",
-        variant: "destructive",
-      });
-    }
-  });
-
-  const handleSaveMemberId = () => {
-    updateMemberIdMutation.mutate(memberIdInput);
-  };
 
   const handleCopyMemberId = () => {
     if (memberIdData?.memberId) {
@@ -1420,7 +1382,7 @@ export default function ParentDashboard() {
               <div className="p-4 rounded-lg border bg-gradient-to-r from-primary/5 to-primary/10">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-muted-foreground">Member ID</span>
-                  {memberIdData?.hasMemberId && !isEditingMemberId && (
+                  {memberIdData?.hasMemberId && (
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -1439,91 +1401,14 @@ export default function ParentDashboard() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span className="text-sm text-muted-foreground">Loading...</span>
                   </div>
-                ) : memberIdData?.hasMemberId && !isEditingMemberId ? (
-                  <div className="flex items-center justify-between">
-                    <code className="text-lg font-mono font-bold text-primary bg-white/50 px-3 py-1 rounded" data-testid="text-member-id">
-                      {memberIdData.memberId}
-                    </code>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => {
-                        setMemberIdInput(memberIdData.memberId || "");
-                        setIsEditingMemberId(true);
-                      }}
-                      className="h-8"
-                      data-testid="btn-edit-member-id"
-                    >
-                      <Edit2 className="h-3.5 w-3.5 mr-1" />
-                      Edit
-                    </Button>
-                  </div>
-                ) : isEditingMemberId ? (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={memberIdInput}
-                      onChange={(e) => setMemberIdInput(e.target.value.toUpperCase())}
-                      placeholder="ASA-YYYY-XXXXXX"
-                      className="font-mono"
-                      data-testid="input-member-id"
-                    />
-                    <Button 
-                      size="sm" 
-                      onClick={handleSaveMemberId}
-                      disabled={updateMemberIdMutation.isPending}
-                      data-testid="btn-save-member-id"
-                    >
-                      {updateMemberIdMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => {
-                        setIsEditingMemberId(false);
-                        setMemberIdInput("");
-                      }}
-                      data-testid="btn-cancel-member-id"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
+                ) : memberIdData?.hasMemberId ? (
+                  <code className="text-lg font-mono font-bold text-primary bg-white/50 px-3 py-1 rounded" data-testid="text-member-id">
+                    {memberIdData.memberId}
+                  </code>
                 ) : (
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      No Member ID yet. Enter your existing Member ID below, or it will be generated when you complete your membership payment.
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={memberIdInput}
-                        onChange={(e) => setMemberIdInput(e.target.value.toUpperCase())}
-                        placeholder="ASA-YYYY-XXXXXX"
-                        className="font-mono"
-                        data-testid="input-member-id"
-                      />
-                      <Button 
-                        size="sm" 
-                        onClick={handleSaveMemberId}
-                        disabled={updateMemberIdMutation.isPending || !memberIdInput}
-                        data-testid="btn-save-member-id"
-                      >
-                        {updateMemberIdMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <>
-                            <Save className="h-4 w-4 mr-1" />
-                            Save
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Format: ASA-2025-X7K9M2
-                    </p>
-                  </div>
+                  <p className="text-sm text-muted-foreground" data-testid="text-member-id-empty">
+                    No Member ID yet. It is assigned when you complete membership payment, or by school staff.
+                  </p>
                 )}
               </div>
 
