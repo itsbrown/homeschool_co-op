@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-21 (School-admin documents shell)
+
+- `/school-admin/documents` uses `SchoolAdminLayout` (grouped sidebar). `AppShell` is the legacy flat sidebar. Assessments was already on `SchoolAdminLayout`. No SQL.
+
 ## 2026-09-21 (Family Schedule day sheet)
 
 - Parent Calendar day click opens a bottom sheet capped at 90dvh. The header stays pinned; class meetings, school events, and lesson rows scroll inside the sheet. Lesson rows are the title only, grouped by child then class, and open the lesson detail in the same sheet. A day with no meetings, events, or published lessons does not open. Playwright: `e2e/parent-family-schedule-day-sheet.spec.ts`. No SQL.
