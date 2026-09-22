@@ -79,24 +79,9 @@ function DetailSection({
   );
 }
 
-/**
- * Shared read-only week-plan block detail sheet (educator Lesson Plans + Schedule + Week Planner).
- */
-export function WeekPlanBlockDetailSheet({
-  open,
-  onClose,
-  block,
-}: {
-  open: boolean;
-  onClose: () => void;
-  block: WeekPlanBlockDetail | null;
-}) {
-  if (!block) return null;
-
-  const title = block.title || "";
+/** Read-only lesson body, shared by the side sheet and the family day sheet. */
+export function WeekPlanBlockDetailBody({ block }: { block: WeekPlanBlockDetail }) {
   const description = block.description || "";
-  const blockType = block.blockType || "flexible";
-  const isCompleted = block.isCompleted || false;
   const objectives = asTrimmedStrings(block.objectives);
   const groups = formatGroupLabels(block.groups);
   const materials = asTrimmedStrings(block.materials);
@@ -107,36 +92,6 @@ export function WeekPlanBlockDetailSheet({
   const extraLinks = resources.filter((url) => url !== lessonLink);
 
   return (
-    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-md overflow-y-auto no-print"
-        aria-label={`Block details for ${title || "this block"}`}
-        data-testid="schedule-block-detail"
-      >
-        <SheetHeader className="mb-6">
-          {block.timeLabel && (
-            <div className="flex items-center gap-2 mb-1">
-              <Clock className="h-3.5 w-3.5 text-slate-400" />
-              <SheetDescription className="text-slate-500 text-sm">
-                {block.timeLabel}
-              </SheetDescription>
-            </div>
-          )}
-          <div className="flex items-center gap-2 flex-wrap">
-            {blockTypeBadgeLg(blockType)}
-            {isCompleted && (
-              <Badge className="px-2.5 py-0.5 bg-green-100 text-green-700 border-green-200 hover:bg-green-100 flex items-center gap-1">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Completed
-              </Badge>
-            )}
-          </div>
-          <SheetTitle className="text-xl font-bold text-slate-900 leading-snug mt-2">
-            {title || <span className="text-slate-400 italic">No title set</span>}
-          </SheetTitle>
-        </SheetHeader>
-
         <div className="space-y-6">
           {description && (
             <DetailSection label="What we are teaching">
@@ -253,6 +208,58 @@ export function WeekPlanBlockDetailSheet({
               </p>
             )}
         </div>
+  );
+}
+
+/**
+ * Shared read-only week-plan block detail sheet (educator Lesson Plans + Schedule + Week Planner).
+ */
+export function WeekPlanBlockDetailSheet({
+  open,
+  onClose,
+  block,
+}: {
+  open: boolean;
+  onClose: () => void;
+  block: WeekPlanBlockDetail | null;
+}) {
+  if (!block) return null;
+
+  const title = block.title || "";
+  const blockType = block.blockType || "flexible";
+  const isCompleted = block.isCompleted || false;
+
+  return (
+    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-md overflow-y-auto no-print"
+        aria-label={`Block details for ${title || "this block"}`}
+        data-testid="schedule-block-detail"
+      >
+        <SheetHeader className="mb-6">
+          {block.timeLabel && (
+            <div className="flex items-center gap-2 mb-1">
+              <Clock className="h-3.5 w-3.5 text-slate-400" />
+              <SheetDescription className="text-slate-500 text-sm">
+                {block.timeLabel}
+              </SheetDescription>
+            </div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {blockTypeBadgeLg(blockType)}
+            {isCompleted && (
+              <Badge className="px-2.5 py-0.5 bg-green-100 text-green-700 border-green-200 hover:bg-green-100 flex items-center gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Completed
+              </Badge>
+            )}
+          </div>
+          <SheetTitle className="text-xl font-bold text-slate-900 leading-snug mt-2">
+            {title || <span className="text-slate-400 italic">No title set</span>}
+          </SheetTitle>
+        </SheetHeader>
+        <WeekPlanBlockDetailBody block={block} />
       </SheetContent>
     </Sheet>
   );
