@@ -12,6 +12,7 @@ import { ChildMathProgressChart } from '@/components/progress-charts/ChildMathPr
 import { PlacementLevelsStrip } from '@/components/progress-charts/PlacementLevelsStrip';
 import { Button } from '@/components/ui/button';
 import { downloadProgressReportPdf } from '@/lib/downloadProgressReport';
+import { downloadIhipSyllabusPdf } from '@/lib/downloadIhipSyllabus';
 import { useToast } from '@/hooks/use-toast';
 import { safeFormatDate } from '@/utils/safeFormatDate';
 import { Link } from 'wouter';
@@ -90,6 +91,7 @@ function FinalizedReportsCard({ childId }: { childId: number }) {
 }
 
 export default function ParentProgressPage() {
+  const { toast } = useToast();
   const { data: progressData = [], isLoading } = useQuery({
     queryKey: ['/api/progress/parent/my-children'],
   });
@@ -205,15 +207,40 @@ export default function ParentProgressPage() {
             </div>
 
             {activeChildId && (
-              <Card data-testid="parent-progress-reports-card">
-                <CardHeader>
-                  <CardTitle className="text-lg">NY | Progress report</CardTitle>
-                  <CardDescription>District-ready PDFs finalized by your ASA mentor</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <FinalizedReportsCard childId={activeChildId} />
-                </CardContent>
-              </Card>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Card data-testid="parent-ihip-syllabus-card">
+                  <CardHeader>
+                    <CardTitle className="text-lg">IHIP / plan of instruction</CardTitle>
+                    <CardDescription>
+                      Curriculum and learning objectives for each required subject. List Parent(s) as instructor.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid="button-download-ihip-syllabus"
+                      onClick={() =>
+                        downloadIhipSyllabusPdf(activeChildId).catch((e) =>
+                          toast({ title: 'Download failed', description: e.message, variant: 'destructive' }),
+                        )
+                      }
+                    >
+                      <FileDown className="h-3 w-3 mr-1" />
+                      Download PDF
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card data-testid="parent-progress-reports-card">
+                  <CardHeader>
+                    <CardTitle className="text-lg">NY | Progress report</CardTitle>
+                    <CardDescription>District-ready PDFs finalized by your ASA mentor</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <FinalizedReportsCard childId={activeChildId} />
+                  </CardContent>
+                </Card>
+              </div>
             )}
 
             <Tabs defaultValue="charts">
