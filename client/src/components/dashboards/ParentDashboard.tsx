@@ -628,7 +628,7 @@ export default function ParentDashboard() {
     ).length;
   })();
 
-  // Fetch upcoming events (class days + school-published events in the next 7 days)
+  // Fetch upcoming events (school activities in the next 7 days; class meetings stay on /schedule)
   const { data: eventsData, isLoading: eventsLoading } = useQuery<ClassDayEvent[]>({
     queryKey: ["/api/schedule"],
     enabled: !!user && !!session,
@@ -1231,7 +1231,7 @@ export default function ParentDashboard() {
             <Card data-testid="parent-upcoming-events-card">
               <CardHeader>
                 <CardTitle>Upcoming Events</CardTitle>
-                <CardDescription>Scheduled classes and activities</CardDescription>
+                <CardDescription>Field trips and school activities</CardDescription>
               </CardHeader>
               <CardContent>
                 {upcomingEventsLoading ? (
@@ -1798,7 +1798,7 @@ export default function ParentDashboard() {
           <Card>
             <CardHeader>
               <CardTitle>Coming up</CardTitle>
-              <CardDescription>Classes and school events in the next 7 days</CardDescription>
+              <CardDescription>School activities in the next 7 days</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {upcomingEventsLoading ? (

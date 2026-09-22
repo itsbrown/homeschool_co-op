@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-22 (Home Upcoming Events skips class days)
+
+- Parent Home Upcoming Events lists field trips and school activities for the next 7 days. Recurring class meetings stay on `/schedule`. Helper: `client/src/lib/parent-upcoming-events.ts`.
+
 ## 2026-09-22 (Monroe IHIP syllabus PDF)
 
 - Parents and staff download a live plan-of-instruction PDF at `GET /api/progress/syllabus/:childId` (`2026-09-asa-v2`). Monroe-shaped 1–6 rows (Reading / Spelling / Writing / English split). Co-op subjects print curriculum/materials plus published-week titles and all objectives. Home subjects are parent blanks. Instructor is Parent(s). District chrome omits the school name. Hours stay on quarterlies. Playwright: `npm run test:e2e -- e2e/parent-ihip-syllabus.spec.ts` (`setup-schedule-builder-scenario`, `requireLinkedSeed`).

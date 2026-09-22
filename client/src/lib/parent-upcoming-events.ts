@@ -5,6 +5,8 @@ export type ClassDayEvent = {
   title: string;
   date: string;
   childName?: string;
+  /** `/api/schedule` type. `class` is a recurring meeting and stays off Home. */
+  type?: string;
 };
 
 export type SchoolCalendarEvent = {
@@ -31,7 +33,12 @@ function inWindow(date: string, today: string, weekOut: string): boolean {
   return date >= today && date <= weekOut;
 }
 
-/** Class days + school events in the next 7 days, deduped by date+title for class rows. */
+function previewSubtitle(childName?: string): string | undefined {
+  if (!childName || childName === "All families") return undefined;
+  return childName;
+}
+
+/** School activities in the next 7 days. Recurring class meetings stay on `/schedule`. */
 export function mergeUpcomingEventsNext7Days(
   classDays: ClassDayEvent[],
   schoolEvents: SchoolCalendarEvent[],
@@ -41,17 +48,19 @@ export function mergeUpcomingEventsNext7Days(
   const classMap = new Map<string, UpcomingPreviewItem>();
 
   for (const event of classDays) {
+    if (event.type === "class") continue;
     if (!inWindow(event.date, today, weekOut)) continue;
     const key = `${event.date}|${event.title}`;
     const existing = classMap.get(key);
+    const subtitle = previewSubtitle(event.childName);
     if (existing) {
-      if (event.childName && existing.subtitle) {
+      if (subtitle && existing.subtitle) {
         const names = existing.subtitle.split(", ");
-        if (!names.includes(event.childName)) {
-          existing.subtitle = `${existing.subtitle}, ${event.childName}`;
+        if (!names.includes(subtitle)) {
+          existing.subtitle = `${existing.subtitle}, ${subtitle}`;
         }
-      } else if (event.childName && !existing.subtitle) {
-        existing.subtitle = event.childName;
+      } else if (subtitle && !existing.subtitle) {
+        existing.subtitle = subtitle;
       }
       continue;
     }
@@ -59,7 +68,7 @@ export function mergeUpcomingEventsNext7Days(
       id: event.id,
       title: event.title,
       date: event.date,
-      subtitle: event.childName,
+      subtitle,
     });
   }
 
@@ -67,6 +76,8 @@ export function mergeUpcomingEventsNext7Days(
   for (const event of schoolEvents) {
     const date = format(new Date(event.startDate), "yyyy-MM-dd");
     if (!inWindow(date, today, weekOut)) continue;
+    const key = `${date}|${event.title}`;
+    if (classMap.has(key)) continue;
     schoolItems.push({
       id: `school-${event.id}`,
       title: event.title,
