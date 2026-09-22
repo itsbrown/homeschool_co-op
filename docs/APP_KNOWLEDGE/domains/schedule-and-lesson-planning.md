@@ -54,6 +54,7 @@ Block completion stays admin/Week Planner in v1 (sets `week_plan_blocks.is_compl
 
 - `GET /api/progress/parent/:childId/scheduled-lessons` — published blocks for child's enrolled classes; completion pills on Parent Progress → **This session**.
 - Quarterly report DTO may include optional `scheduledLessons` list.
+- IHIP syllabus PDF (`GET /api/progress/syllabus/:childId`) rolls published week titles, objectives, and materials into a per-subject Monroe plan of instruction. See [student-progress-assessments.md](./student-progress-assessments.md).
 
 ## Admin KPI
 

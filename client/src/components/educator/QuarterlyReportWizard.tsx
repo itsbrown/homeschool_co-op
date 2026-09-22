@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { downloadProgressReportPdf } from '@/lib/downloadProgressReport';
+import { downloadIhipSyllabusPdf } from '@/lib/downloadIhipSyllabus';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -203,6 +204,18 @@ export default function QuarterlyReportWizard({ childId, childName, gradeLevel }
         </label>
 
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() =>
+              downloadIhipSyllabusPdf(childId).catch((e) =>
+                toast({ title: 'Syllabus download failed', description: e.message, variant: 'destructive' }),
+              )
+            }
+            data-testid="button-staff-download-ihip-syllabus"
+          >
+            <FileDown className="h-4 w-4 mr-2" />
+            Download IHIP syllabus
+          </Button>
           <Button
             variant="secondary"
             onClick={() => saveRubric.mutate()}

@@ -82,6 +82,7 @@ RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your
 | File | Type |
 |------|------|
 | `e2e/quarterly-progress-report-wizard.spec.ts` | Educator wizard save/finalize + parent PDF (`setup-progress-scenario`, Supabase) |
+| `e2e/parent-ihip-syllabus.spec.ts` | Parent + staff IHIP syllabus PDF, no school name (`setup-schedule-builder-scenario`, `requireLinkedSeed`) |
 | `e2e/authenticated/educator-progress-tab.spec.ts` | Opt-in with `E2E_EDUCATOR_EMAIL` |
 | `e2e/authenticated/parent-progress-hub.spec.ts` | Opt-in with `E2E_PARENT_EMAIL` |
 
@@ -93,6 +94,14 @@ RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your
 - `ParentProgressPage` **Charts** tab uses `/api/progress/analytics/child/:childId`; detailed reading history remains on `/parent/assessments`.
 - Parent placement values come from `children.current_lexile_range`, `current_reading_grade_level`, and `current_math_level`; parent APIs expose these fields read-only and never mount staff entry controls.
 - Admin progress catalog uses same `/api/progress/subjects` as educators; subject **create** is admin-only.
+
+## NY IHIP syllabus (plan of instruction)
+
+- Mapper: [`shared/ny-ihip-syllabus.ts`](../../../shared/ny-ihip-syllabus.ts) (`2026-09-asa-v2`) — template slots → Monroe 1–6 rows (Math, Reading, Spelling, Writing, English, Science, History, Health, Visual Arts, PE, Music; foreign language optional). Secondary keeps CR 100.10 ELA lumped. Snack/reset/dismiss skipped.
+- Builder: [`server/lib/build-ihip-syllabus.ts`](../../../server/lib/build-ihip-syllabus.ts) from enrollments + weekly templates + **published** week titles, **all** objectives, and materials (no Drive URLs).
+- PDF: [`server/services/ihipSyllabusPdf.ts`](../../../server/services/ihipSyllabusPdf.ts) + **district** chrome (`chrome: "district"`). Each subject has **Curriculum / materials** and **Plan of instruction / learning objectives**. Home-only subjects are parent blanks. Instructor is Parent(s). Do not put American Seekers Academy on IHIP / quarterly packets. Enrolled class titles stay. Hours go on quarterlies.
+- UI: Parent Progress **IHIP / plan of instruction**; educator wizard **Download IHIP syllabus**.
+- Playwright: `e2e/parent-ihip-syllabus.spec.ts` — `npm run test:e2e -- e2e/parent-ihip-syllabus.spec.ts`.
 
 ## NY | Progress report (IHIP-aligned)
 
@@ -106,7 +115,8 @@ RUN_LIVE_EMAIL=1 npx tsx server/scripts/send-progress-report-email-smoke.ts your
 
 - `shared/schema.ts` — enums + progress/assessment + quarterly tables
 - `server/lib/assessment-progress-db.ts` — CRUD + bridge + insights + quarterly
-- `server/lib/build-student-progress-report.ts`, `server/services/progressReportPdf.ts`
+- `server/lib/build-student-progress-report.ts`, `server/services/progressReportPdf.ts`, `server/services/asa-pdf-brand.ts`
+- `shared/ny-ihip-syllabus.ts`, `server/lib/build-ihip-syllabus.ts`, `server/services/ihipSyllabusPdf.ts`
 - `server/lib/progress-context-bundle.ts` — shared Claude context for insights, Lexile AI, concierge
 - `server/api/progress.ts`, `progress-insights.ts`, `assessments.ts`, `lexile.ts`, `math-level.ts`
 - `client/src/components/math/MathLevelProfileSection.tsx` — profile card + inline entry

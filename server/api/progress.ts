@@ -12,6 +12,8 @@ import {
   generateQuarterlyReportBodySchema,
 } from '../../shared/schema';
 import { generateProgressReportPdf } from '../services/progressReportPdf';
+import { generateIhipSyllabusPdf } from '../services/ihipSyllabusPdf';
+import { buildIhipSyllabus } from '../lib/build-ihip-syllabus';
 import { sendProgressReportEmail } from '../lib/email-service';
 import { logProgressReportEvent } from '../lib/progress-report-audit';
 import { startProgressReportSpan } from '../lib/sentry';
@@ -32,6 +34,7 @@ const reportRateLimit = rateLimit({
 });
 
 const ALLOWED_STAFF = ['schoolAdmin', 'admin', 'educator', 'teacher', 'superAdmin'];
+const SYLLABUS_STAFF = [...ALLOWED_STAFF, 'director'];
 
 function staffOnly(req: Request, res: Response, next: Function) {
   const role = (req.user as any)?.role || (req.user as any)?.activeRole;
@@ -631,6 +634,47 @@ router.get('/parent/:childId/scheduled-lessons', supabaseAuth, async (req: Reque
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: 'Failed to fetch scheduled lessons' });
+  }
+});
+
+router.get('/syllabus/:childId', supabaseAuth, requireSchoolContext, reportRateLimit, async (req: Request, res: Response) => {
+  try {
+    const schoolId = (req.user as any).schoolId;
+    const childId = parseInt(req.params.childId, 10);
+    if (isNaN(childId)) return res.status(400).json({ message: 'Invalid child ID' });
+
+    const role = (req.user as any).role || (req.user as any).activeRole;
+    const userId = (req.user as any).id;
+    const isStaff = SYLLABUS_STAFF.includes(role);
+    if (!isStaff) {
+      const parentChildren = await storage.getChildrenByParentId(userId);
+      if (!parentChildren.some((c) => c.id === childId)) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+    }
+
+    const dto = await buildIhipSyllabus(childId, schoolId);
+    if (!dto) return res.status(404).json({ message: 'Student not found' });
+
+    const format = (req.query.format as string) || 'json';
+    if (format === 'pdf') {
+      const pdf = await startProgressReportSpan('progress.syllabus.pdf.download', () =>
+        generateIhipSyllabusPdf(dto),
+      );
+      const safeName = dto.header.studentName.replace(/[^a-zA-Z0-9-_]/g, '_');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="IHIP-Syllabus-${safeName}-${dto.schoolYear}.pdf"`,
+      );
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.send(pdf);
+    }
+
+    res.json(dto);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: 'Failed to build IHIP syllabus' });
   }
 });
 

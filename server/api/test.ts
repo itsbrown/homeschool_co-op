@@ -5095,6 +5095,8 @@ router.post('/setup-schedule-builder-scenario', async (req: Request, res: Respon
       skeletonBlockId: blockYankee.id,
       title: 'Yankee: Colonial Life',
       description: 'Primary sources',
+      objectives: ['Describe colonial household work', 'Name one local history topic'],
+      materials: ['Primary source packet'],
       isCompleted: false,
       updatedBy: admin.id,
     });

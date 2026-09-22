@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-22 (Monroe IHIP syllabus PDF)
+
+- Parents and staff download a live plan-of-instruction PDF at `GET /api/progress/syllabus/:childId` (`2026-09-asa-v2`). Monroe-shaped 1–6 rows (Reading / Spelling / Writing / English split). Co-op subjects print curriculum/materials plus published-week titles and all objectives. Home subjects are parent blanks. Instructor is Parent(s). District chrome omits the school name. Hours stay on quarterlies. Playwright: `npm run test:e2e -- e2e/parent-ihip-syllabus.spec.ts` (`setup-schedule-builder-scenario`, `requireLinkedSeed`).
+
 ## 2026-09-21 (Parent cannot type a Member ID)
 
 - Home **My Membership** is display + copy only. `PUT /api/parent/member-id` rejects self-assigned IDs (`MEMBER_ID_NOT_SELF_ASSIGNABLE`) and the docs example `ASA-2025-X7K9M2` (`RESERVED_EXAMPLE`). Format check in `isValidMemberIdFormat` also rejects that example.

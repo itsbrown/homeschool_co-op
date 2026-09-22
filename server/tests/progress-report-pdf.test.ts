@@ -1,6 +1,8 @@
 import { describe, expect, it } from '@jest/globals';
 import { buildStudentProgressReport } from '../lib/build-student-progress-report';
 import { generateProgressReportPdf } from '../services/progressReportPdf';
+import { ASA_WORDMARK_LINE1 } from '../services/asa-pdf-brand';
+import { parsePdfText } from './helpers/parsePdfText';
 import type { Child } from '../../shared/schema';
 
 const mockChild: Child = {
@@ -43,7 +45,7 @@ describe('progress report PDF', () => {
     expect(report.populated.phonogramDisplay).toBe('12/26');
   });
 
-  it('generates PDF buffer with %PDF header', async () => {
+  it('generates a district PDF without the school wordmark', async () => {
     const report = buildStudentProgressReport(mockChild, {
       schoolYear: '2025-2026',
       quarter: 'fall',
@@ -56,5 +58,8 @@ describe('progress report PDF', () => {
     const buf = await generateProgressReportPdf(report, { includeGuide: true });
     expect(buf.length).toBeGreaterThan(500);
     expect(buf.subarray(0, 4).toString()).toBe('%PDF');
+    const text = await parsePdfText(buf);
+    expect(text).toContain('Learning Progress Notes');
+    expect(text).not.toContain(ASA_WORDMARK_LINE1);
   });
 });
