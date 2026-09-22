@@ -37,7 +37,7 @@ import {
   Clock
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import AppShell from '@/components/layout/AppShell';
+import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { format } from 'date-fns';
 import { UserLookup, type UserResult } from '@/components/ui/user-lookup';
 
@@ -622,7 +622,7 @@ export default function DocumentManagementPage() {
   };
 
   return (
-    <AppShell>
+    <SchoolAdminLayout pageTitle="Document Management">
       <div className="container mx-auto py-6 px-4 max-w-6xl">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -1118,6 +1118,6 @@ export default function DocumentManagementPage() {
           </SheetContent>
         </Sheet>
       </div>
-    </AppShell>
+    </SchoolAdminLayout>
   );
 }
