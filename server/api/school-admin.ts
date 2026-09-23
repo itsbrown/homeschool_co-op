@@ -40,6 +40,12 @@ import {
   deriveCapabilitiesFromLabels,
 } from '../lib/user-profile-capabilities';
 import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
+import {
+  loadAcademicDashboardMetrics,
+  loadEnrollmentDashboardMetrics,
+  loadFinancialDashboardMetrics,
+  loadStaffDashboardMetrics,
+} from '../lib/load-school-dashboard-metrics';
 import { normalizeAllergiesInput } from '@shared/child-profile-patch';
 import {
   createPendingStaffInvitation,
@@ -4179,62 +4185,7 @@ router.get("/metrics/enrollment", supabaseAuth, async (req: any, res) => {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    console.log('📊 Calculating enrollment metrics from database for school:', schoolId);
-
-    // Get all students/children from database
-    const allChildren = await storage.getAllChildren();
-    
-    // Get program enrollments for additional metrics
-    const allProgramEnrollments = await storage.getAllEnrollments();
-
-    // Filter data by school
-    const schoolChildren = allChildren.filter((c: any) => c.schoolId === schoolId);
-    const programEnrollments = allProgramEnrollments.filter((e: any) => e.schoolId === schoolId);
-
-    // Calculate authentic enrollment metrics
-    const totalStudents = schoolChildren.length;
-    const activeStudents = schoolChildren.filter((s: any) => 
-      s.status === 'active' || !s.status
-    ).length;
-
-    // Calculate new enrollments this month (based on program enrollments)
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    const newEnrollments = programEnrollments.filter((e: any) => {
-      if (!e.enrollmentDate) return false;
-      const enrollDate = new Date(e.enrollmentDate);
-      return enrollDate >= oneMonthAgo;
-    }).length;
-
-    // Calculate growth rate
-    const twoMonthsAgo = new Date();
-    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-    const previousMonthEnrollments = programEnrollments.filter((e: any) => {
-      if (!e.enrollmentDate) return false;
-      const enrollDate = new Date(e.enrollmentDate);
-      return enrollDate >= twoMonthsAgo && enrollDate < oneMonthAgo;
-    }).length;
-
-    const enrollmentGrowth = previousMonthEnrollments > 0 ? 
-      ((newEnrollments - previousMonthEnrollments) / previousMonthEnrollments) * 100 : 0;
-
-    // Calculate retention rate (students still active vs total)
-    const retentionRate = totalStudents > 0 ? 
-      (activeStudents / totalStudents) * 100 : 100;
-    
-    // Graduation rate would need historical data
-    const graduationRate = 88;
-
-    const enrollmentMetrics = {
-      totalStudents,
-      activeStudents,
-      newEnrollments,
-      enrollmentGrowth: Math.round(enrollmentGrowth * 100) / 100,
-      graduationRate,
-      retentionRate: Math.round(retentionRate * 100) / 100
-    };
-
-    console.log('✅ Enrollment metrics calculated from database:', enrollmentMetrics);
+    const enrollmentMetrics = await loadEnrollmentDashboardMetrics(schoolId);
     res.json(enrollmentMetrics);
   } catch (error) {
     console.error('❌ Error calculating enrollment metrics:', error);
@@ -4248,98 +4199,8 @@ router.get("/metrics/financial", supabaseAuth, attachAccessScope, requirePermiss
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    console.log('💰 Calculating financial metrics from database for school:', schoolId);
-
-    // Get all enrollments and payments from database
-    const allEnrollments = await storage.getAllEnrollments();
-    const allPayments = await storage.getAllPayments();
-
-    // Filter data by school
-    let schoolEnrollments = allEnrollments.filter((e: any) => e.schoolId === schoolId);
-    let schoolPayments = allPayments.filter((p: any) => p.schoolId === schoolId);
-
-    // Location-scoped finance staff: limit to accessible campuses (null location = school-wide keep)
     const financeLocationIds = locationFilterIds(req.accessScope);
-    if (financeLocationIds !== null) {
-      const allowed = new Set(financeLocationIds);
-      const schoolClasses = await storage.getClassesBySchoolId(String(schoolId));
-      const classLocationById = new Map<number, number | null | undefined>(
-        schoolClasses.map((cls: any) => [cls.id, cls.locationId]),
-      );
-      schoolEnrollments = schoolEnrollments.filter((e: any) => {
-        const loc =
-          e.locationId != null
-            ? e.locationId
-            : e.classId != null
-              ? classLocationById.get(e.classId) ?? null
-              : null;
-        return loc == null || allowed.has(loc);
-      });
-      const scopedEnrollmentIds = new Set(
-        schoolEnrollments.map((e: any) => e.id).filter((id: any) => id != null),
-      );
-      schoolPayments = schoolPayments.filter((p: any) => {
-        const ids = Array.isArray(p.enrollmentIds) ? p.enrollmentIds : [];
-        // Empty enrollmentIds = unattributed / school-wide; keep (same as null location).
-        if (ids.length === 0) return true;
-        return ids.some((id: number) => scopedEnrollmentIds.has(id));
-      });
-    }
-
-    // Filter for completed payments (positive amounts)
-    // Note: Stripe 'succeeded' status gets converted to 'completed' in our database
-    const completedPayments = schoolPayments.filter((p: any) => 
-      p.amount > 0 && (p.status === 'completed' || p.status === 'succeeded')
-    );
-
-    // Calculate total revenue (sum of all successful payments)
-    const totalRevenue = completedPayments.reduce((sum: number, p: any) => 
-      sum + (p.amount || 0), 0
-    );
-
-    // Calculate outstanding balance using effective balance (includes comp deductions)
-    const getEffectiveBalance = (e: any) =>
-      e.effectiveBalance ?? Math.max(0, (e.totalCost || 0) - (e.totalPaid || 0) - (e.compAmountCents ?? 0));
-    const outstandingBalance = schoolEnrollments.reduce((sum: number, e: any) => 
-      sum + getEffectiveBalance(e), 0
-    );
-
-    // Calculate average tuition paid per enrollment
-    const avgTuitionPaid = schoolEnrollments.length > 0 
-      ? schoolEnrollments.reduce((sum: number, e: any) => sum + (e.totalPaid || 0), 0) / schoolEnrollments.length
-      : 0;
-
-    // Count accounts with unpaid balances
-    const unpaidAccounts = schoolEnrollments.filter((e: any) => 
-      getEffectiveBalance(e) > 0
-    ).length;
-
-    // Calculate collection rate (percentage of enrollments fully paid)
-    const fullyPaidEnrollments = schoolEnrollments.filter((e: any) => 
-      getEffectiveBalance(e) === 0 && (e.totalCost || 0) > 0
-    ).length;
-    const collectionRate = schoolEnrollments.length > 0 
-      ? (fullyPaidEnrollments / schoolEnrollments.length) * 100 
-      : 0;
-
-    // Calculate monthly revenue (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const monthlyRevenue = completedPayments
-      .filter((p: any) => new Date(p.paymentDate) >= thirtyDaysAgo)
-      .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-
-    // Convert cents to dollars for display
-    const financialMetrics = {
-      totalRevenue: totalRevenue / 100,
-      outstandingBalance: outstandingBalance / 100,
-      collectionRate: Math.round(collectionRate * 100) / 100,
-      avgTuitionPaid: Math.round(avgTuitionPaid) / 100,
-      monthlyRevenue: monthlyRevenue / 100,
-      unpaidAccounts
-    };
-
-    console.log('✅ Financial metrics calculated from database (amounts in dollars):', financialMetrics);
+    const financialMetrics = await loadFinancialDashboardMetrics(schoolId, financeLocationIds);
     res.json(financialMetrics);
   } catch (error) {
     console.error('❌ Error calculating financial metrics:', error);
@@ -4353,45 +4214,7 @@ router.get("/metrics/academic", supabaseAuth, async (req: any, res) => {
     const schoolId = await getSchoolIdFromRequest(req, res);
     if (schoolId === null) return;
 
-    console.log('📚 Calculating academic metrics from database for school:', schoolId);
-
-    // Get data from database
-    const allClasses = await storage.getAllClasses();
-    const allStudents = await storage.getAllChildren();
-
-    // Filter data by school
-    const classes = allClasses.filter((c: any) => c.schoolId === schoolId);
-    const students = allStudents.filter((s: any) => s.schoolId === schoolId);
-
-    // Calculate academic performance metrics
-    const totalClasses = classes.length;
-    const activeClasses = classes.filter((c: any) => 
-      c.status === 'active' || c.status === 'ongoing' || c.status === 'upcoming'
-    ).length;
-
-    // Calculate average class size
-    const totalEnrollments = classes.reduce((sum: number, cls: any) => 
-      sum + (cls.enrollmentCount || cls.currentEnrollment || 0), 0);
-    const avgClassSize = activeClasses > 0 ? totalEnrollments / activeClasses : 0;
-
-    // Calculate student-teacher ratio
-    const activeInstructors = new Set(classes.map((c: any) => c.instructorId || c.instructorName)).size;
-    const studentTeacherRatio = activeInstructors > 0 ? students.length / activeInstructors : 0;
-
-    // Average progress based on course completions and student performance
-    const averageProgress = 78; // Would be calculated from actual student progress data
-    const completionRate = 85; // Would be calculated from actual completion data
-
-    const academicMetrics = {
-      averageProgress,
-      completionRate,
-      activeClasses,
-      totalClasses,
-      avgClassSize: Math.round(avgClassSize * 10) / 10,
-      studentTeacherRatio: Math.round(studentTeacherRatio * 10) / 10
-    };
-
-    console.log('✅ Academic metrics calculated:', academicMetrics);
+    const academicMetrics = await loadAcademicDashboardMetrics(schoolId);
     res.json(academicMetrics);
   } catch (error) {
     console.error('❌ Error calculating academic metrics:', error);
@@ -4402,34 +4225,11 @@ router.get("/metrics/academic", supabaseAuth, async (req: any, res) => {
 // Staff Metrics
 router.get("/metrics/staff", supabaseAuth, requireSchoolContext, async (req: any, res: any) => {
   try {
-    const schoolId = req.schoolId;
-    console.log('👥 Calculating staff metrics from database');
-
-    const staffRecords = await storage.getSchoolStaffBySchoolId(Number(schoolId));
-
-    // Calculate staff metrics from actual data
-    const totalStaff = staffRecords.length;
-    
-    // Count active instructors (teachers)
-    const activeInstructors = staffRecords.filter(s => 
-      s.isActive && (s.role === 'teacher' || s.position === 'Teacher' || s.position === 'Instructor')
-    ).length;
-
-    // Count pending invites (inactive staff)
-    const pendingInvites = staffRecords.filter(s => !s.isActive).length;
-
-    // Calculate staff utilization based on active vs total
-    const activeStaff = staffRecords.filter(s => s.isActive).length;
-    const staffUtilization = totalStaff > 0 ? (activeStaff / totalStaff) * 100 : 0;
-
-    const staffMetrics = {
-      totalStaff,
-      activeInstructors,
-      pendingInvites,
-      staffUtilization: Math.round(staffUtilization * 10) / 10
-    };
-
-    console.log('✅ Staff metrics calculated:', staffMetrics);
+    const schoolId = Number(req.schoolId);
+    if (!Number.isFinite(schoolId)) {
+      return res.status(400).json({ message: "School context required" });
+    }
+    const staffMetrics = await loadStaffDashboardMetrics(schoolId);
     res.json(staffMetrics);
   } catch (error) {
     console.error('❌ Error calculating staff metrics:', error);

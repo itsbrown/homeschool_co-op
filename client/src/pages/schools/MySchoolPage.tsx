@@ -68,34 +68,33 @@ interface EnrollmentMetrics {
   totalStudents: number;
   activeStudents: number;
   newEnrollments: number;
-  enrollmentGrowth: number;
-  graduationRate: number;
-  retentionRate: number;
+  enrollmentGrowth: number | null;
+  retentionRate: number | null;
 }
 
 interface FinancialMetrics {
   totalRevenue: number;
   outstandingBalance: number;
-  collectionRate: number;
+  collectionRate: number | null;
   avgTuitionPaid: number;
   monthlyRevenue: number;
   unpaidAccounts: number;
 }
 
 interface AcademicMetrics {
-  averageProgress: number;
-  completionRate: number;
+  averageProgress: number | null;
+  readingStudents: number;
   activeClasses: number;
   totalClasses: number;
   avgClassSize: number;
-  studentTeacherRatio: number;
+  studentTeacherRatio: number | null;
 }
 
 interface StaffMetrics {
   totalStaff: number;
   activeInstructors: number;
   pendingInvites: number;
-  staffUtilization: number;
+  staffUtilization: number | null;
 }
 
 // Marketing Links interfaces - matches shared/schema.ts
@@ -116,6 +115,12 @@ interface MarketingLink {
 interface CreateMarketingLinkData {
   campaignName: string;
   linkUrl: string;
+}
+
+function formatEnrollmentGrowth(growth: number | null | undefined): string {
+  if (growth == null) return 'No prior 30 days';
+  const sign = growth > 0 ? '+' : '';
+  return `${sign}${growth.toFixed(1)}% vs prior 30 days`;
 }
 
 export default function MySchoolPage() {
@@ -392,10 +397,7 @@ export default function MySchoolPage() {
                         </div>
                         <div className="flex items-center text-xs text-muted-foreground">
                           <TrendingUp className="h-3 w-3 mr-1" />
-                          {enrollmentMetrics?.enrollmentGrowth ? 
-                            `+${enrollmentMetrics.enrollmentGrowth.toFixed(1)}% this month` : 
-                            'No growth data'
-                          }
+                          {formatEnrollmentGrowth(enrollmentMetrics?.enrollmentGrowth)}
                         </div>
                       </CardContent>
                     </Card>
@@ -412,10 +414,7 @@ export default function MySchoolPage() {
                         </div>
                         <div className="flex items-center text-xs text-muted-foreground">
                           <CheckCircle className="h-3 w-3 mr-1" />
-                          {financialMetrics?.collectionRate ? 
-                            `${financialMetrics.collectionRate.toFixed(1)}% collection rate` : 
-                            'No collection data'
-                          }
+                          Last 30 days
                         </div>
                       </CardContent>
                     </Card>
@@ -423,22 +422,24 @@ export default function MySchoolPage() {
                     {/* Academic Progress KPI */}
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Avg Progress</CardTitle>
+                        <CardTitle className="text-sm font-medium">Reading growth</CardTitle>
                         <BookOpen className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
                         <div className="text-2xl font-bold">
-                          {academicMetrics?.averageProgress ? 
-                            `${academicMetrics.averageProgress.toFixed(1)}%` : 
-                            '0%'
-                          }
+                          {!academicMetrics
+                            ? '…'
+                            : academicMetrics.averageProgress != null
+                              ? `${academicMetrics.averageProgress.toFixed(1)}%`
+                              : '—'}
                         </div>
                         <div className="flex items-center text-xs text-muted-foreground">
                           <Target className="h-3 w-3 mr-1" />
-                          {academicMetrics?.completionRate ? 
-                            `${academicMetrics.completionRate.toFixed(1)}% completion rate` : 
-                            'No completion data'
-                          }
+                          {!academicMetrics
+                            ? '…'
+                            : academicMetrics.readingStudents
+                              ? `${academicMetrics.readingStudents} students with reading data`
+                              : 'No reading data yet'}
                         </div>
                       </CardContent>
                     </Card>
@@ -446,7 +447,7 @@ export default function MySchoolPage() {
                     {/* Staff KPI */}
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Staff</CardTitle>
+                        <CardTitle className="text-sm font-medium">Instructors</CardTitle>
                         <GraduationCap className="h-4 w-4 text-muted-foreground" />
                       </CardHeader>
                       <CardContent>
@@ -482,24 +483,25 @@ export default function MySchoolPage() {
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium">New Enrollments</span>
+                          <span className="text-sm font-medium">New students (30 days)</span>
                           <span className="text-lg font-bold text-green-600">
-                            +{enrollmentMetrics?.newEnrollments || 0}
+                            {enrollmentMetrics?.newEnrollments ? `+${enrollmentMetrics.newEnrollments}` : 0}
                           </span>
                         </div>
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span>Retention Rate</span>
-                            <span>{enrollmentMetrics?.retentionRate?.toFixed(1) || 0}%</span>
+                            <span>Retention rate</span>
+                            <span>
+                              {!enrollmentMetrics
+                                ? '…'
+                                : enrollmentMetrics.retentionRate != null
+                                  ? `${enrollmentMetrics.retentionRate.toFixed(1)}%`
+                                  : 'No prior term'}
+                            </span>
                           </div>
-                          <Progress value={enrollmentMetrics?.retentionRate || 0} />
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Graduation Rate</span>
-                            <span>{enrollmentMetrics?.graduationRate?.toFixed(1) || 0}%</span>
-                          </div>
-                          <Progress value={enrollmentMetrics?.graduationRate || 0} />
+                          {enrollmentMetrics?.retentionRate != null && (
+                            <Progress value={enrollmentMetrics.retentionRate} />
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -526,7 +528,7 @@ export default function MySchoolPage() {
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium">Unpaid Accounts</span>
+                          <span className="text-sm font-medium">Unpaid families</span>
                           <span className="text-lg font-bold text-red-600">
                             {financialMetrics?.unpaidAccounts || 0}
                           </span>
@@ -534,9 +536,17 @@ export default function MySchoolPage() {
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
                             <span>Collection Rate</span>
-                            <span>{financialMetrics?.collectionRate?.toFixed(1) || 0}%</span>
+                            <span>
+                              {!financialMetrics
+                                ? '…'
+                                : financialMetrics.collectionRate != null
+                                  ? `${financialMetrics.collectionRate.toFixed(1)}%`
+                                  : '—'}
+                            </span>
                           </div>
-                          <Progress value={financialMetrics?.collectionRate || 0} />
+                          {financialMetrics?.collectionRate != null && (
+                            <Progress value={financialMetrics.collectionRate} />
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -564,17 +574,18 @@ export default function MySchoolPage() {
                         </div>
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span>Student Progress</span>
-                            <span>{academicMetrics?.averageProgress?.toFixed(1) || 0}%</span>
+                            <span>Reading growth</span>
+                            <span>
+                              {!academicMetrics
+                                ? '…'
+                                : academicMetrics.averageProgress != null
+                                  ? `${academicMetrics.averageProgress.toFixed(1)}%`
+                                  : 'No reading data yet'}
+                            </span>
                           </div>
-                          <Progress value={academicMetrics?.averageProgress || 0} />
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Course Completion</span>
-                            <span>{academicMetrics?.completionRate?.toFixed(1) || 0}%</span>
-                          </div>
-                          <Progress value={academicMetrics?.completionRate || 0} />
+                          {academicMetrics?.averageProgress != null && (
+                            <Progress value={academicMetrics.averageProgress} />
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -595,7 +606,7 @@ export default function MySchoolPage() {
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium">Active Instructors</span>
+                          <span className="text-sm font-medium">Instructors</span>
                           <span className="text-lg font-bold text-green-600">
                             {staffMetrics?.activeInstructors || 0}
                           </span>
@@ -608,10 +619,18 @@ export default function MySchoolPage() {
                         </div>
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
-                            <span>Staff Utilization</span>
-                            <span>{staffMetrics?.staffUtilization?.toFixed(1) || 0}%</span>
+                            <span>Assigned to a class</span>
+                            <span>
+                              {!staffMetrics
+                                ? '…'
+                                : staffMetrics.staffUtilization != null
+                                  ? `${staffMetrics.staffUtilization.toFixed(1)}%`
+                                  : 'No instructors'}
+                            </span>
                           </div>
-                          <Progress value={staffMetrics?.staffUtilization || 0} />
+                          {staffMetrics?.staffUtilization != null && (
+                            <Progress value={staffMetrics.staffUtilization} />
+                          )}
                         </div>
                       </CardContent>
                     </Card>

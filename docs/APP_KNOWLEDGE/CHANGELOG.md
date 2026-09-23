@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-22 (My School overview metrics)
+
+- Overview KPIs no longer use hardcoded 88/78/85 or `classes.enrollment_count` / `school_staff`. Current-term students, live class size, `user_roles` instructors, and dollar collection rate. See [school-analytics.md](domains/school-analytics.md).
+
 ## 2026-09-22 (Home Upcoming Events skips class days)
 
 - Parent Home Upcoming Events lists field trips and school activities for the next 7 days. Recurring class meetings stay on `/schedule`. Helper: `client/src/lib/parent-upcoming-events.ts`.
