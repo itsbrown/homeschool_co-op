@@ -1233,7 +1233,7 @@ export default function WeekPlannerPage() {
                                     <>
                                       {preview.descriptionPreview && (
                                         <p
-                                          className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap line-clamp-4"
+                                          className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap line-clamp-6"
                                           data-testid={`week-block-description-${wb?.id ?? `slot-${sb.id}`}`}
                                         >
                                           {preview.descriptionPreview}
