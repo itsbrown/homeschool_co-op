@@ -5,6 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { groupByPerson } from "@shared/payroll-day";
 
+type Person = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+};
+
 type Job = {
   id: number;
   personName: string;
@@ -14,17 +21,25 @@ type Job = {
 };
 
 export default function PayrollRatesPage() {
+  const [adding, setAdding] = useState(false);
+  const [personName, setPersonName] = useState("");
+  const [jobLabel, setJobLabel] = useState("");
+  const [hourlyRate, setHourlyRate] = useState("");
+  const [usualHours, setUsualHours] = useState("");
+  const [personQuery, setPersonQuery] = useState("");
   const { data, isLoading, error } = useQuery<{ jobs: Job[] }>({
     queryKey: ["/api/payroll-day/rates"],
   });
   const { data: summary } = useQuery<{ pay: number; saved: boolean }>({
     queryKey: ["/api/payroll-day/summary"],
   });
-  const [adding, setAdding] = useState(false);
-  const [personName, setPersonName] = useState("");
-  const [jobLabel, setJobLabel] = useState("");
-  const [hourlyRate, setHourlyRate] = useState("");
-  const [usualHours, setUsualHours] = useState("");
+  const { data: fillers } = useQuery<{ people: Person[] }>({
+    queryKey: ["/api/payroll-day/fillers"],
+  });
+  const { data: matches } = useQuery<{ people: Person[] }>({
+    queryKey: [`/api/payroll-day/people?q=${encodeURIComponent(personQuery)}`],
+    enabled: personQuery.trim().length >= 2,
+  });
 
   const saveRate = useMutation({
     mutationFn: async (job: Job) => {
@@ -57,8 +72,31 @@ export default function PayrollRatesPage() {
     },
   });
 
+  const grantFiller = useMutation({
+    mutationFn: async (userId: number) => {
+      const response = await apiRequest("POST", "/api/payroll-day/fillers", { userId });
+      if (!response.ok) throw new Error("grant failed");
+    },
+    onSuccess: () => {
+      setPersonQuery("");
+      queryClient.invalidateQueries({ queryKey: ["/api/payroll-day/fillers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payroll-day/access"] });
+    },
+  });
+
+  const revokeFiller = useMutation({
+    mutationFn: async (userId: number) => {
+      const response = await apiRequest("DELETE", `/api/payroll-day/fillers/${userId}`);
+      if (!response.ok) throw new Error("revoke failed");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/payroll-day/fillers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payroll-day/access"] });
+    },
+  });
+
   if (isLoading) return <p className="p-6">Loading hourly rates…</p>;
-  if (error || !data) return <p className="p-6">School admin only.</p>;
+  if (error || !data) return <p className="p-6" data-testid="payroll-rates-denied">You do not have access to hourly rates.</p>;
 
   const groups = groupByPerson(data.jobs.map((job) => ({ ...job, personName: job.personName })));
 
@@ -92,8 +130,49 @@ export default function PayrollRatesPage() {
           Add a job
         </Button>
       )}
+      <section className="mt-8 border-t pt-6">
+        <h2 className="mb-2 text-lg">Who can fill hours</h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          These people see Today&apos;s hours. They cannot change rates.
+        </p>
+        <ul className="mb-4 space-y-2">
+          {(fillers?.people ?? []).map((person) => (
+            <li key={person.id} className="flex items-center justify-between gap-3" data-testid={`filler-${person.id}`}>
+              <span>{personLabel(person)}</span>
+              <Button type="button" variant="outline" onClick={() => revokeFiller.mutate(person.id)}>
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+        <Input
+          placeholder="Search by name or email"
+          value={personQuery}
+          onChange={(event) => setPersonQuery(event.target.value)}
+          data-testid="filler-search"
+        />
+        <ul className="mt-2 space-y-2">
+          {(matches?.people ?? []).map((person) => (
+            <li key={person.id}>
+              <Button
+                type="button"
+                variant="outline"
+                data-testid={`filler-result-${person.id}`}
+                onClick={() => grantFiller.mutate(person.id)}
+              >
+                Add {personLabel(person)}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
+}
+
+function personLabel(person: Person): string {
+  const name = `${person.firstName} ${person.lastName}`.trim();
+  return name ? `${name} (${person.email})` : person.email;
 }
 
 function RateRow({ job, onSave }: { job: Job; onSave: (job: Job) => void }) {

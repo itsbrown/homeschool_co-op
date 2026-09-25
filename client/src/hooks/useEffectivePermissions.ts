@@ -46,6 +46,7 @@ export type MyPermissionsResponse = {
       canManageStudents?: boolean;
       canSendNotifications?: boolean;
       canViewParentContacts?: boolean;
+      canManageHourlyRates?: boolean;
     };
   } | null;
 };
@@ -57,6 +58,7 @@ export type EffectivePermissionsApiResponse = {
   canAccessEntireSchool: boolean;
   isSchoolAdminBypass: boolean;
   showAdminNavGroups: boolean;
+  canManageHourlyRates?: boolean;
   nav: { href: string; title: string; group: string }[];
 };
 
@@ -66,6 +68,7 @@ const FAIL_CLOSED: EffectivePermissions = {
   canAccessEntireSchool: false,
   isSchoolAdminBypass: false,
   showAdminNavGroups: false,
+  canManageHourlyRates: false,
 };
 
 export function useEffectivePermissions() {
@@ -152,6 +155,7 @@ export function useEffectivePermissions() {
         canAccessEntireSchool: roleMatchedApiData.canAccessEntireSchool,
         isSchoolAdminBypass: roleMatchedApiData.isSchoolAdminBypass,
         showAdminNavGroups: roleMatchedApiData.showAdminNavGroups,
+        canManageHourlyRates: roleMatchedApiData.canManageHourlyRates === true,
       };
     }
 

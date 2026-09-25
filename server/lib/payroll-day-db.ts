@@ -1,12 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { users } from "@shared/schema";
-import {
-  PAYROLL_CHECKLIST_EMAIL,
-  PAYROLL_ROSTER,
-  hoursToMinutes,
-  type PayrollPresent,
-} from "@shared/payroll-day";
+import { type PayrollPresent } from "@shared/payroll-day";
 import { ensurePayrollDaySchema } from "./ensure-payroll-day-schema";
 
 export type PayrollJobRow = {
@@ -41,21 +36,6 @@ async function db() {
   return database;
 }
 
-export async function seedPayrollRoster(schoolId: number): Promise<void> {
-  const database = await db();
-  for (const job of PAYROLL_ROSTER) {
-    await database.execute(sql`
-      INSERT INTO payroll_jobs (
-        school_id, job_key, person_name, job_label, rate_cents, weekly_minutes, credit, sort_order
-      ) VALUES (
-        ${schoolId}, ${job.key}, ${job.personName}, ${job.jobLabel},
-        ${job.rateDollars * 100}, ${hoursToMinutes(job.weeklyHours)}, ${job.credit}, ${job.sortOrder}
-      )
-      ON CONFLICT (school_id, job_key) DO NOTHING
-    `);
-  }
-}
-
 export async function listActiveJobs(schoolId: number): Promise<PayrollJobRow[]> {
   const database = await db();
   const rows = await database.execute(sql`
@@ -82,8 +62,23 @@ function mapJob(row: Record<string, unknown>): PayrollJobRow {
   };
 }
 
-export async function userCanFillChecklist(schoolId: number, userId: number, email: string | null): Promise<boolean> {
-  if ((email ?? "").trim().toLowerCase() === PAYROLL_CHECKLIST_EMAIL) return true;
+export type PayrollPerson = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+};
+
+function mapPerson(row: Record<string, unknown>): PayrollPerson {
+  return {
+    id: Number(row.id),
+    firstName: row.first_name == null ? "" : String(row.first_name),
+    lastName: row.last_name == null ? "" : String(row.last_name),
+    email: String(row.email ?? ""),
+  };
+}
+
+export async function userCanFillChecklist(schoolId: number, userId: number): Promise<boolean> {
   const database = await db();
   const rows = await database.execute(sql`
     SELECT 1 FROM payroll_checklist_access
@@ -93,13 +88,69 @@ export async function userCanFillChecklist(schoolId: number, userId: number, ema
   return (rows as unknown as unknown[]).length > 0;
 }
 
-export async function grantChecklistAccess(schoolId: number, userId: number): Promise<void> {
+export async function grantChecklistAccess(schoolId: number, userId: number): Promise<boolean> {
   const database = await db();
+  const member = await database.execute(sql`
+    SELECT 1 FROM users u
+    WHERE u.id = ${userId}
+      AND (
+        u.school_id = ${schoolId}
+        OR EXISTS (
+          SELECT 1 FROM user_roles ur
+          WHERE ur.user_id = u.id AND ur.school_id = ${schoolId}
+        )
+      )
+    LIMIT 1
+  `);
+  if ((member as unknown as unknown[]).length === 0) return false;
   await database.execute(sql`
     INSERT INTO payroll_checklist_access (school_id, user_id)
     VALUES (${schoolId}, ${userId})
     ON CONFLICT (school_id, user_id) DO NOTHING
   `);
+  return true;
+}
+
+export async function revokeChecklistAccess(schoolId: number, userId: number): Promise<void> {
+  const database = await db();
+  await database.execute(sql`
+    DELETE FROM payroll_checklist_access
+    WHERE school_id = ${schoolId} AND user_id = ${userId}
+  `);
+}
+
+export async function listChecklistFillers(schoolId: number): Promise<PayrollPerson[]> {
+  const database = await db();
+  const rows = await database.execute(sql`
+    SELECT u.id, u.first_name, u.last_name, u.email
+    FROM payroll_checklist_access a
+    JOIN users u ON u.id = a.user_id
+    WHERE a.school_id = ${schoolId}
+    ORDER BY u.first_name, u.last_name, u.email
+  `);
+  return (rows as unknown as Record<string, unknown>[]).map(mapPerson);
+}
+
+export async function searchSchoolPeople(schoolId: number, query: string): Promise<PayrollPerson[]> {
+  const term = query.trim();
+  if (term.length < 2) return [];
+  const pattern = `%${term}%`;
+  const database = await db();
+  const rows = await database.execute(sql`
+    SELECT DISTINCT u.id, u.first_name, u.last_name, u.email
+    FROM users u
+    LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.school_id = ${schoolId}
+    WHERE (u.school_id = ${schoolId} OR ur.user_id IS NOT NULL)
+      AND (
+        u.email ILIKE ${pattern}
+        OR u.first_name ILIKE ${pattern}
+        OR u.last_name ILIKE ${pattern}
+        OR (COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')) ILIKE ${pattern}
+      )
+    ORDER BY u.first_name, u.last_name, u.email
+    LIMIT 20
+  `);
+  return (rows as unknown as Record<string, unknown>[]).map(mapPerson);
 }
 
 export async function loadSavedDay(schoolId: number, workDate: string): Promise<{

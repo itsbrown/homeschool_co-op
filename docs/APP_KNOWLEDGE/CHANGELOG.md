@@ -1,8 +1,12 @@
 # App knowledge changelog
 
+## 2026-09-25 (Daily hours is a school feature)
+
+- Super admin turns on `schools.enabled_features.dailyHours` from School Edit. It stays off until then. **Hourly rates** is the school-wide permission `canManageHourlyRates` (`user_school_permissions` only). School admin bypass still opens rates when the feature is on. **Today's hours** is a separate grant on the rates page (`payroll_checklist_access`). No email is built into the program, and a new school starts with no jobs. Saved days still keep the rate from when they were saved. SQL: `263-payroll-days.sql` and `264-payroll-hourly-rates-permission.sql` (`ADD COLUMN IF NOT EXISTS`). Playwright: `npm run test:e2e -- e2e/payroll-day.spec.ts`.
+
 ## 2026-09-25 (Daily payroll checklist)
 
-- Leigh Ann opens `/payroll-day` on Monday, Wednesday, or Friday. The sheet roster is already listed and **Here** is selected. She can mark **Not here**, **Different hours**, and a note. Rates stay on `/school-admin/payroll-rates`. A saved day keeps the rate from when it was saved. Schema: `server/migrations/263-payroll-days.sql`. No Venmo and no tuition-credit write.
+- First version of the class-day checklist and hourly rates. Replaced the same day by the school-feature version above. No Venmo and no tuition-credit write.
 
 ## 2026-09-22 (Home Upcoming Events skips class days)
 

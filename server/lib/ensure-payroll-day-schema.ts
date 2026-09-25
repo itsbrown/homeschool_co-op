@@ -5,7 +5,10 @@ import { getNormalizedDatabaseUrl, getPostgresJsSslOption } from "./database-url
 
 let ensured = false;
 
-const MIGRATION = "server/migrations/263-payroll-days.sql";
+const MIGRATIONS = [
+  "server/migrations/263-payroll-days.sql",
+  "server/migrations/264-payroll-hourly-rates-permission.sql",
+];
 
 export async function ensurePayrollDaySchema(): Promise<void> {
   if (ensured) return;
@@ -17,8 +20,9 @@ export async function ensurePayrollDaySchema(): Promise<void> {
     ssl: getPostgresJsSslOption(connectionString),
   });
   try {
-    const migrationPath = path.join(process.cwd(), MIGRATION);
-    await client.file(migrationPath);
+    for (const migration of MIGRATIONS) {
+      await client.file(path.join(process.cwd(), migration));
+    }
     ensured = true;
   } finally {
     await client.end({ timeout: 5 });

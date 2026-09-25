@@ -1,18 +1,52 @@
+import { isSchoolFeatureEnabled } from "../../server/lib/school-features";
 import {
   classDayOnOrAfter,
   dayShareMinutes,
   hoursToMinutes,
   paidMinutes,
   payCents,
-  rosterWeekTotals,
   shiftClassDay,
 } from "../payroll-day";
 
+/** Week-ending 2026-09-25 dry run. Kept here so production code does not ship a named roster. */
+const SHEET = [
+  { rateDollars: 32, weeklyHours: 30 },
+  { rateDollars: 20, weeklyHours: 6 },
+  { rateDollars: 28, weeklyHours: 15 },
+  { rateDollars: 20, weeklyHours: 3 },
+  { rateDollars: 20, weeklyHours: 9 },
+  { rateDollars: 20, weeklyHours: 6 },
+  { rateDollars: 20, weeklyHours: 3 },
+  { rateDollars: 20, weeklyHours: 9 },
+  { rateDollars: 28, weeklyHours: 18 },
+  { rateDollars: 20, weeklyHours: 9 },
+  { rateDollars: 22, weeklyHours: 18 },
+  { rateDollars: 20, weeklyHours: 6 },
+  { rateDollars: 28, weeklyHours: 15 },
+  { rateDollars: 20, weeklyHours: 6 },
+  { rateDollars: 30, weeklyHours: 3 },
+  { rateDollars: 30, weeklyHours: 3 },
+  { rateDollars: 28, weeklyHours: 28 },
+  { rateDollars: 20, weeklyHours: 8 },
+  { rateDollars: 28, weeklyHours: 30 },
+  { rateDollars: 20, weeklyHours: 6 },
+  { rateDollars: 32, weeklyHours: 18 },
+];
+
 describe("payroll day pay", () => {
   it("matches the unedited sheet total of 249 hours and $6,500", () => {
-    const totals = rosterWeekTotals();
-    expect(totals.minutes).toBe(249 * 60);
-    expect(totals.payCents).toBe(650_000);
+    const minutes = SHEET.reduce((sum, job) => sum + hoursToMinutes(job.weeklyHours), 0);
+    const cents = SHEET.reduce(
+      (sum, job) => sum + payCents(hoursToMinutes(job.weeklyHours), job.rateDollars * 100),
+      0,
+    );
+    expect(minutes).toBe(249 * 60);
+    expect(cents).toBe(650_000);
+  });
+
+  it("leaves daily hours off until a super admin turns it on", () => {
+    expect(isSchoolFeatureEnabled({}, "dailyHours")).toBe(false);
+    expect(isSchoolFeatureEnabled({ dailyHours: true }, "dailyHours")).toBe(true);
   });
 
   it("pays the day's share when someone is here", () => {

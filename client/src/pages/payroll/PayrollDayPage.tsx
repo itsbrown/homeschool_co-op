@@ -64,7 +64,7 @@ export default function PayrollDayPage() {
   if (error || !view) {
     return (
       <p className="p-6 text-lg" data-testid="payroll-day-denied">
-        This page is for Leigh Ann.
+        You do not have access to daily hours.
       </p>
     );
   }

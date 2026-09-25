@@ -114,6 +114,7 @@ export async function attachAccessScope(
           canManageStudents: schoolPerm.canManageStudents,
           canSendNotifications: schoolPerm.canSendNotifications,
           canViewParentContacts: schoolPerm.canViewParentContacts,
+          canManageHourlyRates: schoolPerm.canManageHourlyRates,
         };
       }
     }

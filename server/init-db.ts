@@ -2160,6 +2160,7 @@ async function runMigrations() {
         can_manage_students BOOLEAN NOT NULL DEFAULT FALSE,
         can_send_notifications BOOLEAN NOT NULL DEFAULT FALSE,
         can_view_parent_contacts BOOLEAN NOT NULL DEFAULT FALSE,
+        can_manage_hourly_rates BOOLEAN NOT NULL DEFAULT FALSE,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),

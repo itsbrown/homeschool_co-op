@@ -1,15 +1,19 @@
 import { Router } from "express";
 import { z } from "zod";
+import { isSchoolAdminBypassRole } from "@shared/permissions";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { storage } from "../storage";
+import { isSchoolFeatureEnabled } from "../lib/school-features";
 import { resolveSchoolIdForUser } from "../lib/resolve-school-id";
 import {
   addJob,
   grantChecklistAccess,
   listActiveJobs,
+  listChecklistFillers,
   loadSavedDay,
+  revokeChecklistAccess,
   saveDay,
-  seedPayrollRoster,
+  searchSchoolPeople,
   updateJobRate,
   userCanFillChecklist,
 } from "../lib/payroll-day-db";
@@ -27,18 +31,28 @@ import {
 const router = Router();
 router.use(supabaseAuth);
 
-const ADMIN_ROLES = new Set(["schoolAdmin", "admin", "superAdmin", "director"]);
-
-async function actor(req: { user?: { id?: number; email?: string; role?: string } }) {
+async function actor(req: { user?: { id?: number; role?: string } }) {
   const userId = req.user?.id;
   if (!userId) return null;
   const user = await storage.getUser(userId);
   if (!user) return null;
   const schoolId = await resolveSchoolIdForUser(user);
   if (!schoolId) return null;
-  const admin = ADMIN_ROLES.has(user.role) || ADMIN_ROLES.has(req.user?.role ?? "");
-  const checklist = await userCanFillChecklist(schoolId, user.id, user.email);
-  return { user, schoolId, admin, checklist };
+  const features = await storage.getSchoolFeatures(schoolId);
+  const featureEnabled = isSchoolFeatureEnabled(features, "dailyHours");
+  const roles = await storage.getUserRolesByUserId(user.id);
+  const bypass = [user.role, req.user?.role, ...roles.map((role) => role.role)].some((role) =>
+    isSchoolAdminBypassRole(role),
+  );
+  const schoolGrant = bypass
+    ? null
+    : await storage.getUserSchoolPermissionByUserAndSchool(user.id, schoolId);
+  const grantedRates = Boolean(
+    schoolGrant && (schoolGrant.accessLevel === "admin" || schoolGrant.canManageHourlyRates),
+  );
+  const manageRates = featureEnabled && (bypass || grantedRates);
+  const checklist = featureEnabled && (await userCanFillChecklist(schoolId, user.id));
+  return { user, schoolId, featureEnabled, manageRates, checklist };
 }
 
 function checklistPayload(jobs: Awaited<ReturnType<typeof listActiveJobs>>, saved: Awaited<ReturnType<typeof loadSavedDay>>, workDate: string) {
@@ -66,14 +80,17 @@ function checklistPayload(jobs: Awaited<ReturnType<typeof listActiveJobs>>, save
 router.get("/access", async (req, res) => {
   const who = await actor(req);
   if (!who) return res.status(403).json({ error: "No access" });
-  res.json({ checklist: who.checklist, admin: who.admin });
+  res.json({
+    featureEnabled: who.featureEnabled,
+    checklist: who.checklist,
+    manageRates: who.manageRates,
+  });
 });
 
 router.get("/", async (req, res) => {
   try {
     const who = await actor(req);
-    if (!who?.checklist) return res.status(403).json({ error: "This page is for Leigh Ann." });
-    await seedPayrollRoster(who.schoolId);
+    if (!who?.checklist) return res.status(403).json({ error: "You do not have access to daily hours." });
     const requested = typeof req.query.date === "string" ? req.query.date : new Date().toISOString().slice(0, 10);
     const workDate = isClassDay(requested) ? requested : classDayOnOrAfter(requested);
     const jobs = await listActiveJobs(who.schoolId);
@@ -99,12 +116,11 @@ const saveSchema = z.object({
 router.post("/", async (req, res) => {
   try {
     const who = await actor(req);
-    if (!who?.checklist) return res.status(403).json({ error: "This page is for Leigh Ann." });
+    if (!who?.checklist) return res.status(403).json({ error: "You do not have access to daily hours." });
     const parsed = saveSchema.safeParse(req.body);
     if (!parsed.success || !isClassDay(parsed.data.date)) {
       return res.status(400).json({ error: "Pick a Monday, Wednesday, or Friday." });
     }
-    await seedPayrollRoster(who.schoolId);
     const jobs = await listActiveJobs(who.schoolId);
     const existing = await loadSavedDay(who.schoolId, parsed.data.date);
     const existingByJob = new Map(existing?.lines.map((line) => [line.jobId, line]) ?? []);
@@ -152,8 +168,7 @@ router.post("/", async (req, res) => {
 router.get("/rates", async (req, res) => {
   try {
     const who = await actor(req);
-    if (!who?.admin) return res.status(403).json({ error: "School admin only" });
-    await seedPayrollRoster(who.schoolId);
+    if (!who?.manageRates) return res.status(403).json({ error: "You do not have access to hourly rates." });
     const jobs = await listActiveJobs(who.schoolId);
     res.json({
       jobs: jobs.map((job) => ({
@@ -173,7 +188,7 @@ router.get("/rates", async (req, res) => {
 router.get("/summary", async (req, res) => {
   try {
     const who = await actor(req);
-    if (!who?.admin) return res.status(403).json({ error: "School admin only" });
+    if (!who?.manageRates) return res.status(403).json({ error: "You do not have access to hourly rates." });
     const requested = typeof req.query.date === "string" ? req.query.date : new Date().toISOString().slice(0, 10);
     const workDate = isClassDay(requested) ? requested : classDayOnOrAfter(requested);
     const saved = await loadSavedDay(who.schoolId, workDate);
@@ -209,7 +224,7 @@ const rateSchema = z.object({
 router.patch("/jobs/:id", async (req, res) => {
   try {
     const who = await actor(req);
-    if (!who?.admin) return res.status(403).json({ error: "School admin only" });
+    if (!who?.manageRates) return res.status(403).json({ error: "You do not have access to hourly rates." });
     const parsed = rateSchema.safeParse(req.body);
     const jobId = parseInt(req.params.id, 10);
     if (!parsed.success || !Number.isFinite(jobId)) return res.status(400).json({ error: "Check the rate and hours" });
@@ -237,7 +252,7 @@ const addSchema = z.object({
 router.post("/jobs", async (req, res) => {
   try {
     const who = await actor(req);
-    if (!who?.admin) return res.status(403).json({ error: "School admin only" });
+    if (!who?.manageRates) return res.status(403).json({ error: "You do not have access to hourly rates." });
     const parsed = addSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Fill in the person, the job, the rate, and the usual hours." });
     const id = await addJob({
@@ -254,5 +269,56 @@ router.post("/jobs", async (req, res) => {
   }
 });
 
-export { grantChecklistAccess };
+router.get("/fillers", async (req, res) => {
+  try {
+    const who = await actor(req);
+    if (!who?.manageRates) return res.status(403).json({ error: "You do not have access to hourly rates." });
+    res.json({ people: await listChecklistFillers(who.schoolId) });
+  } catch (error) {
+    console.error("[payroll-day] fillers", error);
+    res.status(500).json({ error: "Could not load who can fill hours" });
+  }
+});
+
+router.get("/people", async (req, res) => {
+  try {
+    const who = await actor(req);
+    if (!who?.manageRates) return res.status(403).json({ error: "You do not have access to hourly rates." });
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    res.json({ people: await searchSchoolPeople(who.schoolId, q) });
+  } catch (error) {
+    console.error("[payroll-day] people", error);
+    res.status(500).json({ error: "Could not search people" });
+  }
+});
+
+router.post("/fillers", async (req, res) => {
+  try {
+    const who = await actor(req);
+    if (!who?.manageRates) return res.status(403).json({ error: "You do not have access to hourly rates." });
+    const userId = Number(req.body?.userId);
+    if (!Number.isFinite(userId)) return res.status(400).json({ error: "Pick a person" });
+    const granted = await grantChecklistAccess(who.schoolId, userId);
+    if (!granted) return res.status(404).json({ error: "That person is not at this school" });
+    res.json({ saved: true });
+  } catch (error) {
+    console.error("[payroll-day] grant filler", error);
+    res.status(500).json({ error: "Could not grant access" });
+  }
+});
+
+router.delete("/fillers/:userId", async (req, res) => {
+  try {
+    const who = await actor(req);
+    if (!who?.manageRates) return res.status(403).json({ error: "You do not have access to hourly rates." });
+    const userId = parseInt(req.params.userId, 10);
+    if (!Number.isFinite(userId)) return res.status(400).json({ error: "Pick a person" });
+    await revokeChecklistAccess(who.schoolId, userId);
+    res.json({ saved: true });
+  } catch (error) {
+    console.error("[payroll-day] revoke filler", error);
+    res.status(500).json({ error: "Could not remove access" });
+  }
+});
+
 export default router;

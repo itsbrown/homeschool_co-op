@@ -4723,6 +4723,7 @@ router.get("/user-locations/my-permissions", supabaseAuth, async (req: any, res)
             canManageStudents: schoolPerm.canManageStudents,
             canSendNotifications: schoolPerm.canSendNotifications,
             canViewParentContacts: schoolPerm.canViewParentContacts,
+            canManageHourlyRates: schoolPerm.canManageHourlyRates,
           },
           isActive: schoolPerm.isActive,
         };
@@ -5049,7 +5050,19 @@ router.post("/user-locations", supabaseAuth, requireSchoolContext, async (req: a
   }
 });
 
-const userSchoolPermissionUpdateSchema = userLocationPermissionUpdateSchema;
+const userSchoolPermissionUpdateSchema = z.object({
+  accessLevel: z.enum(['view', 'manage', 'admin']).optional(),
+  canViewReports: z.boolean().optional(),
+  canManageStaff: z.boolean().optional(),
+  canManageClasses: z.boolean().optional(),
+  canManageStudents: z.boolean().optional(),
+  canSendNotifications: z.boolean().optional(),
+  canViewParentContacts: z.boolean().optional(),
+  canManageHourlyRates: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+}).refine(data => Object.keys(data).length > 0, {
+  message: "At least one field must be provided",
+});
 
 router.get("/user-school-permissions", supabaseAuth, requireSchoolContext, async (req: any, res) => {
   try {
@@ -5072,6 +5085,7 @@ router.get("/user-school-permissions", supabaseAuth, requireSchoolContext, async
           canManageStudents: row.canManageStudents,
           canSendNotifications: row.canSendNotifications,
           canViewParentContacts: row.canViewParentContacts,
+          canManageHourlyRates: row.canManageHourlyRates,
           isActive: row.isActive,
         };
       }),
@@ -5115,6 +5129,7 @@ router.post("/user-school-permissions", supabaseAuth, requireSchoolContext, asyn
         canManageStudents: existing.canManageStudents,
         canSendNotifications: existing.canSendNotifications,
         canViewParentContacts: existing.canViewParentContacts,
+        canManageHourlyRates: existing.canManageHourlyRates,
         isActive: existing.isActive,
       });
     }
@@ -5141,6 +5156,7 @@ router.post("/user-school-permissions", supabaseAuth, requireSchoolContext, asyn
         canManageStudents: false,
         canSendNotifications: false,
         canViewParentContacts: false,
+        canManageHourlyRates: false,
         isActive: true,
       });
     }
@@ -5160,6 +5176,7 @@ router.post("/user-school-permissions", supabaseAuth, requireSchoolContext, asyn
       canManageStudents: row.canManageStudents,
       canSendNotifications: row.canSendNotifications,
       canViewParentContacts: row.canViewParentContacts,
+      canManageHourlyRates: row.canManageHourlyRates,
       isActive: row.isActive,
     });
   } catch (error) {
@@ -5214,6 +5231,7 @@ router.patch(
         canManageStudents: updated.canManageStudents,
         canSendNotifications: updated.canSendNotifications,
         canViewParentContacts: updated.canViewParentContacts,
+        canManageHourlyRates: updated.canManageHourlyRates,
         isActive: updated.isActive,
       });
     } catch (error) {
