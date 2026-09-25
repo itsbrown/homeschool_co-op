@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-25 (Today's hours Save bar clears the sidebar)
+
+- Fixed Save on `/payroll-day` used full viewport width and covered the parent sidebar. Bar is `lg:left-64` so it stays in the main column.
+
 ## 2026-09-25 (Hourly rates shell + row Save)
 
 - `/school-admin/payroll-rates` uses `SchoolAdminLayout` so Finance nav stays visible. Each job has editable person, what they do, usual hours, and rate, plus **Save** and **Remove**. PATCH accepts those fields; DELETE deactivates the job. Saved class days still keep the old rate.

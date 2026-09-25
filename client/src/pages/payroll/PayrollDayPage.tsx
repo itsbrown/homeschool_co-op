@@ -165,7 +165,7 @@ export default function PayrollDayPage() {
           ))}
         </section>
       ))}
-      <div className="fixed inset-x-0 bottom-0 border-t bg-background p-4">
+      <div className="fixed inset-x-0 bottom-0 z-10 border-t bg-background p-4 lg:left-64">
         <Button
           type="button"
           className="h-12 w-full text-base"
