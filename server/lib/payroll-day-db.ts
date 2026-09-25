@@ -153,6 +153,44 @@ export async function searchSchoolPeople(schoolId: number, query: string): Promi
   return (rows as unknown as Record<string, unknown>[]).map(mapPerson);
 }
 
+export type SavedDaySummary = {
+  workDate: string;
+  hereCount: number;
+  awayCount: number;
+  jobCount: number;
+  hasNote: boolean;
+};
+
+export async function listSavedDaySummaries(
+  schoolId: number,
+  fromDate: string,
+  toDate: string,
+): Promise<SavedDaySummary[]> {
+  const database = await db();
+  const rows = await database.execute(sql`
+    SELECT
+      d.work_date AS work_date,
+      COUNT(*)::int AS job_count,
+      COUNT(*) FILTER (WHERE l.present = 'here')::int AS here_count,
+      COUNT(*) FILTER (WHERE l.present = 'away')::int AS away_count,
+      BOOL_OR(COALESCE(TRIM(d.note), '') <> '' OR COALESCE(TRIM(l.note), '') <> '') AS has_note
+    FROM payroll_days d
+    JOIN payroll_day_lines l ON l.payroll_day_id = d.id
+    WHERE d.school_id = ${schoolId}
+      AND d.work_date >= ${fromDate}
+      AND d.work_date <= ${toDate}
+    GROUP BY d.work_date
+    ORDER BY d.work_date
+  `);
+  return (rows as unknown as Record<string, unknown>[]).map((row) => ({
+    workDate: String(row.work_date).slice(0, 10),
+    hereCount: Number(row.here_count),
+    awayCount: Number(row.away_count),
+    jobCount: Number(row.job_count),
+    hasNote: Boolean(row.has_note),
+  }));
+}
+
 export async function loadSavedDay(schoolId: number, workDate: string): Promise<{
   id: number;
   note: string | null;

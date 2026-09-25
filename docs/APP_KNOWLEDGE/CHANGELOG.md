@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-25 (Today's hours list with Approve / Edit)
+
+- `/payroll-day` is a class-day list (about four weeks back, a few ahead). Each row shows Needs review or Approved, a short here/away summary, **Approve** (everyone usual hours), and **Edit** (bottom sheet for exceptions). `GET /api/payroll-day/days` and `POST /api/payroll-day/approve`. Playwright: `e2e/payroll-day.spec.ts`.
+
 ## 2026-09-25 (Today's hours Save bar clears the sidebar)
 
 - Fixed Save on `/payroll-day` used full viewport width and covered the parent sidebar. Bar is `lg:left-64` so it stays in the main column.

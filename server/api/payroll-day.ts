@@ -10,6 +10,7 @@ import {
   grantChecklistAccess,
   listActiveJobs,
   listChecklistFillers,
+  listSavedDaySummaries,
   loadSavedDay,
   revokeChecklistAccess,
   saveDay,
@@ -19,9 +20,11 @@ import {
   userCanFillChecklist,
 } from "../lib/payroll-day-db";
 import {
+  classDayListWindow,
   classDayOnOrAfter,
   hoursToMinutes,
   isClassDay,
+  listClassDays,
   minutesToHours,
   paidMinutes,
   payCents,
@@ -88,6 +91,36 @@ router.get("/access", async (req, res) => {
   });
 });
 
+router.get("/days", async (req, res) => {
+  try {
+    const who = await actor(req);
+    if (!who?.checklist) return res.status(403).json({ error: "You do not have access to daily hours." });
+    const today = new Date().toISOString().slice(0, 10);
+    const focus = isClassDay(today) ? today : classDayOnOrAfter(today);
+    const window = classDayListWindow(focus);
+    const jobs = await listActiveJobs(who.schoolId);
+    const saved = await listSavedDaySummaries(who.schoolId, window.from, window.to);
+    const byDate = new Map(saved.map((row) => [row.workDate, row]));
+    const days = listClassDays(window.from, window.to).map((date) => {
+      const row = byDate.get(date);
+      const approved = Boolean(row);
+      return {
+        date,
+        status: approved ? "approved" : "needs_review",
+        isFocus: date === focus,
+        jobCount: row?.jobCount ?? jobs.length,
+        hereCount: row?.hereCount ?? (approved ? 0 : jobs.length),
+        awayCount: row?.awayCount ?? 0,
+        hasNote: row?.hasNote ?? false,
+      };
+    });
+    res.json({ focus, from: window.from, to: window.to, days });
+  } catch (error) {
+    console.error("[payroll-day] days", error);
+    res.status(500).json({ error: "Could not load class days" });
+  }
+});
+
 router.get("/", async (req, res) => {
   try {
     const who = await actor(req);
@@ -100,6 +133,47 @@ router.get("/", async (req, res) => {
   } catch (error) {
     console.error("[payroll-day] load", error);
     res.status(500).json({ error: "Could not open today" });
+  }
+});
+
+const approveSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+router.post("/approve", async (req, res) => {
+  try {
+    const who = await actor(req);
+    if (!who?.checklist) return res.status(403).json({ error: "You do not have access to daily hours." });
+    const parsed = approveSchema.safeParse(req.body);
+    if (!parsed.success || !isClassDay(parsed.data.date)) {
+      return res.status(400).json({ error: "Pick a Monday, Wednesday, or Friday." });
+    }
+    const jobs = await listActiveJobs(who.schoolId);
+    const existing = await loadSavedDay(who.schoolId, parsed.data.date);
+    if (existing) {
+      return res.json({ saved: true, alreadyApproved: true });
+    }
+    await saveDay({
+      schoolId: who.schoolId,
+      workDate: parsed.data.date,
+      note: null,
+      savedBy: who.user.id,
+      lines: jobs.map((job) => ({
+        jobId: job.id,
+        personName: job.personName,
+        jobLabel: job.jobLabel,
+        present: "here" as const,
+        differentMinutes: null,
+        note: null,
+        rateCentsSnapshot: job.rateCents,
+        weeklyMinutesSnapshot: job.weeklyMinutes,
+        sortOrder: job.sortOrder,
+      })),
+    });
+    res.json({ saved: true, alreadyApproved: false });
+  } catch (error) {
+    console.error("[payroll-day] approve", error);
+    res.status(500).json({ error: "Could not approve the day" });
   }
 });
 

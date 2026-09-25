@@ -71,10 +71,43 @@ export function shiftClassDay(iso: string, direction: -1 | 1): string {
   return iso;
 }
 
+/** Inclusive Monday/Wednesday/Friday dates from `fromIso` through `toIso`. */
+export function listClassDays(fromIso: string, toIso: string): string[] {
+  const days: string[] = [];
+  let cursor = parseIsoDate(fromIso);
+  const end = parseIsoDate(toIso).getTime();
+  for (let i = 0; i < 90; i++) {
+    const next = isoDate(cursor);
+    if (cursor.getTime() > end) break;
+    if (isClassDay(next)) days.push(next);
+    cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return days;
+}
+
+/** About four weeks back and one week forward from a reference class day. */
+export function classDayListWindow(aroundIso: string): { from: string; to: string } {
+  const anchor = isClassDay(aroundIso) ? aroundIso : classDayOnOrAfter(aroundIso);
+  let from = anchor;
+  for (let i = 0; i < 12; i++) from = shiftClassDay(from, -1);
+  let to = anchor;
+  for (let i = 0; i < 3; i++) to = shiftClassDay(to, 1);
+  return { from, to };
+}
+
 export function formatClassDay(iso: string): string {
   return parseIsoDate(iso).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+export function formatClassDayShort(iso: string): string {
+  return parseIsoDate(iso).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
     day: "numeric",
     timeZone: "UTC",
   });

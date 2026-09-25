@@ -1,8 +1,11 @@
 import { isSchoolFeatureEnabled } from "../../server/lib/school-features";
 import {
+  classDayListWindow,
   classDayOnOrAfter,
   dayShareMinutes,
+  formatClassDayShort,
   hoursToMinutes,
+  listClassDays,
   paidMinutes,
   payCents,
   shiftClassDay,
@@ -92,5 +95,8 @@ describe("payroll day pay", () => {
     expect(classDayOnOrAfter("2026-09-24")).toBe("2026-09-25");
     expect(shiftClassDay("2026-09-25", -1)).toBe("2026-09-23");
     expect(shiftClassDay("2026-09-25", 1)).toBe("2026-09-28");
+    expect(listClassDays("2026-09-21", "2026-09-25")).toEqual(["2026-09-21", "2026-09-23", "2026-09-25"]);
+    expect(classDayListWindow("2026-09-23").from < "2026-09-23").toBe(true);
+    expect(formatClassDayShort("2026-09-23")).toMatch(/Sep/);
   });
 });
