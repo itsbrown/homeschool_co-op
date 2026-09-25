@@ -3,6 +3,7 @@ export const DEFAULT_SCHOOL_FEATURES: Record<string, boolean> = {
   financialReports: true,
   aiInsights: true,
   doorCodes: false,
+  dailyHours: false,
 };
 
 export function normalizeSchoolFeatures(raw: unknown): Record<string, boolean> {

@@ -26,6 +26,7 @@ import {
   Bell,
   GraduationCap,
   Phone,
+  Coins,
   Loader2,
   UserPlus,
   ChevronsUpDown,
@@ -107,6 +108,15 @@ const permissionLabels: Record<string, { label: string; icon: typeof FileText; d
   },
 };
 
+const schoolWidePermissionLabels: Record<string, { label: string; icon: typeof FileText; description: string }> = {
+  ...permissionLabels,
+  canManageHourlyRates: {
+    label: 'Hourly rates',
+    icon: Coins,
+    description: 'Daily hours rates for the whole school. Does not include the checklist.',
+  },
+};
+
 function displayUserName(user: SchoolUser): string {
   const name = `${user.firstName || ''} ${user.lastName || ''}`.trim();
   return name || user.email;
@@ -116,10 +126,12 @@ function PermissionsTable({
   rows,
   onToggle,
   isPending,
+  labels = permissionLabels,
 }: {
   rows: StaffPermissionRow[];
   onToggle: (rowId: number, permission: string, currentValue: boolean) => void;
   isPending: boolean;
+  labels?: Record<string, { label: string; icon: typeof FileText; description: string }>;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -128,7 +140,7 @@ function PermissionsTable({
           <TableRow>
             <TableHead>User</TableHead>
             <TableHead>Access Level</TableHead>
-            {Object.entries(permissionLabels).map(([key, { label, icon: Icon }]) => (
+            {Object.entries(labels).map(([key, { label, icon: Icon }]) => (
               <TableHead key={key} className="text-center">
                 <div className="flex flex-col items-center gap-1">
                   <Icon className="h-4 w-4" />
@@ -160,12 +172,16 @@ function PermissionsTable({
                   {perm.accessLevel}
                 </Badge>
               </TableCell>
-              {Object.keys(permissionLabels).map((permKey) => (
+              {Object.keys(labels).map((permKey) => (
                 <TableCell key={permKey} className="text-center">
                   <Switch
-                    checked={perm[permKey as keyof PermissionFlags] as boolean}
+                    checked={Boolean((perm as StaffPermissionRow & Record<string, boolean>)[permKey])}
                     onCheckedChange={() =>
-                      onToggle(perm.id, permKey, perm[permKey as keyof PermissionFlags] as boolean)
+                      onToggle(
+                        perm.id,
+                        permKey,
+                        Boolean((perm as StaffPermissionRow & Record<string, boolean>)[permKey]),
+                      )
                     }
                     disabled={isPending || perm.accessLevel === 'admin'}
                     data-testid={`switch-${perm.id}-${permKey}`}
@@ -441,6 +457,7 @@ export default function StaffPermissionsPage() {
             ) : schoolPermissions && schoolPermissions.length > 0 ? (
               <PermissionsTable
                 rows={schoolPermissions}
+                labels={schoolWidePermissionLabels}
                 onToggle={handleSchoolPermissionToggle}
                 isPending={updateSchoolPermissionMutation.isPending}
               />

@@ -1,5 +1,13 @@
 # App knowledge changelog
 
+## 2026-09-25 (Daily hours is a school feature)
+
+- Super admin turns on `schools.enabled_features.dailyHours` from School Edit. It stays off until then. **Hourly rates** is the school-wide permission `canManageHourlyRates` (`user_school_permissions` only). School admin bypass still opens rates when the feature is on. **Today's hours** is a separate grant on the rates page (`payroll_checklist_access`). No email is built into the program, and a new school starts with no jobs. Saved days still keep the rate from when they were saved. SQL: `263-payroll-days.sql` and `264-payroll-hourly-rates-permission.sql` (`ADD COLUMN IF NOT EXISTS`). Playwright: `npm run test:e2e -- e2e/payroll-day.spec.ts`.
+
+## 2026-09-25 (Daily payroll checklist)
+
+- First version of the class-day checklist and hourly rates. Replaced the same day by the school-feature version above. No Venmo and no tuition-credit write.
+
 ## 2026-09-23 (Week Planner cards show the steps under the heading)
 
 - Week-grid cards used the first description line, so Yankee Doodle Circle Time showed only “1. Welcome & Greeting” and Literacy showed only “Pre-K Group:” even when the Lovevery kit and the rest of the script were on the next lines. `descriptionPreviewText` keeps up to six opening lines (about 320 characters). **Lesson** still has the full script. Print and mentor Schedule still use the first line.

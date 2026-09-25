@@ -86,6 +86,11 @@ import { sqlStripeHistoryUserAtSchool } from './lib/admin-school-context';
 /**
  * DatabaseStorage - Implements IStorage using PostgreSQL and Drizzle ORM
  */
+async function ensureHourlyRatePermissionColumn(): Promise<void> {
+  const { ensurePayrollDaySchema } = await import("./lib/ensure-payroll-day-schema");
+  await ensurePayrollDaySchema();
+}
+
 export class DatabaseStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
@@ -2734,6 +2739,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserSchoolPermissionById(id: number): Promise<UserSchoolPermission | undefined> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     const [row] = await db.select().from(userSchoolPermissions).where(eq(userSchoolPermissions.id, id));
     return row;
@@ -2743,6 +2749,7 @@ export class DatabaseStorage implements IStorage {
     userId: number,
     schoolId: number,
   ): Promise<UserSchoolPermission | undefined> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     const [row] = await db
       .select()
@@ -2761,6 +2768,7 @@ export class DatabaseStorage implements IStorage {
     userId: number,
     schoolId: number,
   ): Promise<UserSchoolPermission | undefined> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     const [row] = await db
       .select()
@@ -2775,6 +2783,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserSchoolPermissionsBySchoolId(schoolId: number): Promise<UserSchoolPermission[]> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     return await db
       .select()
@@ -2788,6 +2797,7 @@ export class DatabaseStorage implements IStorage {
   async createUserSchoolPermission(
     permission: InsertUserSchoolPermission,
   ): Promise<UserSchoolPermission> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     const [row] = await db
       .insert(userSchoolPermissions)
@@ -2804,6 +2814,7 @@ export class DatabaseStorage implements IStorage {
     id: number,
     permission: Partial<InsertUserSchoolPermission>,
   ): Promise<UserSchoolPermission | undefined> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     const [row] = await db
       .update(userSchoolPermissions)
