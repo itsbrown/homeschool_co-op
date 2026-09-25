@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-25 (Daily payroll checklist)
+
+- Leigh Ann opens `/payroll-day` on Monday, Wednesday, or Friday. The sheet roster is already listed and **Here** is selected. She can mark **Not here**, **Different hours**, and a note. Rates stay on `/school-admin/payroll-rates`. A saved day keeps the rate from when it was saved. Schema: `server/migrations/263-payroll-days.sql`. No Venmo and no tuition-credit write.
+
 ## 2026-09-22 (Home Upcoming Events skips class days)
 
 - Parent Home Upcoming Events lists field trips and school activities for the next 7 days. Recurring class meetings stay on `/schedule`. Helper: `client/src/lib/parent-upcoming-events.ts`.

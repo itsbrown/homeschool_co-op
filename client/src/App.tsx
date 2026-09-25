@@ -169,6 +169,8 @@ const EducatorAssessmentsPage = lazy(() => import('./pages/educator/EducatorAsse
 const EducatorWeeklySchedulePage = lazy(() => import('./pages/educator/EducatorWeeklySchedulePage'));
 const StaffGuidePage = lazy(() => import('./pages/educator/StaffGuidePage'));
 const QrScanPage = lazy(() => import('./pages/QrScanPage'));
+const PayrollDayPage = lazy(() => import('./pages/payroll/PayrollDayPage'));
+const PayrollRatesPage = lazy(() => import('./pages/schooladmin/PayrollRatesPage'));
 
 const CallbackPage = () => {
   const { isAuthenticated } = useAuth();
@@ -696,6 +698,7 @@ function Router() {
       {/* Parent routes */}
       <Route path="/parent/concierge" component={() => <ParentAppShell><ParentConciergePage /></ParentAppShell>} />
       <Route path="/parent/home" component={() => <ParentAppShell><ParentDashboard /></ParentAppShell>} />
+      <Route path="/payroll-day" component={() => <ParentAppShell><PayrollDayPage /></ParentAppShell>} />
       <Route path="/parent/emergency-contacts" component={ParentEmergencyContactsPage} />
       <Route path="/parent/programs/browse" component={ProgramsBrowseRedirect} />
       <Route path="/parent/programs" component={ProgramsParentPage} />
@@ -804,6 +807,7 @@ function Router() {
       <Route path="/school-admin/assessments" component={() => <SchoolAdminShellWrapper><AssessmentManagementPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/attendance" component={() => <SchoolAdminShellWrapper><AttendanceManagementPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/credits" component={() => <SchoolAdminShellWrapper><CreditManagementPage /></SchoolAdminShellWrapper>} />
+      <Route path="/school-admin/payroll-rates" component={() => <SchoolAdminShellWrapper><PayrollRatesPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/fundraisers" component={() => <SchoolAdminShellWrapper><FundraiserManagementPage /></SchoolAdminShellWrapper>} />
       <Route path="/school-admin/public-store" component={PublicStoreManagerRoute} />
       <Route path="/school-admin/staff-permissions" component={() => <SchoolAdminShellWrapper><StaffPermissionsPage /></SchoolAdminShellWrapper>} />

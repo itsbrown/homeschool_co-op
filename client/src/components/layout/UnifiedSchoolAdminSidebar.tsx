@@ -130,6 +130,7 @@ const adminNavGroups: NavGroup[] = [
       { title: 'Memberships', href: '/schools/memberships', icon: BadgeCheck },
       { title: 'Discounts', href: '/schools/discounts', icon: Target },
       { title: 'Credits', href: '/school-admin/credits', icon: Coins },
+      { title: 'Hourly rates', href: '/school-admin/payroll-rates', icon: Coins },
       { title: 'Fundraisers', href: '/school-admin/fundraisers', icon: Gift },
     ],
   },

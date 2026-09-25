@@ -122,6 +122,7 @@ See also [`docs/E2E_PARENT_PROFILE.md`](E2E_PARENT_PROFILE.md).
 
 | Spec | Command | What it covers | Seed endpoint |
 |------|---------|----------------|---------------|
+| [`e2e/payroll-day.spec.ts`](../e2e/payroll-day.spec.ts) | `npm run test:e2e -- e2e/payroll-day.spec.ts` | iPhone checklist: pre-filled Here, save Not here + different hours + note, reload, other user turned away, saved day keeps its pay after a rate change | `setup-payroll-day-scenario` + linked parent and admin (`requireLinkedSeed`) |
 | [`e2e/school-code-registration.spec.ts`](../e2e/school-code-registration.spec.ts) | `npm run test:e2e -- e2e/school-code-registration.spec.ts` | `/register/:code` UI + live signup | `POST /api/test/setup-registration-scenario` |
 | [`e2e/additive-nav.spec.ts`](../e2e/additive-nav.spec.ts) | `npm run test:e2e -- e2e/additive-nav.spec.ts` | Parent+Mentor additive chrome: family hub, Family/Teaching groups, no RoleSwitcher, My Classes stays `shell-parent`; parent-only/educator-only unchanged | `setup-additive-nav-scenario` + `linkSupabaseAuth` (do **not** use `playwright/.auth/parent.json`) |
 | [`e2e/session-enrollment-flow.spec.ts`](../e2e/session-enrollment-flow.spec.ts) | `npm run test:e2e -- e2e/session-enrollment-flow.spec.ts` | Parent session wizard + `POST /api/session-enrollments` | `setup-session-enrollment-scenario` |
