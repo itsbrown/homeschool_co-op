@@ -229,12 +229,35 @@ export async function saveDay(args: {
   }
 }
 
-export async function updateJobRate(schoolId: number, jobId: number, rateCents: number, weeklyMinutes: number): Promise<boolean> {
+export async function updateJob(args: {
+  schoolId: number;
+  jobId: number;
+  personName: string;
+  jobLabel: string;
+  rateCents: number;
+  weeklyMinutes: number;
+}): Promise<boolean> {
   const database = await db();
   const updated = await database.execute(sql`
     UPDATE payroll_jobs
-    SET rate_cents = ${rateCents}, weekly_minutes = ${weeklyMinutes}, updated_at = NOW()
-    WHERE id = ${jobId} AND school_id = ${schoolId}
+    SET
+      person_name = ${args.personName},
+      job_label = ${args.jobLabel},
+      rate_cents = ${args.rateCents},
+      weekly_minutes = ${args.weeklyMinutes},
+      updated_at = NOW()
+    WHERE id = ${args.jobId} AND school_id = ${args.schoolId} AND active = TRUE
+    RETURNING id
+  `);
+  return (updated as unknown as unknown[]).length > 0;
+}
+
+export async function deactivateJob(schoolId: number, jobId: number): Promise<boolean> {
+  const database = await db();
+  const updated = await database.execute(sql`
+    UPDATE payroll_jobs
+    SET active = FALSE, updated_at = NOW()
+    WHERE id = ${jobId} AND school_id = ${schoolId} AND active = TRUE
     RETURNING id
   `);
   return (updated as unknown as unknown[]).length > 0;

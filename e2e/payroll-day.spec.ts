@@ -67,7 +67,6 @@ test.describe("daily hours school feature", () => {
     await signOut(page);
     await signIn(page, seed.admin.email, seed.admin.password);
     await page.goto("/school-admin/payroll-rates", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Hourly rates" })).toHaveCount(0);
     await expect(page.getByTestId("payroll-rates-denied")).toBeVisible({ timeout: 30_000 });
 
     await signOut(page);
@@ -133,7 +132,6 @@ test.describe("daily hours school feature", () => {
     await expect(page.getByTestId("payroll-day-note")).toHaveValue("Left after lunch");
 
     await page.goto("/school-admin/payroll-rates", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Hourly rates" })).toHaveCount(0);
     await expect(page.getByTestId("payroll-rates-denied")).toBeVisible({ timeout: 30_000 });
 
     await signOut(page);
@@ -148,7 +146,7 @@ test.describe("daily hours school feature", () => {
       (r) => r.url().includes("/api/payroll-day/jobs/") && r.request().method() === "PATCH",
       { timeout: 20_000 },
     );
-    await rate.blur();
+    await page.locator("[data-testid^='rate-save-']").first().click();
     expect((await patchRate).ok()).toBeTruthy();
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("payroll-day-pay")).toHaveText(payBefore ?? "", { timeout: 30_000 });

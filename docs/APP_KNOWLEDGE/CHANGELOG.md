@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-25 (Hourly rates shell + row Save)
+
+- `/school-admin/payroll-rates` uses `SchoolAdminLayout` so Finance nav stays visible. Each job has editable person, what they do, usual hours, and rate, plus **Save** and **Remove**. PATCH accepts those fields; DELETE deactivates the job. Saved class days still keep the old rate.
+
 ## 2026-09-25 (Daily hours is a school feature)
 
 - Super admin turns on `schools.enabled_features.dailyHours` from School Edit. It stays off until then. **Hourly rates** is the school-wide permission `canManageHourlyRates` (`user_school_permissions` only). School admin bypass still opens rates when the feature is on. **Today's hours** is a separate grant on the rates page (`payroll_checklist_access`). No email is built into the program, and a new school starts with no jobs. Saved days still keep the rate from when they were saved. SQL: `263-payroll-days.sql` and `264-payroll-hourly-rates-permission.sql` (`ADD COLUMN IF NOT EXISTS`). Playwright: `npm run test:e2e -- e2e/payroll-day.spec.ts`.

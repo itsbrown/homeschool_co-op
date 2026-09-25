@@ -14,7 +14,8 @@ import {
   revokeChecklistAccess,
   saveDay,
   searchSchoolPeople,
-  updateJobRate,
+  updateJob,
+  deactivateJob,
   userCanFillChecklist,
 } from "../lib/payroll-day-db";
 import {
@@ -216,7 +217,9 @@ router.get("/summary", async (req, res) => {
   }
 });
 
-const rateSchema = z.object({
+const jobUpdateSchema = z.object({
+  personName: z.string().min(1).max(80),
+  jobLabel: z.string().min(1).max(80),
   hourlyRate: z.number().positive().max(500),
   usualHours: z.number().min(0).max(80),
 });
@@ -225,20 +228,39 @@ router.patch("/jobs/:id", async (req, res) => {
   try {
     const who = await actor(req);
     if (!who?.manageRates) return res.status(403).json({ error: "You do not have access to hourly rates." });
-    const parsed = rateSchema.safeParse(req.body);
+    const parsed = jobUpdateSchema.safeParse(req.body);
     const jobId = parseInt(req.params.id, 10);
-    if (!parsed.success || !Number.isFinite(jobId)) return res.status(400).json({ error: "Check the rate and hours" });
-    const ok = await updateJobRate(
-      who.schoolId,
+    if (!parsed.success || !Number.isFinite(jobId)) {
+      return res.status(400).json({ error: "Check the person, the job, the rate, and the hours." });
+    }
+    const ok = await updateJob({
+      schoolId: who.schoolId,
       jobId,
-      Math.round(parsed.data.hourlyRate * 100),
-      hoursToMinutes(parsed.data.usualHours),
-    );
+      personName: parsed.data.personName.trim(),
+      jobLabel: parsed.data.jobLabel.trim(),
+      rateCents: Math.round(parsed.data.hourlyRate * 100),
+      weeklyMinutes: hoursToMinutes(parsed.data.usualHours),
+    });
     if (!ok) return res.status(404).json({ error: "Job not found" });
     res.json({ saved: true });
   } catch (error) {
     console.error("[payroll-day] update job", error);
-    res.status(500).json({ error: "Could not save the rate" });
+    res.status(500).json({ error: "Could not save the job" });
+  }
+});
+
+router.delete("/jobs/:id", async (req, res) => {
+  try {
+    const who = await actor(req);
+    if (!who?.manageRates) return res.status(403).json({ error: "You do not have access to hourly rates." });
+    const jobId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(jobId)) return res.status(400).json({ error: "Pick a job" });
+    const ok = await deactivateJob(who.schoolId, jobId);
+    if (!ok) return res.status(404).json({ error: "Job not found" });
+    res.json({ saved: true });
+  } catch (error) {
+    console.error("[payroll-day] deactivate job", error);
+    res.status(500).json({ error: "Could not remove the job" });
   }
 });
 
