@@ -32,6 +32,42 @@ export function firstDescriptionParagraph(
   return `${clipped || first.slice(0, maxChars).trim()}…`;
 }
 
+/**
+ * Several opening lines for a week-grid card.
+ * Morning scripts often start with a heading ("1. Welcome & Greeting", "Pre-K Group:")
+ * and put the activity on the next line. The first line alone hides that.
+ */
+export function descriptionPreviewText(
+  description: string | null | undefined,
+  maxChars = 320,
+  maxLines = 6,
+): string | null {
+  if (!description) return null;
+  const lines = description
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return null;
+
+  const picked: string[] = [];
+  let used = 0;
+  for (const line of lines) {
+    if (picked.length >= maxLines) break;
+    const separator = picked.length > 0 ? 1 : 0;
+    const room = maxChars - used - separator;
+    if (room <= 8) break;
+    if (line.length <= room) {
+      picked.push(line);
+      used += separator + line.length;
+      continue;
+    }
+    const clipped = line.slice(0, room).replace(/\s+\S*$/, "").trim();
+    picked.push(`${clipped || line.slice(0, room).trim()}…`);
+    break;
+  }
+  return picked.join("\n");
+}
+
 export function formatGroupLabel(group: WeekPlanGroup): string {
   if (typeof group === "string") return group.trim();
   if (!group || typeof group !== "object") return "";
@@ -67,9 +103,10 @@ export function lessonTeachingPreview(block: {
   const maxObjectives = block.maxObjectives ?? 3;
   const maxMaterials = block.maxMaterials ?? 2;
   return {
-    descriptionPreview: firstDescriptionParagraph(
+    descriptionPreview: descriptionPreviewText(
       block.description,
-      block.maxDescriptionChars ?? 280,
+      block.maxDescriptionChars ?? 320,
+      6,
     ),
     objectives: asTrimmedStrings(block.objectives).slice(0, maxObjectives),
     materials: asTrimmedStrings(block.materials).slice(0, maxMaterials),

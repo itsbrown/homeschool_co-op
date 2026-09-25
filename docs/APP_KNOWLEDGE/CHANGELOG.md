@@ -8,6 +8,10 @@
 
 - First version of the class-day checklist and hourly rates. Replaced the same day by the school-feature version above. No Venmo and no tuition-credit write.
 
+## 2026-09-23 (Week Planner cards show the steps under the heading)
+
+- Week-grid cards used the first description line, so Yankee Doodle Circle Time showed only “1. Welcome & Greeting” and Literacy showed only “Pre-K Group:” even when the Lovevery kit and the rest of the script were on the next lines. `descriptionPreviewText` keeps up to six opening lines (about 320 characters). **Lesson** still has the full script. Print and mentor Schedule still use the first line.
+
 ## 2026-09-22 (Home Upcoming Events skips class days)
 
 - Parent Home Upcoming Events lists field trips and school activities for the next 7 days. Recurring class meetings stay on `/schedule`. Helper: `client/src/lib/parent-upcoming-events.ts`.
