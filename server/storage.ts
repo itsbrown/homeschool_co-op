@@ -6581,15 +6581,27 @@ export class MemStorage implements IStorage {
 
       async claimPaymentEnrollmentLedger(stripePaymentIntentId: string): Promise<boolean> {
         // No memStorage fallback on DB error: a fallback "win" would credit enrollments twice.
+        // Outside production, rows that only exist in memStorage (DB insert fell back) claim there.
         if (this.dbStorage && typeof this.dbStorage.claimPaymentEnrollmentLedger === 'function') {
-          return await this.dbStorage.claimPaymentEnrollmentLedger(stripePaymentIntentId);
+          if (await this.dbStorage.claimPaymentEnrollmentLedger(stripePaymentIntentId)) return true;
+          if (
+            process.env.NODE_ENV !== 'production' &&
+            !(await this.dbStorage.getPaymentByStripeId(stripePaymentIntentId))
+          ) {
+            return await this.memStorage.claimPaymentEnrollmentLedger(stripePaymentIntentId);
+          }
+          return false;
         }
         return await this.memStorage.claimPaymentEnrollmentLedger(stripePaymentIntentId);
       }
 
       async releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId: string): Promise<void> {
         if (this.dbStorage && typeof this.dbStorage.releasePaymentEnrollmentLedgerClaim === 'function') {
-          return await this.dbStorage.releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId);
+          await this.dbStorage.releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId);
+          if (process.env.NODE_ENV !== 'production') {
+            await this.memStorage.releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId);
+          }
+          return;
         }
         return await this.memStorage.releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId);
       }
@@ -6937,8 +6949,17 @@ export class MemStorage implements IStorage {
         completionSource: string,
       ): Promise<ScheduledPayment | undefined> {
         // No memStorage fallback on DB error: a fallback "win" would credit enrollments twice.
+        // Outside production, rows that only exist in memStorage (DB insert fell back) complete there.
         if (this.dbStorage && typeof this.dbStorage.completeScheduledPaymentIfOpen === 'function') {
-          return await this.dbStorage.completeScheduledPaymentIfOpen(id, completionSource);
+          const completed = await this.dbStorage.completeScheduledPaymentIfOpen(id, completionSource);
+          if (completed) {
+            this.memStorage.mirrorScheduledPayment(completed);
+            return completed;
+          }
+          if (process.env.NODE_ENV !== 'production' && !(await this.dbStorage.getScheduledPaymentById(id))) {
+            return await this.memStorage.completeScheduledPaymentIfOpen(id, completionSource);
+          }
+          return undefined;
         }
         return await this.memStorage.completeScheduledPaymentIfOpen(id, completionSource);
       }
