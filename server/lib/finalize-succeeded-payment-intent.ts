@@ -354,9 +354,26 @@ export async function finalizeSucceededPaymentIntent(
     console.warn('⚠️ Failed to persist stripe_payment_history discount snapshot (non-blocking):', histErr);
   }
 
-  const fulfillment = await fulfillBalancePaymentIntent(paymentIntent, enrollmentIds, {
-    paymentHistoryId: stripeHistoryId ?? undefined,
-  });
+  // Client fulfill, webhook, post-payment verify, and the missed-PI sweep all finalize the same PI.
+  // Only the caller that stamps the payment row credits enrollments. With no payment row there is
+  // nothing to stamp, so fall back to the owed-capped apply.
+  const ledgerClaimed = payment?.id
+    ? await storage.claimPaymentEnrollmentLedger(paymentIntent.id)
+    : true;
+
+  let fulfillment: Awaited<ReturnType<typeof fulfillBalancePaymentIntent>>;
+  try {
+    fulfillment = await fulfillBalancePaymentIntent(paymentIntent, enrollmentIds, {
+      paymentHistoryId: stripeHistoryId ?? undefined,
+      skipEnrollmentApply: !ledgerClaimed,
+    });
+  } catch (err) {
+    const creditedBeforeFailure = (err as { enrollmentLedgerApplied?: boolean })?.enrollmentLedgerApplied === true;
+    if (ledgerClaimed && payment?.id && !creditedBeforeFailure) {
+      await storage.releasePaymentEnrollmentLedgerClaim(paymentIntent.id);
+    }
+    throw err;
+  }
 
   let scheduledRowsCreated = 0;
   if (options?.persistScheduledPayments !== false) {

@@ -14,17 +14,38 @@ export type FulfillBalancePaymentIntentResult = {
 
 /**
  * Apply membership + class pool + credit consumption for a succeeded balance/cart PI.
- * Safe to replay: enrollment shares are capped at owed; credits skip if already logged on payment row.
+ * Membership and credits are replay-safe on their own. The class pool is NOT: the cap at owed only
+ * stops over-crediting pay-in-full; an installment seat still owes after the first charge, so a
+ * replay credits it again. Callers replaying a PI must pass skipEnrollmentApply unless they hold
+ * the payment's enrollment-ledger claim (see finalizeSucceededPaymentIntent).
  */
 export async function fulfillBalancePaymentIntent(
   paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'amount' | 'metadata'>,
   enrollmentIds: number[],
-  options?: { paymentHistoryId?: number | null },
+  options?: { paymentHistoryId?: number | null; skipEnrollmentApply?: boolean },
 ): Promise<FulfillBalancePaymentIntentResult> {
   const membershipBreakdown = await applyMembershipFulfillmentFromCartPaymentIntent(paymentIntent);
 
-  const enrollmentApply = await applyClassPoolToEnrollments(paymentIntent, enrollmentIds);
+  const enrollmentApply = options?.skipEnrollmentApply
+    ? { enrollmentIds: [], appliedCents: 0, skippedCents: 0, classPoolCents: 0 }
+    : await applyClassPoolToEnrollments(paymentIntent, enrollmentIds);
 
+  try {
+    return await finishAfterEnrollmentApply(paymentIntent, enrollmentApply, membershipBreakdown, options);
+  } catch (err) {
+    if (err && typeof err === 'object') {
+      (err as { enrollmentLedgerApplied?: boolean }).enrollmentLedgerApplied = !options?.skipEnrollmentApply;
+    }
+    throw err;
+  }
+}
+
+async function finishAfterEnrollmentApply(
+  paymentIntent: Pick<Stripe.PaymentIntent, 'id' | 'amount' | 'metadata'>,
+  enrollmentApply: FulfillBalancePaymentIntentResult['enrollmentApply'],
+  membershipBreakdown: Awaited<ReturnType<typeof applyMembershipFulfillmentFromCartPaymentIntent>>,
+  options?: { paymentHistoryId?: number | null },
+): Promise<FulfillBalancePaymentIntentResult> {
   const resolved = await resolveMembershipReserveForPaymentIntent(paymentIntent);
   const breakdown =
     membershipBreakdown ??

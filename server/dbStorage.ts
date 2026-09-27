@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray, ilike } from 'drizzle-orm';
+import { eq, ne, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray, ilike } from 'drizzle-orm';
 import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { normalizeSchoolFeatures } from './lib/school-features';
 import { getDb } from './db';
@@ -2047,6 +2047,29 @@ export class DatabaseStorage implements IStorage {
     return updatedPayment;
   }
 
+  async claimPaymentEnrollmentLedger(stripePaymentIntentId: string): Promise<boolean> {
+    const db = await getDb();
+    const rows = await db
+      .update(payments)
+      .set({ enrollmentLedgerAppliedAt: new Date() })
+      .where(
+        and(
+          eq(payments.stripePaymentIntentId, stripePaymentIntentId),
+          isNull(payments.enrollmentLedgerAppliedAt),
+        ),
+      )
+      .returning({ id: payments.id });
+    return rows.length > 0;
+  }
+
+  async releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId: string): Promise<void> {
+    const db = await getDb();
+    await db
+      .update(payments)
+      .set({ enrollmentLedgerAppliedAt: null })
+      .where(eq(payments.stripePaymentIntentId, stripePaymentIntentId));
+  }
+
   // Scheduled Payment methods
   async createScheduledPayment(payment: InsertScheduledPayment): Promise<ScheduledPayment> {
     const db = await getDb();
@@ -2115,6 +2138,25 @@ export class DatabaseStorage implements IStorage {
           eq(scheduledPayments.chargedBy, 'parent_manual'),
         ),
       )
+      .returning();
+    return row;
+  }
+
+  async completeScheduledPaymentIfOpen(
+    id: number,
+    completionSource: string,
+  ): Promise<ScheduledPayment | undefined> {
+    const db = await getDb();
+    const now = new Date();
+    const [row] = await db
+      .update(scheduledPayments)
+      .set({
+        status: 'completed',
+        processedAt: now,
+        completionSource,
+        updatedAt: now,
+      })
+      .where(and(eq(scheduledPayments.id, id), ne(scheduledPayments.status, 'completed')))
       .returning();
     return row;
   }

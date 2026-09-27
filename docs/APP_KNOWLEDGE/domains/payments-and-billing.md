@@ -83,6 +83,8 @@ After Stripe `confirmPayment` succeeds in the browser, the client **must** call 
 
 Rules: one finalize per succeeded PI; membership apply capped at remaining owed; `payments` row before enrollment mutation on scheduled path; double client+webhook calls are idempotent.
 
+**Class-pool cap is not idempotency (2026-09-27).** `applyClassPoolToEnrollments` caps each share at the seat's remaining balance, which makes a pay-in-full replay harmless but **not** an installment-plan first checkout (the seat still owes after installment 1, so a replay credits it again). Idempotency now comes from `payments.enrollment_ledger_applied_at`: `storage.claimPaymentEnrollmentLedger(piId)` is an atomic `UPDATE … WHERE enrollment_ledger_applied_at IS NULL`; only the claimer applies, and `releasePaymentEnrollmentLedgerClaim` runs if the apply throws before crediting. Scheduled installments use `completeScheduledPaymentIfOpen` (conditional `status <> 'completed'` update) instead of a stale-read check. Do not store this marker in `payments.metadata` (many writers merge metadata from stale reads; some rows hold a jsonb string scalar). Tests: `server/tests/finalize-payment-intent-ledger-once.test.ts`, `server/tests/finalize-scheduled-payment-concurrency.test.ts`. Detect historical damage with `server/scripts/audit-fall-2026-seat-ledger-vs-cash.sql`.
+
 ### School admin paid-enrollment alert
 
 After a **cart/enrollment** payment succeeds (not balance paydowns, not scheduled installments), school admins get email + in-app:
@@ -242,6 +244,8 @@ node scripts/with-prod-env.mjs npx tsx server/scripts/send-account-correction-em
 
 Summaries: parent-friendly paragraphs (what was wrong, what we fixed, current balance). Script verifies balance via `buildFamilyBalanceEmailPayload` before send.
 
+**Always `--dry-run` first and check "Current Amount Due" against seat `effective_balance`.** Family-plan SPs cover several seats via `metadata.enrollmentIds` (`enrollment_id` is only the first); `family-balance-email.ts` resolves them with `resolveEnrollmentIdsFromScheduledRow` so siblings are not double-counted as "No Plan".
+
 **Known non-blocker:** `email_log.created_at` missing on prod — Brevo send still succeeds; log write fails.
 
 ## Incidents (reference)
@@ -333,6 +337,7 @@ When volunteer credits cover the full cart, `POST /api/stripe/create-payment-int
 | Symptom | Cause | Fix |
 |---------|--------|-----|
 | Parent paid checkout but still shows balance | Approved credit not applied; or `total_paid` not updated after PI | Apply credit script; reconcile PI to enrollments |
+| Seat shows more paid than Stripe received; autopay stops before plan is collected | First installment-plan checkout credited twice (client fulfill + webhook replay) before the ledger claim existed | Run `audit-fall-2026-seat-ledger-vs-cash.sql`; correct `total_paid` / `effective_balance` to Stripe cash |
 | `remaining_balance = 0` but parent owes money | Stale `remaining_balance`; use `effective_balance` | Recompute / update both fields on correction |
 | Checkout charged $630, `total_cost` still $900 | List price stored; credit or proration not on enrollment | Match ledger to cash + credits (see Jake Fabry) |
 | Admin credit “used” in UI but `used_amount_cents = 0` | Credit approved manually, never linked at checkout | Post-hoc apply script + usage logs |

@@ -848,6 +848,9 @@ export const payments = pgTable("payments", {
   
   // Metadata
   metadata: jsonb("metadata").default({}).notNull(),
+
+  // Set once by the finalizer that credited enrollments for this PI; replays must not re-credit.
+  enrollmentLedgerAppliedAt: timestamp("enrollment_ledger_applied_at"),
   
   // Timestamps
   paymentDate: timestamp("payment_date"),
