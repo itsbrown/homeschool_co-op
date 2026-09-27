@@ -372,7 +372,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             existingPayment.status === 'succeeded'
           ) {
             console.log(
-              'ℹ️ Payment row already succeeded; will still apply enrollment ledger if owed:',
+              'ℹ️ Payment row already succeeded; enrollment ledger applies only if not yet claimed:',
               paymentIntent.id,
             );
             paymentLedgerAlreadySucceeded = true;

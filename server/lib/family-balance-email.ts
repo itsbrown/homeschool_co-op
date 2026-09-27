@@ -7,6 +7,7 @@ import {
   sqlEnrollmentEffectiveBalanceColumn,
   sqlEnrollmentEffectiveBalancePositive,
 } from './enrollment-balance';
+import { resolveEnrollmentIdsFromScheduledRow } from './scheduled-payment-intent-metadata';
 
 const MEMBERSHIP_OWED_STATUSES = ['pending_payment', 'grace_period'] as const;
 
@@ -69,6 +70,7 @@ export async function buildFamilyBalanceEmailPayload(
       enrollmentId: scheduledPayments.enrollmentId,
       amount: scheduledPayments.amount,
       scheduledDate: scheduledPayments.scheduledDate,
+      metadata: scheduledPayments.metadata,
     })
     .from(scheduledPayments)
     .where(
@@ -140,42 +142,51 @@ export async function buildFamilyBalanceEmailPayload(
 
   type ScheduledItem = FamilyBalanceLineItem;
 
+  // Family-plan installments carry every covered seat in metadata.enrollmentIds; enrollment_id is only the first.
+  const scheduledEnrollmentIds = (payment: { enrollmentId: number | null; metadata: unknown }) =>
+    resolveEnrollmentIdsFromScheduledRow({ enrollmentId: payment.enrollmentId as number, metadata: payment.metadata });
+
   const scheduledDetails = (
     await Promise.all(
       outstandingPayments.map(async (payment): Promise<ScheduledItem | null> => {
         let childName = 'Student';
         let className = 'Class';
 
-        if (payment.enrollmentId) {
-          let enrollment = enrollmentById.get(payment.enrollmentId);
-          if (!enrollment) {
-            const [row] = await db
-              .select({
-                id: programEnrollments.id,
-                childName: programEnrollments.childName,
-                className: programEnrollments.className,
-                totalCost: programEnrollments.totalCost,
-                totalPaid: programEnrollments.totalPaid,
-                outstandingCents: sqlEnrollmentEffectiveBalanceColumn(),
-              })
-              .from(programEnrollments)
-              .where(eq(programEnrollments.id, payment.enrollmentId))
-              .limit(1);
-            enrollment = row;
+        const planEnrollmentIds = payment.enrollmentId ? scheduledEnrollmentIds(payment) : [];
+        if (planEnrollmentIds.length > 0) {
+          const planEnrollments = [];
+          for (const id of planEnrollmentIds) {
+            let enrollment = enrollmentById.get(id);
+            if (!enrollment) {
+              const [row] = await db
+                .select({
+                  id: programEnrollments.id,
+                  childName: programEnrollments.childName,
+                  className: programEnrollments.className,
+                  totalCost: programEnrollments.totalCost,
+                  totalPaid: programEnrollments.totalPaid,
+                  outstandingCents: sqlEnrollmentEffectiveBalanceColumn(),
+                })
+                .from(programEnrollments)
+                .where(eq(programEnrollments.id, id))
+                .limit(1);
+              enrollment = row;
+            }
+            if (enrollment) planEnrollments.push(enrollment);
           }
-          if (enrollment) {
-            childName = enrollment.childName || 'Student';
-            className = enrollment.className || 'Class';
+          if (planEnrollments.length > 0) {
+            childName = Array.from(new Set(planEnrollments.map((e) => e.childName || 'Student'))).join(' & ');
+            className = Array.from(new Set(planEnrollments.map((e) => e.className || 'Class'))).join(' / ');
 
-            const enrollmentRemainingBalance =
-              Number(enrollment.outstandingCents) ||
-              computeEffectiveBalance(
-                enrollment.totalCost ?? 0,
-                enrollment.totalPaid ?? 0,
-                0,
-              );
+            const planRemainingBalance = planEnrollments.reduce(
+              (sum, enrollment) =>
+                sum +
+                (Number(enrollment.outstandingCents) ||
+                  computeEffectiveBalance(enrollment.totalCost ?? 0, enrollment.totalPaid ?? 0, 0)),
+              0,
+            );
 
-            if (enrollmentRemainingBalance <= 0) {
+            if (planRemainingBalance <= 0) {
               storage.updateScheduledPaymentStatus(payment.id, 'cancelled').catch(() => {});
               return null;
             }
@@ -201,7 +212,7 @@ export async function buildFamilyBalanceEmailPayload(
   ).filter((p): p is ScheduledItem => p !== null);
 
   const coveredEnrollmentIds = new Set(
-    outstandingPayments.map((p) => p.enrollmentId).filter((id): id is number => id != null),
+    outstandingPayments.flatMap((p) => (p.enrollmentId ? scheduledEnrollmentIds(p) : [])),
   );
 
   const unscheduledDetails: ScheduledItem[] = enrollmentsWithBalance
