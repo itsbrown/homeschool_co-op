@@ -96,7 +96,7 @@ router.put('/users/:id/role', jwtCheck, requireRole(['admin', 'superAdmin']), as
   }
 });
 
-// Deactivate user (admin only)
+// Deactivate user (admin only). Sets users.is_active; does not delete linked records.
 router.put('/users/:id/deactivate', jwtCheck, requireRole(['admin', 'superAdmin']), async (req, res) => {
   try {
     const userId = req.params.id;
@@ -112,6 +112,26 @@ router.put('/users/:id/deactivate', jwtCheck, requireRole(['admin', 'superAdmin'
     res.status(500).json({ 
       success: false, 
       message: 'Error deactivating user' 
+    });
+  }
+});
+
+// Reactivate user (admin only). Mirrors deactivate auth and role checks.
+router.put('/users/:id/reactivate', jwtCheck, requireRole(['admin', 'superAdmin']), async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const reactivatedUser = await UserSyncService.reactivateUser(userId);
+
+    res.json({
+      success: true,
+      message: 'User reactivated successfully',
+      user: reactivatedUser
+    });
+  } catch (error) {
+    console.error('Error reactivating user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error reactivating user'
     });
   }
 });

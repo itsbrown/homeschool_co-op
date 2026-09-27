@@ -23,7 +23,9 @@ import {
   Eye,
   RefreshCw,
   Download,
-  Phone
+  Phone,
+  UserX,
+  UserCheck,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -39,6 +41,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Table,
   TableBody,
@@ -61,6 +73,11 @@ export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [selectedLocation, setSelectedLocation] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [accountStatusTarget, setAccountStatusTarget] = useState<{
+    user: any;
+    action: 'deactivate' | 'reactivate';
+  } | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -124,7 +141,12 @@ export default function UsersPage() {
     const matchesLocation = selectedLocation === 'all' || 
                            (selectedLocation === 'none' && !user.locationId) ||
                            String(user.locationId) === selectedLocation;
-    return matchesSearch && matchesLabel && matchesLocation;
+    const accountActive = user.isActive !== false;
+    const matchesStatus =
+      selectedStatus === 'all' ||
+      (selectedStatus === 'active' && accountActive) ||
+      (selectedStatus === 'inactive' && !accountActive);
+    return matchesSearch && matchesLabel && matchesLocation && matchesStatus;
   });
 
   const getRoleBadgeVariant = (role: string) => {
@@ -169,6 +191,35 @@ export default function UsersPage() {
     setEditingUser(user);
     setShowCreateDialog(true); // Reuse the create dialog for editing
   };
+
+  const accountStatusMutation = useMutation({
+    mutationFn: async ({ userId, action }: { userId: number; action: 'deactivate' | 'reactivate' }) => {
+      const response = await apiRequest('PUT', `/api/school-admin/users/${userId}/${action}`);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || `Failed to ${action} user`);
+      }
+      return response.json();
+    },
+    onSuccess: (_data, variables) => {
+      toast({
+        title: variables.action === 'deactivate' ? 'User deactivated' : 'User reactivated',
+        description:
+          variables.action === 'deactivate'
+            ? 'They no longer have access and will not receive notifications. Children and payment records were kept.'
+            : 'They can sign in and receive notifications again.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/school-admin/users'] });
+      setAccountStatusTarget(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update account status',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const editPhoneMutation = useMutation({
     mutationFn: async ({ userId, phone }: { userId: number; phone: string }) => {
@@ -540,6 +591,25 @@ export default function UsersPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2" data-testid="button-filter-status">
+                  <Filter className="h-4 w-4" />
+                  Status: {selectedStatus === 'all' ? 'All' : selectedStatus === 'active' ? 'Active' : 'Inactive'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setSelectedStatus('all')} data-testid="filter-status-all">
+                  All statuses
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('active')} data-testid="filter-status-active">
+                  Active
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSelectedStatus('inactive')} data-testid="filter-status-inactive">
+                  Inactive
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Users Table */}
@@ -561,7 +631,7 @@ export default function UsersPage() {
                 {filteredUsers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="h-24 text-center">
-                      {searchTerm || selectedLabels.length > 0 || selectedLocation !== 'all' ? 'No users match your filters.' : 'No users found.'}
+                      {searchTerm || selectedLabels.length > 0 || selectedLocation !== 'all' || selectedStatus !== 'all' ? 'No users match your filters.' : 'No users found.'}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -616,8 +686,11 @@ export default function UsersPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.isActive ? 'default' : 'secondary'}>
-                          {user.isActive ? 'Active' : 'Inactive'}
+                        <Badge
+                          variant={user.isActive !== false ? 'default' : 'secondary'}
+                          data-testid={`badge-user-status-${user.id}`}
+                        >
+                          {user.isActive !== false ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -665,11 +738,30 @@ export default function UsersPage() {
                               <Send className="h-4 w-4 mr-2" />
                               Resend Welcome Email
                             </DropdownMenuItem>
-                            {user.staffId && !user.isActive && (
+                            {user.staffId && user.staffIsActive === false && (
                               <DropdownMenuItem onClick={() => handleResendStaffInvite(user)}>
                                 <RefreshCw className="h-4 w-4 mr-2" />
                                 Resend Staff Invite
                               </DropdownMenuItem>
+                            )}
+                            {!user.isOrphaned && userProfile?.id !== user.id && (
+                              user.isActive !== false ? (
+                                <DropdownMenuItem
+                                  onClick={() => setAccountStatusTarget({ user, action: 'deactivate' })}
+                                  data-testid={`button-deactivate-${user.id}`}
+                                >
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Deactivate
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => setAccountStatusTarget({ user, action: 'reactivate' })}
+                                  data-testid={`button-reactivate-${user.id}`}
+                                >
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Reactivate
+                                </DropdownMenuItem>
+                              )
                             )}
                             <DropdownMenuItem 
                               className="text-destructive"
@@ -762,6 +854,58 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!accountStatusTarget}
+        onOpenChange={(open) => {
+          if (!open && !accountStatusMutation.isPending) setAccountStatusTarget(null);
+        }}
+      >
+        <AlertDialogContent data-testid="dialog-account-status">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {accountStatusTarget?.action === 'reactivate' ? 'Reactivate user?' : 'Deactivate user?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {accountStatusTarget?.action === 'reactivate' ? (
+                <>
+                  {accountStatusTarget.user.firstName} {accountStatusTarget.user.lastName} will be able to sign in
+                  and will receive notifications again. Children and payment records stay as they are.
+                </>
+              ) : (
+                <>
+                  {accountStatusTarget
+                    ? `${accountStatusTarget.user.firstName || ''} ${accountStatusTarget.user.lastName || ''}`.trim() ||
+                      accountStatusTarget.user.email
+                    : 'This user'}{' '}
+                  will lose access and stop receiving notifications. Children and payment records are kept.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={accountStatusMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="button-confirm-account-status"
+              disabled={accountStatusMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!accountStatusTarget) return;
+                accountStatusMutation.mutate({
+                  userId: accountStatusTarget.user.id,
+                  action: accountStatusTarget.action,
+                });
+              }}
+            >
+              {accountStatusMutation.isPending
+                ? 'Saving...'
+                : accountStatusTarget?.action === 'reactivate'
+                  ? 'Reactivate'
+                  : 'Deactivate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       </div>
     </SchoolAdminLayout>

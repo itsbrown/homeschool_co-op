@@ -45,6 +45,15 @@ export class ProductionPathHttp {
     }
     return req;
   }
+
+  async put(url: string, data?: unknown): Promise<request.Response> {
+    const app = await this.ensureApp();
+    let req = this.applyAuth(request(app).put(url));
+    if (data !== undefined) {
+      req = req.send(data);
+    }
+    return req;
+  }
 }
 
 let sharedHttp: ProductionPathHttp | null = null;

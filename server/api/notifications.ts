@@ -6,6 +6,7 @@ import { sendSMS, isTwilioConfigured, getTwilioConnectionSummary } from '../serv
 import * as brevo from '@getbrevo/brevo';
 import { getUserIdsWithLabelsAtSchool } from '../lib/user-labels';
 import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
+import { excludeInactiveUserIds } from '../lib/active-notification-recipients';
 
 const router = express.Router();
 
@@ -83,7 +84,7 @@ async function resolveCombinedRecipientIds(
       const users = await storage.getAllUsers();
       for (const u of users) ids.add(u.id);
     }
-    return [...ids].filter((id) => id > 0);
+    return excludeInactiveUserIds([...ids].filter((id) => id > 0));
   }
 
   for (const uid of body.userIds || []) {
@@ -129,7 +130,7 @@ async function resolveCombinedRecipientIds(
     }
   }
 
-  return [...ids].filter((id) => id > 0);
+  return excludeInactiveUserIds([...ids].filter((id) => id > 0));
 }
 
 function normalizeCombinedDeliveryType(raw: unknown): "email" | "in_app" | "sms" | "both" | "all" {
@@ -823,7 +824,7 @@ router.post("/:id/resend", async (req: any, res) => {
     if (!notification) return res.status(404).json({ message: "Notification not found" });
 
     const recs = await storage.getNotificationRecipientsByNotificationId(id);
-    const userIds = [...new Set(recs.map((r) => r.recipientId))];
+    const userIds = await excludeInactiveUserIds([...new Set(recs.map((r) => r.recipientId))]);
     if (userIds.length === 0) {
       return res.status(400).json({ message: "No recipients found for this notification" });
     }
@@ -980,7 +981,7 @@ async function resolveNotificationRecipients(
       break;
   }
   
-  return [...new Set(recipients)].filter(id => id && id > 0);
+  return excludeInactiveUserIds([...new Set(recipients)].filter(id => id && id > 0));
 }
 
 export async function sendNotificationEmails(notification: any, recipientIds: number[]): Promise<void> {

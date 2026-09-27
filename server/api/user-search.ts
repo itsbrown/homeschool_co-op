@@ -25,6 +25,7 @@ const searchQuerySchema = z.object({
   schoolId: z.union([z.string(), z.number()]).optional(),
   limit: z.union([z.string(), z.number()]).optional().default(20),
   offset: z.union([z.string(), z.number()]).optional().default(0),
+  activeOnly: z.union([z.string(), z.boolean()]).optional(),
 });
 
 router.get('/search', supabaseAuth, async (req: any, res) => {
@@ -66,12 +67,16 @@ router.get('/search', supabaseAuth, async (req: any, res) => {
 
     const roleFilter = params.role && validRoles.includes(params.role) ? params.role : undefined;
 
+    const activeOnly =
+      params.activeOnly === true || params.activeOnly === 'true' || params.activeOnly === '1';
+
     const { users: matchedUsers, total } = await storage.searchUsers({
       schoolId: effectiveSchoolId,
       query: params.query,
       role: roleFilter,
       limit,
       offset,
+      activeOnly,
     });
 
     const sanitizedUsers = matchedUsers.map((user) => ({

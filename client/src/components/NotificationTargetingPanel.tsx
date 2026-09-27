@@ -272,6 +272,7 @@ export function NotificationTargetingPanel({
                     placeholder="Search for users by name or email..."
                     multiSelect={true}
                     modalTitle="Select Notification Recipients"
+                    activeOnly
                   />
                   {value.selectedUsers.length > 0 ? (
                     <p className="text-sm text-muted-foreground">

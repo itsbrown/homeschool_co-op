@@ -6059,6 +6059,7 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
         lastName: user.lastName || user.name?.split(' ').slice(1).join(' ') || '',
         ...labelPayload,
         phone: user.phone || '',
+        // Account flag (users.is_active). Staff employment status is separate.
         isActive: user.isActive !== false,
         createdAt: user.createdAt,
         locationId: user.locationId,
@@ -6071,7 +6072,7 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
           ...baseUser,
           staffRecordId: staffRecord.id,
           staffId: staffRecord.id,
-          isActive: staffRecord.isActive,
+          staffIsActive: staffRecord.isActive,
           createdAt: staffRecord.startDate || user.createdAt,
           department: staffRecord.department,
           position: staffRecord.position || 'Staff Member',
@@ -6105,6 +6106,7 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
               legacyRole: null,
               phone: '',
               isActive: staffRecord.isActive,
+              staffIsActive: staffRecord.isActive,
               createdAt: staffRecord.startDate,
               department: staffRecord.department,
               position: staffRecord.position || 'Staff Member',
@@ -6132,7 +6134,8 @@ router.get('/users', supabaseAuth, requireSchoolContext, async (req: any, res) =
             legacyRole,
             role: primaryLabel || legacyRole || '',
             phone: user.phone || '',
-            isActive: staffRecord.isActive,
+            isActive: (user as any).isActive !== false,
+            staffIsActive: staffRecord.isActive,
             createdAt: staffRecord.startDate,
             department: staffRecord.department,
             position: staffRecord.position || 'Staff Member'
@@ -6589,6 +6592,77 @@ router.put('/users/:id', supabaseAuth, requireSchoolContext, async (req: any, re
       error: err.message 
     });
   }
+});
+
+/**
+ * Toggle users.is_active for a person at this school.
+ * Does not delete the user, children, payments, or other linked rows.
+ */
+async function setSchoolUserAccountActive(req: any, res: any, isActive: boolean) {
+  try {
+    const schoolIdNum = Number(req.schoolId);
+    const userId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
+
+    const actorId = Number(req.user?.id);
+    if (!isActive && Number.isFinite(actorId) && actorId === userId) {
+      return res.status(400).json({ message: 'You cannot deactivate your own account' });
+    }
+
+    const existingUser = await storage.getUser(userId);
+    if (!existingUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const adminEmail = req.user?.email;
+    if (!adminEmail) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const access = await assertAdminCanViewUserProfile(
+      adminEmail,
+      userId,
+      schoolIdNum,
+      req.user?.allRoles ?? [],
+    );
+    if (!access.allowed) {
+      const msg = access.reason || 'Access denied';
+      const status = msg.includes('not found') ? 404 : 403;
+      return res.status(status).json({ message: msg });
+    }
+
+    const updatedUser = await storage.updateUser(userId, {
+      isActive,
+      updatedAt: new Date(),
+    });
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const { password: _password, ...safeUser } = updatedUser as any;
+    return res.status(200).json({
+      success: true,
+      message: isActive ? 'User reactivated successfully' : 'User deactivated successfully',
+      user: safeUser,
+    });
+  } catch (error) {
+    const err = error as Error;
+    console.error(`Error ${isActive ? 'reactivating' : 'deactivating'} user:`, error);
+    return res.status(500).json({
+      message: isActive ? 'Error reactivating user' : 'Error deactivating user',
+      error: err.message,
+    });
+  }
+}
+
+router.put('/users/:id/deactivate', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  return setSchoolUserAccountActive(req, res, false);
+});
+
+router.put('/users/:id/reactivate', supabaseAuth, requireSchoolContext, async (req: any, res) => {
+  return setSchoolUserAccountActive(req, res, true);
 });
 
 // Delete a user (hard-delete: completely removes from database, revokes auth, cleans up FK references)

@@ -150,6 +150,7 @@ export class DatabaseStorage implements IStorage {
     role?: string;
     limit: number;
     offset: number;
+    activeOnly?: boolean;
   }): Promise<{ users: User[]; total: number }> {
     const db = await getDb();
     const limit = Math.max(1, Math.min(params.limit, 100));
@@ -204,6 +205,10 @@ export class DatabaseStorage implements IStorage {
     if (params.role) {
       const r = params.role;
       conditions.push(sql`((${users.role})::text = ${r} OR coalesce(${users.activeRole}, '') = ${r})`);
+    }
+
+    if (params.activeOnly) {
+      conditions.push(eq(users.isActive, true));
     }
 
     const whereExpr = conditions.length === 0 ? undefined : conditions.length === 1 ? conditions[0] : and(...conditions);
