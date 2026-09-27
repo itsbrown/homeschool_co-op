@@ -1,4 +1,5 @@
 import { beforeAll, expect, it } from '@jest/globals';
+import request from 'supertest';
 import { describeProductionPath } from '../../helpers/describeProductionPath';
 import { getProductionPathHttp } from '../../helpers/productionPathHttp';
 import { assertPostgresStorageForProductionPath } from '../../helpers/productionPathApp';
@@ -8,6 +9,8 @@ import { excludeInactiveUserIds } from '../../../lib/active-notification-recipie
 import { getDb } from '../../../db';
 import { payments } from '@shared/schema';
 import { eq } from 'drizzle-orm';
+import { getSimpleTestApp } from '../../../simple-test-app';
+import { UserSyncService } from '../../../services/userSyncService';
 
 describeProductionPath('production-path: school user deactivate', () => {
   const http = getProductionPathHttp();
@@ -78,5 +81,52 @@ describeProductionPath('production-path: school user deactivate', () => {
     expect(afterReactivate?.isActive).toBe(true);
     const childrenAfter = await storage.getChildrenByParentId(parent.id);
     expect(childrenAfter.map((c) => c.id)).toContain(child.id);
+  });
+
+  it('returns 403 from jwtCheck on /api/children for a deactivated parent', async () => {
+    const parent = await testDb.createTestUser({
+      role: 'parent',
+      email: `inactive_children_${Date.now()}@test.com`,
+      name: 'Inactive Parent',
+      isActive: false,
+    });
+    const child = await testDb.createTestChild(parent.id, {
+      firstName: 'Kept',
+      lastName: 'Child',
+    });
+
+    const app = await getSimpleTestApp();
+    const blocked = await request(app)
+      .get('/api/children')
+      .set('x-test-user-email', parent.email);
+    expect(blocked.status).toBe(403);
+    expect(String(blocked.body.message || '')).toMatch(/inactive/i);
+
+    const parentRoute = await request(app)
+      .get('/api/parent/children')
+      .set('x-test-user-email', parent.email);
+    expect(parentRoute.status).toBe(403);
+    expect(String(parentRoute.body.message || '')).toMatch(/inactive/i);
+
+    const stillThere = await storage.getChildrenByParentId(parent.id);
+    expect(stillThere.map((c) => c.id)).toContain(child.id);
+
+    const synced = await UserSyncService.syncAuth0User({
+      email: parent.email,
+      id: `supabase-${parent.id}`,
+    });
+    expect(synced.isActive).toBe(false);
+    const afterSync = await storage.getUser(parent.id);
+    expect(afterSync?.isActive).toBe(false);
+
+    const active = await testDb.createTestUser({
+      role: 'parent',
+      email: `active_children_${Date.now()}@test.com`,
+      name: 'Active Parent',
+    });
+    const allowed = await request(app)
+      .get('/api/children')
+      .set('x-test-user-email', active.email);
+    expect(allowed.status).toBe(200);
   });
 });

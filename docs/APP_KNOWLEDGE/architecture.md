@@ -53,7 +53,7 @@ Helpers: `client/src/lib/user-jobs.ts`. Do **not** use `hasRole('parent')` (scho
 
 ## Account deactivate (school Users)
 
-School owners deactivate a departed parent from `/schools/users` (`PUT /api/school-admin/users/:id/deactivate` and `.../reactivate`). That sets `users.is_active` only. Children, payments, and other linked rows stay. The person cannot sign in (`403` “Account is inactive”) and is omitted from `/schools/notifications` recipient resolution (email and in-app), including resend.
+School owners deactivate a departed parent from `/schools/users` (`PUT /api/school-admin/users/:id/deactivate` and `.../reactivate`). That sets `users.is_active` only. Children, payments, and other linked rows stay. The person cannot sign in (`403` “Account is inactive”) and is omitted from `/schools/notifications` recipient resolution (email and in-app), including resend. The same `403` is required in **both** `supabaseAuth` and `jwtCheck` (`server/middleware/auth0-auth.ts`). Parent routes such as `GET /api/children` use `jwtCheck`. Token sync must not set `users.is_active` back to true.
 
 `GET /api/school-admin/users` `isActive` is the **account** flag. Staff employment is `staffIsActive` (Resend Staff Invite). Do not overwrite `isActive` with `school_staff.is_active` or the Inactive badge and notification filter disagree.
 

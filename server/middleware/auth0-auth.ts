@@ -15,6 +15,9 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
       const { storage } = await import('../storage');
       const testUser = await storage.getUserByEmail(testEmail);
       if (testUser) {
+        if (testUser.isActive === false) {
+          return res.status(403).json({ message: 'Account is inactive. Please contact support.' });
+        }
         req.user = {
           id: testUser.supabaseId || String(testUser.id),
           email: testUser.email,
@@ -59,6 +62,19 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
     console.log('🔍 User object fields:', Object.keys(user));
     console.log('🔍 User ID field:', user.id);
 
+    // Reject before sync. syncAuth0User used to force is_active true and would
+    // revive a deactivated parent on the next Supabase token.
+    if (user.email) {
+      try {
+        const existingAccount = await storage.getUserByEmail(user.email);
+        if (existingAccount?.isActive === false) {
+          return res.status(403).json({ message: 'Account is inactive. Please contact support.' });
+        }
+      } catch (statusLookupError) {
+        console.error('❌ Failed to check account active status:', statusLookupError);
+      }
+    }
+
     // Sync user with database - ALWAYS use database as source of truth for schoolId
     let dbUser;
     try {
@@ -73,6 +89,9 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
           const { storage } = await import('../storage');
           const memUser = await storage.getUserByEmail(user.email);
           if (memUser) {
+            if (memUser.isActive === false) {
+              return res.status(403).json({ message: 'Account is inactive. Please contact support.' });
+            }
             dbUser = memUser;
             console.log('✅ Loaded user from memory storage:', memUser.email, 'Role:', memUser.role, 'SchoolId:', memUser.schoolId);
           }
@@ -129,6 +148,10 @@ export const jwtCheck = async (req: any, res: Response, next: NextFunction) => {
         effectiveRole = activeRoleHeader as string;
         console.log(`🔄 Role switched to: ${effectiveRole} for user: ${user.email}`);
       }
+    }
+
+    if (dbUser?.isActive === false) {
+      return res.status(403).json({ message: 'Account is inactive. Please contact support.' });
     }
 
     // Use DB integer ID when available (required for all DB queries downstream)

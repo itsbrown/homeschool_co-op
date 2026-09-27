@@ -15,6 +15,10 @@
 - **Fall audit:** `server/scripts/audit-fall-2026-seat-ledger-vs-cash.sql` (read-only, per-family ledger vs Stripe-backed payments). ~25 Fall families show seats paid > cash received (~$11k); for most, remaining installments exceed the seat balance by the over-credit, so autopay's balance cap will under-collect. Ledger remediation is a separate, per-family decision.
 - **Family-plan balance email:** `buildFamilyBalanceEmailPayload` (`server/lib/family-balance-email.ts`) mapped each pending SP only to `scheduled_payments.enrollment_id`, so on family plans (`metadata.enrollmentIds` = several seats) every other child's balance was listed again as "No Plan" (Billotti dry run: $1,850 vs real $1,233.33). Now uses `resolveEnrollmentIdsFromScheduledRow`. Affects `send-account-correction-email.ts` and `send-balance-reminders-batch.ts`; earlier family-plan emails may have overstated "Current Amount Due".
 
+## 2026-09-27 (Deactivated parents blocked on jwtCheck routes)
+
+- `jwtCheck` now returns 403 when `users.is_active` is false, including the test-email shortcut and the Supabase token path. `UserSyncService.syncAuth0User` no longer flips a deactivated account back to active. `GET /api/children` and `GET /api/parent/children` are covered by the production-path test.
+
 ## 2026-09-27 (Deactivate users without deleting family records)
 
 - School Users (`/schools/users`) can Deactivate / Reactivate. `PUT /api/school-admin/users/:id/deactivate|reactivate` sets `users.is_active` only. Children and payments stay. Inactive accounts cannot sign in and are left out of `/schools/notifications` email and in-app recipient lists. List `isActive` is the account flag; staff employment is `staffIsActive`.

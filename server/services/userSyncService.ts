@@ -64,9 +64,12 @@ export class UserSyncService {
           name: auth0User.name || auth0User.nickname || existingUser.name,
           lastLogin: new Date(),
           updatedAt: new Date(),
-          isActive: true,
           ...filteredData,
         };
+        // Token sync must not revive a school-admin deactivation.
+        if (existingUser.isActive === false) {
+          updateData.isActive = false;
+        }
 
         if (supabaseUuid) {
           updateData.auth0Id = supabaseUuid;
@@ -150,11 +153,12 @@ export class UserSyncService {
           .set({
             lastLogin: new Date(),
             updatedAt: new Date(),
-            isActive: true,
+            ...(raced.isActive === false ? { isActive: false } : {}),
             ...(supabaseUuid
               ? { auth0Id: supabaseUuid, supabaseId: supabaseUuid }
               : {}),
             ...filteredData,
+            ...(raced.isActive === false ? { isActive: false } : {}),
           })
           .where(eq(users.id, raced.id))
           .returning();
