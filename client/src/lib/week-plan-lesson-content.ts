@@ -1,5 +1,9 @@
 /** Helpers for week-plan lesson teaching content (cards, print, detail sheet). */
 
+import { collectLessonLinks, expandLessonLinkFields } from "@shared/lesson-links";
+
+export { expandLessonLinkFields };
+
 export type WeekPlanGroup =
   | string
   | {
@@ -14,6 +18,46 @@ export function asTrimmedStrings(value: unknown): string[] {
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+}
+
+/** Unique lesson URLs: primary `lessonLink` first, then `resources`, no empties/dupes. */
+export function lessonLinksFromBlock(block: {
+  lessonLink?: string | null;
+  resources?: unknown;
+}): string[] {
+  return collectLessonLinks(block);
+}
+
+/** Persist first URL on `lesson_link` and the full unique list on `resources` (legacy readers keep working). */
+export function splitLessonLinks(links: unknown): {
+  lessonLink: string | null;
+  resources: string[];
+} {
+  const unique = lessonLinksFromBlock({ resources: links });
+  return {
+    lessonLink: unique[0] || null,
+    resources: unique,
+  };
+}
+
+export function lessonLinksForForm(block: {
+  lessonLink?: string | null;
+  resources?: unknown;
+}): string[] {
+  const links = lessonLinksFromBlock(block);
+  return links.length ? links : [""];
+}
+
+export function lessonLinkButtonLabel(url: string, index: number): string {
+  if (index === 0) return "Open Lesson";
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    if (host.includes("docs.google.com")) return `Open Google Doc ${index + 1}`;
+    if (host.includes("drive.google.com")) return `Open Drive ${index + 1}`;
+    return `Open link ${index + 1}`;
+  } catch {
+    return `Open link ${index + 1}`;
+  }
 }
 
 /** First non-empty paragraph of a lesson description, optionally truncated for dense grids/print. */

@@ -34,6 +34,7 @@ import { parse as csvParse } from "csv-parse/sync";
 import { stringify as csvStringify } from "csv-stringify/sync";
 import { UploadedFile } from "express-fileupload";
 import { extractDriveFileId } from "@shared/lesson-push";
+import { collectLessonLinks, urlsFromLessonLinkText } from "@shared/lesson-links";
 import { classBandFromClass, parseCurriculumFilename } from "@shared/curriculum-drive";
 import {
   DriveListError,
@@ -1104,7 +1105,7 @@ router.get(
           wb?.title || sb.defaultTitle || "",
           wb?.description || "",
           objectives,
-          wb?.lessonLink || "",
+          wb ? collectLessonLinks(wb).join(" | ") : "",
           wb?.notes || "",
         ];
       });
@@ -1211,6 +1212,7 @@ router.post(
         description: string | null;
         objectives: string[];
         lessonLink: string | null;
+        resources?: string[];
         notes: string | null;
       }> = [];
 
@@ -1241,12 +1243,14 @@ router.post(
           .split(";")
           .map((s: string) => s.trim())
           .filter(Boolean);
+        const lessonLinks = urlsFromLessonLinkText(String(r.lesson_link || ""));
         updates.push({
           skeletonBlockId: skeleton.id,
           title,
           description: (r.description || "").trim() || null,
           objectives,
-          lessonLink: (r.lesson_link || "").trim() || null,
+          lessonLink: lessonLinks[0] ?? null,
+          ...(lessonLinks.length ? { resources: lessonLinks } : {}),
           notes: (r.notes || "").trim() || null,
         });
       }
