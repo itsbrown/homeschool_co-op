@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-09-28 (Week Planner multiple lesson links)
+
+- Block Edit replaces the single Lesson Link box with an add/remove **Lesson links** list. Saves the first URL to `lesson_link` and the full list to `resources`, so older readers keep working. Cards list every link; the Lesson sheet already showed `resources`. Week-plan CSV import/export round-trips several URLs in `lesson_link` (space or `|`). Drive swap keeps the existing links after the new asset link. The earlier build lived only in an uncommitted local checkout, which is why production still showed one box after #138.
+
 ## 2026-09-27 (Enrollment ledger double-credit + family-plan balance email)
 
 - **Root cause:** the first checkout of an installment plan was credited to `program_enrollments.total_paid` twice. `fulfillBalancePaymentIntent` → `applyClassPoolToEnrollments` caps each share at what the seat still owes, which only makes pay-in-full replays harmless; an installment seat still owes after installment 1, so a second apply lands in full. The client `POST /api/billing/fulfill-payment-intent` and the `payment_intent.succeeded` webhook both finalize (the webhook re-applies when the payment row already succeeded). Found via the Hutchins withdrawal ($450 phantom from `pi_3U193w…` applied twice).
