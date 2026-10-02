@@ -64,9 +64,12 @@ export class UserSyncService {
           name: auth0User.name || auth0User.nickname || existingUser.name,
           lastLogin: new Date(),
           updatedAt: new Date(),
-          isActive: true,
           ...filteredData,
         };
+        // Token sync must not revive a school-admin deactivation.
+        if (existingUser.isActive === false) {
+          updateData.isActive = false;
+        }
 
         if (supabaseUuid) {
           updateData.auth0Id = supabaseUuid;
@@ -150,11 +153,12 @@ export class UserSyncService {
           .set({
             lastLogin: new Date(),
             updatedAt: new Date(),
-            isActive: true,
+            ...(raced.isActive === false ? { isActive: false } : {}),
             ...(supabaseUuid
               ? { auth0Id: supabaseUuid, supabaseId: supabaseUuid }
               : {}),
             ...filteredData,
+            ...(raced.isActive === false ? { isActive: false } : {}),
           })
           .where(eq(users.id, raced.id))
           .returning();
@@ -266,7 +270,7 @@ export class UserSyncService {
   }
 
   /**
-   * Deactivate user (soft delete)
+   * Deactivate user (account flag only — children, payments, and other links stay).
    */
   static async deactivateUser(auth0Id: string) {
     const db = await getDb();
@@ -280,6 +284,23 @@ export class UserSyncService {
       .returning();
 
     return deactivatedUser;
+  }
+
+  /**
+   * Reactivate user. Same identity key as deactivateUser (Auth0 id, not users.id).
+   */
+  static async reactivateUser(auth0Id: string) {
+    const db = await getDb();
+    const [reactivatedUser] = await db
+      .update(users)
+      .set({
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.auth0Id, auth0Id))
+      .returning();
+
+    return reactivatedUser;
   }
 
   /**

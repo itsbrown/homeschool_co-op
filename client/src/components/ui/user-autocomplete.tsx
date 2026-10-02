@@ -26,6 +26,8 @@ interface UserAutocompleteProps {
   excludeIds?: number[];
   /** When set, scopes search to this school (required for platform admins on school-admin pages). */
   schoolId?: number | null;
+  /** Omit deactivated accounts (notification recipient picker). */
+  activeOnly?: boolean;
   endpoint?: string; // Custom endpoint URL (defaults to /api/user-search/search)
 }
 
@@ -37,6 +39,7 @@ export function UserAutocomplete({
   roleFilter,
   excludeIds = [],
   schoolId,
+  activeOnly = false,
   endpoint = "/api/user-search/search",
 }: UserAutocompleteProps) {
   const [query, setQuery] = useState("");
@@ -53,6 +56,7 @@ export function UserAutocomplete({
   if (schoolId != null && Number.isFinite(schoolId)) {
     searchParams.set("schoolId", String(schoolId));
   }
+  if (activeOnly) searchParams.set("activeOnly", "1");
   searchParams.set("limit", "10");
   const searchUrl = `${endpoint}?${searchParams}`;
 

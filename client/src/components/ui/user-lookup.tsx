@@ -15,6 +15,8 @@ interface UserLookupProps {
   multiSelect?: boolean;
   roleFilter?: string;
   modalTitle?: string;
+  /** Omit deactivated accounts from search and browse. */
+  activeOnly?: boolean;
 }
 
 export function UserLookup({
@@ -26,6 +28,7 @@ export function UserLookup({
   multiSelect = true,
   roleFilter,
   modalTitle = "Select Users",
+  activeOnly = false,
 }: UserLookupProps) {
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -71,6 +74,7 @@ export function UserLookup({
           placeholder={placeholder}
           disabled={disabled}
           roleFilter={roleFilter}
+          activeOnly={activeOnly}
           excludeIds={value.map((u) => u.id)}
           className="flex-1"
         />
@@ -120,6 +124,7 @@ export function UserLookup({
         initialSelected={value}
         excludeIds={[]}
         multiSelect={multiSelect}
+        activeOnly={activeOnly}
       />
     </div>
   );

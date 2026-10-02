@@ -90,6 +90,7 @@ export class SupabaseStorage implements IStorage {
     role?: string;
     limit: number;
     offset: number;
+    activeOnly?: boolean;
   }): Promise<{ users: User[]; total: number }> {
     const { data, error } = await supabase.from('users').select('*').limit(5000);
     if (error) {
@@ -117,6 +118,9 @@ export class SupabaseStorage implements IStorage {
           String(u.role ?? '').toLowerCase() === rl ||
           String(u.active_role ?? '').toLowerCase() === rl,
       );
+    }
+    if (params.activeOnly) {
+      list = list.filter((u) => u.is_active !== false);
     }
     const total = list.length;
     list.sort((a: any, b: any) => String(a.email ?? '').localeCompare(String(b.email ?? '')));

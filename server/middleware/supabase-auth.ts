@@ -45,6 +45,9 @@ export const supabaseAuth = async (
       const testEmail = String(req.headers['x-test-user-email']);
       const testUser = await storage.getUserByEmail(testEmail);
       if (testUser) {
+        if (testUser.isActive === false) {
+          return res.status(403).json({ message: 'Account is inactive. Please contact support.' });
+        }
         req.user = {
           id: testUser.id,
           email: testUser.email,
@@ -91,6 +94,9 @@ export const supabaseAuth = async (
         const user = await storage.getUser((req as any).session.userId);
         
         if (user) {
+          if (user.isActive === false) {
+            return res.status(403).json({ message: 'Account is inactive. Please contact support.' });
+          }
           if (process.env.NODE_ENV === 'development') {
             console.log('✅ Session user found in storage:', user.email, 'role:', user.role);
           }
@@ -209,6 +215,9 @@ export const supabaseAuth = async (
 
       // Proceed with metadata sync only when the lookup succeeded
       if (!dbLookupFailed && dbUser) {
+        if (dbUser.isActive === false) {
+          return res.status(403).json({ message: 'Account is inactive. Please contact support.' });
+        }
         // Store database user data for req.user
         dbUserId = dbUser.id;
         dbUserData = dbUser;

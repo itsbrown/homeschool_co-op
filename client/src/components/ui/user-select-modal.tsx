@@ -42,6 +42,7 @@ interface UserSelectModalProps {
   initialSelected?: UserResult[];
   excludeIds?: number[];
   multiSelect?: boolean;
+  activeOnly?: boolean;
 }
 
 const PAGE_SIZE = 15;
@@ -54,6 +55,7 @@ export function UserSelectModal({
   initialSelected = [],
   excludeIds = [],
   multiSelect = true,
+  activeOnly = false,
 }: UserSelectModalProps) {
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
@@ -77,11 +79,12 @@ export function UserSelectModal({
   });
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["/api/user-search/search", { query, role: roleFilter, limit: PAGE_SIZE, offset: page * PAGE_SIZE }],
+    queryKey: ["/api/user-search/search", { query, role: roleFilter, limit: PAGE_SIZE, offset: page * PAGE_SIZE, activeOnly }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (query) params.set("query", query);
       if (roleFilter) params.set("role", roleFilter);
+      if (activeOnly) params.set("activeOnly", "1");
       params.set("limit", String(PAGE_SIZE));
       params.set("offset", String(page * PAGE_SIZE));
 

@@ -775,6 +775,11 @@ router.post("/login", async (req, res) => {
 
       console.log(`✅ Found user in database: ${user.email}, ID: ${user.id}, Role: ${user.role}`);
 
+      if (!user.isActive) {
+        console.log('⚠️ User account is inactive:', user.email);
+        return res.status(403).json({ message: 'Account is inactive. Please contact support.' });
+      }
+
       // Set session data
       if (req.session) {
         req.session.userId = user.id;

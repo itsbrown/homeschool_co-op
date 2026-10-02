@@ -118,6 +118,8 @@ export interface IStorage {
     role?: string;
     limit: number;
     offset: number;
+    /** When true, omit users.is_active = false (notification recipient picker). */
+    activeOnly?: boolean;
   }): Promise<{ users: User[]; total: number }>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
@@ -1096,6 +1098,7 @@ export class MemStorage implements IStorage {
     role?: string;
     limit: number;
     offset: number;
+    activeOnly?: boolean;
   }): Promise<{ users: User[]; total: number }> {
     let list = Array.from(this.usersStore.values());
     if (params.schoolId != null && Number.isFinite(Number(params.schoolId))) {
@@ -1118,6 +1121,9 @@ export class MemStorage implements IStorage {
           String(u.role ?? "").toLowerCase() === rl ||
           String((u as { activeRole?: string }).activeRole ?? "").toLowerCase() === rl,
       );
+    }
+    if (params.activeOnly) {
+      list = list.filter((u) => u.isActive !== false);
     }
     const total = list.length;
     const sorted = [...list].sort((a, b) => String(a.email).localeCompare(String(b.email)));
@@ -5400,6 +5406,7 @@ export class MemStorage implements IStorage {
       role?: string;
       limit: number;
       offset: number;
+      activeOnly?: boolean;
     }): Promise<{ users: User[]; total: number }> {
       try {
         return await this.dbStorage.searchUsers(params);
