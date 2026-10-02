@@ -3,6 +3,7 @@ import { loginSchoolAdmin } from "./helpers/schoolAdminAuth";
 import { postEnsurePublicStoreSchema, postSetupPublicStoreScenario, testApiToken } from "./helpers/testSeed";
 import { requireLinkedSeed } from "./helpers/requireLinkedSeed";
 import { postFulfillStoreCheckout } from "./helpers/publicStoreCheckout";
+import { isRealStripeTestSecretConfigured } from "./helpers/stripeEnv";
 import {
   emptyStoreEventRsvp,
   eventStripeLineItems,
@@ -151,8 +152,10 @@ test.describe("public store event RSVP", () => {
     });
     await page.getByTestId("store-checkout-submit").click({ noWaitAfter: true });
     await expect.poll(() => checkoutBody, { timeout: 20_000 }).not.toBeNull();
-    expect(checkoutBody!.checkoutUrl, JSON.stringify(checkoutBody)).toBeTruthy();
-    expect(checkoutBody!.accessToken).toBeTruthy();
+    expect(checkoutBody!.accessToken, JSON.stringify(checkoutBody)).toBeTruthy();
+    if (isRealStripeTestSecretConfigured()) {
+      expect(checkoutBody!.checkoutUrl, JSON.stringify(checkoutBody)).toBeTruthy();
+    }
 
     const fulfilled = await postFulfillStoreCheckout(request, { accessToken: checkoutBody!.accessToken });
     expect(fulfilled.ok, JSON.stringify(fulfilled.json)).toBeTruthy();
@@ -205,7 +208,10 @@ test.describe("public store event RSVP", () => {
     };
     const paid = await postCheckout(request, product, `cap-${Date.now()}@example.com`, answer);
     const paidBody = await readJson<{ accessToken?: string; checkoutUrl?: string | null }>(paid);
-    expect(paidBody.checkoutUrl).toBeTruthy();
+    expect(paidBody.accessToken, JSON.stringify(paidBody)).toBeTruthy();
+    if (isRealStripeTestSecretConfigured()) {
+      expect(paidBody.checkoutUrl).toBeTruthy();
+    }
     const done = await postFulfillStoreCheckout(request, { accessToken: paidBody.accessToken });
     expect(done.ok, JSON.stringify(done.json)).toBeTruthy();
 

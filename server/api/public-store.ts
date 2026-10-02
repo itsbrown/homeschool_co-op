@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { supabaseAuth } from '../middleware/supabase-auth';
-import { getStripeClient } from '../config/stripe';
+import { getStripeClient, getStripeSecretKey, isStripeDocsSampleSecret } from '../config/stripe';
 import {
   generateStoreAccessToken,
   generateStoreSnapshotId,
@@ -404,6 +404,11 @@ router.post('/:storeSlug/checkout', async (req, res) => {
         accessToken,
         waitlistEnrollments: result?.created ?? [],
       });
+    }
+
+    const stripeSecret = await getStripeSecretKey();
+    if (isStripeDocsSampleSecret(stripeSecret)) {
+      return res.json({ checkoutUrl: null, accessToken, snapshotId });
     }
 
     const stripe = await getStripeClient();
