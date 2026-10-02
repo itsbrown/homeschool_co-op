@@ -1,6 +1,6 @@
 # School analytics
 
-**Last updated:** 2026-09-09
+**Last updated:** 2026-09-22
 
 Unified school-admin analytics: **app engagement**, **cart abandonment**, and **student progress** (Lexile trends/bands, Math Level distribution, and placement coverage). Parent-facing progress charts use the same progress analytics service with parent scoping.
 
@@ -12,6 +12,7 @@ Unified school-admin analytics: **app engagement**, **cart abandonment**, and **
 | School admin | `/school-admin/assessments` → **Progress insights** | Shared placement KPIs/worklist, charts, and social PNG export |
 | Parent | `/parent/progress` → **Charts** tab | Child reading/math time-series |
 | Legacy | My School → Statistics | `/api/analytics/school/*` (enrollment breakdown) |
+| School admin | `/schools/my-school` Overview | `/api/school-admin/metrics/{enrollment,financial,academic,staff}` |
 
 Sidebar: **Finance → School Analytics**.
 
@@ -105,6 +106,7 @@ Engagement and cart reports slice by **child demographics** (primary enrolled ch
 | File | Type |
 |------|------|
 | `server/tests/parse-lexile-range.test.ts` | Unit |
+| `server/tests/unit/school-dashboard-metrics.test.ts` | Unit (no DB) |
 | `server/tests/integration/activity-telemetry.test.ts` | DB (`TEST_DATABASE_URL`) |
 | `server/tests/integration/checkout-funnel.test.ts` | DB |
 | `server/tests/integration/progress-analytics-school.test.ts` | DB |
@@ -123,6 +125,20 @@ Engagement and cart reports slice by **child demographics** (primary enrolled ch
 - [student-progress-assessments.md](./student-progress-assessments.md) — F-14 assessments, progress log
 - [payments-and-billing.md](./payments-and-billing.md) — cart checkout, pending_payment backfill for funnel
 
+## My School overview
+
+Defined in `server/lib/school-dashboard-metrics.ts`, loaded by `server/lib/load-school-dashboard-metrics.ts`.
+
+| Card | Meaning |
+|------|---------|
+| Total / active students | Distinct children on the **in-progress** term (`sessions.status = active`, or a session whose dates contain today). `pending_payment` counts in the total only. Later upcoming terms (winter while fall is still active) are excluded. |
+| New students | Distinct children whose **first** non-cancelled enrollment date is in the last 30 days. |
+| Retention | Families on the previous completed term (latest end-month before this term) who also have a seat this term. Null when there is no prior term. |
+| Reading growth | Share of students with reading data whose Lexile improved (`buildSchoolLiteracyAnalytics`). Hidden when nobody has reading data. |
+| Average class size | Live seats on current-term classes (`enrolled`, `pending_payment`, `pending_admin_approval`, `waitlist`, `completed`), not `classes.enrollment_count`. |
+| Instructors | Distinct `user_roles` at the school with role educator, teacher, mentor, instructor, or aide. Pending invites are unaccepted, unexpired `staff_invitations` and `role_invitations`. |
+| Collection rate | Completed payment cents ÷ (those cents + outstanding). Outstanding is effective balance on open enrollments plus owed membership. Unpaid accounts are **families**. |
+
 ## Pitfalls
 
 - `/api/analytics` must be mounted in **both** `server/index.ts` and `server/app-init.ts` (My School Statistics 404 if missing).
@@ -131,3 +147,4 @@ Engagement and cart reports slice by **child demographics** (primary enrolled ch
 - Progress child API returns 403 if parent does not own the child.
 - `student_assessments.session_id` references `assessment_sessions`, not program `sessions`; manual Lexile/Math entry leaves it null.
 - Math Level is categorical; sorting or banding labels numerically produces misleading analytics.
+- My School overview used to hardcode graduation **88**, progress **78**, and completion **85**, and average class size from the stale `classes.enrollment_count` column. Staff counts came from `school_staff` (`teacher` only), so mentors on `user_roles` were missing. Do not restore those placeholders.

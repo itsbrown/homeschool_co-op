@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-10-01 (My School overview metrics)
+
+- Overview KPIs no longer use hardcoded 88/78/85 or `classes.enrollment_count` / `school_staff`. Current-term students, live class size, `user_roles` instructors, and dollar collection rate. See [school-analytics.md](domains/school-analytics.md).
+
 ## 2026-09-27 (Enrollment ledger double-credit + family-plan balance email)
 
 - **Root cause:** the first checkout of an installment plan was credited to `program_enrollments.total_paid` twice. `fulfillBalancePaymentIntent` → `applyClassPoolToEnrollments` caps each share at what the seat still owes, which only makes pay-in-full replays harmless; an installment seat still owes after installment 1, so a second apply lands in full. The client `POST /api/billing/fulfill-payment-intent` and the `payment_intent.succeeded` webhook both finalize (the webhook re-applies when the payment row already succeeded). Found via the Hutchins withdrawal ($450 phantom from `pi_3U193w…` applied twice).
