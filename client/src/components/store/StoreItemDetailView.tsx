@@ -13,13 +13,16 @@ import {
 import { StoreProductCardImage } from "@/components/store/StoreProductCardImage";
 import { StoreCatalogItemActions } from "@/components/store/StoreCatalogItemActions";
 import { StoreItemShareButton } from "@/components/store/StoreItemShareButton";
+import { StoreEventRsvpForm } from "@/components/store/StoreEventRsvpForm";
 import { storeProductCta } from "@shared/store-product-cta";
+import type { StoreEventRsvpAnswer } from "@shared/store-event-rsvp";
 
 type StoreItemDetailViewProps = {
   item: StoreCatalogItem;
   schoolSlug: string;
   sharerUserId?: number | null;
   onAddProduct: (item: StoreCatalogItem) => void;
+  onAddEvent?: (item: StoreCatalogItem, answer: StoreEventRsvpAnswer, lineTotalCents: number, headcount: number) => void;
   onAddProgram: (item: StoreCatalogItem, variant: "half_day" | "full_day") => void;
 };
 
@@ -28,11 +31,13 @@ export function StoreItemDetailView({
   schoolSlug,
   sharerUserId = null,
   onAddProduct,
+  onAddEvent,
   onAddProgram,
 }: StoreItemDetailViewProps) {
   const dateRange = formatStoreListingDateRange(item.startDate, item.endDate);
   const priceLine = formatStoreListingPrice(item);
   const isProduct = item.listingType === "product";
+  const isEvent = isProduct && item.productKind === "event";
   const outboundCta = storeProductCta({ affiliateUrl: item.affiliateUrl });
   const isOutbound = outboundCta.kind !== "cart";
   const isAmazon = outboundCta.kind === "amazon";
@@ -87,10 +92,10 @@ export function StoreItemDetailView({
                 {storeListingTypeLabel(item.listingType, item.productKind, item.affiliateUrl)}
               </Badge>
               {item.membersOnly && <Badge variant="secondary">Members only</Badge>}
-              {isProduct && !isOutbound && item.inStock === false && (
+              {isProduct && !isEvent && !isOutbound && item.inStock === false && (
                 <Badge variant="destructive">Out of stock</Badge>
               )}
-              {isProduct && !isOutbound && item.inStock !== false && (
+              {isProduct && !isEvent && !isOutbound && item.inStock !== false && (
                 <Badge variant="secondary" className="bg-emerald-50 text-emerald-800 border-emerald-200">
                   In stock
                 </Badge>
@@ -110,6 +115,11 @@ export function StoreItemDetailView({
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                   <Package className="h-4 w-4 shrink-0" aria-hidden />
                   Sold on the vendor site — you will leave this site to view the product.
+                </p>
+              ) : isEvent ? (
+                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                  <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
+                  Choose how many people are coming. Checkout collects payment for paid attendees and emails your RSVP receipt.
                 </p>
               ) : isProduct && item.pickupOnly ? (
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5">
@@ -142,12 +152,16 @@ export function StoreItemDetailView({
 
             <Separator />
 
+            {isEvent && item.rsvp && onAddEvent ? (
+              <StoreEventRsvpForm item={item} onSubmit={(answer, lineTotalCents, headcount) => onAddEvent(item, answer, lineTotalCents, headcount)} />
+            ) : (
             <StoreCatalogItemActions
               item={item}
               layout="detail"
               onAddProduct={onAddProduct}
               onAddProgram={onAddProgram}
             />
+            )}
 
             <StoreItemShareButton
               item={item}

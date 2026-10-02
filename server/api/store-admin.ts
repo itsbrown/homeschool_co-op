@@ -33,6 +33,7 @@ import {
   AmazonPaapiError,
   fetchAmazonProductByUrl,
 } from '../lib/amazon-paapi';
+import { storeEventRsvpSchema } from '@shared/store-event-rsvp';
 
 const router = Router();
 
@@ -173,18 +174,37 @@ router.post('/products', async (req: any, res) => {
       .object({
         name: z.string().min(1),
         description: z.string().nullable().optional(),
-        priceCents: z.number().int().positive(),
+        priceCents: z.number().int().min(0),
         imageUrl: z.string().nullable().optional(),
         inventoryQty: z.number().int().nullable().optional(),
         isActive: z.boolean().optional(),
         sortOrder: z.number().int().optional(),
-        productKind: z.enum(['owned', 'affiliate']).optional(),
+        productKind: z.enum(['owned', 'affiliate', 'event']).optional(),
         affiliateUrl: optionalProductUrlSchema,
         asin: z.string().min(10).max(10).nullable().optional(),
         affiliateMetadata: z.record(z.unknown()).optional(),
         pickupOnly: z.boolean().optional(),
+        rsvp: z.unknown().optional(),
       })
       .superRefine((data, ctx) => {
+        if (data.productKind === 'event') {
+          const parsed = storeEventRsvpSchema.safeParse(data.rsvp);
+          if (!parsed.success) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: parsed.error.issues[0]?.message ?? 'Event RSVP is invalid',
+              path: ['rsvp'],
+            });
+          }
+          return;
+        }
+        if (data.priceCents <= 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Price must be greater than 0',
+            path: ['priceCents'],
+          });
+        }
         if (data.productKind === 'affiliate') {
           if (!data.affiliateUrl) {
             ctx.addIssue({
@@ -204,6 +224,26 @@ router.post('/products', async (req: any, res) => {
       });
     const data = schema.parse(req.body);
     const productKind = data.productKind ?? 'owned';
+    if (productKind === 'event') {
+      const eventRsvp = storeEventRsvpSchema.parse(data.rsvp);
+      const product = await createStoreProduct({
+        schoolId,
+        name: data.name,
+        description: data.description,
+        priceCents: 0,
+        imageUrl: data.imageUrl,
+        inventoryQty: null,
+        isActive: data.isActive,
+        sortOrder: data.sortOrder,
+        productKind,
+        affiliateUrl: null,
+        asin: null,
+        affiliateMetadata: {},
+        pickupOnly: true,
+        rsvp: eventRsvp,
+      });
+      return res.status(201).json(product);
+    }
     const link = resolveStoreProductLinkUpdate({
       nextKind: productKind,
       incomingUrl: data.affiliateUrl ?? null,
@@ -284,20 +324,44 @@ router.patch('/products/:id', async (req: any, res) => {
     const schema = z.object({
       name: z.string().min(1).optional(),
       description: z.string().nullable().optional(),
-      priceCents: z.number().int().positive().optional(),
+      priceCents: z.number().int().min(0).optional(),
       imageUrl: z.string().nullable().optional(),
       inventoryQty: z.number().int().nullable().optional(),
       isActive: z.boolean().optional(),
       sortOrder: z.number().int().optional(),
-      productKind: z.enum(['owned', 'affiliate']).optional(),
+      productKind: z.enum(['owned', 'affiliate', 'event']).optional(),
       affiliateUrl: optionalProductUrlSchema,
       asin: z.string().min(10).max(10).nullable().optional(),
       affiliateMetadata: z.record(z.unknown()).optional(),
       isPublished: z.boolean().optional(),
       pickupOnly: z.boolean().optional(),
+      rsvp: z.unknown().optional(),
     });
-    const { isPublished, ...data } = schema.parse(req.body);
-    const nextKind = (data.productKind ?? existing.productKind) as 'owned' | 'affiliate';
+    const { isPublished, rsvp, ...data } = schema.parse(req.body);
+    const nextKind = (data.productKind ?? existing.productKind) as 'owned' | 'affiliate' | 'event';
+    let product;
+    if (nextKind === 'event') {
+      if (rsvp !== undefined) {
+        const parsed = storeEventRsvpSchema.safeParse(rsvp);
+        if (!parsed.success) {
+          return res.status(400).json({ message: parsed.error.issues[0]?.message ?? 'Event RSVP is invalid' });
+        }
+      }
+      const { affiliateUrl: _ignoredUrl, asin: _ignoredAsin, ...rest } = data;
+      product = await updateStoreProduct(id, {
+        ...rest,
+        productKind: 'event',
+        priceCents: 0,
+        inventoryQty: null,
+        pickupOnly: true,
+        affiliateUrl: null,
+        asin: null,
+        ...(rsvp !== undefined ? { rsvp: storeEventRsvpSchema.parse(rsvp) } : {}),
+      });
+    } else {
+    if (data.priceCents != null && data.priceCents <= 0) {
+      return res.status(400).json({ message: 'Price must be greater than 0' });
+    }
     const link = resolveStoreProductLinkUpdate({
       nextKind,
       incomingUrl: data.affiliateUrl,
@@ -309,13 +373,14 @@ router.patch('/products/:id', async (req: any, res) => {
       return res.status(400).json({ message: link.message });
     }
     const { affiliateUrl: _ignoredUrl, asin: _ignoredAsin, ...rest } = data;
-    const product = await updateStoreProduct(id, {
+    product = await updateStoreProduct(id, {
       ...rest,
       inventoryQty: nextKind === 'affiliate' ? null : data.inventoryQty,
       affiliateUrl: link.affiliateUrl,
       asin: link.asin,
       pickupOnly: nextKind === 'affiliate' ? false : (data.pickupOnly ?? existing.pickupOnly),
     });
+    }
     if (!product) return res.status(404).json({ message: 'Product not found' });
     const listing =
       isPublished !== undefined

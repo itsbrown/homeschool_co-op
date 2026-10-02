@@ -1,7 +1,7 @@
 /**
  * Structured supply lists on classes and sessions; household merge for parents.
  */
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   classes,
@@ -238,7 +238,7 @@ export async function listShopProductsForPicker(schoolId: number): Promise<ShopP
   const products = await db
     .select()
     .from(storeProducts)
-    .where(and(eq(storeProducts.schoolId, schoolId), eq(storeProducts.isActive, true)))
+    .where(and(eq(storeProducts.schoolId, schoolId), eq(storeProducts.isActive, true), ne(storeProducts.productKind, "event")))
     .orderBy(asc(storeProducts.sortOrder), asc(storeProducts.id));
 
   const listings = await db

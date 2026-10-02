@@ -25,6 +25,7 @@ export function StoreCatalogItemActions({
     : "flex flex-col sm:flex-row flex-wrap gap-2 w-full";
 
   if (item.listingType === "product") {
+    if (item.productKind === "event") return null;
     const cta = storeProductCta({ affiliateUrl: item.affiliateUrl });
     if (cta.kind === "amazon") {
       return (

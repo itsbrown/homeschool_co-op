@@ -96,7 +96,11 @@ export function StoreCatalogCard({
             className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             data-testid={`store-view-details-${item.listingId}`}
           >
-            {item.listingType === "product" ? "View product details" : "View program details"}
+            {item.listingType === "product" && item.productKind === "event"
+              ? "View event"
+              : item.listingType === "product"
+                ? "View product details"
+                : "View program details"}
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
           <StoreItemShareButton

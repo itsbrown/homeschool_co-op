@@ -13,9 +13,19 @@ type StoreSnapshotPayload = {
     lineId: string;
     title: string;
     listingType: string;
+    sourceId?: number;
     lineTotalCents?: number;
     quantity?: number;
     fulfillment?: string;
+    eventRsvp?: {
+      startsOn: string;
+      startTime: string;
+      endTime: string;
+      location: string;
+      attendees: Array<{ label: string; quantity: number; unitPriceCents: number; lineTotalCents: number }>;
+      meals: Array<{ label: string; quantity: number }>;
+      otherNote: string | null;
+    };
   }>;
   childAssignments?: Array<{
     lineId: string;
@@ -103,9 +113,15 @@ export async function sendStoreOrderConfirmationEmail(params: {
   const payload = params.snapshotPayload;
   const lines = payload.lines ?? [];
   const programLines = lines.filter((l) => l.listingType !== 'product');
-  const merchLines = lines.filter((l) => l.listingType === 'product');
+  const merchLines = lines.filter((l) => l.listingType === 'product' && !l.eventRsvp);
+  const eventLines = lines.filter((l) => l.listingType === 'product' && l.eventRsvp);
 
-  const rawDocs = await resolveStoreDeliveryDocuments(params.schoolId, programLines);
+  const rawDocs = await resolveStoreDeliveryDocuments(
+    params.schoolId,
+    programLines.flatMap((line) =>
+      typeof line.sourceId === 'number' ? [{ listingType: line.listingType, sourceId: line.sourceId }] : [],
+    ),
+  );
   const shareTokens = await ensureDeliveryDocumentShareTokens(rawDocs);
   const documents = rawDocs.map((d: { id: number; title: string; fileName: string }) => {
     const token = shareTokens.get(d.id);
@@ -148,6 +164,11 @@ export async function sendStoreOrderConfirmationEmail(params: {
       title: l.title,
       quantity: l.quantity,
       lineTotalCents: l.lineTotalCents ?? 0,
+    })),
+    eventLines: eventLines.map((l) => ({
+      title: l.title,
+      lineTotalCents: l.lineTotalCents ?? 0,
+      eventRsvp: l.eventRsvp!,
     })),
     productDelivery: payload.productDelivery ?? null,
     documents,

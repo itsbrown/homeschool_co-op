@@ -1,3 +1,4 @@
+import { eventDisplayPriceCents, parseStoreEventRsvp } from '@shared/store-event-rsvp';
 import type { StoreListing } from '@shared/schema';
 import { isClassEligibleForPublicStore } from './store-programs';
 import {
@@ -21,11 +22,20 @@ export type StoreCatalogItem = {
   membersOnly: boolean;
   sortOrder: number;
   inStock?: boolean;
-  /** Owned merch vs Amazon affiliate (external buy). */
-  productKind?: 'owned' | 'affiliate';
+  /** Owned merch, Amazon affiliate, or event RSVP. */
+  productKind?: 'owned' | 'affiliate' | 'event';
   affiliateUrl?: string | null;
-  /** Owned merch that cannot be shipped — pickup at school only. */
+  /** Owned merch that cannot be shipped — pickup at school only. Events are always pickup. */
   pickupOnly?: boolean;
+  rsvp?: {
+    startsOn: string;
+    startTime: string;
+    endTime: string;
+    location: string;
+    closeOn: string | null;
+    attendees: Array<{ type: 'adult' | 'children' | 'guests'; enabled: boolean; priceCents: number }>;
+    meals: Array<{ type: 'gluten_free' | 'vegan' | 'dairy_free' | 'other'; enabled: boolean }>;
+  } | null;
 };
 
 export async function buildStoreCatalogItem(
@@ -36,23 +46,43 @@ export async function buildStoreCatalogItem(
   if (listing.listingType === 'product') {
     const product = await getStoreProductById(listing.sourceId);
     if (!product?.isActive) return null;
+    const eventRsvp = product.productKind === 'event' ? parseStoreEventRsvp(product.rsvp) : null;
     return {
       listingId: listing.id,
       listingType: 'product',
       sourceId: product.id,
       title: product.name,
       description: product.description,
-      priceCents: product.priceCents,
+      priceCents: eventRsvp ? eventDisplayPriceCents(eventRsvp) : product.priceCents,
       imageUrl: product.imageUrl,
+      startDate: eventRsvp?.startsOn ?? null,
       membersOnly: listing.membersOnly,
       sortOrder: listing.sortOrder,
       inStock:
-        product.productKind === 'affiliate' || Boolean(product.affiliateUrl?.trim())
+        product.productKind === 'event' ||
+        product.productKind === 'affiliate' ||
+        Boolean(product.affiliateUrl?.trim())
           ? true
           : product.inventoryQty == null || product.inventoryQty > 0,
-      productKind: (product.productKind as 'owned' | 'affiliate') ?? 'owned',
+      productKind: (product.productKind as 'owned' | 'affiliate' | 'event') ?? 'owned',
       affiliateUrl: product.affiliateUrl ?? null,
-      pickupOnly: product.productKind === 'affiliate' ? false : Boolean(product.pickupOnly),
+      pickupOnly:
+        product.productKind === 'affiliate' ? false : product.productKind === 'event' ? true : Boolean(product.pickupOnly),
+      rsvp: eventRsvp
+        ? {
+            startsOn: eventRsvp.startsOn,
+            startTime: eventRsvp.startTime,
+            endTime: eventRsvp.endTime,
+            location: eventRsvp.location,
+            closeOn: eventRsvp.closeOn,
+            attendees: eventRsvp.attendees.map((row) => ({
+              type: row.type,
+              enabled: row.enabled,
+              priceCents: row.priceCents,
+            })),
+            meals: eventRsvp.meals.map((row) => ({ type: row.type, enabled: row.enabled })),
+          }
+        : null,
     };
   }
 

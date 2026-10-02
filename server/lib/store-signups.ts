@@ -43,6 +43,16 @@ export type StoreSignupRow = {
   referralUserId: number | null;
   referralName: string | null;
   referralEmail: string | null;
+  eventCounts: {
+    adult: number;
+    children: number;
+    guests: number;
+    gluten_free: number;
+    vegan: number;
+    dairy_free: number;
+    other: number;
+    otherNote: string | null;
+  } | null;
 };
 
 function parentDisplayName(user: {
@@ -170,6 +180,7 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
       quantity: null,
       productFulfillmentMethod: null,
       shippingAddress: null,
+      eventCounts: null,
       ...referral,
     };
   });
@@ -195,6 +206,22 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
     const productDelivery = (order?.metadata as { productDelivery?: StoreProductDelivery } | null)
       ?.productDelivery;
     const referral = referralFromOrder(order);
+    const rsvp = (item.metadata as { rsvp?: { attendees?: Array<{ type?: string; quantity?: number }>; meals?: Array<{ type?: string; quantity?: number }>; otherNote?: string | null } } | null)
+      ?.rsvp;
+    const countOf = (rows: Array<{ type?: string; quantity?: number }> | undefined, type: string) =>
+      rows?.find((row) => row.type === type)?.quantity ?? 0;
+    const eventCounts = rsvp
+      ? {
+          adult: countOf(rsvp.attendees, 'adult'),
+          children: countOf(rsvp.attendees, 'children'),
+          guests: countOf(rsvp.attendees, 'guests'),
+          gluten_free: countOf(rsvp.meals, 'gluten_free'),
+          vegan: countOf(rsvp.meals, 'vegan'),
+          dairy_free: countOf(rsvp.meals, 'dairy_free'),
+          other: countOf(rsvp.meals, 'other'),
+          otherNote: rsvp.otherNote ?? null,
+        }
+      : null;
     return {
       id: `product-${item.id}`,
       kind: 'product',
@@ -226,6 +253,7 @@ export async function getPublicStoreSignups(schoolId: number): Promise<StoreSign
           : productDelivery?.method === 'pickup'
             ? 'Pick up at school'
             : null,
+      eventCounts,
       ...referral,
     };
   });
@@ -268,6 +296,14 @@ export function buildStoreSignupsCsv(rows: StoreSignupRow[]): string {
     'Referral user ID',
     'Referral name',
     'Referral email',
+    'Adults',
+    'Children',
+    'Guests',
+    'Gluten-free',
+    'Vegan',
+    'Dairy-free',
+    'Other meals',
+    'Other allergy note',
   ];
 
   const lines = rows.map((row) => {
@@ -303,6 +339,14 @@ export function buildStoreSignupsCsv(rows: StoreSignupRow[]): string {
       csvEscape(row.referralUserId),
       csvEscape(row.referralName),
       csvEscape(row.referralEmail),
+      csvEscape(row.eventCounts?.adult ?? ''),
+      csvEscape(row.eventCounts?.children ?? ''),
+      csvEscape(row.eventCounts?.guests ?? ''),
+      csvEscape(row.eventCounts?.gluten_free ?? ''),
+      csvEscape(row.eventCounts?.vegan ?? ''),
+      csvEscape(row.eventCounts?.dairy_free ?? ''),
+      csvEscape(row.eventCounts?.other ?? ''),
+      csvEscape(row.eventCounts?.otherNote),
     ].join(',');
   });
 

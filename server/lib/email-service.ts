@@ -4,6 +4,7 @@ import sgMail from '@sendgrid/mail';
 import type { Payment } from '@shared/schema';
 import { getDb } from '../db';
 import { emailLog } from '@shared/schema';
+import { rememberStoreConfirmationPreview } from './store-confirmation-preview';
 
 const EMAIL_TIMEOUT_MS = 10_000;
 
@@ -2175,6 +2176,19 @@ export async function sendStorePurchaseConfirmationEmail(data: {
   paidLines: Array<{ title: string; childName?: string; lineTotalCents: number }>;
   waitlistLines: Array<{ title: string; childName?: string; waitlistPosition?: number | null }>;
   merchLines: Array<{ title: string; quantity?: number; lineTotalCents: number }>;
+  eventLines?: Array<{
+    title: string;
+    lineTotalCents: number;
+    eventRsvp: {
+      startsOn: string;
+      startTime: string;
+      endTime: string;
+      location: string;
+      attendees: Array<{ label: string; quantity: number; unitPriceCents: number; lineTotalCents: number }>;
+      meals: Array<{ label: string; quantity: number }>;
+      otherNote: string | null;
+    };
+  }>;
   productDelivery?: {
     method: 'pickup' | 'shipping';
     shippingAddress?: {
@@ -2191,9 +2205,22 @@ export async function sendStorePurchaseConfirmationEmail(data: {
   const { storage } = await import('../storage');
   const school = await storage.getSchool(data.schoolId);
   const schoolName = school?.name ?? 'School';
-  const subject = `Order confirmed — ${schoolName} (#${data.orderNumber})`;
+  const eventOnly =
+    (data.eventLines?.length ?? 0) > 0 &&
+    data.paidLines.length === 0 &&
+    data.merchLines.length === 0 &&
+    data.waitlistLines.length === 0;
+  const subject = eventOnly
+    ? `RSVP confirmed — ${schoolName} — ${data.eventLines![0].title} (#${data.orderNumber})`
+    : `Order confirmed — ${schoolName} (#${data.orderNumber})`;
 
   const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
 
   const lineRow = (
     title: string,
@@ -2236,6 +2263,32 @@ export async function sendStorePurchaseConfirmationEmail(data: {
       ),
     ),
   ].join('');
+
+  const eventSection = (data.eventLines ?? [])
+    .map((event) => {
+      const when = `${escapeHtml(event.eventRsvp.startsOn)} ${escapeHtml(event.eventRsvp.startTime)}–${escapeHtml(event.eventRsvp.endTime)}`;
+      const attendeeRows = event.eventRsvp.attendees
+        .map(
+          (row) =>
+            `<li>${escapeHtml(row.label)} × ${row.quantity} — ${formatMoney(row.lineTotalCents)}</li>`,
+        )
+        .join('');
+      const mealRows = event.eventRsvp.meals
+        .map((row) => `<li>${escapeHtml(row.label)} × ${row.quantity}</li>`)
+        .join('');
+      const note = event.eventRsvp.otherNote
+        ? `<p style="margin:8px 0 0 0;color:#4B5563;font-size:14px;">Other allergy: ${escapeHtml(event.eventRsvp.otherNote)}</p>`
+        : '';
+      return `
+    <div style="margin-top:20px;padding:14px 16px;background:#F9FAFB;border-radius:6px;border:1px solid #E5E7EB;">
+      <p style="margin:0 0 6px 0;font-weight:600;color:#1F2937;">${escapeHtml(event.title)}</p>
+      <p style="margin:0;color:#4B5563;font-size:14px;">${when}<br/>${escapeHtml(event.eventRsvp.location)}</p>
+      <ul style="margin:12px 0 0 0;padding-left:20px;color:#1F2937;font-size:14px;">${attendeeRows}${mealRows}</ul>
+      ${note}
+      <p style="margin:12px 0 0 0;font-weight:600;">Total ${formatMoney(event.lineTotalCents)}</p>
+    </div>`;
+    })
+    .join('');
 
   const docSection =
     data.documents.length > 0
@@ -2289,7 +2342,7 @@ export async function sendStorePurchaseConfirmationEmail(data: {
       </div>
       <div style="padding:24px;background:#fff;border:1px solid #E5E7EB;border-top:none;border-radius:0 0 8px 8px;">
         <p style="margin-top:0;">Hi ${data.parentName},</p>
-        <p>Your registration with ${schoolName} is confirmed.</p>
+        <p>${eventOnly ? `Your RSVP with ${schoolName} is confirmed.` : `Your registration with ${schoolName} is confirmed.`}</p>
         <p style="margin:16px 0;"><strong>Order #${data.orderNumber}</strong></p>
 
         <table style="width:100%;border-collapse:collapse;font-size:14px;">
@@ -2299,6 +2352,8 @@ export async function sendStorePurchaseConfirmationEmail(data: {
             <td style="padding:14px 0;text-align:right;font-weight:bold;">${formatMoney(data.orderTotalCents)}</td>
           </tr>
         </table>
+
+        ${eventSection}
 
         ${deliverySection}
 
@@ -2334,6 +2389,14 @@ export async function sendStorePurchaseConfirmationEmail(data: {
     ...data.merchLines.map(
       (m) => `- ${m.title}${m.quantity && m.quantity > 1 ? ` x${m.quantity}` : ''}: ${formatMoney(m.lineTotalCents)}`,
     ),
+    ...(data.eventLines ?? []).flatMap((event) => [
+      `- ${event.title}: ${event.eventRsvp.startsOn} ${event.eventRsvp.startTime}-${event.eventRsvp.endTime} at ${event.eventRsvp.location}`,
+      ...event.eventRsvp.attendees.map(
+        (row) => `  ${row.label} x${row.quantity}: ${formatMoney(row.lineTotalCents)}`,
+      ),
+      ...event.eventRsvp.meals.map((row) => `  ${row.label} x${row.quantity}`),
+      ...(event.eventRsvp.otherNote ? [`  Other allergy: ${event.eventRsvp.otherNote}`] : []),
+    ]),
     ...(data.productDelivery && data.merchLines.length > 0
       ? [
           '',
@@ -2356,12 +2419,15 @@ export async function sendStorePurchaseConfirmationEmail(data: {
     }
   }
 
+  const text = textLines.join('\n');
+  rememberStoreConfirmationPreview(data.to, text);
+
   return sendEmail(
     data.to,
     data.parentName,
     subject,
     html,
-    textLines.join('\n'),
+    text,
     'store_purchase_confirmation',
     data.attachments,
   );

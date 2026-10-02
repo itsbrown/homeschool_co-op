@@ -13,9 +13,18 @@ export type StoreCatalogItem = {
   endDate?: string | null;
   membersOnly: boolean;
   inStock?: boolean;
-  productKind?: "owned" | "affiliate";
+  productKind?: "owned" | "affiliate" | "event";
   affiliateUrl?: string | null;
   pickupOnly?: boolean;
+  rsvp?: {
+    startsOn: string;
+    startTime: string;
+    endTime: string;
+    location: string;
+    closeOn: string | null;
+    attendees: Array<{ type: "adult" | "children" | "guests"; enabled: boolean; priceCents: number }>;
+    meals: Array<{ type: "gluten_free" | "vegan" | "dairy_free" | "other"; enabled: boolean }>;
+  } | null;
 };
 
 export function storeItemDetailPath(

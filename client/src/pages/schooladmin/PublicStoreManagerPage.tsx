@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ExternalLink } from "lucide-react";
@@ -19,7 +26,9 @@ import {
   StoreProductEditDialog,
   type EditableStoreProduct,
 } from "@/components/store/StoreProductEditDialog";
+import { StoreEventRsvpEditor } from "@/components/store/StoreEventRsvpEditor";
 import { storeProductCta } from "@shared/store-product-cta";
+import { emptyStoreEventRsvp, type StoreEventRsvp } from "@shared/store-event-rsvp";
 
 type StoreProduct = EditableStoreProduct;
 
@@ -48,7 +57,7 @@ type AffiliateFormState = {
 
 const STORE_TAB_KEY = "public-store-manager-tab";
 const PRODUCT_DRAFT_KEY = "public-store-manager-product-draft";
-const STORE_TABS = new Set(["settings", "programs", "signups", "products", "orders"]);
+const STORE_TABS = new Set(["settings", "programs", "signups", "purchases", "products", "orders"]);
 
 const emptyProductForm = (): ProductFormState => ({
   name: "",
@@ -163,6 +172,12 @@ export default function PublicStoreManagerPage() {
   const [productForm, setProductForm] = useState<ProductFormState>(readProductDraft);
   const [affiliateForm, setAffiliateForm] = useState<AffiliateFormState>(emptyAffiliateForm);
   const [editingProduct, setEditingProduct] = useState<StoreProduct | null>(null);
+  const [createKind, setCreateKind] = useState<"owned" | "affiliate" | "event">("owned");
+  const [eventForm, setEventForm] = useState<{ name: string; description: string; rsvp: StoreEventRsvp }>({
+    name: "",
+    description: "",
+    rsvp: emptyStoreEventRsvp(),
+  });
 
   useEffect(() => {
     sessionStorage.setItem(PRODUCT_DRAFT_KEY, JSON.stringify(productForm));
@@ -208,6 +223,35 @@ export default function PublicStoreManagerPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/programs"] });
     },
+  });
+
+  const createEvent = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/school-admin/public-store/products", {
+        name: eventForm.name,
+        description: eventForm.description || null,
+        priceCents: 0,
+        productKind: "event",
+        rsvp: eventForm.rsvp,
+      });
+      if (!res.ok) throw new Error("Failed to create event");
+      const product = (await res.json()) as StoreProduct;
+      const listingRes = await apiRequest("POST", "/api/school-admin/public-store/listings", {
+        listingType: "product",
+        sourceId: product.id,
+        isPublished: true,
+        membersOnly: false,
+      });
+      if (!listingRes.ok) throw new Error("Event created but failed to publish listing");
+      return product;
+    },
+    onSuccess: () => {
+      toast({ title: "Event listed on store" });
+      setEventForm({ name: "", description: "", rsvp: emptyStoreEventRsvp() });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/school-admin/public-store/programs"] });
+    },
+    onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
   });
 
   const fetchAffiliate = useMutation({
@@ -314,6 +358,7 @@ export default function PublicStoreManagerPage() {
             <TabsTrigger value="settings" data-testid="store-tab-settings">Settings</TabsTrigger>
             <TabsTrigger value="programs" data-testid="store-tab-programs">Classes &amp; programs</TabsTrigger>
             <TabsTrigger value="signups" data-testid="store-tab-signups">Sign-ups</TabsTrigger>
+            <TabsTrigger value="purchases" data-testid="store-tab-purchases">Purchases</TabsTrigger>
             <TabsTrigger value="products" data-testid="store-tab-products">Products</TabsTrigger>
           </TabsList>
 
@@ -366,7 +411,58 @@ export default function PublicStoreManagerPage() {
             <StoreSignupsTab />
           </TabsContent>
 
+          <TabsContent value="purchases" className="mt-4">
+            <StoreSignupsTab view="purchases" />
+          </TabsContent>
+
           <TabsContent value="products" className="mt-4 space-y-6">
+            <div className="max-w-xs">
+              <Label className="mb-2 block">Product type</Label>
+              <Select value={createKind} onValueChange={(value) => setCreateKind(value as typeof createKind)}>
+                <SelectTrigger data-testid="select-product-kind">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="owned">Merch</SelectItem>
+                  <SelectItem value="affiliate">Amazon affiliate</SelectItem>
+                  <SelectItem value="event">Event</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {createKind === "event" ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Event</CardTitle>
+                  <CardDescription>Parents RSVP and pay per attendee type. Pickup only.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Input
+                    placeholder="Event name"
+                    value={eventForm.name}
+                    onChange={(e) => setEventForm((prev) => ({ ...prev, name: e.target.value }))}
+                    data-testid="input-event-name"
+                  />
+                  <Input
+                    placeholder="Description"
+                    value={eventForm.description}
+                    onChange={(e) => setEventForm((prev) => ({ ...prev, description: e.target.value }))}
+                    data-testid="input-event-description"
+                  />
+                  <StoreEventRsvpEditor
+                    value={eventForm.rsvp}
+                    onChange={(rsvp) => setEventForm((prev) => ({ ...prev, rsvp }))}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => createEvent.mutate()}
+                    disabled={!eventForm.name.trim() || createEvent.isPending}
+                    data-testid="button-create-event"
+                  >
+                    Create event
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
             <Card>
               <CardHeader>
                 <CardTitle>Merch products</CardTitle>
@@ -584,7 +680,11 @@ export default function PublicStoreManagerPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium truncate">{p.name}</p>
-                          {storeProductCta({ affiliateUrl: p.affiliateUrl }).kind === "amazon" ? (
+                          {p.productKind === "event" ? (
+                            <Badge variant="secondary" data-testid={`event-badge-${p.id}`}>
+                              Event
+                            </Badge>
+                          ) : storeProductCta({ affiliateUrl: p.affiliateUrl }).kind === "amazon" ? (
                             <Badge variant="secondary" data-testid={`affiliate-badge-${p.id}`}>
                               Amazon
                             </Badge>

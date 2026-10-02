@@ -23,6 +23,7 @@ export default function PublicStoreItemPage() {
     cartTotal,
     cartPulse,
     addProduct,
+    addEvent,
     onAddProgram,
     goToCheckout,
   } = usePublicStoreCart(schoolSlug);
@@ -125,6 +126,7 @@ export default function PublicStoreItemPage() {
           schoolSlug={schoolSlug}
           sharerUserId={sharerUserId}
           onAddProduct={addProduct}
+          onAddEvent={addEvent}
           onAddProgram={onAddProgram}
         />
       </main>
