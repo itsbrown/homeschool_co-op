@@ -271,12 +271,25 @@ export default function ParentSidebar() {
     await signOut();
   };
 
+  const { data: payrollAccess } = useQuery<{ checklist: boolean }>({
+    queryKey: ["/api/payroll-day/access"],
+    enabled: !!user,
+    retry: false,
+  });
+
   const familyLeafItems = [
     {
       href: "/parent/home",
       title: "Dashboard",
       icon: <Home className="h-5 w-5" />,
     },
+    ...(payrollAccess?.checklist
+      ? [{
+          href: "/payroll-day",
+          title: "Today's hours",
+          icon: <Clock className="h-5 w-5" />,
+        }]
+      : []),
     {
       href: "/children",
       title: "My Children",

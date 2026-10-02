@@ -75,6 +75,19 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userSchool, setUserSchool] = useState<any>(null);
 
+  const { data: payrollAccess } = useQuery<{ checklist?: boolean }>({
+    queryKey: ["/api/payroll-day/access"],
+    enabled: !!user,
+    retry: false,
+  });
+  const familyMobileItems = payrollAccess?.checklist
+    ? [
+        ...mobileNavigationItems.slice(0, 2),
+        { href: "/payroll-day", title: "Today's hours", icon: Clock },
+        ...mobileNavigationItems.slice(2),
+      ]
+    : mobileNavigationItems;
+
   const showTeachingNav = holdsParentAndTeaching(availableRoles);
   const hasSchoolAdminRole = holdsSchoolAdmin(availableRoles);
   const jobsSubtitle = showTeachingNav ? formatJobsSubtitle(availableRoles) : (activeRole === 'parent' ? 'Parent Account' : 'User');
@@ -250,7 +263,7 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                               )} />
                             </CollapsibleTrigger>
                             <CollapsibleContent className="mt-1 space-y-1 pl-4">
-                              {mobileNavigationItems.map((item) => {
+                              {familyMobileItems.map((item) => {
                                 const Icon = item.icon;
                                 const isActive = location === item.href;
                                 const showBadge = item.href === "/notifications" && unreadNotifications > 0;
@@ -280,7 +293,7 @@ export default function ParentAppShell({ children }: ParentAppShellProps) {
                             </CollapsibleContent>
                           </Collapsible>
                         ) : (
-                          mobileNavigationItems.map((item) => {
+                          familyMobileItems.map((item) => {
                             const Icon = item.icon;
                             const isActive = location === item.href;
                             const showBadge = item.href === "/notifications" && unreadNotifications > 0;

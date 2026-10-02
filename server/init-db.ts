@@ -2160,6 +2160,7 @@ async function runMigrations() {
         can_manage_students BOOLEAN NOT NULL DEFAULT FALSE,
         can_send_notifications BOOLEAN NOT NULL DEFAULT FALSE,
         can_view_parent_contacts BOOLEAN NOT NULL DEFAULT FALSE,
+        can_manage_hourly_rates BOOLEAN NOT NULL DEFAULT FALSE,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -3096,6 +3097,25 @@ async function runMigrations() {
     ADD COLUMN IF NOT EXISTS completion_source TEXT;
   `);
   console.log('✅ Migration completed: completion_source column added to scheduled_payments table');
+
+  // Once-per-PI enrollment credit guard (finalizeSucceededPaymentIntent). First add backfills
+  // existing completed rows so webhook redeliveries of old PIs cannot re-credit installment seats.
+  console.log('Running migration: payments.enrollment_ledger_applied_at...');
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'payments' AND column_name = 'enrollment_ledger_applied_at'
+      ) THEN
+        ALTER TABLE payments ADD COLUMN enrollment_ledger_applied_at TIMESTAMP;
+        UPDATE payments
+        SET enrollment_ledger_applied_at = COALESCE(updated_at, created_at)
+        WHERE status IN ('completed', 'succeeded', 'refunded', 'partially_refunded');
+      END IF;
+    END $$
+  `);
+  console.log('✅ Migration completed: payments.enrollment_ledger_applied_at');
 
   // Add source column to refunds table to distinguish manual vs Stripe refunds
   console.log('Running migration: Adding source column to refunds table...');

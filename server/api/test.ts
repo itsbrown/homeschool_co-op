@@ -4512,6 +4512,124 @@ router.post('/setup-public-form-scenario', async (req: Request, res: Response) =
 });
 
 /**
+ * POST /api/test/setup-payroll-day-scenario
+ * Seeds a school with daily hours off, plus parent, school admin, super admin, and a mentor.
+ * Does not grant checklist access or insert jobs.
+ */
+router.post('/setup-payroll-day-scenario', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    if (!db) return res.status(400).json({ error: 'Postgres required (set DATABASE_URL)' });
+
+    const { seedPublicFormScenario } = await import('../tests/helpers/seedPublicFormScenario');
+    const { userRoles } = await import('@shared/schema');
+    const testDb = new TestDatabase();
+    const seed = await seedPublicFormScenario(testDb);
+    const password = 'TestPassword123!';
+    const superAdmin = await testDb.createTestUser({
+      email: `hours_super_${seed.school.id}@test.com`,
+      username: `hourssuper_${seed.school.id}`,
+      name: 'Hours Super Admin',
+      firstName: 'Hours',
+      lastName: 'Super',
+      role: 'superAdmin',
+      password,
+    });
+    const staff = await testDb.createTestUser({
+      email: `hours_mentor_${seed.school.id}@test.com`,
+      username: `hoursmentor_${seed.school.id}`,
+      name: 'Hours Mentor',
+      firstName: 'Hours',
+      lastName: 'Mentor',
+      role: 'educator',
+      schoolId: seed.school.id,
+      password,
+    });
+
+    for (const roleRow of [
+      { userId: seed.admin.id, role: 'schoolAdmin' as const, schoolId: seed.school.id, isPrimary: true },
+      { userId: seed.parent.id, role: 'parent' as const, schoolId: seed.school.id, isPrimary: true },
+      { userId: superAdmin.id, role: 'superAdmin' as const, schoolId: null, isPrimary: true },
+      { userId: staff.id, role: 'educator' as const, schoolId: seed.school.id, isPrimary: true },
+    ]) {
+      try {
+        await db.insert(userRoles).values(roleRow);
+      } catch {
+        /* role may already exist */
+      }
+    }
+
+    let parentSupabaseLinked = false;
+    let adminSupabaseLinked = false;
+    let superAdminSupabaseLinked = false;
+    let staffSupabaseLinked = false;
+    const link = req.body ?? {};
+    if (link.linkSupabaseAuthParent === true) {
+      parentSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: seed.parent.id,
+        email: seed.parent.email,
+        password: seed.parent.password,
+        role: 'parent',
+        schoolId: seed.school.id,
+        displayName: `${seed.parent.firstName} ${seed.parent.lastName}`,
+      });
+    }
+    if (link.linkSupabaseAuthAdmin === true) {
+      adminSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: seed.admin.id,
+        email: seed.admin.email,
+        password: seed.admin.password,
+        role: 'schoolAdmin',
+        schoolId: seed.school.id,
+        displayName: 'Payroll E2E Admin',
+      });
+    }
+    if (link.linkSupabaseAuthSuperAdmin === true) {
+      superAdminSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: superAdmin.id,
+        email: superAdmin.email,
+        password,
+        role: 'superAdmin',
+        schoolId: seed.school.id,
+        displayName: 'Hours Super Admin',
+      });
+    }
+    if (link.linkSupabaseAuthStaff === true) {
+      staffSupabaseLinked = await linkSeedUserToSupabase({
+        dbUserId: staff.id,
+        email: staff.email,
+        password,
+        role: 'educator',
+        schoolId: seed.school.id,
+        displayName: 'Hours Mentor',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        school: seed.school,
+        parent: seed.parent,
+        admin: seed.admin,
+        superAdmin: { id: superAdmin.id, email: superAdmin.email, password },
+        staff: { id: staff.id, email: staff.email, password, firstName: 'Hours', lastName: 'Mentor' },
+        parentSupabaseLinked,
+        adminSupabaseLinked,
+        superAdminSupabaseLinked,
+        staffSupabaseLinked,
+        supabaseLinked: parentSupabaseLinked,
+      },
+    });
+  } catch (error) {
+    console.error('setup-payroll-day-scenario:', error);
+    res.status(500).json({
+      error: 'Failed to setup payroll day scenario',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
  * GET /api/test/email-log?recipient=&type=
  * Returns recent email_log rows for Playwright assertions (form notifications, etc.).
  */

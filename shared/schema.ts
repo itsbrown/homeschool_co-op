@@ -848,6 +848,9 @@ export const payments = pgTable("payments", {
   
   // Metadata
   metadata: jsonb("metadata").default({}).notNull(),
+
+  // Set once by the finalizer that credited enrollments for this PI; replays must not re-credit.
+  enrollmentLedgerAppliedAt: timestamp("enrollment_ledger_applied_at"),
   
   // Timestamps
   paymentDate: timestamp("payment_date"),
@@ -2264,6 +2267,7 @@ export const userSchoolPermissions = pgTable("user_school_permissions", {
   canManageStudents: boolean("can_manage_students").default(false).notNull(),
   canSendNotifications: boolean("can_send_notifications").default(false).notNull(),
   canViewParentContacts: boolean("can_view_parent_contacts").default(false).notNull(),
+  canManageHourlyRates: boolean("can_manage_hourly_rates").default(false).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

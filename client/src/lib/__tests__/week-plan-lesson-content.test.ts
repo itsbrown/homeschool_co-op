@@ -1,5 +1,6 @@
 import {
   asTrimmedStrings,
+  descriptionPreviewText,
   firstDescriptionParagraph,
   formatGroupLabel,
   formatGroupLabels,
@@ -36,9 +37,26 @@ describe("week plan lesson content helpers", () => {
         maxMaterials: 2,
       }),
     ).toEqual({
-      descriptionPreview: "Fight the claim, not the person.",
+      descriptionPreview: "Fight the claim, not the person.\nTimed script follows.",
       objectives: ["Define ad hominem.", "Chorus Fair vs Attack.", "Write a speech slip."],
       materials: ["Speech slips", "Art of Argument TE"],
     });
+  });
+
+  it("keeps the activity under a heading line", () => {
+    expect(
+      descriptionPreviewText(
+        "1. Welcome & Greeting\n-Welcome each child as they join the circle.\n\n2. Calendar — 5 minutes\nIdentify the day of the week.",
+      ),
+    ).toBe(
+      "1. Welcome & Greeting\n-Welcome each child as they join the circle.\n2. Calendar — 5 minutes\nIdentify the day of the week.",
+    );
+    expect(
+      descriptionPreviewText(
+        "Pre-K Group:\nLovevery Kit- Follow the Sound Maze\n\nKindergarten Group:\nLovevery Kit - Rhyming Leaves Game",
+      ),
+    ).toBe(
+      "Pre-K Group:\nLovevery Kit- Follow the Sound Maze\nKindergarten Group:\nLovevery Kit - Rhyming Leaves Game",
+    );
   });
 });

@@ -81,6 +81,7 @@ router.get('/effective-permissions', supabaseAuth, async (req: any, res) => {
           canManageStudents: schoolPerm.canManageStudents,
           canSendNotifications: schoolPerm.canSendNotifications,
           canViewParentContacts: schoolPerm.canViewParentContacts,
+          canManageHourlyRates: schoolPerm.canManageHourlyRates,
         };
       }
     }
@@ -106,6 +107,7 @@ router.get('/effective-permissions', supabaseAuth, async (req: any, res) => {
       canAccessEntireSchool: effective.canAccessEntireSchool,
       isSchoolAdminBypass: effective.isSchoolAdminBypass,
       showAdminNavGroups: effective.showAdminNavGroups,
+      canManageHourlyRates: effective.canManageHourlyRates,
       nav,
     });
   } catch (error) {

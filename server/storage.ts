@@ -407,6 +407,13 @@ export interface IStorage {
   getPaymentByStripeId(stripePaymentIntentId: string): Promise<Payment | undefined>;
   updatePaymentStatus(id: number, status: 'pending' | 'succeeded' | 'failed' | 'canceled'): Promise<Payment | undefined>;
   updatePayment(id: number, payment: Partial<InsertPayment>): Promise<Payment | undefined>;
+  /**
+   * Atomically stamp `enrollment_ledger_applied_at` on the payment row for this PI. True only for
+   * the single caller that should credit enrollments (client fulfill and webhook both finalize).
+   */
+  claimPaymentEnrollmentLedger(stripePaymentIntentId: string): Promise<boolean>;
+  /** Undo a claim when enrollment credit failed before completing, so a replay can retry. */
+  releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId: string): Promise<void>;
 
   // Stripe Payment History methods
   saveStripePayment(payment: InsertStripePaymentHistory): Promise<StripePaymentHistory>;
@@ -432,6 +439,15 @@ export interface IStorage {
   claimScheduledPaymentForParentCharge(id: number, parentId: number): Promise<ScheduledPayment | undefined>;
   /** Undo a parent manual claim when checkout did not finish (row must be `processing` + `parent_manual`). */
   releaseScheduledPaymentParentClaim(id: number, parentId: number): Promise<ScheduledPayment | undefined>;
+  /**
+   * Atomically mark an installment `completed` unless it already is. Returns the row only for the
+   * single caller that won; concurrent finalizers (webhook, client fulfill, sweeps) get undefined
+   * and must not credit enrollments.
+   */
+  completeScheduledPaymentIfOpen(
+    id: number,
+    completionSource: string,
+  ): Promise<ScheduledPayment | undefined>;
 
   // Refund methods
   createRefund(refund: InsertRefund): Promise<Refund>;
@@ -3453,6 +3469,19 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async claimPaymentEnrollmentLedger(stripePaymentIntentId: string): Promise<boolean> {
+    const payment = await this.getPaymentByStripeId(stripePaymentIntentId);
+    if (!payment || payment.enrollmentLedgerAppliedAt) return false;
+    this.paymentsStore.set(payment.id, { ...payment, enrollmentLedgerAppliedAt: new Date() });
+    return true;
+  }
+
+  async releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId: string): Promise<void> {
+    const payment = await this.getPaymentByStripeId(stripePaymentIntentId);
+    if (!payment) return;
+    this.paymentsStore.set(payment.id, { ...payment, enrollmentLedgerAppliedAt: null });
+  }
+
   async updatePayment(id: number, patch: Partial<InsertPayment>): Promise<Payment | undefined> {
     const payment = this.paymentsStore.get(id);
     if (!payment) return undefined;
@@ -3777,6 +3806,25 @@ export class MemStorage implements IStorage {
       stripePaymentIntentId: null,
       updatedAt: new Date(),
     };
+    this.scheduledPaymentsStore.set(id, updatedPayment);
+    await this.saveScheduledPaymentsToFile();
+    return updatedPayment;
+  }
+
+  async completeScheduledPaymentIfOpen(
+    id: number,
+    completionSource: string,
+  ): Promise<ScheduledPayment | undefined> {
+    const existing = this.scheduledPaymentsStore.get(id);
+    if (!existing || String(existing.status) === 'completed') return undefined;
+    const now = new Date();
+    const updatedPayment: ScheduledPayment = {
+      ...existing,
+      status: 'completed',
+      processedAt: now,
+      completionSource,
+      updatedAt: now,
+    } as ScheduledPayment;
     this.scheduledPaymentsStore.set(id, updatedPayment);
     await this.saveScheduledPaymentsToFile();
     return updatedPayment;
@@ -6531,6 +6579,33 @@ export class MemStorage implements IStorage {
         return this.memStorage.updatePayment(id, patch);
       }
 
+      async claimPaymentEnrollmentLedger(stripePaymentIntentId: string): Promise<boolean> {
+        // No memStorage fallback on DB error: a fallback "win" would credit enrollments twice.
+        // Outside production, rows that only exist in memStorage (DB insert fell back) claim there.
+        if (this.dbStorage && typeof this.dbStorage.claimPaymentEnrollmentLedger === 'function') {
+          if (await this.dbStorage.claimPaymentEnrollmentLedger(stripePaymentIntentId)) return true;
+          if (
+            process.env.NODE_ENV !== 'production' &&
+            !(await this.dbStorage.getPaymentByStripeId(stripePaymentIntentId))
+          ) {
+            return await this.memStorage.claimPaymentEnrollmentLedger(stripePaymentIntentId);
+          }
+          return false;
+        }
+        return await this.memStorage.claimPaymentEnrollmentLedger(stripePaymentIntentId);
+      }
+
+      async releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId: string): Promise<void> {
+        if (this.dbStorage && typeof this.dbStorage.releasePaymentEnrollmentLedgerClaim === 'function') {
+          await this.dbStorage.releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId);
+          if (process.env.NODE_ENV !== 'production') {
+            await this.memStorage.releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId);
+          }
+          return;
+        }
+        return await this.memStorage.releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId);
+      }
+
       // Payment receipts — implemented on DatabaseStorage only; CombinedStorage must delegate
       // (otherwise GET /api/parent/payment-receipts throws: getPaymentReceiptsByParentId is not a function).
       async getPaymentReceiptById(id: number): Promise<PaymentReceipt | undefined> {
@@ -6867,6 +6942,26 @@ export class MemStorage implements IStorage {
         } catch (error) {
           return await this.memStorage.releaseScheduledPaymentParentClaim(id, parentId);
         }
+      }
+
+      async completeScheduledPaymentIfOpen(
+        id: number,
+        completionSource: string,
+      ): Promise<ScheduledPayment | undefined> {
+        // No memStorage fallback on DB error: a fallback "win" would credit enrollments twice.
+        // Outside production, rows that only exist in memStorage (DB insert fell back) complete there.
+        if (this.dbStorage && typeof this.dbStorage.completeScheduledPaymentIfOpen === 'function') {
+          const completed = await this.dbStorage.completeScheduledPaymentIfOpen(id, completionSource);
+          if (completed) {
+            this.memStorage.mirrorScheduledPayment(completed);
+            return completed;
+          }
+          if (process.env.NODE_ENV !== 'production' && !(await this.dbStorage.getScheduledPaymentById(id))) {
+            return await this.memStorage.completeScheduledPaymentIfOpen(id, completionSource);
+          }
+          return undefined;
+        }
+        return await this.memStorage.completeScheduledPaymentIfOpen(id, completionSource);
       }
 
       // Refund methods - use memStorage since database fallback is needed

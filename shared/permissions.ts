@@ -15,7 +15,7 @@ export const LOCATION_PERMISSION_KEYS = [
 export type LocationPermissionKey = (typeof LOCATION_PERMISSION_KEYS)[number];
 
 /** Capability keys used by nav/API (location flags + school-wide scope). */
-export type PermissionKey = LocationPermissionKey | 'canAccessEntireSchool';
+export type PermissionKey = LocationPermissionKey | 'canAccessEntireSchool' | 'canManageHourlyRates';
 
 export type PermissionFlags = Record<LocationPermissionKey, boolean>;
 
@@ -65,6 +65,8 @@ export type SchoolWideGrantInput = {
   canManageStudents?: boolean;
   canSendNotifications?: boolean;
   canViewParentContacts?: boolean;
+  /** School-wide only. Campus grants do not set this. */
+  canManageHourlyRates?: boolean;
 } | null | undefined;
 
 export type AggregatePermissionsInput = {
@@ -85,6 +87,8 @@ export type EffectivePermissions = {
   isSchoolAdminBypass: boolean;
   /** Whether school-admin nav groups should show (active role based). */
   showAdminNavGroups: boolean;
+  /** School-wide grant or school-admin bypass. Not granted by a campus row. */
+  canManageHourlyRates: boolean;
 };
 
 function flagsFromGrant(
@@ -139,6 +143,7 @@ export function aggregateEffectivePermissions(
       canAccessEntireSchool: true,
       isSchoolAdminBypass: true,
       showAdminNavGroups: true,
+      canManageHourlyRates: true,
     };
   }
 
@@ -156,12 +161,18 @@ export function aggregateEffectivePermissions(
     flags = orFlags(flags, flagsFromGrant(schoolWide));
   }
 
+  const canManageHourlyRates =
+    hasSchoolWide &&
+    !!schoolWide &&
+    (schoolWide.accessLevel === 'admin' || schoolWide.canManageHourlyRates === true);
+
   return {
     flags,
     accessibleLocationIds,
     canAccessEntireSchool: hasSchoolWide,
     isSchoolAdminBypass: false,
     showAdminNavGroups: false,
+    canManageHourlyRates,
   };
 }
 
@@ -169,6 +180,9 @@ export function hasPermission(
   effective: EffectivePermissions,
   key: PermissionKey,
 ): boolean {
+  if (key === 'canManageHourlyRates') {
+    return effective.canManageHourlyRates === true;
+  }
   if (key === 'canAccessEntireSchool') {
     return effective.canAccessEntireSchool || effective.isSchoolAdminBypass;
   }
@@ -318,6 +332,12 @@ export const NAV_REGISTRY: NavRegistryItem[] = [
   { title: 'Discounts', href: '/schools/discounts', group: 'Finance', required: 'canViewReports' },
   { title: 'Credits', href: '/school-admin/credits', group: 'Finance', required: 'canViewReports' },
   {
+    title: 'Hourly rates',
+    href: '/school-admin/payroll-rates',
+    group: 'Finance',
+    required: 'canManageHourlyRates',
+  },
+  {
     title: 'Fundraisers',
     href: '/school-admin/fundraisers',
     group: 'Finance',
@@ -454,10 +474,16 @@ export function canAccessPath(
   effective: EffectivePermissions,
   path: string,
 ): boolean {
+  const normalized = path.split('?')[0];
+  if (
+    normalized === '/school-admin/payroll-rates' ||
+    normalized.startsWith('/school-admin/payroll-rates/')
+  ) {
+    return effective.canManageHourlyRates === true;
+  }
   if (effective.showAdminNavGroups || effective.isSchoolAdminBypass) {
     return true;
   }
-  const normalized = path.split('?')[0];
   const pathForMatch = MY_SCHOOL_LANDING_PATHS.has(normalized)
     ? '/schools/my-school'
     : normalized;

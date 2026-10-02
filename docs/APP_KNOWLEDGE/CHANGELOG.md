@@ -1,8 +1,39 @@
 # App knowledge changelog
 
-## 2026-09-22 (My School overview metrics)
+## 2026-10-01 (My School overview metrics)
 
 - Overview KPIs no longer use hardcoded 88/78/85 or `classes.enrollment_count` / `school_staff`. Current-term students, live class size, `user_roles` instructors, and dollar collection rate. See [school-analytics.md](domains/school-analytics.md).
+
+## 2026-09-27 (Enrollment ledger double-credit + family-plan balance email)
+
+- **Root cause:** the first checkout of an installment plan was credited to `program_enrollments.total_paid` twice. `fulfillBalancePaymentIntent` → `applyClassPoolToEnrollments` caps each share at what the seat still owes, which only makes pay-in-full replays harmless; an installment seat still owes after installment 1, so a second apply lands in full. The client `POST /api/billing/fulfill-payment-intent` and the `payment_intent.succeeded` webhook both finalize (the webhook re-applies when the payment row already succeeded). Found via the Hutchins withdrawal ($450 phantom from `pi_3U193w…` applied twice).
+- **Fix:** new column `payments.enrollment_ledger_applied_at` (boot migration in `init-db.ts`, backfilled for existing completed/succeeded/refunded rows). `finalizeSucceededPaymentIntent` claims it with an atomic `UPDATE … WHERE enrollment_ledger_applied_at IS NULL RETURNING`; only the winner runs the class-pool apply (`skipEnrollmentApply` for losers); the claim is released if the apply throws before crediting. `finalizeSucceededScheduledPaymentIntent` now uses `completeScheduledPaymentIfOpen` (conditional `status <> 'completed'` update) instead of a stale-read check; a failed payment insert reopens the installment. Tests: `server/tests/finalize-payment-intent-ledger-once.test.ts`, `server/tests/finalize-scheduled-payment-concurrency.test.ts` (storage mocked; run without Postgres).
+- **Fall audit:** `server/scripts/audit-fall-2026-seat-ledger-vs-cash.sql` (read-only, per-family ledger vs Stripe-backed payments). ~25 Fall families show seats paid > cash received (~$11k); for most, remaining installments exceed the seat balance by the over-credit, so autopay's balance cap will under-collect. Ledger remediation is a separate, per-family decision.
+- **Family-plan balance email:** `buildFamilyBalanceEmailPayload` (`server/lib/family-balance-email.ts`) mapped each pending SP only to `scheduled_payments.enrollment_id`, so on family plans (`metadata.enrollmentIds` = several seats) every other child's balance was listed again as "No Plan" (Billotti dry run: $1,850 vs real $1,233.33). Now uses `resolveEnrollmentIdsFromScheduledRow`. Affects `send-account-correction-email.ts` and `send-balance-reminders-batch.ts`; earlier family-plan emails may have overstated "Current Amount Due".
+
+## 2026-09-25 (Today's hours list with Approve / Edit)
+
+- `/payroll-day` is a class-day list (about four weeks back, a few ahead). Each row shows Needs review or Approved, a short here/away summary, **Approve** (everyone usual hours), and **Edit** (bottom sheet for exceptions). `GET /api/payroll-day/days` and `POST /api/payroll-day/approve`. Playwright: `e2e/payroll-day.spec.ts`.
+
+## 2026-09-25 (Today's hours Save bar clears the sidebar)
+
+- Fixed Save on `/payroll-day` used full viewport width and covered the parent sidebar. Bar is `lg:left-64` so it stays in the main column.
+
+## 2026-09-25 (Hourly rates shell + row Save)
+
+- `/school-admin/payroll-rates` uses `SchoolAdminLayout` so Finance nav stays visible. Each job has editable person, what they do, usual hours, and rate, plus **Save** and **Remove**. PATCH accepts those fields; DELETE deactivates the job. Saved class days still keep the old rate.
+
+## 2026-09-25 (Daily hours is a school feature)
+
+- Super admin turns on `schools.enabled_features.dailyHours` from School Edit. It stays off until then. **Hourly rates** is the school-wide permission `canManageHourlyRates` (`user_school_permissions` only). School admin bypass still opens rates when the feature is on. **Today's hours** is a separate grant on the rates page (`payroll_checklist_access`). No email is built into the program, and a new school starts with no jobs. Saved days still keep the rate from when they were saved. SQL: `263-payroll-days.sql` and `264-payroll-hourly-rates-permission.sql` (`ADD COLUMN IF NOT EXISTS`). Playwright: `npm run test:e2e -- e2e/payroll-day.spec.ts`.
+
+## 2026-09-25 (Daily payroll checklist)
+
+- First version of the class-day checklist and hourly rates. Replaced the same day by the school-feature version above. No Venmo and no tuition-credit write.
+
+## 2026-09-23 (Week Planner cards show the steps under the heading)
+
+- Week-grid cards used the first description line, so Yankee Doodle Circle Time showed only “1. Welcome & Greeting” and Literacy showed only “Pre-K Group:” even when the Lovevery kit and the rest of the script were on the next lines. `descriptionPreviewText` keeps up to six opening lines (about 320 characters). **Lesson** still has the full script. Print and mentor Schedule still use the first line.
 
 ## 2026-09-22 (Home Upcoming Events skips class days)
 

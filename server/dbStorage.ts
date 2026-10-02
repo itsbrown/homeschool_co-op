@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray, ilike } from 'drizzle-orm';
+import { eq, ne, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray, ilike } from 'drizzle-orm';
 import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { normalizeSchoolFeatures } from './lib/school-features';
 import { getDb } from './db';
@@ -86,6 +86,11 @@ import { sqlStripeHistoryUserAtSchool } from './lib/admin-school-context';
 /**
  * DatabaseStorage - Implements IStorage using PostgreSQL and Drizzle ORM
  */
+async function ensureHourlyRatePermissionColumn(): Promise<void> {
+  const { ensurePayrollDaySchema } = await import("./lib/ensure-payroll-day-schema");
+  await ensurePayrollDaySchema();
+}
+
 export class DatabaseStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
@@ -2042,6 +2047,29 @@ export class DatabaseStorage implements IStorage {
     return updatedPayment;
   }
 
+  async claimPaymentEnrollmentLedger(stripePaymentIntentId: string): Promise<boolean> {
+    const db = await getDb();
+    const rows = await db
+      .update(payments)
+      .set({ enrollmentLedgerAppliedAt: new Date() })
+      .where(
+        and(
+          eq(payments.stripePaymentIntentId, stripePaymentIntentId),
+          isNull(payments.enrollmentLedgerAppliedAt),
+        ),
+      )
+      .returning({ id: payments.id });
+    return rows.length > 0;
+  }
+
+  async releasePaymentEnrollmentLedgerClaim(stripePaymentIntentId: string): Promise<void> {
+    const db = await getDb();
+    await db
+      .update(payments)
+      .set({ enrollmentLedgerAppliedAt: null })
+      .where(eq(payments.stripePaymentIntentId, stripePaymentIntentId));
+  }
+
   // Scheduled Payment methods
   async createScheduledPayment(payment: InsertScheduledPayment): Promise<ScheduledPayment> {
     const db = await getDb();
@@ -2110,6 +2138,25 @@ export class DatabaseStorage implements IStorage {
           eq(scheduledPayments.chargedBy, 'parent_manual'),
         ),
       )
+      .returning();
+    return row;
+  }
+
+  async completeScheduledPaymentIfOpen(
+    id: number,
+    completionSource: string,
+  ): Promise<ScheduledPayment | undefined> {
+    const db = await getDb();
+    const now = new Date();
+    const [row] = await db
+      .update(scheduledPayments)
+      .set({
+        status: 'completed',
+        processedAt: now,
+        completionSource,
+        updatedAt: now,
+      })
+      .where(and(eq(scheduledPayments.id, id), ne(scheduledPayments.status, 'completed')))
       .returning();
     return row;
   }
@@ -2734,6 +2781,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserSchoolPermissionById(id: number): Promise<UserSchoolPermission | undefined> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     const [row] = await db.select().from(userSchoolPermissions).where(eq(userSchoolPermissions.id, id));
     return row;
@@ -2743,6 +2791,7 @@ export class DatabaseStorage implements IStorage {
     userId: number,
     schoolId: number,
   ): Promise<UserSchoolPermission | undefined> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     const [row] = await db
       .select()
@@ -2761,6 +2810,7 @@ export class DatabaseStorage implements IStorage {
     userId: number,
     schoolId: number,
   ): Promise<UserSchoolPermission | undefined> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     const [row] = await db
       .select()
@@ -2775,6 +2825,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserSchoolPermissionsBySchoolId(schoolId: number): Promise<UserSchoolPermission[]> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     return await db
       .select()
@@ -2788,6 +2839,7 @@ export class DatabaseStorage implements IStorage {
   async createUserSchoolPermission(
     permission: InsertUserSchoolPermission,
   ): Promise<UserSchoolPermission> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     const [row] = await db
       .insert(userSchoolPermissions)
@@ -2804,6 +2856,7 @@ export class DatabaseStorage implements IStorage {
     id: number,
     permission: Partial<InsertUserSchoolPermission>,
   ): Promise<UserSchoolPermission | undefined> {
+    await ensureHourlyRatePermissionColumn();
     const db = await getDb();
     const [row] = await db
       .update(userSchoolPermissions)

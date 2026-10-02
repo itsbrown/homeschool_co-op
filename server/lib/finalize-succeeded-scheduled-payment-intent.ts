@@ -81,22 +81,25 @@ export async function finalizeSucceededScheduledPaymentIntent(
     }
   }
 
+  const skippedDuplicateResult = async (): Promise<FinalizeSucceededScheduledPaymentIntentResult> => ({
+    scheduledPaymentId: spIdParsed,
+    paymentId: existingPayment?.id ?? (await storage.getPaymentByStripeId(paymentIntent.id))?.id ?? null,
+    appliedEnrollmentIds: [],
+    skippedDuplicate: true,
+  });
+
   if (String(scheduledPayment.status) === 'completed') {
-    return {
-      scheduledPaymentId: spIdParsed,
-      paymentId: existingPayment?.id ?? null,
-      appliedEnrollmentIds: [],
-      skippedDuplicate: true,
-    };
+    return skippedDuplicateResult();
   }
 
   const completionSrc =
     paymentIntent.metadata.autoPayInitiated === 'true' ? 'stripe_autopay' : 'stripe_checkout';
-  await storage.updateScheduledPayment(spIdParsed, {
-    status: 'completed',
-    processedAt: new Date(),
-    completionSource: completionSrc,
-  });
+  // Webhook, client fulfill, post-payment verify, and the missed-PI sweep can all finalize the
+  // same PI concurrently; only the caller that flips the row to completed may credit enrollments.
+  const claimed = await storage.completeScheduledPaymentIfOpen(spIdParsed, completionSrc);
+  if (!claimed) {
+    return skippedDuplicateResult();
+  }
 
   const enrollmentIds = resolveScheduledPaymentEnrollmentIds(
     scheduledPayment,
@@ -164,8 +167,22 @@ export async function finalizeSucceededScheduledPaymentIntent(
 
   let paymentId = existingPayment?.id ?? null;
   if (!existingPayment) {
-    const created = await storage.createPayment(paymentRecord);
-    paymentId = created.id;
+    try {
+      const created = await storage.createPayment(paymentRecord);
+      paymentId = created.id;
+    } catch (createErr) {
+      const raced = await storage.getPaymentByStripeId(paymentIntent.id);
+      if (!raced) {
+        // Nothing credited yet: reopen the row so a retry can finalize it.
+        await storage.updateScheduledPayment(spIdParsed, {
+          status: scheduledPayment.status,
+          processedAt: scheduledPayment.processedAt ?? null,
+          completionSource: scheduledPayment.completionSource ?? null,
+        });
+        throw createErr;
+      }
+      paymentId = raced.id;
+    }
   }
 
   if (enrollmentIds.length > 0) {

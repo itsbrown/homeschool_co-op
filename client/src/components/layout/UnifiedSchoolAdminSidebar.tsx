@@ -130,6 +130,7 @@ const adminNavGroups: NavGroup[] = [
       { title: 'Memberships', href: '/schools/memberships', icon: BadgeCheck },
       { title: 'Discounts', href: '/schools/discounts', icon: Target },
       { title: 'Credits', href: '/school-admin/credits', icon: Coins },
+      { title: 'Hourly rates', href: '/school-admin/payroll-rates', icon: Coins },
       { title: 'Fundraisers', href: '/school-admin/fundraisers', icon: Gift },
     ],
   },
@@ -257,6 +258,11 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
   const hasSuperAdminRole =
     availableRoles.some((r) => r.role.toLowerCase() === 'superadmin') || hasRole('superAdmin');
   const { showPublicStoreInNav } = useSchoolFeatures();
+  const { data: payrollAccess } = useQuery<{ manageRates?: boolean }>({
+    queryKey: ["/api/payroll-day/access"],
+    enabled: !!user,
+    retry: false,
+  });
   const baseNavGroups = buildAdminNavGroups(showAdminNavGroups || showPublicStoreInNav || hasSuperAdminRole);
 
   // Filter groups/items by effective permissions (fail closed for non-bypass)
@@ -279,13 +285,37 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
     })
     .filter((group) => group.items.length > 0);
 
+  const hourlyRatesHref = "/school-admin/payroll-rates";
+  const hourlyRatesItem = { title: "Hourly rates", href: hourlyRatesHref, icon: Coins };
+  const withoutLockedRates = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => item.href !== hourlyRatesHref || payrollAccess?.manageRates === true,
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+  const ratesAlreadyListed = withoutLockedRates.some((group) =>
+    group.items.some((item) => item.href === hourlyRatesHref),
+  );
+  const visibleNavGroups =
+    payrollAccess?.manageRates === true && !ratesAlreadyListed
+      ? withoutLockedRates.some((group) => group.title === "Finance")
+        ? withoutLockedRates.map((group) =>
+            group.title === "Finance"
+              ? { ...group, items: [...group.items, hourlyRatesItem] }
+              : group,
+          )
+        : [...withoutLockedRates, { title: "Finance", icon: Wallet, items: [hourlyRatesItem] }]
+      : withoutLockedRates;
+
   // Show permission-filtered admin groups when bypass OR staff has any granted sections
-  const showPermissionNav = showAdminNavGroups || navGroups.length > 0;
+  const showPermissionNav = showAdminNavGroups || visibleNavGroups.length > 0;
 
   // Auto-expand group containing current route
   useEffect(() => {
     if (showPermissionNav) {
-      for (const group of navGroups) {
+      for (const group of visibleNavGroups) {
         const hasActiveItem = group.items.some(item => 
           location === item.href || location.startsWith(`${item.href}/`)
         );
@@ -294,7 +324,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
         }
       }
     }
-  }, [location, showPermissionNav, navGroups]);
+  }, [location, showPermissionNav, visibleNavGroups]);
 
   // Save expanded state to localStorage (guarded for SSR safety)
   useEffect(() => {
@@ -463,7 +493,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
             </Link>
 
             {/* Grouped Navigation - for users with admin or director roles */}
-            {showPermissionNav && navGroups.map((group) => {
+            {showPermissionNav && visibleNavGroups.map((group) => {
               const isGroupExpanded = expandedGroups.has(group.title);
               const hasActiveItem = group.items.some(item => 
                 location === item.href || location.startsWith(`${item.href}/`)
@@ -721,7 +751,7 @@ export default function UnifiedSchoolAdminSidebar({ className }: SidebarProps) {
                   </Link>
 
                   {/* Grouped Navigation - for users with admin or director roles */}
-                  {showPermissionNav && navGroups.map((group) => {
+                  {showPermissionNav && visibleNavGroups.map((group) => {
                     const isGroupExpanded = expandedGroups.has(group.title);
                     const hasActiveItem = group.items.some(item => 
                       location === item.href || location.startsWith(`${item.href}/`)

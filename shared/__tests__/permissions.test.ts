@@ -80,6 +80,24 @@ describe('aggregateEffectivePermissions', () => {
     expect(effective.accessibleLocationIds).toEqual([2]);
   });
 
+  it('hourly rates come from a school-wide grant, not a campus admin row', () => {
+    const fromCampus = aggregateEffectivePermissions({
+      activeRole: 'educator',
+      locationGrants: [{ locationId: 1, isActive: true, accessLevel: 'admin' }],
+    });
+    expect(fromCampus.canManageHourlyRates).toBe(false);
+    expect(hasPermission(fromCampus, 'canManageHourlyRates')).toBe(false);
+
+    const fromSchool = aggregateEffectivePermissions({
+      activeRole: 'educator',
+      schoolWideGrant: { isActive: true, canManageHourlyRates: true },
+    });
+    expect(fromSchool.canManageHourlyRates).toBe(true);
+    expect(hasPermission(fromSchool, 'canManageHourlyRates')).toBe(true);
+    expect(canAccessPath(fromSchool, '/school-admin/payroll-rates')).toBe(true);
+    expect(canAccessPath(fromSchool, '/school-admin/credits')).toBe(false);
+  });
+
   it('school-wide grant ⇒ canAccessEntireSchool and OR flags', () => {
     const effective = aggregateEffectivePermissions({
       activeRole: 'educator',
