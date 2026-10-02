@@ -37,8 +37,10 @@ export function StoreCartReview({ cart, onCartChange, showSubtotal = true }: Sto
     <div className="space-y-3" data-testid="store-cart-review">
       <ul className="divide-y rounded-lg border bg-white">
         {cart.lines.map((line) => {
-          const lineTotal = (line.unitPriceCents ?? 0) * Math.max(1, line.quantity);
-          const isProduct = line.listingType === "product";
+          const lineTotal = line.eventRsvp && line.lineTotalCents != null
+            ? line.lineTotalCents
+            : (line.unitPriceCents ?? 0) * Math.max(1, line.quantity);
+          const isProduct = line.listingType === "product" && !line.eventRsvp;
 
           return (
             <li
@@ -48,11 +50,18 @@ export function StoreCartReview({ cart, onCartChange, showSubtotal = true }: Sto
             >
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-sm leading-snug">{line.title}</p>
-                {line.unitPriceCents != null && (
+                {line.eventRsvp ? (
+                  <p className="text-xs text-muted-foreground mt-0.5" data-testid="store-cart-event-summary">
+                    {line.eventRsvp.attendees
+                      .filter((row) => row.quantity > 0)
+                      .map((row) => `${row.quantity} ${row.type}`)
+                      .join(", ")}
+                  </p>
+                ) : line.unitPriceCents != null ? (
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {formatStoreCartMoney(line.unitPriceCents)} each
                   </p>
-                )}
+                ) : null}
                 {!isProduct && (
                   <p className="text-xs text-muted-foreground mt-1">
                     One child per enrollment — add again from the store for another child.

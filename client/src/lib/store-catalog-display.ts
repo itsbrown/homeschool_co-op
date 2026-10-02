@@ -16,6 +16,7 @@ export function storeListingTypeLabel(
   productKind?: StoreCatalogItem["productKind"],
   affiliateUrl?: StoreCatalogItem["affiliateUrl"],
 ): string {
+  if (listingType === "product" && productKind === "event") return "Event";
   if (listingType === "product") {
     const cta = storeProductCta({ affiliateUrl });
     if (cta.kind === "amazon" || (productKind === "affiliate" && cta.kind === "cart")) {
@@ -50,6 +51,10 @@ export function formatStoreMoney(cents: number): string {
 
 /** Primary price line for catalog cards and detail headers. */
 export function formatStoreListingPrice(item: StoreCatalogItem): string | null {
+  if (item.listingType === "product" && item.productKind === "event") {
+    if ((item.priceCents ?? 0) <= 0) return "Free";
+    return `From ${formatStoreMoney(item.priceCents ?? 0)}`;
+  }
   if (item.listingType === "product" && item.priceCents != null) {
     return formatStoreMoney(item.priceCents);
   }

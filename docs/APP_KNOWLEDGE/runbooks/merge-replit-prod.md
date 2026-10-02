@@ -72,6 +72,7 @@ Apply **additive** SQL only when columns/tables are missing:
 | `server/migrations/262-require-member-id.sql` | `sessions.require_member_id` / `classes.require_member_id` (default false). Replit boot `init-db.ts` ALTER IF NOT EXISTS should add it; run this SQL only if 42703. Do not flip the admin toggle until auditing null `users.member_id`. |
 | `server/migrations/264-children-math-level.sql` | `children.current_math_level` + **Math Level** assessment type. Apply **before or with** deploy of student-profile Math Level card. Boot `ensureMathLevelSchema` / `init-db` are idempotent. Never `db:push`. |
 | `server/migrations/265-week-planner-drive.sql` | Week Planner Drive: `classes.drive_folder_id`, `skeleton_blocks.drive_folder_id`, `curriculum_assets`, `week_plan_blocks.curriculum_asset_id`. Idempotent. Apply **before or with** this publish. Boot `init-db` also ALTER/CREATE IF NOT EXISTS. Never `db:push`. |
+| `server/migrations/266-store-event-products.sql` | Public store events: `store_products.rsvp` jsonb and `product_kind` includes `event`. Idempotent. Apply **before or with** publish. Non-prod `ensurePublicStoreSchema` applies it; production does not. Never `db:push`. |
 
 Verify with read-only checks or `scripts/verify-f001-schema.mjs` against a **non-prod** mirror when possible.
 

@@ -30,6 +30,10 @@ describe('buildStoreSignupsCsv', () => {
         quantity: null,
         productFulfillmentMethod: null,
         shippingAddress: null,
+        referralUserId: null,
+        referralName: null,
+        referralEmail: null,
+        eventCounts: null,
       },
     ];
 

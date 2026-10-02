@@ -13,6 +13,13 @@
 
 import Stripe from 'stripe';
 
+/** Stripe's documented sample secret. It initializes the SDK and is rejected by the API. */
+export const STRIPE_DOCS_SAMPLE_SECRET = 'sk_test_4eC39HqLyjWDarjtT1ColDPY';
+
+export function isStripeDocsSampleSecret(secretKey: string | null | undefined): boolean {
+  return (secretKey ?? '').trim() === STRIPE_DOCS_SAMPLE_SECRET;
+}
+
 let cachedSecretKey: string | null = null;
 let cachedStripeClient: Stripe | null = null;
 

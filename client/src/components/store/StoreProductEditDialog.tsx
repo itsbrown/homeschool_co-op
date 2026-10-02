@@ -15,7 +15,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/ImageUpload";
+import { StoreEventRsvpEditor } from "@/components/store/StoreEventRsvpEditor";
 import { useToast } from "@/hooks/use-toast";
+import { emptyStoreEventRsvp, parseStoreEventRsvp, type StoreEventRsvp } from "@shared/store-event-rsvp";
 
 export type EditableStoreProduct = {
   id: number;
@@ -23,12 +25,13 @@ export type EditableStoreProduct = {
   priceCents: number;
   description?: string | null;
   imageUrl?: string | null;
-  productKind?: "owned" | "affiliate";
+  productKind?: "owned" | "affiliate" | "event";
   affiliateUrl?: string | null;
   asin?: string | null;
   listingId?: number | null;
   isPublished?: boolean;
   pickupOnly?: boolean;
+  rsvp?: unknown;
 };
 
 type EditFormState = {
@@ -39,6 +42,7 @@ type EditFormState = {
   isPublished: boolean;
   productUrl: string;
   pickupOnly: boolean;
+  rsvp: StoreEventRsvp;
 };
 
 function formFromProduct(product: EditableStoreProduct): EditFormState {
@@ -50,6 +54,7 @@ function formFromProduct(product: EditableStoreProduct): EditFormState {
     isPublished: product.isPublished ?? false,
     productUrl: product.affiliateUrl ?? "",
     pickupOnly: product.pickupOnly === true,
+    rsvp: parseStoreEventRsvp(product.rsvp) ?? emptyStoreEventRsvp(),
   };
 }
 
@@ -73,6 +78,7 @@ export function StoreProductEditDialog({
     isPublished: false,
     productUrl: "",
     pickupOnly: false,
+    rsvp: emptyStoreEventRsvp(),
   });
 
   useEffect(() => {
@@ -87,14 +93,15 @@ export function StoreProductEditDialog({
   };
 
   const isAffiliate = product?.productKind === "affiliate";
+  const isEvent = product?.productKind === "event";
   const trimmedUrl = form.productUrl.trim();
   const affiliateUrlMissing = isAffiliate && !trimmedUrl;
 
   const saveProduct = useMutation({
     mutationFn: async () => {
       if (!product) throw new Error("No product selected");
-      const priceCents = Math.round(form.priceDollars * 100);
-      if (!form.name.trim() || priceCents <= 0) {
+      const priceCents = isEvent ? 0 : Math.round(form.priceDollars * 100);
+      if (!form.name.trim() || (!isEvent && priceCents <= 0)) {
         throw new Error("Name and a price greater than $0 are required");
       }
       if (isAffiliate && !trimmedUrl) {
@@ -109,8 +116,9 @@ export function StoreProductEditDialog({
           priceCents,
           imageUrl: form.imageUrl || null,
           isPublished: form.isPublished,
-          affiliateUrl: trimmedUrl || null,
-          pickupOnly: product.productKind === "affiliate" ? false : form.pickupOnly,
+          affiliateUrl: isEvent ? null : trimmedUrl || null,
+          pickupOnly: isEvent ? true : product.productKind === "affiliate" ? false : form.pickupOnly,
+          ...(isEvent ? { priceCents: 0, rsvp: form.rsvp } : {}),
         },
       );
       if (!res.ok) {
@@ -208,7 +216,7 @@ export function StoreProductEditDialog({
                 />
                 <Label>List on public store</Label>
               </div>
-              {!isAffiliate ? (
+              {!isAffiliate && !isEvent ? (
                 <div className="flex items-start gap-2">
                   <Switch
                     checked={form.pickupOnly}
@@ -232,6 +240,9 @@ export function StoreProductEditDialog({
                   data-testid="input-edit-product-name"
                 />
               </div>
+              {isEvent ? (
+                <StoreEventRsvpEditor value={form.rsvp} onChange={(rsvp) => updateForm({ rsvp })} />
+              ) : (
               <div>
                 <Label htmlFor="edit-product-price">Price (USD)</Label>
                 <Input
@@ -249,6 +260,7 @@ export function StoreProductEditDialog({
                   </p>
                 ) : null}
               </div>
+              )}
               <div>
                 <Label htmlFor="edit-product-description">Description</Label>
                 <Textarea
@@ -324,7 +336,7 @@ export function StoreProductEditDialog({
                   disabled={
                     saveProduct.isPending ||
                     !form.name.trim() ||
-                    form.priceDollars <= 0 ||
+                    (!isEvent && form.priceDollars <= 0) ||
                     affiliateUrlMissing
                   }
                   data-testid="button-save-product"

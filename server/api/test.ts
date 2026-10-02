@@ -4650,13 +4650,42 @@ router.get('/email-log', async (req: Request, res: Response) => {
     if (type) conditions.push(eq(emailLog.type, type));
 
     const rows = await db
-      .select()
+      .select({
+        id: emailLog.id,
+        recipientEmail: emailLog.recipientEmail,
+        type: emailLog.type,
+        subject: emailLog.subject,
+        status: emailLog.status,
+        error: emailLog.error,
+      })
       .from(emailLog)
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(desc(emailLog.id))
       .limit(20);
 
-    res.json({ success: true, data: rows });
+    const { readStoreConfirmationPreview } = await import('../lib/store-confirmation-preview');
+    const preview = recipient ? readStoreConfirmationPreview(recipient) : null;
+    const data = rows.map((row: (typeof rows)[number]) =>
+      row.type === 'store_purchase_confirmation' && preview ? { ...row, preview } : row,
+    );
+    if (
+      preview &&
+      recipient &&
+      (!type || type === 'store_purchase_confirmation') &&
+      !data.some((row: (typeof data)[number]) => 'preview' in row && row.preview)
+    ) {
+      data.unshift({
+        id: 0,
+        recipientEmail: recipient,
+        type: 'store_purchase_confirmation',
+        subject: null,
+        status: 'sent',
+        error: null,
+        preview,
+      });
+    }
+
+    res.json({ success: true, data });
   } catch (error) {
     console.error('❌ email-log:', error);
     res.status(500).json({

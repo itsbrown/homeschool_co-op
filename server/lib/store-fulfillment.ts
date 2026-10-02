@@ -152,7 +152,7 @@ export async function fulfillStoreCheckoutFromWebhook(params: {
 
   for (const line of lines.filter((l: any) => l.listingType === 'product')) {
     const product = await getStoreProductById(line.sourceId);
-    if (product?.inventoryQty != null) {
+    if (product?.inventoryQty != null && product.productKind !== 'event') {
       const { updateStoreProduct } = await import('./store-storage');
       await updateStoreProduct(product.id, {
         inventoryQty: Math.max(0, product.inventoryQty - (line.quantity ?? 1)),
@@ -166,7 +166,7 @@ export async function fulfillStoreCheckoutFromWebhook(params: {
       quantity: line.quantity ?? 1,
       unitPriceCents: line.unitPriceCents,
       lineTotalCents: line.lineTotalCents,
-      metadata: {},
+      metadata: line.eventRsvp ? { rsvp: line.eventRsvp } : {},
     });
   }
 
@@ -268,7 +268,7 @@ export async function fulfillStoreCheckoutWithoutPayment(snapshotId: string) {
   for (const line of lines.filter((l: any) => l.listingType === 'product')) {
     if (!payload.pendingStoreOrderId) break;
     const product = await getStoreProductById(line.sourceId);
-    if (product?.inventoryQty != null) {
+    if (product?.inventoryQty != null && product.productKind !== 'event') {
       const { updateStoreProduct } = await import('./store-storage');
       await updateStoreProduct(product.id, {
         inventoryQty: Math.max(0, product.inventoryQty - (line.quantity ?? 1)),
@@ -282,7 +282,7 @@ export async function fulfillStoreCheckoutWithoutPayment(snapshotId: string) {
       quantity: line.quantity ?? 1,
       unitPriceCents: line.unitPriceCents,
       lineTotalCents: line.lineTotalCents,
-      metadata: {},
+      metadata: line.eventRsvp ? { rsvp: line.eventRsvp } : {},
     });
   }
 

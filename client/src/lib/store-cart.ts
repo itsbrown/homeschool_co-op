@@ -1,3 +1,5 @@
+import type { StoreEventRsvpAnswer } from "@shared/store-event-rsvp";
+
 export const STORE_CART_KEY = 'public_store_cart_v1';
 
 export type StoreCartLine = {
@@ -9,6 +11,8 @@ export type StoreCartLine = {
   quantity: number;
   variant?: 'half_day' | 'full_day';
   unitPriceCents?: number;
+  lineTotalCents?: number;
+  eventRsvp?: StoreEventRsvpAnswer;
 };
 
 export type StoreCartState = {
@@ -45,10 +49,10 @@ export function cartLineCount(cart: StoreCartState): number {
 }
 
 export function cartSubtotalCents(cart: StoreCartState): number {
-  return cart.lines.reduce(
-    (sum, line) => sum + (line.unitPriceCents ?? 0) * Math.max(1, line.quantity),
-    0,
-  );
+  return cart.lines.reduce((sum, line) => {
+    if (line.eventRsvp && line.lineTotalCents != null) return sum + line.lineTotalCents;
+    return sum + (line.unitPriceCents ?? 0) * Math.max(1, line.quantity);
+  }, 0);
 }
 
 export function formatStoreCartMoney(cents: number): string {
@@ -103,6 +107,25 @@ export function addProductLine(
   };
 }
 
+export function addEventLine(
+  cart: StoreCartState,
+  line: Omit<StoreCartLine, 'lineId' | 'quantity'> & { quantity: number; eventRsvp: StoreEventRsvpAnswer; lineTotalCents: number },
+): StoreCartState {
+  const existing = findMatchingCartLine(cart, line);
+  const nextLine = {
+    ...line,
+    lineId: existing?.lineId ?? newLineId(),
+    quantity: line.quantity,
+  };
+  if (existing) {
+    return {
+      ...cart,
+      lines: cart.lines.map((l) => (l.lineId === existing.lineId ? nextLine : l)),
+    };
+  }
+  return { ...cart, lines: [...cart.lines, nextLine] };
+}
+
 export function addProgramLine(
   cart: StoreCartState,
   line: Omit<StoreCartLine, 'lineId' | 'quantity'>,
@@ -123,7 +146,7 @@ export function updateCartLineQuantity(
   }
   const line = cart.lines.find((l) => l.lineId === lineId);
   if (!line) return cart;
-  if (line.listingType !== 'product') {
+  if (line.listingType !== 'product' || line.eventRsvp) {
     return cart;
   }
   return {

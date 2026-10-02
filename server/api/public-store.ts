@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { supabaseAuth } from '../middleware/supabase-auth';
-import { getStripeClient } from '../config/stripe';
+import { getStripeClient, getStripeSecretKey, isStripeDocsSampleSecret } from '../config/stripe';
 import {
   generateStoreAccessToken,
   generateStoreSnapshotId,
@@ -19,6 +19,7 @@ import {
   updateStoreOrder,
 } from '../lib/store-storage';
 import { calculateStoreSnapshot, StoreAffiliateCartError, type StoreCartLineInput } from '../lib/store-pricing';
+import { eventStripeLineItems, isBelowStripeMinimum } from '@shared/store-event-rsvp';
 import {
   resolveStoreParent,
   resolveStoreChild,
@@ -34,7 +35,7 @@ import {
   formatStoreOrderNumber,
   persistStoreEmergencyContact,
 } from '../lib/store-checkout-contact';
-import { storeProductDeliverySchema, StorePickupOnlyError, assertStoreProductDeliveryAllowed } from '../lib/store-product-fulfillment';
+import { storeProductDeliverySchema, assertStoreProductDeliveryAllowed, StorePickupOnlyError } from '../lib/store-product-fulfillment';
 import { resolveStoreShareReferral } from '../lib/store-share-attribution';
 
 const router = Router();
@@ -53,6 +54,18 @@ const cartLineSchema = z.object({
       lastName: z.string().min(1),
       birthdate: z.string().min(1),
       gradeLevel: z.string().min(1),
+    })
+    .optional(),
+  eventRsvp: z
+    .object({
+      attendees: z.array(z.object({ type: z.enum(['adult', 'children', 'guests']), quantity: z.number().int().min(0) })),
+      meals: z.array(
+        z.object({
+          type: z.enum(['gluten_free', 'vegan', 'dairy_free', 'other']),
+          quantity: z.number().int().min(0),
+        }),
+      ),
+      otherNote: z.string().max(240).nullable(),
     })
     .optional(),
 });
@@ -264,6 +277,13 @@ router.post('/:storeSlug/checkout', async (req, res) => {
       });
     }
 
+    if (isBelowStripeMinimum(snapshot.amountDueCents)) {
+      return res.status(400).json({
+        message: 'Card payments must be at least $0.50. Set the total to $0 or $0.50 or more.',
+        code: 'STRIPE_MINIMUM',
+      });
+    }
+
     const childAssignments: Array<{
       lineId: string;
       childId: number;
@@ -386,6 +406,11 @@ router.post('/:storeSlug/checkout', async (req, res) => {
       });
     }
 
+    const stripeSecret = await getStripeSecretKey();
+    if (isStripeDocsSampleSecret(stripeSecret)) {
+      return res.json({ checkoutUrl: null, accessToken, snapshotId });
+    }
+
     const stripe = await getStripeClient();
     const lineItems: Array<{ price_data: any; quantity: number }> = [];
 
@@ -402,6 +427,19 @@ router.post('/:storeSlug/checkout', async (req, res) => {
 
     for (const line of snapshot.lines) {
       if (line.fulfillment !== 'paid' || line.lineTotalCents <= 0) continue;
+      if (line.eventRsvp) {
+        for (const charge of eventStripeLineItems(line.eventRsvp, line.title)) {
+          lineItems.push({
+            price_data: {
+              currency: 'usd',
+              product_data: { name: charge.name },
+              unit_amount: charge.unitAmountCents,
+            },
+            quantity: charge.quantity,
+          });
+        }
+        continue;
+      }
       lineItems.push({
         price_data: {
           currency: 'usd',

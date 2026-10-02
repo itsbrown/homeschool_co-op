@@ -49,6 +49,16 @@ export type StoreSignupRow = {
   referralUserId: number | null;
   referralName: string | null;
   referralEmail: string | null;
+  eventCounts: {
+    adult: number;
+    children: number;
+    guests: number;
+    gluten_free: number;
+    vegan: number;
+    dairy_free: number;
+    other: number;
+    otherNote: string | null;
+  } | null;
 };
 
 type StatusFilter = "all" | "enrolled" | "waitlist" | "pending_payment" | "product";
@@ -158,7 +168,7 @@ function exportSignupsCsv(rows: StoreSignupRow[], filenamePrefix: string) {
   URL.revokeObjectURL(link.href);
 }
 
-export function StoreSignupsTab() {
+export function StoreSignupsTab({ view = "signups" }: { view?: "signups" | "purchases" }) {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [programFilter, setProgramFilter] = useState<string>("all");
@@ -176,6 +186,7 @@ export function StoreSignupsTab() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return signups.filter((row) => {
+      if (view === "purchases" && row.kind !== "product") return false;
       if (programFilter !== "all" && row.programName !== programFilter) return false;
       if (statusFilter === "product" && row.kind !== "product") return false;
       if (statusFilter === "enrolled" && row.enrollmentStatus !== "enrolled") return false;
@@ -200,7 +211,23 @@ export function StoreSignupsTab() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [signups, search, programFilter, statusFilter]);
+  }, [signups, search, programFilter, statusFilter, view]);
+
+  const eventTotals = useMemo(() => {
+    if (view !== "purchases") return null;
+    const totals = { adult: 0, children: 0, guests: 0, gluten_free: 0, vegan: 0, dairy_free: 0, other: 0 };
+    for (const row of filtered) {
+      if (!row.eventCounts || row.orderStatus !== "paid") continue;
+      totals.adult += row.eventCounts.adult;
+      totals.children += row.eventCounts.children;
+      totals.guests += row.eventCounts.guests;
+      totals.gluten_free += row.eventCounts.gluten_free;
+      totals.vegan += row.eventCounts.vegan;
+      totals.dairy_free += row.eventCounts.dairy_free;
+      totals.other += row.eventCounts.other;
+    }
+    return Object.values(totals).some((n) => n > 0) ? totals : null;
+  }, [filtered, view]);
 
   const handleExport = () => {
     if (filtered.length === 0) {
@@ -288,6 +315,13 @@ export function StoreSignupsTab() {
         ) : filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground">No sign-ups match your filters.</p>
         ) : (
+          <div className="space-y-3">
+            {eventTotals ? (
+              <p className="text-sm" data-testid="store-event-totals">
+                Coming: {eventTotals.adult} adults, {eventTotals.children} children, {eventTotals.guests} guests.
+                {" "}Meals: {eventTotals.gluten_free} gluten-free, {eventTotals.vegan} vegan, {eventTotals.dairy_free} dairy-free, {eventTotals.other} other.
+              </p>
+            ) : null}
           <div className="overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
@@ -380,6 +414,7 @@ export function StoreSignupsTab() {
                 ))}
               </TableBody>
             </Table>
+          </div>
           </div>
         )}
 

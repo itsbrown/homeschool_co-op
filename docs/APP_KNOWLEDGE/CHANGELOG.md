@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-10-01 (Public store events)
+
+- Public store product kind `event` with `store_products.rsvp` (attendee prices, optional meal counts, date/place, close date, caps). Parents RSVP on the product page; Stripe charges paid attendee types only; $0 orders record without Stripe and still email an RSVP receipt. Purchases tab totals paid headcount. Supply-list shop picker excludes events. SQL: `266-store-event-products.sql`. Playwright: `npm run test:e2e -- e2e/public-store-event.spec.ts`. CI's documented sample Stripe secret cannot create a Checkout Session; that key records the pending order (`checkoutUrl: null`) so the spec can fulfill it. A real `sk_test_` key still returns a Stripe URL. The E2E job timeout is 30 minutes so the extra spec can finish.
+
 ## 2026-10-01 (My School overview metrics)
 
 - Overview KPIs no longer use hardcoded 88/78/85 or `classes.enrollment_count` / `school_staff`. Current-term students, live class size, `user_roles` instructors, and dollar collection rate. See [school-analytics.md](domains/school-analytics.md).

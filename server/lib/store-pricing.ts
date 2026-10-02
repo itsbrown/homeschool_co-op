@@ -1,6 +1,6 @@
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 import { getDb } from '../db';
-import { programEnrollments } from '@shared/schema';
+import { programEnrollments, storeOrderItems, storeOrders } from '@shared/schema';
 import { storage } from '../storage';
 import {
   parentHasMemberIdForCheckout,
@@ -25,6 +25,14 @@ import {
   countSessionWaitlist,
 } from './session-enrollment-counts';
 import { storeProductIsCartPurchasable } from '@shared/store-product-cta';
+import {
+  parseStoreEventRsvp,
+  priceEventRsvp,
+  storeEventRsvpAnswerSchema,
+  type StoreAttendeeType,
+  type StoreEventRsvpAnswer,
+  type StoreEventRsvpSnapshot,
+} from '@shared/store-event-rsvp';
 
 export type StoreCartLineType = 'product' | 'session' | 'class';
 
@@ -49,6 +57,7 @@ export interface StoreCartLineInput {
     birthdate: string;
     gradeLevel: string;
   };
+  eventRsvp?: StoreEventRsvpAnswer;
 }
 
 export interface StoreSnapshotLine {
@@ -68,6 +77,7 @@ export interface StoreSnapshotLine {
   childId?: number;
   childName?: string;
   unavailableReason?: string;
+  eventRsvp?: StoreEventRsvpSnapshot;
 }
 
 export interface StoreSnapshotResult {
@@ -174,6 +184,77 @@ async function resolveClassLine(
   };
 }
 
+async function loadPaidAttendeeCounts(productId: number): Promise<Partial<Record<StoreAttendeeType, number>>> {
+  const db = await getDb();
+  const rows = await db
+    .select({ metadata: storeOrderItems.metadata })
+    .from(storeOrderItems)
+    .innerJoin(storeOrders, eq(storeOrders.id, storeOrderItems.storeOrderId))
+    .where(and(eq(storeOrderItems.productId, productId), eq(storeOrders.status, 'paid')));
+
+  const sold: Partial<Record<StoreAttendeeType, number>> = {};
+  for (const row of rows) {
+    const attendees = (row.metadata as { rsvp?: { attendees?: Array<{ type?: string; quantity?: number }> } } | null)
+      ?.rsvp?.attendees;
+    if (!Array.isArray(attendees)) continue;
+    for (const attendee of attendees) {
+      if (attendee.type !== 'adult' && attendee.type !== 'children' && attendee.type !== 'guests') continue;
+      const qty = typeof attendee.quantity === 'number' ? attendee.quantity : 0;
+      sold[attendee.type] = (sold[attendee.type] ?? 0) + qty;
+    }
+  }
+  return sold;
+}
+
+async function priceEventSnapshotLine(params: {
+  line: StoreCartLineInput;
+  listing: { id: number; membersOnly: boolean };
+  product: { id: number; name: string; description: string | null; rsvp: unknown };
+}): Promise<StoreSnapshotLine> {
+  const config = parseStoreEventRsvp(params.product.rsvp);
+  const answerParsed = storeEventRsvpAnswerSchema.safeParse(
+    params.line.eventRsvp ?? { attendees: [], meals: [], otherNote: null },
+  );
+  const base = {
+    lineId: params.line.lineId,
+    listingId: params.listing.id,
+    listingType: 'product' as const,
+    sourceId: params.product.id,
+    title: params.product.name,
+    description: params.product.description,
+    membersOnly: params.listing.membersOnly,
+    fulfillment: 'paid' as const,
+    childId: params.line.childId,
+  };
+  if (!config || !answerParsed.success) {
+    return {
+      ...base,
+      quantity: 1,
+      unitPriceCents: 0,
+      lineTotalCents: 0,
+      unavailableReason: config ? 'RSVP answers are invalid' : 'This event is not ready for RSVP',
+    };
+  }
+  const soldByType = await loadPaidAttendeeCounts(params.product.id);
+  const priced = priceEventRsvp({ config, answer: answerParsed.data, soldByType });
+  if (!priced.ok) {
+    return {
+      ...base,
+      quantity: 1,
+      unitPriceCents: 0,
+      lineTotalCents: 0,
+      unavailableReason: priced.unavailableReason,
+    };
+  }
+  return {
+    ...base,
+    quantity: priced.headcount,
+    unitPriceCents: 0,
+    lineTotalCents: priced.lineTotalCents,
+    eventRsvp: priced.eventRsvp,
+  };
+}
+
 export async function calculateStoreSnapshot(params: {
   schoolId: number;
   cartLines: StoreCartLineInput[];
@@ -199,6 +280,19 @@ export async function calculateStoreSnapshot(params: {
     if (line.listingType === 'product') {
       const product = await getStoreProductById(line.sourceId);
       if (!product || !product.isActive) continue;
+      if (product.productKind === 'event') {
+        pickupOnlyRequired = true;
+        const eventLine = await priceEventSnapshotLine({
+          line,
+          listing,
+          product,
+        });
+        if (eventLine.lineTotalCents > 0 && !eventLine.unavailableReason) {
+          itemsTotalCents += eventLine.lineTotalCents;
+        }
+        snapshotLines.push(eventLine);
+        continue;
+      }
       if (!storeProductIsCartPurchasable(product.affiliateUrl)) {
         throw new StoreAffiliateCartError(
           'Products with an external buy link cannot be added to the cart.',

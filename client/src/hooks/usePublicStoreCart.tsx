@@ -6,6 +6,7 @@ import {
   loadStoreCart,
   saveStoreCart,
   addProductLine,
+  addEventLine,
   addProgramLine,
   cartLineCount,
   cartSubtotalCents,
@@ -13,6 +14,7 @@ import {
   type StoreCartState,
 } from "@/lib/store-cart";
 import type { StoreCatalogItem } from "@/lib/store-catalog";
+import type { StoreEventRsvpAnswer } from "@shared/store-event-rsvp";
 import { storeProductCta } from "@shared/store-product-cta";
 
 export function usePublicStoreCart(schoolSlug: string) {
@@ -65,6 +67,21 @@ export function usePublicStoreCart(schoolSlug: string) {
     notifyAdded(item.title, next);
   };
 
+  const addEvent = (item: StoreCatalogItem, answer: StoreEventRsvpAnswer, lineTotalCents: number, headcount: number) => {
+    const next = addEventLine(cart, {
+      listingId: item.listingId,
+      listingType: "product",
+      sourceId: item.sourceId,
+      title: item.title,
+      quantity: headcount,
+      lineTotalCents,
+      eventRsvp: answer,
+      unitPriceCents: 0,
+    });
+    setCart(next);
+    notifyAdded(item.title, next);
+  };
+
   const addProgram = (item: StoreCatalogItem, variant: "half_day" | "full_day") => {
     const price =
       variant === "half_day" ? item.halfDayPrice ?? 0 : item.fullDayPrice ?? item.priceCents ?? 0;
@@ -97,6 +114,7 @@ export function usePublicStoreCart(schoolSlug: string) {
     cartTotal,
     cartPulse,
     addProduct,
+    addEvent,
     onAddProgram,
     goToCheckout: () => setLocation(`/store/${schoolSlug}/checkout`),
   };

@@ -153,6 +153,7 @@ export default function PublicStoreCheckoutPage() {
         sourceId: l.sourceId,
         quantity: l.quantity,
         variant: l.variant,
+        eventRsvp: l.eventRsvp,
       })),
     [cart.lines],
   );
