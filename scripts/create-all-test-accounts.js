@@ -7,6 +7,15 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    console.error(`Missing ${name}. Set it in the environment; do not commit passwords.`);
+    process.exit(1);
+  }
+  return value;
+}
+
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables');
   process.exit(1);
@@ -18,21 +27,21 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const testAccounts = [
   {
     email: 'schooladmin.test@americanseekersacademy.com',
-    password: 'SchoolAdmin123!',
+    password: requiredEnv('SCHOOL_ADMIN_TEST_PASSWORD'),
     role: 'school_admin',
     name: 'Test School Admin',
     description: 'School administrator test account'
   },
   {
     email: 'educator.test@americanseekersacademy.com',
-    password: 'Educator123!',
+    password: requiredEnv('EDUCATOR_TEST_PASSWORD'),
     role: 'educator',
     name: 'Test Educator',
     description: 'Educator/teacher test account'
   },
   {
     email: 'learner.test@americanseekersacademy.com',
-    password: 'Learner123!',
+    password: requiredEnv('LEARNER_TEST_PASSWORD'),
     role: 'learner',
     name: 'Test Learner',
     description: 'Student/learner test account'
@@ -113,7 +122,7 @@ async function createAllTestAccounts() {
   // Include the parent account we created earlier
   console.log('👨‍👩‍👧‍👦 PARENT ACCOUNT:');
   console.log('📧 Email: parent.test@americanseekersacademy.com');
-  console.log('🔒 Password: TestParent123!');
+  console.log('🔒 Password: (from PARENT_TEST_PASSWORD; not printed)');
   console.log('👥 Role: parent\n');
   
   testAccounts.forEach(account => {
@@ -125,7 +134,7 @@ async function createAllTestAccounts() {
     
     console.log(`${roleEmoji} ${account.description.toUpperCase()}:`);
     console.log(`📧 Email: ${account.email}`);
-    console.log(`🔒 Password: ${account.password}`);
+    console.log('🔒 Password: (from the environment; not printed)');
     console.log(`👥 Role: ${account.role}\n`);
   });
   

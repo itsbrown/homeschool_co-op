@@ -130,7 +130,7 @@ test.describe("session enrollment flow (admin sessions → parent /enroll)", () 
           /enrollment_price_history|session_id|enrollment_version|does not exist|relation/i.test(
             details,
           ),
-        `F001 schema not applied on DATABASE_URL — run server/migrations/f001-phase1-schema.sql or npm run db:push. Server said: ${details}`,
+        `F001 schema not applied on DATABASE_URL — run server/migrations/f001-phase1-schema.sql (local asa_test: node scripts/ci-db-push.mjs). Server said: ${details}`,
       );
     }
     expect(enrollRes.ok(), `session-enrollments HTTP ${enrollRes.status()}: ${enrollText}`).toBeTruthy();

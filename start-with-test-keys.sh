@@ -1,13 +1,19 @@
 #!/bin/bash
+# Start the dev server with Stripe test keys already present in the environment.
+# Do not commit key values. Live secret keys are refused.
+set -euo pipefail
 
-# Set test Stripe keys
-export STRIPE_SECRET_KEY="sk_test_51RkR2QRFKXbVXRE3U8c2AyDvLcOlqBQTYTeokh9J1O4hy9daHeW6B5Tzs0FyP2X2OC0Fnu9RVw9f8fQ8XMxFK6ne00nmfCHJxA"
-export STRIPE_PUBLISHABLE_KEY="pk_test_51RkR2QRFKXbVXRE3BwJnN0L9qeEDh2uDM3vsGr8JDb4LjGLPIUEQV5HeYFHnZlqGlVKrlFU8GRwM9dY0Sy0BXntL00uLiEGiXl"
-export VITE_STRIPE_PUBLIC_KEY="pk_test_51RkR2QRFKXbVXRE3BwJnN0L9qeEDh2uDM3vsGr8JDb4LjGLPIUEQV5HeYFHnZlqGlVKrlFU8GRwM9dY0Sy0BXntL00uLiEGiXl"
+if [ -z "${STRIPE_SECRET_KEY:-}" ] || [ -z "${STRIPE_PUBLISHABLE_KEY:-}" ] || [ -z "${VITE_STRIPE_PUBLIC_KEY:-}" ]; then
+  echo "Refusing to start. Export STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, and VITE_STRIPE_PUBLIC_KEY (test mode only)." >&2
+  exit 1
+fi
 
-echo "Test Stripe keys set:"
-echo "STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:0:20}..."
-echo "STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:0:20}..."
+case "$STRIPE_SECRET_KEY" in
+  sk_live_*)
+    echo "Refusing to start with a live Stripe secret key." >&2
+    exit 1
+    ;;
+esac
 
-# Start the application
+echo "Stripe test keys are set in the environment (values not printed)."
 NODE_ENV=development tsx server/index.ts

@@ -78,7 +78,8 @@ Protocol: `~/.cursor/skills/maintain-app-knowledge/SKILL.md` (Step 2 = edit file
 
 | Script | Role |
 |--------|------|
-| `scripts/ci-db-push.mjs` | Bootstrap `role` enum + drizzle push, fail on error |
+| `scripts/ci-db-push.mjs` | Bootstrap `role` enum + guarded drizzle push to **localhost only** (`ALLOW_DB_PUSH=1`). Refuses any other host |
+| `scripts/guard-db-push.mjs` | Refuses `db:push` / `drizzle-kit push` on production indicators or without `ALLOW_DB_PUSH=1`. Check: `node --test scripts/guard-db-push.test.mjs` |
 | `scripts/verify-core-schema.mjs` | Fail fast if core tables missing |
 | `scripts/verify-f001-schema.mjs` | F001 phase columns |
 

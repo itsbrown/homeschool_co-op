@@ -53,7 +53,7 @@ Before marking completed, verify:
   # Query database to see current column types
   npm run db:studio
   ```
-- [ ] **Use safe push command**: `npm run db:push --force` (never write manual migrations)
+- [ ] **Production schema**: additive SQL in `server/migrations/` (never `db:push` / `drizzle-kit push` on production; the guard refuses it)
 - [ ] **Test with actual data** - Don't just check LSP
 
 ---

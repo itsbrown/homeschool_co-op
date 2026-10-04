@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse } from 'dotenv';
 import { execSync } from 'node:child_process';
+import { assertDbPushAllowed } from './guard-db-push.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 for (const name of ['.env', '.env.local']) {
@@ -23,6 +24,13 @@ if (!process.env.DATABASE_URL) {
     'DATABASE_URL is not set. Add it to .env or export it, then re-run:\n' +
       '  node scripts/db-push-with-env.mjs',
   );
+  process.exit(1);
+}
+
+try {
+  assertDbPushAllowed(process.env);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 }
 

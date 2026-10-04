@@ -22,7 +22,7 @@ async function migrate() {
   const db = drizzle(client);
   
   try {
-    // The schema changes will be applied through drizzle-kit push
+    // Schema changes are additive SQL in server/migrations/. Do not db:push production.
     // This script just verifies the connection works
     
     console.log('📋 Checking if new tables exist...');
@@ -44,9 +44,9 @@ async function migrate() {
     });
     
     if (tableNames.size === 0) {
-      console.log('\n⚠️  No financial tables found. Run: npm run db:push --force');
+      console.log('\n⚠️  No financial tables found. Apply additive SQL in server/migrations/ (never db:push on production).');
     } else if (tableNames.size < 4) {
-      console.log('\n⚠️  Some financial tables are missing. Run: npm run db:push --force');
+      console.log('\n⚠️  Some financial tables are missing. Apply additive SQL in server/migrations/ (never db:push on production).');
     } else {
       console.log('\n✅ All financial tables exist!');
     }

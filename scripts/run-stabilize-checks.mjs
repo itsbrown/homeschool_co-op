@@ -3,7 +3,7 @@
  * Stabilization checklist runner (local dev).
  * 1) Verify F001 schema (if Postgres reachable)
  * 2) Fast unit/integration tests that mock DB
- * 3) Reminder for full suite + db:push
+ * 3) Reminder for the full suite. Schema push is guarded and is not for production.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -33,9 +33,9 @@ try {
   run('node scripts/verify-f001-schema.mjs');
 } catch {
   console.warn(
-    '\n⚠ Schema verify failed or DB unreachable. If F001 columns are missing, run:\n' +
-      '   node scripts/db-push-with-env.mjs\n' +
-      '   (requires DATABASE_URL in .env)\n',
+    '\n⚠ Schema verify failed or DB unreachable. If F001 columns are missing on local asa_test:\n' +
+      '   node scripts/ci-db-push.mjs\n' +
+      '   Production uses additive SQL in server/migrations/ (never db:push).\n',
   );
   failed = true;
 }
@@ -59,7 +59,7 @@ try {
 console.log('\n=== Next (on your machine with Postgres) ===');
 console.log('  export TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/asa_test');
 console.log('  export DATABASE_URL="$TEST_DATABASE_URL"');
-console.log('  node scripts/db-push-with-env.mjs');
+console.log('  node scripts/ci-db-push.mjs   # localhost asa_test only; guarded');
 console.log(
   '  PAYMENT_PROCESSOR_ENABLED=true npm run test:server -- --runInBand --testPathPatterns=production-path',
 );

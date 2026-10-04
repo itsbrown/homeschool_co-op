@@ -6,9 +6,10 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const parentPassword = process.env.PARENT_TEST_PASSWORD;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables');
+if (!supabaseUrl || !supabaseServiceKey || !parentPassword) {
+  console.error('Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and PARENT_TEST_PASSWORD. Do not commit them.');
   process.exit(1);
 }
 
@@ -21,7 +22,7 @@ async function createParentTestAccount() {
     // Create auth user in Supabase
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: 'parent.test@americanseekersacademy.com',
-      password: 'TestParent123!',
+      password: parentPassword,
       email_confirm: true,
       user_metadata: {
         full_name: 'Test Parent',
@@ -60,7 +61,7 @@ async function createParentTestAccount() {
 
     console.log('\n🎉 Parent test account created successfully!');
     console.log('📧 Email: parent.test@americanseekersacademy.com');
-    console.log('🔒 Password: TestParent123!');
+    console.log('🔒 Password: (from PARENT_TEST_PASSWORD; not printed)');
     console.log('👥 Role: parent');
     console.log('\nYou can now use this account to test parent functionality.');
 

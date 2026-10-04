@@ -14,7 +14,7 @@ description: >-
 - **Update knowledge in the same session** when you learn durable invariants, pitfalls, or CI/deploy truth.
 - **Do not duplicate the PRD** — link to `docs/PRODUCT_REQUIREMENTS_DOCUMENT.md` for product depth.
 - **Cross-repo habit:** personal skill `~/.cursor/skills/maintain-app-knowledge` defines the maintenance workflow for any project with `docs/APP_KNOWLEDGE/`.
-- **Prod DB:** additive SQL only; never `db:push` on live data (see hub non-negotiables).
+- **Prod DB:** additive SQL only (`server/migrations/`). `db:push` is guarded (`scripts/guard-db-push.mjs`) and must refuse production. Never add a schema push to deploy, build, or start.
 
 ## Hub layout
 

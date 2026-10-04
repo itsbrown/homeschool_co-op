@@ -32,7 +32,7 @@ Unused Firebase SDKs were removed from `package.json` (Jul 2026): they had no im
 |-------------|--------|
 | CI `asa_test` | `node scripts/ci-db-push.mjs` (bootstrap `role` enum + `drizzle-kit push --force`) |
 | Local test DB | Same scripts; `scripts/verify-core-schema.mjs`, `scripts/verify-f001-schema.mjs` |
-| Production | Additive SQL in `server/migrations/` — **not** `db:push` |
+| Production | Additive SQL in `server/migrations/` — **not** `db:push`. Guard: `scripts/guard-db-push.mjs` (refuses production indicators; `ALLOW_DB_PUSH=1` is disposable local/CI only) |
 
 ## Registration / locations (critical path)
 

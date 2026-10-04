@@ -1,9 +1,16 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://moivwjuglwwfrhqeewju.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vaXZ3anVnbHd3ZnJocWVld2p1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyNTQ4MDk3MywiZXhwIjoyMDQxMDU2OTczfQ.g2zbGJBtVhDH_K89Uyxqnb1vECOYfhQgUCBQT2xAa4Q';
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const password = process.env.ADMIN_INITIAL_PASSWORD;
+
+if (!supabaseUrl || !supabaseServiceKey || !password) {
+  console.error(
+    'Set SUPABASE_URL (or VITE_SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY, and ADMIN_INITIAL_PASSWORD in the environment. Do not commit them.',
+  );
+  process.exit(1);
+}
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
@@ -16,8 +23,7 @@ async function createSuperAdmin() {
   try {
     console.log('🔧 Creating super admin user in Supabase...');
 
-    const email = 'corey@americanseekersacademy.com';
-    const password = 'I4mlnrC30!';
+    const email = process.env.ADMIN_EMAIL || 'corey@americanseekersacademy.com';
 
     // Check if user already exists
     console.log('🔍 Checking if super admin user already exists...');
@@ -71,10 +77,9 @@ async function createSuperAdmin() {
     }
 
     console.log('✅ Super admin user created successfully:', newUser.user?.email);
-    console.log('🔑 Login credentials:');
     console.log(`   Email: ${email}`);
-    console.log(`   Password: ${password}`);
-    console.log(`   Role: superAdmin`);
+    console.log('   Password: (from ADMIN_INITIAL_PASSWORD; not printed)');
+    console.log('   Role: superAdmin');
 
   } catch (error) {
     console.error('❌ Unexpected error creating super admin user:', error);

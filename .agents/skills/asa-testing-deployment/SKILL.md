@@ -43,8 +43,8 @@ description: Workflow configuration, port binding, testing patterns, and deploym
 ## Database Operations
 
 - **Schema file**: `shared/schema.ts` (Drizzle ORM)
-- **Push changes**: `npm run db:push` — never write raw SQL migrations
-- **Force push**: `npm run db:push --force` if data-loss warning appears
+- **Production schema**: additive SQL in `server/migrations/` only. Never `db:push` / `drizzle-kit push` on production.
+- **`db:push` guard**: `scripts/guard-db-push.mjs` refuses the push when `NODE_ENV=production`, `REPLIT_DEPLOYMENT` is set, `DATABASE_URL` is a known production host, or `ALLOW_DB_PUSH` is not `1`. CI localhost uses `scripts/ci-db-push.mjs`.
 - **Debug queries**: Use the SQL execution tool, not raw `psql`
 - **Never run destructive SQL** (DROP, DELETE, UPDATE) without explicit user approval
 - **Connection string**: Resolve through `getNormalizedDatabaseUrl()` in `server/lib/database-url.ts` (it just normalizes `process.env.DATABASE_URL` so passwords with reserved characters parse cleanly). `DATABASE_URL` is the single source of truth in every environment — Replit injects it in dev (managed Helium) and the Reserved VM injects it in production. The legacy `PGHOST` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` / `PGPORT` fallback and the `NEON_DATABASE_URL` dev fallback have been removed.
@@ -298,7 +298,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - **E2E wrote to production money path** → loaded `.env.prod` / `with-prod-env.mjs` → use `.env` (Railway clone) + `.env.e2e` only
 - **Tests fail with "element not found"** → test assumes empty database state → generate unique test data with `nanoid` instead
 - **Frontend env var undefined** → missing `VITE_` prefix → rename to `VITE_MY_VAR` and access via `import.meta.env.VITE_MY_VAR`
-- **Schema change not applied** → wrote raw SQL migration file → use `npm run db:push` (Drizzle handles it)
+- **Schema change not applied on production** → apply the additive file in `server/migrations/`. Do not run `db:push` (the guard refuses production targets)
 - **`The server does not support SSL connections`** in dev → a `pg`/`postgres.js` client was opened with hardcoded `ssl: { rejectUnauthorized: false }` or `ssl: 'require'`. Replit dev uses Helium, which does not accept SSL handshakes. Replace the hardcoded option with `getDbSslConfig()` (for `pg`) or `getPostgresJsSslOption()` (for `postgres.js`) from `server/lib/database-url.ts` so SSL is enabled only when `NODE_ENV === 'production'`.
 - **Chunk load failures after deployment** → `index.html` cached by browser with stale chunk hashes → verify `Cache-Control: no-cache` middleware is present in `server/index.ts` inside the production `else` block, before `serveStatic(app)`. Symptom: "Failed to fetch dynamically imported module" or "text/html is not valid JavaScript" in error telemetry. Affects ALL frontend routes simultaneously — not just the one the user reported.
 - **Scheduler not running in production** → deployment type is Autoscale, not Reserved VM → change to Reserved VM in Replit deployment settings. Autoscale spins down between requests, killing all `setInterval`-based background jobs silently with no error or warning.
@@ -312,7 +312,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - Always use `requireLinkedSeed` for new seed/login Playwright specs and run those files before finishing
 - Always point local E2E at `.env` (Railway clone) + `.env.e2e` — never `.env.prod`
 - Always check workflow logs when debugging server issues
-- Always use `npm run db:push` for schema changes — never write raw SQL migrations
+- Always put production schema changes in `server/migrations/` as additive SQL. Do not run `db:push` against production
 - Always prefix frontend env vars with `VITE_`
 - Always use the secrets tool for sensitive values like API keys
 - Always verify the `Cache-Control: no-cache` middleware is present in `server/index.ts` before publishing
@@ -323,7 +323,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - Don't use the "Start App" workflow — it's a legacy duplicate
 - Don't bind anything other than the frontend to port 5000
 - Don't use Docker, virtual environments, or containerization
-- Don't edit `vite.config.ts` or `drizzle.config.ts` without cause; `server/vite.ts` may only change for `/api/*` SPA-skip safety
+- Don't edit `vite.config.ts` or `drizzle.config.ts` without cause. The `assertDbPushAllowed()` call at the top of `drizzle.config.ts` must stay so `npx drizzle-kit push` cannot skip the guard. `server/vite.ts` may only change for `/api/*` SPA-skip safety
 - Don't edit `package.json` scripts without user approval
 - Don't write Playwright tests that assume empty database state
 - Don't `test.skip` on missing `supabaseLinked` in new seed/login specs — that is a green run, not a gate
@@ -338,7 +338,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - `server/index.ts` — Express server entry point; port binding; `Cache-Control` middleware for production
 - `server/vite.ts` — Vite + static SPA; must skip `/api/*` (not forbidden for that fix)
 - `vite.config.ts` — Vite configuration with aliases (do not edit)
-- `drizzle.config.ts` — Drizzle ORM config (do not edit)
+- `drizzle.config.ts` — Drizzle ORM config. Keep the `assertDbPushAllowed()` guard; do not remove it
 - `e2e/helpers/requireLinkedSeed.ts` — fail (not skip) when seed/Supabase link is missing
 - `docs/E2E_COMMANDS.md` — Playwright command + spec catalog
 - `.cursor/rules/e2e-seed-gate.mdc` — always-on seed/login gate

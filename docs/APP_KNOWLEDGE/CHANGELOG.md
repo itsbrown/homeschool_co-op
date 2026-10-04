@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-10-04 (db:push production guard)
+
+- `npm run db:push` and `drizzle-kit push` go through `scripts/guard-db-push.mjs`. They refuse `NODE_ENV=production`, a set `REPLIT_DEPLOYMENT`, a known production `DATABASE_URL` (Supabase project `moivwjuglwwfrhqeewju`, or `PROD_DATABASE_HOST` / `PROD_DATABASE_URL` / `PRODUCTION_DATABASE_URL`), and any push that lacks `ALLOW_DB_PUSH=1`. The flag does not override production. CI push stays on localhost via `scripts/ci-db-push.mjs`. Check: `node --test scripts/guard-db-push.test.mjs`.
+- Production schema changes stay additive SQL in `server/migrations/`. Deploy, build, and start do not push.
+
 ## 2026-10-01 (Public store events)
 
 - Public store product kind `event` with `store_products.rsvp` (attendee prices, optional meal counts, date/place, close date, caps). Parents RSVP on the product page; Stripe charges paid attendee types only; $0 orders record without Stripe and still email an RSVP receipt. Purchases tab totals paid headcount. Supply-list shop picker excludes events. SQL: `266-store-event-products.sql`. Playwright: `npm run test:e2e -- e2e/public-store-event.spec.ts`. CI's documented sample Stripe secret cannot create a Checkout Session; that key records the pending order (`checkoutUrl: null`) so the spec can fulfill it. A real `sk_test_` key still returns a Stripe URL. The E2E job timeout is 30 minutes so the extra spec can finish.

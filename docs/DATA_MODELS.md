@@ -1097,12 +1097,9 @@ schoolId: integer('school_id').references(() => schools.id, { onDelete: 'cascade
 
 ### Current Migration Process
 
-**Tool:** Drizzle Kit  
-**Commands:**
-- `npm run db:push` - Push schema changes to database (safe for small changes)
-- `npm run db:push --force` - Force push (use for resolving conflicts)
-- `npm run db:generate` - Generate migration files
-- `npm run db:migrate` - Run pending migrations
+**Production:** additive SQL in `server/migrations/` only. `npm run db:push` is guarded and refuses production targets (`scripts/guard-db-push.mjs`). Do not push a database that has real users.
+
+**Local disposable DB only:** `ALLOW_DB_PUSH=1 npm run db:push` when `NODE_ENV` is not production, `REPLIT_DEPLOYMENT` is unset, and `DATABASE_URL` is not a known production host. CI uses `node scripts/ci-db-push.mjs` against localhost `asa_test`.
 
 ### Phase Rollout Strategy
 

@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse } from 'dotenv';
 import postgres from 'postgres';
+import { assertDbPushAllowed } from './guard-db-push.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 for (const name of ['.env', '.env.local']) {
@@ -25,6 +26,33 @@ const url =
   'postgresql://test:test@localhost:5432/asa_test';
 
 process.env.DATABASE_URL = url;
+
+function isLocalDatabase(connectionString) {
+  try {
+    const normalized = connectionString.replace(/^postgres(ql)?:\/\//i, 'http://');
+    const host = new URL(normalized).hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return false;
+  }
+}
+
+if (!isLocalDatabase(url)) {
+  console.error(
+    'ci-db-push.mjs only applies drizzle-kit push to a local test database (localhost / 127.0.0.1).',
+  );
+  console.error('Production schema changes belong in server/migrations/*.sql.');
+  process.exit(1);
+}
+
+// Local CI database only. The guard still refuses production indicators.
+process.env.ALLOW_DB_PUSH = '1';
+try {
+  assertDbPushAllowed(process.env);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
 
 const sql = postgres(url, { prepare: false, max: 1 });
 try {

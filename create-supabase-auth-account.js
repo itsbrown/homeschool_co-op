@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const schoolAdminPassword = process.env.SCHOOL_ADMIN_PASSWORD;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('Missing Supabase environment variables');
+if (!supabaseUrl || !supabaseServiceKey || !schoolAdminPassword) {
+  console.error('Set SUPABASE_URL (or VITE_SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY, and SCHOOL_ADMIN_PASSWORD. Do not commit them.');
   process.exit(1);
 }
 
@@ -22,7 +23,7 @@ async function createSchoolAdminAuthAccount() {
     // Create auth account
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: 'contact.americanseekersacademy@gmail.com',
-      password: 'SchoolAdmin123!',
+      password: schoolAdminPassword,
       email_confirm: true,
       user_metadata: {
         full_name: 'ASA School Administrator',

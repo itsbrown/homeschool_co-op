@@ -16,7 +16,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 
 ## Non-negotiables
 
-- **Production / shared dev DB:** additive SQL only (`server/migrations/*.sql`). **Never** `db:push` / `drizzle-kit push` on databases with real users.
+- **Production / shared dev DB:** additive SQL only (`server/migrations/*.sql`). **Never** `db:push` / `drizzle-kit push` on databases with real users. The npm script and `drizzle-kit push` are guarded (`scripts/guard-db-push.mjs`): they refuse when `NODE_ENV=production`, when `REPLIT_DEPLOYMENT` is set, when `DATABASE_URL` matches a known production host (Supabase project `moivwjuglwwfrhqeewju`, plus `PROD_DATABASE_HOST` / `PROD_DATABASE_URL` / `PRODUCTION_DATABASE_URL`), or when `ALLOW_DB_PUSH` is not exactly `1`. The flag does not override production. CI may push only to local `asa_test` via `scripts/ci-db-push.mjs`. Deploy, build, and start must not invoke a schema push.
 - **School context:** Admin workflows must resolve school via `schools.admin_id`, not only `users.school_id` (misalignment caused registration/location bugs).
 - **Postgres in tests:** Integration tests that claim production path must use real Postgres; mem/file `CombinedStorage` fallback invalidates results.
 - **CI merge gate (Tests workflow):** schema verify → production-path → dev server smoke → client jsdom. Full `test:server` (700+ tests) is local / Payments CI, not the PR Tests job.

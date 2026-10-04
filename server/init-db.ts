@@ -3086,7 +3086,7 @@ async function runMigrations() {
     console.log('Migration note (non-blocking):', allowedMemberIdsError.message);
   }
 
-  // email_log table is managed by Drizzle (shared/schema.ts) via `npm run db:push`.
+  // email_log is defined in shared/schema.ts. Production applies additive SQL in server/migrations/; do not db:push.
 
   // Add completion_source column to scheduled_payments table
   // Tracks how a payment was completed: 'stripe_autopay', 'stripe_checkout', 'manual_sync', 'reconciliation', 'recovery'
