@@ -1,4 +1,12 @@
 import { defineConfig } from "drizzle-kit";
+import { assertDbPushAllowed } from "./scripts/guard-db-push.mjs";
+
+// Catch `npx drizzle-kit push` as well as `npm run db:push`. Other drizzle-kit
+// commands (generate, studio, check) are unchanged. ALLOW_DB_PUSH never
+// overrides a production target.
+if (process.argv.includes("push")) {
+  assertDbPushAllowed();
+}
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL, ensure the database is provisioned");

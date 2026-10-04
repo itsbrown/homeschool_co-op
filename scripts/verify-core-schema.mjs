@@ -44,8 +44,8 @@ try {
 
   if (!ok) {
     console.error(
-      '\nCore schema missing. On asa_test run: npx drizzle-kit push --force\n' +
-        '  (or npm run db:push -- --force with DATABASE_URL pointing at asa_test only)',
+      '\nCore schema missing. On local asa_test run: node scripts/ci-db-push.mjs\n' +
+        '  (ALLOW_DB_PUSH is set by that script for localhost only. Never db:push against production.)',
     );
   }
 } catch (err) {

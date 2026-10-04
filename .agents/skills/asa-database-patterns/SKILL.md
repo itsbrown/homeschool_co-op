@@ -131,18 +131,14 @@ Located in `server/lib/prorate-calculator.ts` — `totalDays = ceil((endDate - s
 
 ## Migration Rules
 
-- **Never write raw SQL migrations** — use `npm run db:push` (see exception below)
-- Never change primary key column types
-- Schema file: `shared/schema.ts`
-
-### ⚠️ Project-Specific Exception: db:push Is Blocked in This Environment
-
-`npm run db:push` crashes due to a drizzle-kit bug (functional unique index on `user_roles` uses `COALESCE` expression that drizzle-kit cannot parse). **Established workaround**: Add idempotent `ALTER TABLE` statements to `server/init-db.ts`:
-```sql
-ALTER TABLE my_table ADD COLUMN IF NOT EXISTS my_column TEXT;
-ALTER TABLE my_table ALTER COLUMN my_column DROP NOT NULL;
-```
-Place inside the relevant migration try-catch block in `server/init-db.ts`. The app runs these on startup — safe to re-run on every restart.
+- **Production schema changes are additive SQL files in `server/migrations/`.** Never `npm run db:push` or `drizzle-kit push` against production, the Reserved VM, or any database with real users.
+- **`db:push` is guarded** by `scripts/guard-db-push.mjs` (also loaded from `drizzle.config.ts` on `push`). It exits non-zero when `NODE_ENV=production`, when `REPLIT_DEPLOYMENT` is set, when `DATABASE_URL` matches a known production host (Supabase project `moivwjuglwwfrhqeewju`, or `PROD_DATABASE_HOST` / `PRODUCTION_DATABASE_HOST` / `PROD_DATABASE_URL` / `PRODUCTION_DATABASE_URL`), or when `ALLOW_DB_PUSH` is not exactly `1`. The flag does not override production indicators.
+- **CI** may push only to local `asa_test` through `scripts/ci-db-push.mjs`, which sets `ALLOW_DB_PUSH=1` after checking the host is localhost.
+- Deploy, build, and start (`.replit` run/deployment, `npm start`, `npm run build`, server startup) must not invoke a schema push.
+- Never change primary key column types.
+- Schema file: `shared/schema.ts`.
+- Idempotent startup SQL still lives in `server/init-db.ts` (`ADD COLUMN IF NOT EXISTS`). Anything production must apply also gets a file in `server/migrations/`.
+- drizzle-kit still cannot parse the `user_roles` `COALESCE` expression index. That is another reason not to rely on `db:push`; it is not a reason to push production.
 
 ## Derived Financial Fields
 
@@ -252,7 +248,9 @@ WHERE effective_balance IS DISTINCT FROM GREATEST(
 - `shared/schema.ts` — all Drizzle table definitions, insert schemas, and inferred types
 - `server/storage.ts` — `IStorage` interface and all storage method implementations
 - `server/db.ts` — `getDb()` lazy loader with one-shot connection test (`connectionTested` flag)
-- `server/init-db.ts` — idempotent `ALTER TABLE` migrations run on startup (replaces `db:push`)
+- `server/init-db.ts` — idempotent `ALTER TABLE` migrations run on startup
+- `scripts/guard-db-push.mjs` — refuses `db:push` / `drizzle-kit push` unless the target is a non-production database and `ALLOW_DB_PUSH=1`
+- `server/migrations/` — additive SQL for production schema changes
 - `server/lib/database-url.ts` — `getDbSslConfig()` / `getPostgresJsSslOption()` helpers; SSL on in production, off in dev (Helium). Sibling `database-url.mjs` shares the same logic for plain ESM scripts.
 - `server/lib/prorate-calculator.ts` — proration date math
 - `server/api/csv-upload.ts` — `parseDateToYMD()` and `addMonthsYMD()` date string helpers

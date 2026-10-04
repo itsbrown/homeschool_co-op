@@ -21,15 +21,15 @@ vite.config.ts.*
 # Saved login session (contains tokens — never commit)
 /playwright/.auth/parent.json
 
-# Local Playwright / Supabase secrets (see .env.e2e.example)
-.env.e2e
+# Local secrets (see .env.example and .env.e2e.example). Examples stay tracked.
+.env*
+!.env.example
+!.env.e2e.example
+!.env*.example
 
-# Local dev secrets (see .env.example)
-.env
-.env.local
-
-# Prod DB connection string for agent/manual investigation — NEVER commit
-.env.prod
+# db / drizzle tooling output (may contain connection strings)
+*_output.txt
+db_push_output.txt
 
 # Local Google Drive service-account key (see runbooks/google-drive-service-account.md)
 /secrets/

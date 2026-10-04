@@ -49,7 +49,7 @@ try {
   if (!ok) {
     console.error(
       '\nQuarterly report schema missing. Run: npx tsx scripts/init-db.ts\n' +
-        '  (or npm run db:push -- --force with DATABASE_URL pointing at the target DB only)',
+        '  Production: apply the additive SQL in server/migrations/. Do not db:push.',
     );
   }
 } catch (err) {

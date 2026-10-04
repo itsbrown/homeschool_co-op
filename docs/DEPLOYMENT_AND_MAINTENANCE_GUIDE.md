@@ -72,9 +72,10 @@ DATABASE_URL=postgresql://user:pass@host/database?sslmode=require
 3. Copy connection string
 4. Add to .env
 
-**Sync schema to database:**
+**Sync schema to a disposable local database only.** Production changes are additive SQL in `server/migrations/`. `npm run db:push` refuses when `NODE_ENV=production`, when `REPLIT_DEPLOYMENT` is set, when `DATABASE_URL` is a known production host, or when `ALLOW_DB_PUSH` is not `1`.
+
 ```bash
-npm run db:push
+ALLOW_DB_PUSH=1 npm run db:push
 ```
 
 Or force push if needed:

@@ -37,7 +37,7 @@ node scripts/post-merge-replit-check.mjs
 | Core fail | [locations-schema-align.sql](../../server/migrations/locations-schema-align.sql) |
 | F001 fail | [f001-phase1-schema.sql](../../server/migrations/f001-phase1-schema.sql) only if you use session/F001 features |
 
-Both SQL files are idempotent (`IF NOT EXISTS`). **Never** `db:push` on shared/prod DBs.
+Both SQL files are idempotent (`IF NOT EXISTS`). **Never** `db:push` on shared/prod DBs. `npm run db:push` and `drizzle-kit push` refuse production (`scripts/guard-db-push.mjs`); do not bypass the guard.
 
 **Smoke test**
 

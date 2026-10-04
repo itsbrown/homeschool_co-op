@@ -14,7 +14,9 @@ console.log('✅ DATABASE_URL detected');
 console.log('🔄 Running db:push...\n');
 
 const { execSync } = await import('child_process');
+const { assertDbPushAllowed } = await import('./scripts/guard-db-push.mjs');
 try {
+  assertDbPushAllowed(process.env);
   execSync('npm run db:push -- --force', {
     stdio: 'inherit',
     env: { ...process.env, DATABASE_URL: databaseUrl },

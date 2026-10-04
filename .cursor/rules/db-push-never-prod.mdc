@@ -1,0 +1,19 @@
+---
+description: Never schema-push production; db:push is guarded
+alwaysApply: true
+---
+
+# No db:push against production
+
+Production schema changes are additive SQL files in `server/migrations/` only.
+
+`npm run db:push`, `drizzle-kit push`, `scripts/db-push.js`, `scripts/db-push-with-env.mjs`, and `sync_schema.mjs` must go through `scripts/guard-db-push.mjs`. The guard refuses the push when any of these are true:
+
+- `NODE_ENV=production`
+- `REPLIT_DEPLOYMENT` is set
+- `DATABASE_URL` matches a known production host (Supabase project `moivwjuglwwfrhqeewju`, or `PROD_DATABASE_HOST` / `PRODUCTION_DATABASE_HOST` / `PROD_DATABASE_URL` / `PRODUCTION_DATABASE_URL`)
+- `ALLOW_DB_PUSH` is not exactly `1`
+
+`ALLOW_DB_PUSH=1` does not override a production indicator. CI may push only to local `asa_test` via `scripts/ci-db-push.mjs`.
+
+Do not add a schema push to `.replit` run/deployment, `postinstall`, `start`, `build`, or server startup. Do not commit `*_output.txt` or `.env*` files (they can contain connection strings).

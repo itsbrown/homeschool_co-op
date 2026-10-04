@@ -23,7 +23,7 @@
     "playwright:install": "node scripts/run-playwright.mjs install chromium",
     "playwright:install:deps": "node scripts/run-playwright.mjs install-deps chromium chromium-headless-shell",
     "playwright:install:replit": "npm run playwright:install",
-    "db:push": "drizzle-kit push"
+    "db:push": "node scripts/guard-db-push.mjs && drizzle-kit push"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",

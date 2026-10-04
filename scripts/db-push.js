@@ -3,6 +3,7 @@
 
 import { execSync } from 'child_process';
 import { normalizeDatabaseUrl } from '../server/lib/database-url.mjs';
+import { assertDbPushAllowed } from './guard-db-push.mjs';
 
 const rawUrl = process.env.DATABASE_URL;
 
@@ -21,6 +22,7 @@ try {
   console.log("Running drizzle-kit push with normalized DATABASE_URL...");
 
   process.env.DATABASE_URL = normalized;
+  assertDbPushAllowed(process.env);
   execSync('npx drizzle-kit push', { stdio: 'inherit' });
 
   console.log("Database schema push completed.");
