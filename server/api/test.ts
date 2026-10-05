@@ -1,5 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { TestDatabase } from '../tests/helpers/testDatabase';
+import {
+  fetchSupabaseAdminUsersPage,
+  findExistingSupabaseUserId,
+  SUPABASE_USER_LIST_PER_PAGE,
+} from '../tests/helpers/findExistingSupabaseUser';
+import { normalizeEmailForLookup } from '@shared/parent-identity';
 import { storage } from '../storage';
 import { nanoid } from 'nanoid';
 import { processOneScheduledPayment, recoverOneScheduledPayment } from '../services/auto-pay-scheduler';
@@ -101,32 +107,82 @@ async function linkSeedUserToSupabase(params: {
     if (!already) {
       throw new Error(createErr.message);
     }
-    let match: { id: string } | undefined;
-    for (let pageNum = 1; pageNum <= 10; pageNum++) {
-      const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
-        page: pageNum,
-        perPage: 200,
+
+    // listUsers is newest-first. A 10-page walk misses auth users left by
+    // earlier CI runs (school ids restart, so hours_super_<id>@test.com collides).
+    // A short page is also not the end: some servers cap per_page below 200.
+    let pageSize = SUPABASE_USER_LIST_PER_PAGE;
+    const listPage = async (page: number, perPage: number) => {
+      const result = await fetchSupabaseAdminUsersPage({
+        supabaseUrl,
+        serviceKey,
+        page,
+        perPage: pageSize === SUPABASE_USER_LIST_PER_PAGE ? perPage : pageSize,
       });
-      if (listErr || !listData?.users?.length) {
-        break;
-      }
-      match = listData.users.find((u) => u.email?.toLowerCase() === params.email.toLowerCase());
-      if (match) {
-        break;
-      }
-      if (listData.users.length < 200) {
-        break;
-      }
+      if (result || pageSize === 50) return result;
+      pageSize = 50;
+      return fetchSupabaseAdminUsersPage({
+        supabaseUrl,
+        serviceKey,
+        page,
+        perPage: 50,
+      });
+    };
+
+    supabaseUserId = await findExistingSupabaseUserId(params.email, {
+      listByEmailFilter: (email, page, perPage) =>
+        fetchSupabaseAdminUsersPage({
+          supabaseUrl,
+          serviceKey,
+          page,
+          perPage,
+          filter: email,
+        }),
+      lookupByEmail: async (email) => {
+        const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'magiclink',
+          email,
+        });
+        if (error || !data?.user?.id) return null;
+        const found = normalizeEmailForLookup(data.user.email);
+        if (found && found !== email) return null;
+        return data.user.id;
+      },
+      listPage,
+    });
+    if (!supabaseUserId) {
+      throw new Error(
+        `Supabase reported existing user but listUsers did not return a match (${params.email})`,
+      );
     }
-    if (!match) {
-      throw new Error('Supabase reported existing user but listUsers did not return a match');
-    }
-    supabaseUserId = match.id;
-    await supabaseAdmin.auth.admin.updateUserById(supabaseUserId, {
+
+    const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(supabaseUserId, {
       password: params.password,
       email_confirm: true,
       app_metadata: { role: params.role, school_id: params.schoolId },
     });
+    if (updateErr) {
+      const { error: deleteErr } = await supabaseAdmin.auth.admin.deleteUser(supabaseUserId);
+      if (deleteErr) {
+        throw new Error(updateErr.message);
+      }
+      const { data: recreated, error: recreateErr } = await supabaseAdmin.auth.admin.createUser({
+        email: params.email,
+        password: params.password,
+        email_confirm: true,
+        app_metadata: {
+          role: params.role,
+          school_id: params.schoolId,
+        },
+        user_metadata: {
+          name: params.displayName,
+        },
+      });
+      if (recreateErr || !recreated.user?.id) {
+        throw new Error(recreateErr?.message || 'Failed to recreate Supabase auth user');
+      }
+      supabaseUserId = recreated.user.id;
+    }
   } else if (created.user?.id) {
     supabaseUserId = created.user.id;
   }

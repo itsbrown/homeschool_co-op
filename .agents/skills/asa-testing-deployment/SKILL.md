@@ -295,6 +295,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - **Frontend can't reach API** → port conflict or wrong binding → ensure only Express+Vite uses port 5000
 - **Server changes not visible** → workflow not restarted after code changes → restart "Start application" and verify clean startup
 - **Playwright “passed” but skipped** → `test.skip` on missing `supabaseLinked` (exit 0) → use `requireLinkedSeed`; symlink `.env` + `.env.e2e` in worktrees; do not treat skip as a pass
+- **Seed 500 `listUsers did not return a match`** → `createUser` says the email exists, but a 10-page `listUsers` walk never reaches it (CI school ids restart; Auth keeps old users, newest first). Look up with `filter`, then `generateLink`, then every page. A page shorter than `per_page` is not the last page when the server caps the page size
 - **E2E wrote to production money path** → loaded `.env.prod` / `with-prod-env.mjs` → use `.env` (Railway clone) + `.env.e2e` only
 - **Tests fail with "element not found"** → test assumes empty database state → generate unique test data with `nanoid` instead
 - **Frontend env var undefined** → missing `VITE_` prefix → rename to `VITE_MY_VAR` and access via `import.meta.env.VITE_MY_VAR`
