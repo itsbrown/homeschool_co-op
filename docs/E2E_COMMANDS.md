@@ -28,6 +28,8 @@ npm run test:e2e -- e2e/public-custom-forms.spec.ts
 
 **Local env:** Copy [`.env.e2e.example`](../.env.e2e.example) → `.env.e2e` (gitignored). Loaded by [`scripts/run-playwright.mjs`](../scripts/run-playwright.mjs) without overriding shell exports. Postgres comes from **`.env`** (`DATABASE_URL` = Railway **dev clone**). Never load **`.env.prod`** or `with-prod-env.mjs` for Playwright. Worktrees: symlink `.env` and `.env.e2e` from the main checkout.
 
+**Supabase:** E2E Auth must be a **dedicated project**. Never Adaptive Learning Program (`moivwjuglwwfrhqeewju`, host `moivwjuglwwfrhqeewju.supabase.co`). GitHub secrets `E2E_SUPABASE_URL` and `E2E_VITE_SUPABASE_URL` (and the matching anon/service-role keys) are what `.github/workflows/e2e.yml` injects. If either URL is that project, `/api/test/*` seeds that set `linkSupabaseAuth*` return **403** `E2E_SUPABASE_LIVE_PROJECT` and do not call `auth.admin.createUser`.
+
 **Seed/login gate:** New specs that `linkSupabaseAuth` must use `requireLinkedSeed`. Playwright `test.skip` on missing Supabase is a green run — that is not a pass. Report passed/failed/skipped; skipped on those files means not done. Laptop without keys: `E2E_ALLOW_SKIP=1` (ignored when `CI=true`).
 
 **Worktree:** symlink `.env` and `.env.e2e` from the main clone. A leftover login-shell `DATABASE_URL` to retired Neon `asa_test` is ignored in favor of `.env` (`server/lib/apply-local-env.ts`). If seeds still 500 with `The endpoint has been disabled`, free port 5000 so Playwright does not reuse a server that booted on Neon.
@@ -72,8 +74,8 @@ npm run test:e2e:headed -- e2e/school-code-registration.spec.ts
 | Variable | Used for |
 |----------|----------|
 | `DATABASE_URL` | Postgres; required for any spec that calls `/api/test/*` seeds |
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Real auth (registration, login, seeded users) |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Browser Supabase client (often same as above) |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Real auth (registration, login, seeded users). **Dedicated project only** — not Adaptive Learning Program (`moivwjuglwwfrhqeewju`) |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Browser Supabase client (often same as above). Same dedicated-project rule |
 | `E2E_PARENT_EMAIL`, `E2E_PARENT_PASSWORD` | `auth.setup.ts` + `e2e/authenticated/**` project |
 | `E2E_EDUCATOR_EMAIL` (+ password if added later) | `e2e/authenticated/educator-progress-tab.spec.ts` |
 | `E2E_TEST_API_TOKEN` | `X-Test-Token` header (default `test-secret-token`) |

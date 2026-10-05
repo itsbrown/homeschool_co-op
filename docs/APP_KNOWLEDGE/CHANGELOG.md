@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-10-05 (E2E must not write Auth users to Adaptive Learning Program)
+
+- GitHub Actions E2E (`.github/workflows/e2e.yml`) maps `E2E_SUPABASE_*` / `E2E_VITE_SUPABASE_*` onto `SUPABASE_URL` / `VITE_SUPABASE_URL`. Those secrets were the live Adaptive Learning Program project (`moivwjuglwwfrhqeewju`). `linkSeedUserToSupabase` created ~185 `@test.com` Auth users per run and never deleted them.
+- Seed and other E2E Auth-user writers now throw `E2E_SUPABASE_LIVE_PROJECT` before `auth.admin.createUser` when either URL contains that project ref or host `moivwjuglwwfrhqeewju.supabase.co`. `/api/test/*` link requests return **403** with that message. Production signup on Adaptive Learning Program is unchanged (the Playwright-only check does not run when `PLAYWRIGHT_WEB_SERVER` is unset). Operators must point E2E secrets at a dedicated Supabase project. This change does not rotate secrets or delete the existing test accounts.
+
 ## 2026-10-01 (Public store events)
 
 - Public store product kind `event` with `store_products.rsvp` (attendee prices, optional meal counts, date/place, close date, caps). Parents RSVP on the product page; Stripe charges paid attendee types only; $0 orders record without Stripe and still email an RSVP receipt. Purchases tab totals paid headcount. Supply-list shop picker excludes events. SQL: `266-store-event-products.sql`. Playwright: `npm run test:e2e -- e2e/public-store-event.spec.ts`. CI's documented sample Stripe secret cannot create a Checkout Session; that key records the pending order (`checkoutUrl: null`) so the spec can fulfill it. A real `sk_test_` key still returns a Stripe URL. The E2E job timeout is 30 minutes so the extra spec can finish.

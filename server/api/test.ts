@@ -8,6 +8,11 @@ import { ensureFamilyCalendarSchema } from '../lib/ensure-family-calendar-schema
 import { getDb } from '../db';
 import { eq, sql } from 'drizzle-orm';
 import {
+  E2eLiveSupabaseProjectError,
+  assertE2eSupabaseProjectIsDedicated,
+  requestLinksSupabaseAuth,
+} from '../lib/e2e-supabase-project-guard';
+import {
   programEnrollments,
   stripePaymentHistory,
   refundEvents,
@@ -57,6 +62,22 @@ const testOnlyMiddleware = (req: Request, res: Response, next: Function) => {
 
 router.use(testOnlyMiddleware);
 
+/** Fail the seed HTTP call before any Auth admin request when secrets point at live ASA. */
+router.use((req: Request, res: Response, next: Function) => {
+  if (!requestLinksSupabaseAuth(req.body)) {
+    next();
+    return;
+  }
+  try {
+    assertE2eSupabaseProjectIsDedicated();
+    next();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const code = error instanceof E2eLiveSupabaseProjectError ? error.code : undefined;
+    return res.status(403).json({ error: message, code });
+  }
+});
+
 /** Links a seeded DB user to Supabase Auth so Playwright can sign in via /login. */
 async function linkSeedUserToSupabase(params: {
   dbUserId: number;
@@ -66,6 +87,7 @@ async function linkSeedUserToSupabase(params: {
   schoolId: number;
   displayName: string;
 }): Promise<boolean> {
+  assertE2eSupabaseProjectIsDedicated();
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
@@ -254,6 +276,7 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
           displayName: parent.name || 'Test Parent',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuth failed (continuing without Supabase link):', e);
         supabaseLinked = false;
       }
@@ -269,6 +292,7 @@ router.post('/setup-cart-scenario', async (req: Request, res: Response) => {
             displayName: admin.name || 'Test Admin',
           });
         } catch (e) {
+          if (e instanceof E2eLiveSupabaseProjectError) throw e;
           console.error('linkSupabaseAuthAdmin failed (continuing without admin Supabase link):', e);
           adminSupabaseLinked = false;
         }
@@ -653,6 +677,7 @@ router.post('/setup-credit-lookup-scenario', async (req: Request, res: Response)
           displayName: admin.name || 'Credit Lookup Admin',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthAdmin failed:', e);
         adminSupabaseLinked = false;
       }
@@ -1194,6 +1219,7 @@ router.post('/setup-session-day-type-admin-scenario', async (req: Request, res: 
           });
         }
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuth failed (day-type scenario):', e);
       }
     }
@@ -3956,6 +3982,7 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
           displayName: 'Store E2E Admin',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthAdmin failed:', e);
         adminSupabaseLinked = false;
       }
@@ -3984,6 +4011,7 @@ router.post('/setup-public-store-scenario', async (req: Request, res: Response) 
           displayName: 'Store E2E Parent',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthParent failed:', e);
         parentSupabaseLinked = false;
       }
@@ -4033,6 +4061,7 @@ router.post('/setup-supply-list-scenario', async (req: Request, res: Response) =
           displayName: 'Supply List Admin',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthAdmin failed:', e);
       }
     }
@@ -4047,6 +4076,7 @@ router.post('/setup-supply-list-scenario', async (req: Request, res: Response) =
           displayName: 'Supply List Parent',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthParent failed:', e);
       }
     }
@@ -4099,6 +4129,7 @@ router.post('/setup-class-allergy-scenario', async (req: Request, res: Response)
           displayName: 'Allergy Admin',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthAdmin failed (allergy scenario):', e);
       }
     }
@@ -4113,6 +4144,7 @@ router.post('/setup-class-allergy-scenario', async (req: Request, res: Response)
           displayName: 'Allergy Parent A',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthParentA failed (allergy scenario):', e);
       }
     }
@@ -4127,6 +4159,7 @@ router.post('/setup-class-allergy-scenario', async (req: Request, res: Response)
           displayName: 'Allergy Parent B',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthParentB failed (allergy scenario):', e);
       }
     }
@@ -4178,6 +4211,7 @@ router.post('/setup-emergency-contact-list-scenario', async (req: Request, res: 
           displayName: 'Emergency List Admin',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthAdmin failed (emergency contact list):', e);
       }
     }
@@ -4230,6 +4264,7 @@ router.post('/setup-family-access-code-scenario', async (req: Request, res: Resp
           displayName: 'Door Code Admin',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthAdmin failed:', e);
       }
     }
@@ -4244,6 +4279,7 @@ router.post('/setup-family-access-code-scenario', async (req: Request, res: Resp
           displayName: 'Door Code Parent',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthParent failed:', e);
       }
     }
@@ -4258,6 +4294,7 @@ router.post('/setup-family-access-code-scenario', async (req: Request, res: Resp
           displayName: 'Door Code Super Admin',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthSuperAdmin failed:', e);
       }
     }
@@ -4308,6 +4345,7 @@ router.post('/setup-membership-agreement-scenario', async (req: Request, res: Re
           displayName: 'Unsigned Parent',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthParent failed (membership agreement scenario):', e);
       }
       try {
@@ -4320,6 +4358,7 @@ router.post('/setup-membership-agreement-scenario', async (req: Request, res: Re
           displayName: 'Signed Parent',
         });
       } catch (e) {
+        if (e instanceof E2eLiveSupabaseProjectError) throw e;
         console.error('linkSupabaseAuthSignedParent failed (membership agreement scenario):', e);
       }
     }
@@ -4472,6 +4511,7 @@ router.post('/setup-public-form-scenario', async (req: Request, res: Response) =
             displayName: 'Form E2E Admin',
           });
         } catch (e) {
+          if (e instanceof E2eLiveSupabaseProjectError) throw e;
           console.error('linkSupabaseAuthAdmin failed (form scenario):', e);
           adminSupabaseLinked = false;
         }
@@ -4487,6 +4527,7 @@ router.post('/setup-public-form-scenario', async (req: Request, res: Response) =
             displayName: `${seed.parent.firstName} ${seed.parent.lastName}`,
           });
         } catch (e) {
+          if (e instanceof E2eLiveSupabaseProjectError) throw e;
           console.error('linkSupabaseAuthParent failed (form scenario):', e);
           parentSupabaseLinked = false;
         }
