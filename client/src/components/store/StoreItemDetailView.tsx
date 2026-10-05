@@ -57,7 +57,8 @@ export function StoreItemDetailView({
             <StoreProductCardImage
               src={item.imageUrl}
               alt={item.title}
-              className="rounded-none aspect-square sm:aspect-[4/3] lg:aspect-square max-h-[min(70vh,520px)]"
+              fit="contain"
+              className="rounded-none"
               data-testid={
                 isProduct ? "store-product-image" : `store-${item.listingType}-image`
               }

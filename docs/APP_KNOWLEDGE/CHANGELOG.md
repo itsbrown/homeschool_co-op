@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-10-05 (Public store product photo)
+
+- Detail hero (`StoreItemDetailView` → `StoreProductCardImage` `fit="contain"`) shows the full image, centered. `aspect-square` plus `max-h-[min(70vh,520px)]` was shrinking the frame to the max height and pinning that square to the left of the wide card; `object-cover` then clipped the sides. Catalog cards stay square `object-cover`. Presigned store uploads are stored as uploaded — no trim/recrop step.
+
 ## 2026-10-01 (Public store events)
 
 - Public store product kind `event` with `store_products.rsvp` (attendee prices, optional meal counts, date/place, close date, caps). Parents RSVP on the product page; Stripe charges paid attendee types only; $0 orders record without Stripe and still email an RSVP receipt. Purchases tab totals paid headcount. Supply-list shop picker excludes events. SQL: `266-store-event-products.sql`. Playwright: `npm run test:e2e -- e2e/public-store-event.spec.ts`. CI's documented sample Stripe secret cannot create a Checkout Session; that key records the pending order (`checkoutUrl: null`) so the spec can fulfill it. A real `sk_test_` key still returns a Stripe URL. The E2E job timeout is 30 minutes so the extra spec can finish.

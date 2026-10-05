@@ -7,14 +7,26 @@ type StoreProductCardImageProps = {
   alt: string;
   className?: string;
   "data-testid"?: string;
+  /**
+   * cover: square crop for catalog cards.
+   * contain: full image, centered, for the product detail hero.
+   */
+  fit?: "cover" | "contain";
 };
 
-/** Square cropped image for public store product cards. */
+/**
+ * Public store product photo.
+ * Catalog cards stay a square `object-cover` crop.
+ * The detail hero uses `contain` so the whole file is visible.
+ * Do not pair `aspect-square` with `max-height` on that hero: the used width
+ * shrinks to the max height and the square stays left-aligned in the card.
+ */
 export function StoreProductCardImage({
   src,
   alt,
   className,
   "data-testid": dataTestId,
+  fit = "cover",
 }: StoreProductCardImageProps) {
   const [failed, setFailed] = useState(false);
 
@@ -22,11 +34,15 @@ export function StoreProductCardImage({
     setFailed(false);
   }, [src]);
 
+  const contain = fit === "contain";
+
   if (!src) {
     return (
       <div
         className={cn(
-          "aspect-square bg-muted flex items-center justify-center rounded-t-lg",
+          contain
+            ? "flex min-h-[240px] w-full items-center justify-center bg-white"
+            : "aspect-square bg-muted flex items-center justify-center rounded-t-lg",
           className,
         )}
         aria-hidden
@@ -37,11 +53,25 @@ export function StoreProductCardImage({
   }
 
   return (
-    <div className={cn("aspect-square overflow-hidden rounded-t-lg bg-muted relative", className)}>
+    <div
+      className={cn(
+        "relative overflow-hidden",
+        contain
+          ? "flex w-full items-center justify-center bg-white"
+          : "aspect-square rounded-t-lg bg-muted",
+        contain && failed && "min-h-[240px]",
+        className,
+      )}
+    >
       <img
         src={src}
         alt={alt}
-        className={cn("h-full w-full object-cover", failed && "opacity-0")}
+        className={cn(
+          contain
+            ? "block h-auto w-full max-h-[min(70vh,520px)] object-contain object-center"
+            : "h-full w-full object-cover",
+          failed && "opacity-0",
+        )}
         loading="lazy"
         data-testid={dataTestId}
         onError={() => setFailed(true)}

@@ -312,7 +312,7 @@ export function StoreProductEditDialog({
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Shown as a square crop on the public store. JPEG, PNG, GIF, or WebP — max 5MB.
+                  Catalog cards use a square crop. The product page shows the full photo, centered. JPEG, PNG, GIF, or WebP — max 5MB.
                 </p>
               </div>
             </div>
