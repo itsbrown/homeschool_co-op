@@ -95,6 +95,7 @@ Protocol: `~/.cursor/skills/maintain-app-knowledge/SKILL.md` (Step 2 = edit file
 | E2E seed returns HTML / no data | Port 5000 reused by server without `/api/test` | `node scripts/free-port-5000.mjs` or `CI=true` for fresh `webServer` |
 | Playwright report green but skipped | `test.skip` on missing `supabaseLinked` | `requireLinkedSeed`; symlink `.env` + `.env.e2e` in worktrees |
 | E2E against live Stripe/prod | Loaded `.env.prod` | Use `.env` (Railway clone) + `.env.e2e` only |
+| Payroll-day seed 500: `listUsers did not return a match` | `linkSeedUserToSupabase` scanned only 10 pages of 200. CI reuses `hours_super_<schoolId>@test.com` because school ids restart; Auth keeps older users and lists newest first | Filter `GET /auth/v1/admin/users?filter=`, then `generateLink`, then walk every page. Do not treat a short page as the last page |
 
 ## Key files
 
