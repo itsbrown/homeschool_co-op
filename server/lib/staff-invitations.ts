@@ -18,6 +18,10 @@ import {
 import { getActiveEducatorAssignmentForClass } from "./educator-class-assignments-db";
 import { ensureStaffInvitationsSchema } from "./ensure-staff-invitations-schema";
 import { getSupabaseAdminClient } from "./supabase-admin-auth";
+import {
+  E2eLiveSupabaseProjectError,
+  assertPlaywrightServerUsesDedicatedSupabase,
+} from "./e2e-supabase-project-guard";
 
 export { mapPositionToRole };
 
@@ -230,6 +234,7 @@ export async function ensureSupabaseAuthUser(params: {
   lastName: string;
   role: string;
 }): Promise<{ supabaseUserId: string; created: boolean }> {
+  assertPlaywrightServerUsesDedicatedSupabase();
   const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) {
     throw new Error("Server configuration error - unable to create account");
@@ -304,6 +309,9 @@ export async function acceptStaffInvitation(params: {
     });
     supabaseUserId = auth.supabaseUserId;
   } catch (err) {
+    if (err instanceof E2eLiveSupabaseProjectError) {
+      return { ok: false, status: 403, message: err.message };
+    }
     const message = err instanceof Error ? err.message : "Failed to create account";
     if (message.includes("Server configuration")) {
       return { ok: false, status: 500, message };

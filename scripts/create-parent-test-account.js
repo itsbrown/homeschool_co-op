@@ -3,6 +3,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { assertE2eSupabaseProjectIsDedicated } from '../server/lib/e2e-supabase-project-guard.mjs';
+
+assertE2eSupabaseProjectIsDedicated();
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

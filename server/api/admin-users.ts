@@ -3,6 +3,10 @@ import { storage } from '../storage';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
+import {
+  assertPlaywrightServerUsesDedicatedSupabase,
+  liveAsaSupabaseHttpError,
+} from '../lib/e2e-supabase-project-guard';
 
 const router = Router();
 
@@ -94,6 +98,7 @@ router.post('/users/create-from-enrollments', async (req, res) => {
     // Create Supabase auth account first
     let supabaseUserId: string;
     try {
+      assertPlaywrightServerUsesDedicatedSupabase();
       const { createClient } = await import('@supabase/supabase-js');
       const supabaseAdmin = createClient(
         process.env.SUPABASE_URL!,
@@ -170,6 +175,10 @@ router.post('/users/create-from-enrollments', async (req, res) => {
       }
     } catch (supabaseError) {
       console.error('❌ Error creating Supabase account:', supabaseError);
+      const refusal = liveAsaSupabaseHttpError(supabaseError);
+      if (refusal) {
+        return res.status(refusal.status).json({ message: refusal.message, code: refusal.code });
+      }
       return res.status(500).json({ message: 'Failed to create authentication account' });
     }
     
@@ -335,6 +344,7 @@ router.post('/users/update-role', async (req, res) => {
 // POST create Supabase accounts for users missing them (migration utility)
 router.post('/users/migrate-to-supabase', async (req, res) => {
   try {
+    assertPlaywrightServerUsesDedicatedSupabase();
     console.log('🔄 Starting migration: creating Supabase accounts for users without supabaseId');
     
     // Get all users from database
@@ -461,6 +471,10 @@ router.post('/users/migrate-to-supabase', async (req, res) => {
     });
   } catch (error) {
     console.error('Error during migration:', error);
+    const refusal = liveAsaSupabaseHttpError(error);
+    if (refusal) {
+      return res.status(refusal.status).json({ message: refusal.message, code: refusal.code });
+    }
     res.status(500).json({ message: 'Migration failed' });
   }
 });

@@ -26,6 +26,10 @@ import rateLimit from 'express-rate-limit';
 import { getDb } from '../db';
 import { ensureSchoolRegistrationCode } from '../lib/school-registration-code';
 import {
+  assertPlaywrightServerUsesDedicatedSupabase,
+  liveAsaSupabaseHttpError,
+} from '../lib/e2e-supabase-project-guard';
+import {
   buildAvailableLabelOptions,
   fallbackRoleAfterStaffRemoval,
   getLabelRowsForUserAtSchool,
@@ -206,8 +210,9 @@ async function getSchoolIdFromRequest(req: any, res: any): Promise<number | null
 }
 
 // Create Supabase account for staff member (exported for use in public invitation flow)
-export async function createStaffAccount(email: string, firstName: string, lastName: string, role: string, department: string): Promise<{ success: boolean; temporaryPassword?: string; error?: string; userExists?: boolean }> {
+export async function createStaffAccount(email: string, firstName: string, lastName: string, role: string, department: string): Promise<{ success: boolean; temporaryPassword?: string; error?: string; userExists?: boolean; code?: string }> {
   try {
+    assertPlaywrightServerUsesDedicatedSupabase();
     console.log(`👤 Creating Supabase account for: ${email}`);
     
     // Generate temporary password
@@ -244,6 +249,10 @@ export async function createStaffAccount(email: string, firstName: string, lastN
     
   } catch (error) {
     console.error('❌ Error creating staff account:', error);
+    const refusal = liveAsaSupabaseHttpError(error);
+    if (refusal) {
+      return { success: false, error: refusal.message, code: refusal.code };
+    }
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
@@ -7021,6 +7030,7 @@ router.post('/users/:userId/send-invite', async (req, res) => {
       console.log(`🔧 Creating or linking Supabase account for ${user.email} (user has no supabaseId)`);
       
       try {
+        assertPlaywrightServerUsesDedicatedSupabase();
         const { createClient } = await import('@supabase/supabase-js');
         const supabaseAdmin = createClient(
           process.env.SUPABASE_URL!,
@@ -7102,6 +7112,10 @@ router.post('/users/:userId/send-invite', async (req, res) => {
         console.log(`✅ Updated local user ${userId} with supabaseId: ${supabaseUserId}`);
       } catch (supabaseError) {
         console.error('❌ Error creating Supabase account:', supabaseError);
+        const refusal = liveAsaSupabaseHttpError(supabaseError);
+        if (refusal) {
+          return res.status(refusal.status).json({ message: refusal.message, code: refusal.code });
+        }
         return res.status(500).json({ message: 'Failed to create authentication account' });
       }
     } else {
@@ -7109,6 +7123,7 @@ router.post('/users/:userId/send-invite', async (req, res) => {
       
       // Update password in both Supabase and local database
       try {
+        assertPlaywrightServerUsesDedicatedSupabase();
         const { createClient } = await import('@supabase/supabase-js');
         const supabaseAdmin = createClient(
           process.env.SUPABASE_URL!,
@@ -7125,6 +7140,10 @@ router.post('/users/:userId/send-invite', async (req, res) => {
         console.log(`✅ Updated local password for user ${userId}`);
       } catch (updateError) {
         console.error('❌ Error updating password:', updateError);
+        const refusal = liveAsaSupabaseHttpError(updateError);
+        if (refusal) {
+          return res.status(refusal.status).json({ message: refusal.message, code: refusal.code });
+        }
         return res.status(500).json({ message: 'Failed to update password' });
       }
     }

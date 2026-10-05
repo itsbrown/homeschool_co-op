@@ -12,6 +12,11 @@ import { supabaseAuth } from "./middleware/supabase-auth";
 import { buildFamilyClassScheduleEvents } from "./lib/family-class-schedule";
 import { childMatchesParent } from "@shared/parent-identity";
 import { buildChildProfilePatch } from "@shared/child-profile-patch";
+import {
+  E2E_LIVE_SUPABASE_PROJECT_CODE,
+  E2eLiveSupabaseProjectError,
+  assertPlaywrightServerUsesDedicatedSupabase,
+} from "./lib/e2e-supabase-project-guard";
 
 // Type for authenticated requests with our auth structure
 interface AuthenticatedRequest extends Request {
@@ -3109,6 +3114,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             invitationDTO.role // Use role as department for compatibility
           );
 
+          if (accountResult.code === E2E_LIVE_SUPABASE_PROJECT_CODE) {
+            return res.status(403).json({
+              message: accountResult.error,
+              code: accountResult.code,
+            });
+          }
+
           if (accountResult.success) {
             accountCreated = true;
             // Send account credentials email
@@ -3161,6 +3173,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.error('❌ Missing Supabase configuration for account creation');
               return res.status(500).json({ message: "Server configuration error - unable to create account" });
             }
+
+            assertPlaywrightServerUsesDedicatedSupabase();
             
             // Create Supabase account with provided password
             const { createClient } = await import("@supabase/supabase-js");
@@ -3208,6 +3222,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           } catch (createError) {
             console.error("Error creating educator account:", createError);
+            if (createError instanceof E2eLiveSupabaseProjectError) {
+              return res.status(403).json({ message: createError.message, code: createError.code });
+            }
             return res.status(500).json({ message: "Error creating account" });
           }
         }

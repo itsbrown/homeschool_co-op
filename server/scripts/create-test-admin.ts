@@ -2,6 +2,9 @@ import { createClient } from '@supabase/supabase-js';
 import { getDb } from '../db';
 import { users, userRoles } from '@shared/schema';
 import { eq } from 'drizzle-orm';
+import { assertE2eSupabaseProjectIsDedicated } from '../lib/e2e-supabase-project-guard';
+
+assertE2eSupabaseProjectIsDedicated();
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

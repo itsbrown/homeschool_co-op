@@ -70,6 +70,7 @@ Specs that call `/api/test/setup-*-scenario` with `linkSupabaseAuth` and then lo
 - **Operator enable path is a gate.** If staff turn a feature on in the UI (Super-admin School Edit, Location Management checkbox, etc.), seed-login E2E must click that control and assert the real `PUT`/`PATCH` is **2xx**. Seeding `enabled_features` in SQL is not enough — that is how unmounted `/api/superadmin/schools/:id/features` shipped.
 - **Do not `login` a second user on the same page.** `/login` leaves immediately when a Supabase session exists, so `getByLabel("Email")` hangs. Use `browser.newContext()` or `page.goto("/logout")` first.
 - **Dev only.** `DATABASE_URL` comes from `.env` (Railway **clone**, not live prod Postgres). Playwright also loads `.env.e2e` (test Stripe / Supabase keys). **Never** `.env.prod` or `with-prod-env.mjs`.
+- **Dedicated Supabase project for E2E.** Never Adaptive Learning Program (`moivwjuglwwfrhqeewju` / `moivwjuglwwfrhqeewju.supabase.co`). `E2E_SUPABASE_URL` and `E2E_VITE_SUPABASE_URL` must be that dedicated project. `assertE2eSupabaseProjectIsDedicated` in `server/lib/e2e-supabase-project-guard.ts` makes `/api/test` link seeds return 403 `E2E_SUPABASE_LIVE_PROJECT` before `auth.admin.createUser`. Do not point those secrets at the live project to “unblock” CI.
 - Worktrees do not copy gitignored env files — symlink `.env` and `.env.e2e` from the main checkout.
 - Laptop without keys: `E2E_ALLOW_SKIP=1` (ignored when `CI=true`). Do not use this to green a feature gate.
 - Smoke / public-form specs with no login may still run without real Supabase.
@@ -296,6 +297,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - **Server changes not visible** → workflow not restarted after code changes → restart "Start application" and verify clean startup
 - **Playwright “passed” but skipped** → `test.skip` on missing `supabaseLinked` (exit 0) → use `requireLinkedSeed`; symlink `.env` + `.env.e2e` in worktrees; do not treat skip as a pass
 - **E2E wrote to production money path** → loaded `.env.prod` / `with-prod-env.mjs` → use `.env` (Railway clone) + `.env.e2e` only
+- **E2E seed 403 `E2E_SUPABASE_LIVE_PROJECT`** → `SUPABASE_URL` or `VITE_SUPABASE_URL` is Adaptive Learning Program → point `E2E_SUPABASE_*` and `E2E_VITE_SUPABASE_*` at a dedicated Supabase project
 - **Tests fail with "element not found"** → test assumes empty database state → generate unique test data with `nanoid` instead
 - **Frontend env var undefined** → missing `VITE_` prefix → rename to `VITE_MY_VAR` and access via `import.meta.env.VITE_MY_VAR`
 - **Schema change not applied** → wrote raw SQL migration file → use `npm run db:push` (Drizzle handles it)
@@ -328,6 +330,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - Don't write Playwright tests that assume empty database state
 - Don't `test.skip` on missing `supabaseLinked` in new seed/login specs — that is a green run, not a gate
 - Don't run Playwright or `/api/test/*` with `.env.prod` or `with-prod-env.mjs`
+- Don't point E2E Supabase secrets at Adaptive Learning Program (`moivwjuglwwfrhqeewju`). Seed code will refuse, and it must keep refusing.
 - Don't expose or log secrets/API keys in code
 - Don't use raw `psql` for database debugging — use the SQL execution tool
 - Don't remove the `Cache-Control: no-cache` middleware from `server/index.ts` — post-deployment chunk-load failures will break all frontend routes for users with cached browsers
@@ -340,6 +343,7 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - `vite.config.ts` — Vite configuration with aliases (do not edit)
 - `drizzle.config.ts` — Drizzle ORM config (do not edit)
 - `e2e/helpers/requireLinkedSeed.ts` — fail (not skip) when seed/Supabase link is missing
+- `server/lib/e2e-supabase-project-guard.ts` — block E2E Auth writes to Adaptive Learning Program (`moivwjuglwwfrhqeewju`)
 - `docs/E2E_COMMANDS.md` — Playwright command + spec catalog
 - `.cursor/rules/e2e-seed-gate.mdc` — always-on seed/login gate
 - `client/src/lib/queryClient.ts` — API client configuration

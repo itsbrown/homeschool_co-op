@@ -53,6 +53,7 @@ Production-path prerequisites: Postgres + `node scripts/ci-db-push.mjs`. See `se
 | Seed/login helper | [`e2e/helpers/requireLinkedSeed.ts`](../../../e2e/helpers/requireLinkedSeed.ts) — fail if seed/Supabase missing |
 | Cursor rule | `.cursor/rules/e2e-seed-gate.mdc` |
 | Local DB | `.env` `DATABASE_URL` = Railway **clone** (dev). Never `.env.prod` / `with-prod-env.mjs` for Playwright |
+| Supabase Auth | **Dedicated project only.** Never Adaptive Learning Program (`moivwjuglwwfrhqeewju`). GitHub `E2E_SUPABASE_*` / `E2E_VITE_SUPABASE_*` must not be that host. `linkSeedUserToSupabase` returns **403** `E2E_SUPABASE_LIVE_PROJECT` before `auth.admin.createUser`. |
 | CI workflow | `.github/workflows/e2e.yml` — `CI=true npm run test:e2e` |
 | Config | `playwright.config.ts` — `webServer: npm run dev`, port 5000, `PLAYWRIGHT_WEB_SERVER=true` |
 | Public forms lane | [`e2e/public-custom-forms.spec.ts`](../../e2e/public-custom-forms.spec.ts); domain doc [`custom-forms-public-access.md`](custom-forms-public-access.md) |
@@ -95,6 +96,7 @@ Protocol: `~/.cursor/skills/maintain-app-knowledge/SKILL.md` (Step 2 = edit file
 | E2E seed returns HTML / no data | Port 5000 reused by server without `/api/test` | `node scripts/free-port-5000.mjs` or `CI=true` for fresh `webServer` |
 | Playwright report green but skipped | `test.skip` on missing `supabaseLinked` | `requireLinkedSeed`; symlink `.env` + `.env.e2e` in worktrees |
 | E2E against live Stripe/prod | Loaded `.env.prod` | Use `.env` (Railway clone) + `.env.e2e` only |
+| E2E seed 403 `E2E_SUPABASE_LIVE_PROJECT` | `SUPABASE_URL` or `VITE_SUPABASE_URL` is Adaptive Learning Program (`moivwjuglwwfrhqeewju`) | Point `E2E_SUPABASE_URL`, `E2E_VITE_SUPABASE_URL`, and the matching anon/service-role keys at a dedicated Supabase project. Do not delete or reuse the live project for seeds. |
 
 ## Key files
 
@@ -103,6 +105,7 @@ Protocol: `~/.cursor/skills/maintain-app-knowledge/SKILL.md` (Step 2 = edit file
 - `.cursor/rules/e2e-seed-gate.mdc`
 - `.github/workflows/tests.yml`
 - `.github/workflows/e2e.yml`
+- `server/lib/e2e-supabase-project-guard.ts` — refuses Adaptive Learning Program (`moivwjuglwwfrhqeewju`) for E2E Auth writes
 - `jest.integration.config.cjs`, `jest.config.cjs`, `jest.payments.config.cjs`
 - `server/tests/helpers/productionPathApp.ts`
 - `.agents/skills/asa-testing-deployment/SKILL.md`

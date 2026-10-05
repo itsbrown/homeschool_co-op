@@ -13,6 +13,10 @@ import { userStorage } from "../users-storage";
 import { supabaseAdmin } from "../db/supabase";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { getDb } from "../db";
+import {
+  E2eLiveSupabaseProjectError,
+  assertPlaywrightServerUsesDedicatedSupabase,
+} from "../lib/e2e-supabase-project-guard";
 import { normalizeAuthRegisterInput } from "@shared/auth-register";
 import {
   createChildLinkedToParent,
@@ -164,6 +168,8 @@ router.post('/register', async (req, res) => {
       if (!supabaseUrl || !supabaseServiceKey) {
         throw new Error('Supabase configuration missing');
       }
+
+      assertPlaywrightServerUsesDedicatedSupabase();
       
       const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
         auth: {
@@ -198,6 +204,13 @@ router.post('/register', async (req, res) => {
       
     } catch (supabaseError) {
       console.error('❌ Supabase account creation failed:', supabaseError);
+      if (supabaseError instanceof E2eLiveSupabaseProjectError) {
+        return res.status(403).json({
+          success: false,
+          code: supabaseError.code,
+          message: supabaseError.message,
+        });
+      }
       const errorMessage = supabaseError instanceof Error ? supabaseError.message : 'Unknown error';
       return res.status(500).json({ 
         success: false, 

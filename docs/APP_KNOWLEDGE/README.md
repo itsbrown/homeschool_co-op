@@ -17,6 +17,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 ## Non-negotiables
 
 - **Production / shared dev DB:** additive SQL only (`server/migrations/*.sql`). **Never** `db:push` / `drizzle-kit push` on databases with real users.
+- **E2E Supabase:** a dedicated project only. Never Adaptive Learning Program (`moivwjuglwwfrhqeewju` / `moivwjuglwwfrhqeewju.supabase.co`). Seed code refuses that host.
 - **School context:** Admin workflows must resolve school via `schools.admin_id`, not only `users.school_id` (misalignment caused registration/location bugs).
 - **Postgres in tests:** Integration tests that claim production path must use real Postgres; mem/file `CombinedStorage` fallback invalidates results.
 - **CI merge gate (Tests workflow):** schema verify → production-path → dev server smoke → client jsdom. Full `test:server` (700+ tests) is local / Payments CI, not the PR Tests job.
