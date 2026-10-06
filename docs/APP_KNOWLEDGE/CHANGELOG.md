@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-10-06 (Scheduled notification claims cannot stall the batch)
+
+- `deliverDueScheduledNotifications` now settles each claimed row on its own. A throw marks that row `failed`, or returns it to `scheduled` when it still has zero recipient rows (max 3, `delivery_stats.claimRecoveries`). The loop continues. Rows left in `sending` longer than 15 minutes take the same path and are not delivered again when anyone already has a recipient row. No migration.
+
 ## 2026-10-06 (School clock: scheduled notifications, calendar edit, document expiry)
 
 - Naive admin datetimes are Eastern wall time via `shared/school-timezone.ts`. `new Date("YYYY-MM-DDTHH:mm")` on the UTC server stored 11:00 AM as 7:00 AM ET; `new Date("YYYY-MM-DD")` stored document expiry at UTC midnight so the label and the hide time were the previous evening.

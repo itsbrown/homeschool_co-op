@@ -39,6 +39,8 @@ Helpers: `shared/school-timezone.ts`. Edit Event must load the input with `forma
 
 Scheduled notifications use the same wall-time parser. A future `scheduledFor` stays `scheduled` until `startScheduledNotificationJob` (every 60s, same `ENABLE_BACKGROUND_JOBS` worker as reminders). Production does not run that job until the flag is true and the process is restarted. No extra Replit cron.
 
+A throw while delivering one claimed row must not skip the rest of the batch. The tick requeues that row only when it has no `notification_recipients` (up to 3 times, counted in `delivery_stats.claimRecoveries`). If any recipient row exists, it is marked `failed` and not sent again. The same rule recovers rows left in `sending` for 15 minutes. No schema change.
+
 ## Schema changes
 
 | Environment | Method |
