@@ -5,12 +5,14 @@
  * `ENABLE_BACKGROUND_JOBS=true` on the production VM). There is no separate
  * Replit cron. A one-minute tick is enough for "send at 8:00 AM".
  *
- * Claimed rows (`sending`) that throw, or that sit in `sending` for 15
- * minutes, are requeued only when no recipient rows exist. Otherwise they
- * are marked failed so people who already have an in-app row are not sent
- * a second copy. Retry count is `delivery_stats.claimRecoveries`.
+ * Claimed rows that throw, that come back `failed` (processNotification
+ * swallows ordinary errors), or that sit in `sending` for 15 minutes, are
+ * requeued only when no recipient rows exist. Otherwise they are marked
+ * failed so people who already have an in-app row are not sent a second
+ * copy. Retry count is `delivery_stats.claimRecoveries`. Only a row whose
+ * status is `sent` counts as delivered.
  */
-import { and, asc, eq, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import { notificationRecipients, notifications } from "@shared/schema";
 import {
   SENDING_STUCK_AFTER_MS,
@@ -50,6 +52,15 @@ export async function deliverDueScheduledNotifications(
 
     deliver: (row) => deliverNotification(row),
 
+    readStatus: async (id) => {
+      const [found] = await db
+        .select({ status: notifications.status })
+        .from(notifications)
+        .where(eq(notifications.id, id))
+        .limit(1);
+      return found?.status ?? null;
+    },
+
     countRecipients: async (id) => {
       const found = await db
         .select({ id: notificationRecipients.id })
@@ -59,18 +70,21 @@ export async function deliverDueScheduledNotifications(
       return found.length;
     },
 
+    // `failed` is included because processNotification sets that status itself
+    // and does not throw. `sent` is not included, so a finished send is not
+    // moved back.
     markFailed: async (id, deliveryStats, at) => {
       await db
         .update(notifications)
         .set({ status: "failed", deliveryStats, updatedAt: at })
-        .where(and(eq(notifications.id, id), eq(notifications.status, "sending")));
+        .where(and(eq(notifications.id, id), inArray(notifications.status, ["sending", "failed"])));
     },
 
     requeue: async (id, deliveryStats, at) => {
       await db
         .update(notifications)
         .set({ status: "scheduled", deliveryStats, updatedAt: at })
-        .where(and(eq(notifications.id, id), eq(notifications.status, "sending")));
+        .where(and(eq(notifications.id, id), inArray(notifications.status, ["sending", "failed"])));
     },
 
     listStuckSending: async (cutoff) =>

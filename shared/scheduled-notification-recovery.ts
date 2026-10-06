@@ -104,6 +104,12 @@ export type ScheduledPassDeps = {
   listDue: (now: Date) => Promise<ScheduledPassRow[]>;
   claim: (id: number, now: Date) => Promise<ScheduledPassRow | null>;
   deliver: (row: ScheduledPassRow) => Promise<void>;
+  /**
+   * Status after deliver returns. `processNotification` catches ordinary
+   * errors, sets `failed`, and does not throw, so a quiet return can still
+   * be a failure.
+   */
+  readStatus: (id: number) => Promise<string | null>;
   countRecipients: (id: number) => Promise<number>;
   markFailed: (id: number, deliveryStats: Record<string, unknown>, now: Date) => Promise<void>;
   requeue: (id: number, deliveryStats: Record<string, unknown>, now: Date) => Promise<void>;
@@ -146,15 +152,29 @@ async function settleClaimFailure(
 
 /**
  * One worker tick. A throw from one row does not stop the rest of the batch.
- * Stuck `sending` rows are settled here and are not delivered in this pass —
- * a requeue is picked up on a later tick, after we know the previous attempt
- * did not create recipient rows.
+ * A delivery that returns without throwing is counted as delivered only when
+ * the row is `sent`. `processNotification` swallows errors and sets `failed`,
+ * so that case is settled the same way as a throw: requeue when nobody has a
+ * recipient row, otherwise leave it failed. Stuck `sending` rows are settled
+ * here and are not delivered in this pass.
  */
 export async function runScheduledNotificationPass(
   now: Date,
   deps: ScheduledPassDeps,
 ): Promise<ScheduledPassResult> {
   const result: ScheduledPassResult = { delivered: 0, failed: 0, requeued: 0 };
+
+  const applySettlement = async (claimed: ScheduledPassRow) => {
+    try {
+      const settled = await settleClaimFailure(claimed, deps, now);
+      result[settled === "requeue" ? "requeued" : "failed"] += 1;
+    } catch (settleError) {
+      console.error(
+        `[ScheduledNotifications] Could not record failure for notification ${claimed.id}; leaving it for stuck-sending recovery:`,
+        settleError,
+      );
+    }
+  };
 
   let due: ScheduledPassRow[] = [];
   try {
@@ -175,19 +195,36 @@ export async function runScheduledNotificationPass(
 
     try {
       await deps.deliver(claimed);
-      result.delivered += 1;
     } catch (error) {
       console.error(`[ScheduledNotifications] Delivery failed for notification ${claimed.id}:`, error);
-      try {
-        const settled = await settleClaimFailure(claimed, deps, now);
-        result[settled === "requeue" ? "requeued" : "failed"] += 1;
-      } catch (settleError) {
-        console.error(
-          `[ScheduledNotifications] Could not record failure for notification ${claimed.id}; leaving it for stuck-sending recovery:`,
-          settleError,
-        );
-      }
+      await applySettlement(claimed);
+      continue;
     }
+
+    let status: string | null;
+    try {
+      status = await deps.readStatus(claimed.id);
+    } catch (error) {
+      console.error(
+        `[ScheduledNotifications] Could not read status after delivery of notification ${claimed.id}; not counting it as delivered:`,
+        error,
+      );
+      continue;
+    }
+
+    if (status === "sent") {
+      result.delivered += 1;
+      continue;
+    }
+
+    if (status !== "failed" && status !== "sending") {
+      console.error(
+        `[ScheduledNotifications] Notification ${claimed.id} finished in status ${status ?? "missing"}; not counting it as delivered`,
+      );
+      continue;
+    }
+
+    await applySettlement(claimed);
   }
 
   const cutoff = new Date(now.getTime() - SENDING_STUCK_AFTER_MS);

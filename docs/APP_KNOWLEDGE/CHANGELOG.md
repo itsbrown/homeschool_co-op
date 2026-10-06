@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-10-06 (Swallowed notification errors still retry)
+
+- `processNotification` sets `failed` and does not throw, so the scheduled tick was counting those rows as delivered and skipping the zero-recipient retry. After `deliverNotification` returns, the tick re-reads status. Only `sent` counts as delivered. `failed` with no recipient rows is requeued (same `claimRecoveries` cap). No migration.
+
 ## 2026-10-06 (Scheduled notification claims cannot stall the batch)
 
 - `deliverDueScheduledNotifications` now settles each claimed row on its own. A throw marks that row `failed`, or returns it to `scheduled` when it still has zero recipient rows (max 3, `delivery_stats.claimRecoveries`). The loop continues. Rows left in `sending` longer than 15 minutes take the same path and are not delivered again when anyone already has a recipient row. No migration.

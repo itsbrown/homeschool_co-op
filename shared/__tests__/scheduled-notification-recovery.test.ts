@@ -26,6 +26,7 @@ function harness(overrides: Partial<ScheduledPassDeps> = {}) {
     deliver: async () => {
       calls.push("deliver");
     },
+    readStatus: async () => "sent",
     countRecipients: async () => 0,
     markFailed: async (id) => {
       calls.push(`fail:${id}`);
@@ -99,6 +100,65 @@ describe("scheduled notification claim recovery", () => {
     expect(decision.reason).toBe("retry_limit");
     expect(decision.deliveryStats.totalRecipients).toBe(4);
     expect(decision.deliveryStats.claimRecoveries).toBe(MAX_CLAIM_RECOVERIES);
+  });
+
+  it("requeues a swallowed failure when the row is failed and nobody was notified", async () => {
+    const { deps, calls } = harness({
+      listDue: async () => [row({ id: 11, deliveryStats: { totalRecipients: 56 } }), row({ id: 12 })],
+      deliver: async () => {
+        // processNotification catches, sets failed, and does not throw.
+      },
+      readStatus: async (id) => (id === 11 ? "failed" : "sent"),
+      countRecipients: async (id) => (id === 11 ? 0 : 0),
+    });
+
+    const result = await runScheduledNotificationPass(NOW, deps);
+
+    expect(calls).toEqual(["requeue:11:1"]);
+    expect(result).toEqual({ delivered: 1, failed: 0, requeued: 1 });
+  });
+
+  it("counts a swallowed failure as failed when recipient rows already exist", async () => {
+    const { deps, calls } = harness({
+      listDue: async () => [row({ id: 13 })],
+      readStatus: async () => "failed",
+      countRecipients: async () => 8,
+    });
+
+    const result = await runScheduledNotificationPass(NOW, deps);
+
+    expect(calls).toEqual(["deliver", "fail:13"]);
+    expect(result).toEqual({ delivered: 0, failed: 1, requeued: 0 });
+  });
+
+  it("does not requeue a swallowed failure that already used the retry budget", async () => {
+    const { deps, calls } = harness({
+      listDue: async () => [row({ id: 14 })],
+      claim: async (id) =>
+        row({ id, deliveryStats: { totalRecipients: 4, claimRecoveries: MAX_CLAIM_RECOVERIES } }),
+      readStatus: async () => "failed",
+      countRecipients: async () => 0,
+    });
+
+    const result = await runScheduledNotificationPass(NOW, deps);
+
+    expect(calls).toEqual(["deliver", "fail:14"]);
+    expect(result.delivered).toBe(0);
+    expect(result.requeued).toBe(0);
+  });
+
+  it("does not count a delivery as delivered when the status read fails", async () => {
+    const { deps, calls } = harness({
+      listDue: async () => [row({ id: 15 })],
+      readStatus: async () => {
+        throw new Error("read failed");
+      },
+    });
+
+    const result = await runScheduledNotificationPass(NOW, deps);
+
+    expect(calls).toEqual(["deliver"]);
+    expect(result).toEqual({ delivered: 0, failed: 0, requeued: 0 });
   });
 
   it("fails closed when the recipient lookup throws, so a partial send is not repeated", async () => {
