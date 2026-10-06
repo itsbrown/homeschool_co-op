@@ -26,6 +26,19 @@ Unused Firebase SDKs were removed from `package.json` (Jul 2026): they had no im
 - **`CombinedStorage`** (`server/storage.ts`): tries Postgres first; falls back to mem/file JSON when DB unavailable or schema missing.
 - **Risk:** Tests or dev without Postgres look “green” while hitting mem storage — always verify Postgres in production-path and integration tests (`assertCorePostgresSchema`, `assertPostgresStorageForProductionPath`).
 
+## School clock (America/New_York)
+
+The API process runs in UTC. Do not persist admin-entered dates with bare `new Date(string)`.
+
+| Input | Wrong | Right |
+|-------|--------|--------|
+| `datetime-local` `2026-10-12T11:00` | UTC 11:00 → displays 7:00 AM ET | `parseSchoolWallTime` → 15:00Z (11:00 AM EDT) |
+| `<input type="date">` `2026-10-13` | UTC midnight → label “Oct 12”, hidden at 8:00 PM ET the day before | `parseDocumentExpiry` → 23:59:59.999 ET that day |
+
+Helpers: `shared/school-timezone.ts`. Edit Event must load the input with `formatSchoolWallTimeLocal` and save with `parseSchoolWallTime`. Saving a description must not move the clock. Strings that already have `Z` or an offset stay that instant — do not shift rows that were stored earlier.
+
+Scheduled notifications use the same wall-time parser. A future `scheduledFor` stays `scheduled` until `startScheduledNotificationJob` (every 60s, same `ENABLE_BACKGROUND_JOBS` worker as reminders). Production does not run that job until the flag is true and the process is restarted. No extra Replit cron.
+
 ## Schema changes
 
 | Environment | Method |

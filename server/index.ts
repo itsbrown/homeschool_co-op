@@ -448,7 +448,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
         AUTOPAY_RECONCILIATION_INTERVAL_MS,
       } = await import('./services/scheduled-payment-reminders.js');
       console.log(
-        `🔧 Starting background services (role=${singletonRole}) — reminders ~6h, missed-PI sweep daily, AutoPay stuck-processing reconciliation ~${Math.round(
+        `🔧 Starting background services (role=${singletonRole}) — scheduled notifications every 60s, reminders ~6h, missed-PI sweep daily, AutoPay stuck-processing reconciliation ~${Math.round(
           AUTOPAY_RECONCILIATION_INTERVAL_MS / 60_000,
         )}min; enable this process only on one worker when running multiple web replicas`,
       );
@@ -478,6 +478,11 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
       
       // Start scheduled payment reminder job (sends email reminders for upcoming/overdue payments)
       startScheduledPaymentReminderJob();
+
+      const { startScheduledNotificationJob } = await import(
+        './services/scheduled-notification-job.js'
+      );
+      startScheduledNotificationJob();
 
       // Daily Stripe↔DB missed-PI sweep (Layer 3). Detect + alert; auto-fix off by default.
       const { startMissedPiSweepJob } = await import('./services/missed-payment-intent-sweep-job.js');
@@ -510,6 +515,9 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
             const { stopEnrollmentReminderScheduler } = await import('./services/enrollmentReminderScheduler.js');
             const { stopCheckoutFunnelAbandonJob } = await import('./services/checkout-funnel-abandon-job.js');
             const { stopScheduledPaymentReminderJob } = await import('./services/scheduled-payment-reminders.js');
+            const { stopScheduledNotificationJob } = await import(
+              './services/scheduled-notification-job.js'
+            );
             const { stopCreditExpirationJob } = await import('./services/creditExpirationService.js');
             const { stopLocationActivationScheduler } = await import(
               './services/location-activation-scheduler.js'
@@ -522,6 +530,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
             stopEnrollmentReminderScheduler();
             stopCheckoutFunnelAbandonJob();
             stopScheduledPaymentReminderJob();
+            stopScheduledNotificationJob();
             stopCreditExpirationJob();
             stopLocationActivationScheduler();
             stopMissedPiSweepJob();
@@ -543,7 +552,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     } else {
       console.log('☁️ Background jobs disabled for this process');
       console.log(
-        '💡 Production/staging (any NODE_ENV except development/test): set ENABLE_BACKGROUND_JOBS=true on exactly one worker with DATABASE_URL; leave it unset/false on web/API replicas so reconciliation and reminders are not double-scheduled',
+        '💡 Production/staging (any NODE_ENV except development/test): set ENABLE_BACKGROUND_JOBS=true on exactly one worker with DATABASE_URL; leave it unset/false on web/API replicas so reconciliation and reminders are not double-scheduled. Scheduled notifications are delivered by that same in-process job (every 60s) — they are not sent until the flag is on and the process is restarted.',
       );
     }
   });

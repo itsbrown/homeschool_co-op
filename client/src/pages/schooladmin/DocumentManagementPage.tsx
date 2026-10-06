@@ -39,6 +39,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 import { format } from 'date-fns';
+import { formatSchoolCalendarDate, isDocumentExpired } from '@shared/school-timezone';
 import { UserLookup, type UserResult } from '@/components/ui/user-lookup';
 
 interface SchoolDocument {
@@ -658,7 +659,7 @@ export default function DocumentManagementPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {documents.map((doc) => {
-              const isExpired = doc.expiresAt && new Date(doc.expiresAt) < new Date();
+              const isExpired = isDocumentExpired(doc.expiresAt);
               return (
                 <Card key={doc.id} data-testid={`card-document-${doc.id}`} className={doc.isArchived ? 'opacity-70' : ''}>
                   <CardHeader className="pb-3">
@@ -691,7 +692,7 @@ export default function DocumentManagementPage() {
                       {doc.expiresAt && !isExpired && (
                         <Badge variant="outline" className="text-xs gap-1">
                           <Clock className="h-3 w-3" />
-                          Expires {format(new Date(doc.expiresAt), 'MMM d, yyyy')}
+                          Expires {formatSchoolCalendarDate(doc.expiresAt)}
                         </Badge>
                       )}
                     </div>
@@ -904,7 +905,7 @@ export default function DocumentManagementPage() {
                   style={{ fontSize: '16px' }}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  If set, this document will automatically be hidden from parents after this date.
+                  Parents can open this document through the end of this day, Eastern Time.
                 </p>
               </div>
 

@@ -15,6 +15,12 @@ description: In-app notification system, error tracking with database logging, a
 
 ## Notification System
 
+### Scheduled delivery
+- Compose (`NotificationManagementPage`) sends `scheduledFor` as a `datetime-local` string. Blank means send now.
+- `POST /api/notifications/send-combined` parses that string as America/New_York. A future time is stored `status=scheduled` and is not emailed or written to `notification_recipients`.
+- `server/services/scheduled-notification-job.ts` claims due rows (`scheduled` → `sending`) and calls `deliverNotification`. It starts from `server/index.ts` next to the other background jobs.
+- Production (`NODE_ENV=production`, including the esbuild bundle) does **not** start that job unless `ENABLE_BACKGROUND_JOBS=true`. Development starts it automatically. Deployment is one VM (`npm run start`), so the flag belongs on that process only.
+
 ### Notification Schema
 ```
 notifications:
@@ -149,6 +155,8 @@ new → acknowledged → investigating → resolved
 - **Telemetry loop** → error tracker captures its own telemetry endpoint failures → `apiRequest` in `queryClient.ts` already excludes `/api/telemetry/` URLs from capture — never remove that exclusion
 - **Missing Brevo key** → error emails silently fail → check `BREVO_API_KEY` is set; service logs warning if missing
 - **Notification not delivered** → created notification but no recipient records → must create `notification_recipients` entries for each target user
+- **Schedule For sends immediately** → the compose field must be controlled state and included on `POST /api/notifications/send-combined`. A future `scheduledFor` stays `status=scheduled` with no recipient rows until the in-process job runs. Naive `datetime-local` values are Eastern wall time (`shared/school-timezone.ts`), not UTC
+- **Scheduled row never leaves the queue** → production only starts background jobs when `ENABLE_BACKGROUND_JOBS=true` (`server/index.ts`). The delivery tick is `startScheduledNotificationJob` every 60s on that same process. After a merge, restart the Repl. No separate Replit cron. Single VM: set the flag on that one deployment if it is not already on
 - **Unread count stale** → notification read but badge still shows → invalidate `['/api/notifications']` query after marking as read
 - **PII in error logs** → sensitive data stored in `requestBody` → sanitize request bodies before passing to error telemetry
 - **Allergy blast names a child** → class allergy copy must never include student names; use `classroomAllergyReminderCopy` and `GET /api/parent/class-allergy-alerts`

@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-10-06 (School clock: scheduled notifications, calendar edit, document expiry)
+
+- Naive admin datetimes are Eastern wall time via `shared/school-timezone.ts`. `new Date("YYYY-MM-DDTHH:mm")` on the UTC server stored 11:00 AM as 7:00 AM ET; `new Date("YYYY-MM-DD")` stored document expiry at UTC midnight so the label and the hide time were the previous evening.
+- Compose Notification now sends `scheduledFor`. A future time stays `status=scheduled` (no recipient rows) until `startScheduledNotificationJob` (60s, `server/index.ts`, same `ENABLE_BACKGROUND_JOBS` gate as the other in-process jobs). No new Replit cron. Restart after merge; set the flag on the single production VM if it is not already on.
+- Document expiry date-only values last through 23:59:59.999 ET that day. Parent published lists and parent downloads hide the file after that instant. Existing rows are not rewritten.
+
 ## 2026-10-05 (Public store product photo)
 
 - Detail hero (`StoreItemDetailView` → `StoreProductCardImage` `fit="contain"`) shows the full image, centered. `aspect-square` plus `max-h-[min(70vh,520px)]` was shrinking the frame to the max height and pinning that square to the left of the wide card; `object-cover` then clipped the sides. Catalog cards stay square `object-cover`. Presigned store uploads are stored as uploaded — no trim/recrop step.

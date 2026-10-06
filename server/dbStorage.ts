@@ -1,5 +1,6 @@
 import { eq, ne, and, desc, asc, like, or, sql, lt, gt, lte, gte, isNull, inArray, ilike } from 'drizzle-orm';
 import { normalizeEmailForLookup } from '@shared/parent-identity';
+import { isDocumentExpired } from '@shared/school-timezone';
 import { normalizeSchoolFeatures } from './lib/school-features';
 import { getDb } from './db';
 import { IStorage, type InsertPaymentReminderLog, type PaymentReminderLog } from './storage';
@@ -1408,7 +1409,7 @@ export class DatabaseStorage implements IStorage {
 
   async getPublishedSchoolDocuments(schoolId: number): Promise<SchoolDocument[]> {
     const db = await getDb();
-    return await db
+    const rows = await db
       .select()
       .from(schoolDocuments)
       .where(
@@ -1418,6 +1419,8 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(schoolDocuments.createdAt));
+    const now = new Date();
+    return rows.filter((doc: SchoolDocument) => !isDocumentExpired(doc.expiresAt, now));
   }
 
   async createSchoolDocument(documentData: InsertSchoolDocument): Promise<SchoolDocument> {

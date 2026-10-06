@@ -8288,7 +8288,10 @@ router.get('/notifications/tracking', supabaseAuth, requireSchoolContext, attach
         const emailRecipients = recipients.filter(r => r.deliveryType === 'email');
         const smsRecipients = recipients.filter(r => r.deliveryType === 'sms');
         
-        const totalRecipients = inAppRecipients.length;
+        const intendedRecipients = Array.isArray((notification.targetData as any)?.userIds)
+          ? (notification.targetData as any).userIds.length
+          : 0;
+        const totalRecipients = inAppRecipients.length > 0 ? inAppRecipients.length : intendedRecipients;
         const openedCount = inAppRecipients.filter(r => r.status === 'read').length;
         const deliveredCount = inAppRecipients.filter(r => r.status === 'delivered' || r.status === 'read').length;
         
@@ -8301,6 +8304,8 @@ router.get('/notifications/tracking', supabaseAuth, requireSchoolContext, attach
           targetType: notification.targetType,
           type: notification.type,
           priority: notification.priority,
+          status: notification.status,
+          scheduledFor: notification.scheduledFor,
           sentAt: notification.sentAt,
           createdAt: notification.createdAt,
           stats: {
@@ -8321,11 +8326,13 @@ router.get('/notifications/tracking', supabaseAuth, requireSchoolContext, attach
       })
     );
 
-    // Sort by sentAt descending (most recent first)
     trackingData.sort((a, b) => {
-      const dateA = a.sentAt ? new Date(a.sentAt).getTime() : 0;
-      const dateB = b.sentAt ? new Date(b.sentAt).getTime() : 0;
-      return dateB - dateA;
+      const stamp = (row: { sentAt?: Date | string | null; scheduledFor?: Date | string | null; createdAt?: Date | string | null }) => {
+        const raw = row.sentAt || row.scheduledFor || row.createdAt;
+        const ms = raw ? new Date(raw).getTime() : 0;
+        return Number.isNaN(ms) ? 0 : ms;
+      };
+      return stamp(b) - stamp(a);
     });
 
     res.json(trackingData);
