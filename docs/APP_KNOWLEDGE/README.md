@@ -25,7 +25,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 
 | Doc | Contents |
 |-----|----------|
-| [architecture.md](./architecture.md) | Stack, tenancy, storage, auth |
+| [architecture.md](./architecture.md) | Stack, tenancy, storage, auth, school clock (Eastern) |
 | [domains/registration-and-locations.md](./domains/registration-and-locations.md) | School code signup, locations, school_id |
 | [domains/payments-and-billing.md](./domains/payments-and-billing.md) | Ledgers, credits, prod balance audit, correction email |
 | [domains/ci-and-testing.md](./domains/ci-and-testing.md) | GitHub Actions, Playwright, agent knowledge maintenance |

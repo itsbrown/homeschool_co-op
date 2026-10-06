@@ -9,6 +9,7 @@ import { fileUploadService, DOCUMENT_ALLOWED_MIME_TYPES } from '../../services/f
 import { DOCUMENT_MAX_SIZE_BYTES, DOCUMENT_MAX_SIZE_MB } from '@shared/upload-content-type';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
 import { sendNotificationEmails } from '../notifications';
+import { isDocumentExpired, parseDocumentExpiry } from '@shared/school-timezone';
 
 const router = express.Router();
 
@@ -400,6 +401,15 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
     const parsedIsPublished = isPublished === 'true' || isPublished === true;
     const parsedVisibleToAll = visibleToAll === 'true' || visibleToAll === true;
 
+    let parsedExpiresAt: Date | undefined;
+    if (expiresAt) {
+      try {
+        parsedExpiresAt = parseDocumentExpiry(expiresAt);
+      } catch {
+        return res.status(400).json({ success: false, message: 'Invalid expiry date' });
+      }
+    }
+
     let document;
     try {
       document = await storage.createSchoolDocument({
@@ -414,7 +424,7 @@ router.post('/upload', supabaseAuth, async (req: any, res) => {
         mimeType,
         isPublished: parsedIsPublished,
         visibleToAll: parsedVisibleToAll,
-        ...(expiresAt ? { expiresAt: new Date(expiresAt) } : {}),
+        ...(parsedExpiresAt ? { expiresAt: parsedExpiresAt } : {}),
       });
     } catch (dbError: any) {
       console.error('❌ DB insert failed after presigned upload — cleaning up orphaned file:', fileUrl, dbError);
@@ -498,6 +508,15 @@ router.get('/:id/download', supabaseAuth, async (req: any, res) => {
       return res.status(403).json({ 
         success: false, 
         message: 'Access denied: You do not have permission to download this document' 
+      });
+    }
+
+    const role = String(user.role || '').toLowerCase();
+    const parentLike = role === 'parent' || role === 'student' || role === 'learner';
+    if (parentLike && isDocumentExpired(document.expiresAt)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found',
       });
     }
 
@@ -609,7 +628,7 @@ router.get('/public/:token/download', async (req: any, res) => {
     const document = await storage.getSchoolDocumentByShareToken(token);
 
     // Use a generic 404 for every "not available" case so we don't leak document state.
-    const isExpired = (document as any)?.expiresAt && new Date((document as any).expiresAt) < new Date();
+    const isExpired = isDocumentExpired((document as any)?.expiresAt);
     if (
       !document ||
       !document.shareToken ||
@@ -738,8 +757,17 @@ router.patch('/:id', supabaseAuth, async (req: any, res) => {
     if (visibleToAll !== undefined) updateData.visibleToAll = visibleToAll;
     if (isArchived !== undefined) updateData.isArchived = isArchived;
     if (expiresAt !== undefined) {
-      // Accept null to clear, or a date string (YYYY-MM-DD or ISO)
-      updateData.expiresAt = expiresAt === null ? null : new Date(expiresAt);
+      // Accept null to clear, a calendar date (YYYY-MM-DD = end of that Eastern day),
+      // or an absolute timestamp. Do not rewrite dates that were already stored.
+      if (expiresAt === null || expiresAt === "") {
+        updateData.expiresAt = null;
+      } else {
+        try {
+          updateData.expiresAt = parseDocumentExpiry(expiresAt);
+        } catch {
+          return res.status(400).json({ success: false, message: "Invalid expiry date" });
+        }
+      }
     }
 
     const document = await storage.updateSchoolDocument(documentId, updateData);

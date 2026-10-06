@@ -30,6 +30,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { NotificationTargetingPanel, defaultTargetingState, type TargetingState } from "@/components/NotificationTargetingPanel";
+import { formatSchoolDateTime, formatSchoolWallTimeLocal } from "@shared/school-timezone";
 
 interface Notification {
   id: number;
@@ -58,6 +59,8 @@ interface NotificationTrackingRow {
   priority: string;
   sentAt: string | null;
   createdAt: string;
+  status?: string;
+  scheduledFor?: string | null;
   stats: {
     totalRecipients: number;
     delivered: number;
@@ -100,7 +103,13 @@ function mapTrackingRowToNotification(row: NotificationTrackingRow): Notificatio
       ? (tt as Notification["targetType"])
       : "all";
 
-  const status: Notification["status"] = row.sentAt ? "sent" : "scheduled";
+  const knownStatuses: Notification["status"][] = ["draft", "scheduled", "sending", "sent", "failed"];
+  const rawStatus = String(row.status || "").toLowerCase();
+  const status: Notification["status"] = knownStatuses.includes(rawStatus as Notification["status"])
+    ? (rawStatus as Notification["status"])
+    : row.sentAt
+      ? "sent"
+      : "scheduled";
 
   return {
     id: row.id,
@@ -111,6 +120,7 @@ function mapTrackingRowToNotification(row: NotificationTrackingRow): Notificatio
     content: row.content,
     targetType,
     targetData: {},
+    scheduledFor: row.scheduledFor || undefined,
     sentAt: row.sentAt || undefined,
     status,
     deliveryStats: { totalRecipients: row.stats?.totalRecipients ?? 0 },
@@ -194,9 +204,14 @@ export default function NotificationManagementPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({ queryKey: TRACKING_QUERY_KEY });
       setIsComposeDialogOpen(false);
+      const count = data.recipientCount ?? 0;
+      const people = `${count} recipient${count !== 1 ? "s" : ""}`;
       toast({
         title: "Success",
-        description: `Notification sent to ${data.recipientCount ?? 0} recipient${(data.recipientCount ?? 0) !== 1 ? "s" : ""}`,
+        description:
+          data.status === "scheduled" && data.scheduledFor
+            ? `Notification scheduled for ${formatSchoolDateTime(data.scheduledFor)} (${people})`
+            : `Notification sent to ${people}`,
       });
     },
     onError: (error: any) => {
@@ -361,6 +376,7 @@ export default function NotificationManagementPage() {
             </Button>
           </DialogTrigger>
           <NotificationComposeDialog
+            isOpen={isComposeDialogOpen}
             editingNotification={editingNotification}
             onSendCombined={sendCombinedMutation.mutate}
             onUpdateDraft={(data) => editingNotification && updateDraftMutation.mutate({ id: editingNotification.id, data })}
@@ -534,12 +550,16 @@ export default function NotificationManagementPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {notification.sentAt ? (
+                      {notification.status === "scheduled" && notification.scheduledFor ? (
                         <div className="text-sm">
-                          {new Date(notification.sentAt).toLocaleDateString()}
+                          Scheduled
                           <div className="text-muted-foreground">
-                            {new Date(notification.sentAt).toLocaleTimeString()}
+                            {formatSchoolDateTime(notification.scheduledFor)}
                           </div>
+                        </div>
+                      ) : notification.sentAt ? (
+                        <div className="text-sm">
+                          {formatSchoolDateTime(notification.sentAt)}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">Not sent</span>
@@ -622,9 +642,11 @@ export default function NotificationManagementPage() {
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Sent</Label>
                   <p className="mt-1">
-                    {selectedNotification.sentAt 
-                      ? new Date(selectedNotification.sentAt).toLocaleString()
-                      : "Not sent yet"}
+                    {selectedNotification.sentAt
+                      ? formatSchoolDateTime(selectedNotification.sentAt)
+                      : selectedNotification.scheduledFor
+                        ? `Scheduled for ${formatSchoolDateTime(selectedNotification.scheduledFor)}`
+                        : "Not sent yet"}
                   </p>
                 </div>
               </div>
@@ -668,12 +690,14 @@ export default function NotificationManagementPage() {
 
 // Notification Compose Dialog Component
 function NotificationComposeDialog({
+  isOpen,
   editingNotification,
   onSendCombined,
   onUpdateDraft,
   onDeleteDraft,
   isLoading,
 }: {
+  isOpen: boolean;
   editingNotification: Notification | null;
   onSendCombined: (data: any) => void;
   onUpdateDraft: (data: any) => void;
@@ -707,6 +731,9 @@ function NotificationComposeDialog({
   const [targeting, setTargeting] = useState<TargetingState>(buildInitialTargeting);
   const [subject, setSubject] = useState(editingNotification?.subject || "");
   const [content, setContent] = useState(editingNotification?.content || "");
+  const [scheduledFor, setScheduledFor] = useState(
+    editingNotification?.scheduledFor ? formatSchoolWallTimeLocal(editingNotification.scheduledFor) : "",
+  );
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
@@ -715,7 +742,15 @@ function NotificationComposeDialog({
     setTargeting(buildInitialTargeting());
     setSubject(editingNotification?.subject || "");
     setContent(editingNotification?.content || "");
+    setScheduledFor(
+      editingNotification?.scheduledFor ? formatSchoolWallTimeLocal(editingNotification.scheduledFor) : "",
+    );
   }, [editingNotification]);
+
+  useEffect(() => {
+    if (!isOpen || editingNotification) return;
+    setScheduledFor("");
+  }, [isOpen, editingNotification]);
 
   // Debounced recipient count preview
   useEffect(() => {
@@ -770,6 +805,7 @@ function NotificationComposeDialog({
       roles: selectedRoles,
       locationIds: selectedLocations,
       classIds: selectedClasses,
+      ...(scheduledFor.trim() ? { scheduledFor: scheduledFor.trim() } : {}),
     };
   };
 
@@ -857,8 +893,17 @@ function NotificationComposeDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label>Schedule For (Optional)</Label>
-              <Input type="datetime-local" style={{ fontSize: "16px" }} />
+              <Label htmlFor="scheduledFor">Schedule For (Optional)</Label>
+              <Input
+                id="scheduledFor"
+                type="datetime-local"
+                value={scheduledFor}
+                onChange={(e) => setScheduledFor(e.target.value)}
+                style={{ fontSize: "16px" }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave blank to send now. A time here is Eastern Time and is delivered then, not immediately.
+              </p>
             </div>
           </div>
 
@@ -906,7 +951,13 @@ function NotificationComposeDialog({
             </>
           ) : (
             <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Sending..." : "Send Notification"}
+              {isLoading
+                ? scheduledFor.trim()
+                  ? "Scheduling..."
+                  : "Sending..."
+                : scheduledFor.trim()
+                  ? "Schedule Notification"
+                  : "Send Notification"}
             </Button>
           )}
         </DialogFooter>

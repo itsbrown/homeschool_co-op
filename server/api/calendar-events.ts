@@ -8,6 +8,7 @@ import { filterEventsForCampuses } from "../lib/calendar-ics";
 import { resolveParentCalendarScope } from "../lib/parent-calendar-scope";
 import { ensureFamilyCalendarSchema } from "../lib/ensure-family-calendar-schema";
 import { buildIcsCalendar } from "../lib/calendar-ics";
+import { parseSchoolWallTime } from "@shared/school-timezone";
 
 const router = Router();
 
@@ -33,6 +34,16 @@ function parseLocationId(raw: unknown): number | null {
 /** requireSchoolContext injects schoolId as a string. */
 function parseSchoolId(req: { schoolId?: string | number }): number {
   return Number(req.schoolId);
+}
+
+/**
+ * Datetime-local values are Eastern wall time. Strings that already include
+ * `Z` or an offset stay that instant, so a save that does not change the
+ * clock does not shift the event.
+ */
+function parseEventInstant(value: unknown): Date {
+  if (value instanceof Date) return parseSchoolWallTime(value);
+  return parseSchoolWallTime(String(value));
 }
 
 async function ensureSchema(_req: any, _res: Response, next: () => void) {
@@ -115,10 +126,19 @@ router.post(
         return res.status(401).json({ message: "User not authenticated" });
       }
 
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+      try {
+        if (req.body.startDate) startDate = parseEventInstant(req.body.startDate);
+        if (req.body.endDate) endDate = parseEventInstant(req.body.endDate);
+      } catch {
+        return res.status(400).json({ message: "Invalid event date" });
+      }
+
       const parsed = insertEventSchema.safeParse({
         ...req.body,
-        startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
-        endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
+        startDate,
+        endDate,
         schoolId: parseSchoolId(req),
         locationId: parseLocationId(req.body.locationId),
         isAllDay: Boolean(req.body.isAllDay),
@@ -179,8 +199,12 @@ router.patch(
       }
 
       const updateData: Partial<InsertEvent> = { ...req.body };
-      if (req.body.startDate) updateData.startDate = new Date(req.body.startDate);
-      if (req.body.endDate) updateData.endDate = new Date(req.body.endDate);
+      try {
+        if (req.body.startDate) updateData.startDate = parseEventInstant(req.body.startDate);
+        if (req.body.endDate) updateData.endDate = parseEventInstant(req.body.endDate);
+      } catch {
+        return res.status(400).json({ message: "Invalid event date" });
+      }
       if (req.body.locationId !== undefined) {
         updateData.locationId = parseLocationId(req.body.locationId);
       }

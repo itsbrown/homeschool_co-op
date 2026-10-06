@@ -7,6 +7,7 @@ import * as brevo from '@getbrevo/brevo';
 import { getUserIdsWithLabelsAtSchool } from '../lib/user-labels';
 import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
 import { excludeInactiveUserIds } from '../lib/active-notification-recipients';
+import { isFutureSchedule, parseSchoolWallTime, shouldDeliverNotification } from '@shared/school-timezone';
 
 const router = express.Router();
 
@@ -133,6 +134,13 @@ async function resolveCombinedRecipientIds(
   return excludeInactiveUserIds([...ids].filter((id) => id > 0));
 }
 
+/** Naive `datetime-local` strings are school wall time. Offset/Z strings stay absolute. */
+function readScheduledFor(value: unknown): Date | null {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) return parseSchoolWallTime(value);
+  return parseSchoolWallTime(String(value));
+}
+
 function normalizeCombinedDeliveryType(raw: unknown): "email" | "in_app" | "sms" | "both" | "all" {
   const t = String(raw ?? "both").toLowerCase();
   if (t === "email" || t === "in_app" || t === "sms" || t === "both" || t === "all") return t;
@@ -174,6 +182,7 @@ router.post("/", async (req: any, res) => {
             ? "sms"
             : "in_app";
 
+    const scheduledAt = readScheduledFor(scheduledFor);
     const notification = await storage.createNotification({
       senderId: req.user?.id || req.session?.userId || 1,
       type: normalizedType as any,
@@ -182,9 +191,9 @@ router.post("/", async (req: any, res) => {
       content: message,
       targetType: "individual" as const,
       targetData: { userIds: [Number(userId)] } as any,
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+      scheduledFor: scheduledAt,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
-      status: scheduledFor ? "scheduled" : "pending",
+      status: isFutureSchedule(scheduledAt) ? "scheduled" : "pending",
     } as any);
 
     await processNotification(notification);
@@ -393,6 +402,16 @@ router.post("/send-combined", async (req: any, res) => {
       return res.status(400).json({ message: "No recipients match the selected targeting" });
     }
 
+    let scheduledAt: Date | null = null;
+    if (scheduledFor != null && scheduledFor !== "") {
+      try {
+        scheduledAt = readScheduledFor(scheduledFor);
+      } catch {
+        return res.status(400).json({ message: "Invalid schedule time" });
+      }
+    }
+    const defer = isFutureSchedule(scheduledAt);
+
     const deliveryType = normalizeCombinedDeliveryType(type);
     const notification = await storage.createNotification({
       senderId,
@@ -402,16 +421,20 @@ router.post("/send-combined", async (req: any, res) => {
       content,
       targetType: "individual" as const,
       targetData: { userIds: recipientIds } as any,
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-      status: scheduledFor ? "scheduled" : "sending",
+      scheduledFor: scheduledAt,
+      status: defer ? "scheduled" : "sending",
+      deliveryStats: { totalRecipients: recipientIds.length },
     } as any);
 
-    await processNotification(notification);
+    if (!defer) {
+      await processNotification(notification);
+    }
 
     return res.status(201).json({
       id: notification.id,
       recipientCount: recipientIds.length,
-      status: notification.status || "sent",
+      status: defer ? "scheduled" : "sent",
+      scheduledFor: scheduledAt ? scheduledAt.toISOString() : null,
     });
   } catch (error) {
     console.error("Error sending combined notification:", error);
@@ -545,6 +568,8 @@ router.post("/broadcast", async (req: any, res) => {
       }
     }
 
+    const scheduledAt = readScheduledFor(scheduledFor);
+    const defer = isFutureSchedule(scheduledAt);
     let sentCount = 0;
     for (const uid of recipientIds) {
       const n = await storage.createNotification({
@@ -555,8 +580,8 @@ router.post("/broadcast", async (req: any, res) => {
         content: message,
         targetType: "individual" as const,
         targetData: { userIds: [uid] } as any,
-        scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-        status: scheduledFor ? "scheduled" : "pending",
+        scheduledFor: scheduledAt,
+        status: defer ? "scheduled" : "pending",
       } as any);
       await processNotification(n);
       sentCount += 1;
@@ -575,8 +600,8 @@ router.post("/broadcast", async (req: any, res) => {
       sentCount,
       locationsSent: requestedLocationIds,
       notification: {
-        scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-        status: scheduledFor ? "scheduled" : "sent",
+        scheduledFor: scheduledAt,
+        status: defer ? "scheduled" : "sent",
       },
     });
   } catch (error) {
@@ -634,7 +659,8 @@ router.post("/send-individual", async (req, res) => {
       content,
       targetType: "individual" as const,
       targetData: { userIds },
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+      scheduledFor: readScheduledFor(scheduledFor),
+      ...(isFutureSchedule(readScheduledFor(scheduledFor)) ? { status: "scheduled" as const } : {}),
     };
 
     const notification = await storage.createNotification(notificationData);
@@ -665,7 +691,8 @@ router.post("/send-by-role", async (req, res) => {
       content,
       targetType: "role" as const,
       targetData: { roles, locationIds },
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+      scheduledFor: readScheduledFor(scheduledFor),
+      ...(isFutureSchedule(readScheduledFor(scheduledFor)) ? { status: "scheduled" as const } : {}),
     };
 
     const notification = await storage.createNotification(notificationData);
@@ -695,7 +722,8 @@ router.post("/send-by-location", async (req, res) => {
       content,
       targetType: "location" as const,
       targetData: { locationIds, roles: includeRoles },
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+      scheduledFor: readScheduledFor(scheduledFor),
+      ...(isFutureSchedule(readScheduledFor(scheduledFor)) ? { status: "scheduled" as const } : {}),
     };
 
     const notification = await storage.createNotification(notificationData);
@@ -721,7 +749,8 @@ router.post("/send-all", async (req, res) => {
       content,
       targetType: "all" as const,
       targetData: {},
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
+      scheduledFor: readScheduledFor(scheduledFor),
+      ...(isFutureSchedule(readScheduledFor(scheduledFor)) ? { status: "scheduled" as const } : {}),
     };
 
     const notification = await storage.createNotification(notificationData);
@@ -846,8 +875,16 @@ router.post("/:id/resend", async (req: any, res) => {
   }
 });
 
+export async function deliverNotification(notification: any): Promise<void> {
+  return processNotification(notification);
+}
+
 async function processNotification(notification: any): Promise<void> {
   try {
+    if (!shouldDeliverNotification(notification ?? {})) {
+      return;
+    }
+
     const recipients = await resolveNotificationRecipients(notification);
     
     const recipientRecords = [];

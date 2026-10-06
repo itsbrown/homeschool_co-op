@@ -17,6 +17,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, CalendarDays, ChevronLeft, ChevronRight, Edit, Trash2, Clock, Download, FileText } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths } from 'date-fns';
+import { formatSchoolDateTime, formatSchoolLongDate, formatSchoolWallTimeLocal } from '@shared/school-timezone';
 import SchoolAdminLayout from '@/components/layout/SchoolAdminLayout';
 
 interface CalendarEvent {
@@ -288,8 +289,8 @@ export default function CalendarPage() {
     form.reset({
       title: selectedEvent.title,
       description: selectedEvent.description || '',
-      startDate: format(new Date(selectedEvent.startDate), "yyyy-MM-dd'T'HH:mm"),
-      endDate: format(new Date(selectedEvent.endDate), "yyyy-MM-dd'T'HH:mm"),
+      startDate: formatSchoolWallTimeLocal(selectedEvent.startDate),
+      endDate: formatSchoolWallTimeLocal(selectedEvent.endDate),
       eventType: selectedEvent.eventType,
       isAllDay: selectedEvent.isAllDay,
       location: selectedEvent.location || '',
@@ -454,6 +455,7 @@ export default function CalendarPage() {
                     )}
                   />
                 </div>
+                <p className="text-xs text-muted-foreground -mt-2">Times are Eastern Time. Saving without changing them keeps the same clock time.</p>
                 <FormField
                   control={form.control}
                   name="locationId"
@@ -605,10 +607,10 @@ export default function CalendarPage() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock className="h-4 w-4" />
                 {selectedEvent.isAllDay ? (
-                  <span>All day on {format(new Date(selectedEvent.startDate), 'MMMM d, yyyy')}</span>
+                  <span>All day on {formatSchoolLongDate(selectedEvent.startDate)}</span>
                 ) : (
                   <span>
-                    {format(new Date(selectedEvent.startDate), 'MMM d, yyyy h:mm a')} - {format(new Date(selectedEvent.endDate), 'MMM d, yyyy h:mm a')}
+                    {formatSchoolDateTime(selectedEvent.startDate)} – {formatSchoolDateTime(selectedEvent.endDate)}
                   </span>
                 )}
               </div>
