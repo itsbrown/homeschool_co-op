@@ -88,7 +88,7 @@ export function registerLockedAccountRoutes(app: Express): void {
 
   app.get("/api/admin/backups", ...requireSuperAdmin, async (_req, res) => {
     try {
-      const { backupService } = await import("../services/backupService.js");
+      const { backupService } = await import("../services/backupService");
       const backups = await backupService.listBackups();
       res.json(backups);
     } catch (error) {
@@ -99,7 +99,7 @@ export function registerLockedAccountRoutes(app: Express): void {
 
   app.post("/api/admin/backups/create", ...requireSuperAdmin, async (_req, res) => {
     try {
-      const { backupService } = await import("../services/backupService.js");
+      const { backupService } = await import("../services/backupService");
       await backupService.performBackup();
       res.json({ success: true, message: "Backup created successfully" });
     } catch (error) {
@@ -110,7 +110,7 @@ export function registerLockedAccountRoutes(app: Express): void {
 
   app.post("/api/admin/backups/restore/:timestamp", ...requireSuperAdmin, async (req, res) => {
     try {
-      const { backupService } = await import("../services/backupService.js");
+      const { backupService } = await import("../services/backupService");
       const { timestamp } = req.params;
       const result = await backupService.restoreBackup(timestamp);
 

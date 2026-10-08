@@ -4,6 +4,17 @@ import { z } from "zod";
 import * as brevo from '@getbrevo/brevo';
 import { supabaseStorage } from "../supabase-storage";
 import { storage } from "../storage";
+import { getDb } from "../db";
+import { schoolApplications } from "@shared/schema";
+import { desc } from "drizzle-orm";
+
+async function listSchoolApplications() {
+  const database = await getDb();
+  return database
+    .select()
+    .from(schoolApplications)
+    .orderBy(desc(schoolApplications.submittedAt));
+}
 import { getBrevoApiInstance, logEmailAttempt } from "../lib/email-service";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { requireRole } from "../middleware/auth0-auth";
@@ -302,7 +313,7 @@ router.post("/", async (req, res) => {
 // Get all applications (Super Admin only)
 router.get("/", ...superAdminOnly, async (req, res) => {
   try {
-    const applications = await storage.getAllSchoolApplications();
+    const applications = await listSchoolApplications();
     
     // Don't expose sensitive information like tokens
     const sanitizedApplications = applications.map(app => {
@@ -414,7 +425,7 @@ router.post("/check-status", supabaseAuth, async (req: any, res) => {
       return res.status(403).json({ message: "Insufficient permissions" });
     }
 
-    const allApplications = await storage.getAllSchoolApplications();
+    const allApplications = await listSchoolApplications();
     const userApplications = allApplications
       .filter(app => emailsMatch(app.adminEmail, email))
       .map(app => publicApplicationStatus(app))
