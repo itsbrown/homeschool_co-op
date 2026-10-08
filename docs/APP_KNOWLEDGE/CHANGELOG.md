@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-10-08 (Public page titles and sitemap)
+
+- Store, store item (including events), public form, and school registration HTML is rewritten in `server/vite.ts` before it is sent. `og:url` uses `https://accounts.americanseekersacademy.com`. `og:image` is the school logo when it is a public path, otherwise `/og-default.png`.
+- `GET /robots.txt` disallows private app routes. `GET /sitemap.xml` lists public stores and published catalog items (events included). No migration.
+
 ## 2026-10-08 (Route lockdown and tracked PII)
 
 - Child, school roster, debug, backup, migration, payment-import, and admin role-invitation routes now require the matching role. School staff are scoped with `schools.admin_id` / staff `user_roles`, not a stale `users.school_id`. Public school-code signup stays anonymous and does not mint a registration code.
