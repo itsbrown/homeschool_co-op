@@ -1,10 +1,7 @@
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
@@ -13,10 +10,8 @@ import {
   Minus, 
   Calendar,
   Loader2,
-  Check,
   Package
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
 interface StoreProduct {
@@ -62,42 +57,11 @@ interface FundraiserStorePageProps {
 }
 
 export default function FundraiserStorePage({ campaignId, familySlug }: FundraiserStorePageProps) {
-  const { toast } = useToast();
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [checkoutForm, setCheckoutForm] = useState({
-    customerName: '',
-    customerEmail: '',
-    customerPhone: '',
-  });
 
   const { data: storeData, isLoading, error } = useQuery<StoreData>({
     queryKey: ['/api/fundraisers/store', campaignId, familySlug],
     retry: false,
-  });
-
-  const checkoutMutation = useMutation({
-    mutationFn: async (data: { 
-      campaignId: number;
-      familyLinkId: number;
-      customer: typeof checkoutForm;
-      items: CartItem[];
-    }) => {
-      return apiRequest('POST', '/api/fundraisers/checkout', data);
-    },
-    onSuccess: async (response) => {
-      const data = await response.json();
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-      }
-    },
-    onError: (error: any) => {
-      toast({ 
-        title: 'Checkout failed', 
-        description: error.message || 'Please try again',
-        variant: 'destructive' 
-      });
-    },
   });
 
   function addToCart(product: StoreProduct) {
@@ -139,26 +103,6 @@ export default function FundraiserStorePage({ campaignId, familySlug }: Fundrais
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.priceCents * item.quantity), 0);
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  function handleCheckout() {
-    if (!storeData) return;
-    
-    if (!checkoutForm.customerName || !checkoutForm.customerEmail) {
-      toast({ 
-        title: 'Please fill in your information', 
-        description: 'Name and email are required',
-        variant: 'destructive' 
-      });
-      return;
-    }
-    
-    checkoutMutation.mutate({
-      campaignId: parseInt(campaignId),
-      familyLinkId: storeData.seller.familyLinkId,
-      customer: checkoutForm,
-      items: cart,
-    });
-  }
 
   if (isLoading) {
     return (
@@ -314,77 +258,9 @@ export default function FundraiserStorePage({ campaignId, familySlug }: Fundrais
                       <span data-testid="cart-total">{formatCents(cartTotal)}</span>
                     </div>
 
-                    {!isCheckingOut ? (
-                      <Button 
-                        className="w-full mt-4" 
-                        onClick={() => setIsCheckingOut(true)}
-                        data-testid="button-checkout"
-                      >
-                        Proceed to Checkout
-                      </Button>
-                    ) : (
-                      <div className="mt-4 space-y-3">
-                        <Separator />
-                        <h3 className="font-medium">Your Information</h3>
-                        <div>
-                          <Label htmlFor="customer-name">Name *</Label>
-                          <Input
-                            id="customer-name"
-                            value={checkoutForm.customerName}
-                            onChange={(e) => setCheckoutForm({ ...checkoutForm, customerName: e.target.value })}
-                            placeholder="Your name"
-                            data-testid="input-customer-name"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="customer-email">Email *</Label>
-                          <Input
-                            id="customer-email"
-                            type="email"
-                            value={checkoutForm.customerEmail}
-                            onChange={(e) => setCheckoutForm({ ...checkoutForm, customerEmail: e.target.value })}
-                            placeholder="your@email.com"
-                            data-testid="input-customer-email"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="customer-phone">Phone (optional)</Label>
-                          <Input
-                            id="customer-phone"
-                            type="tel"
-                            value={checkoutForm.customerPhone}
-                            onChange={(e) => setCheckoutForm({ ...checkoutForm, customerPhone: e.target.value })}
-                            placeholder="(555) 123-4567"
-                            data-testid="input-customer-phone"
-                          />
-                        </div>
-                        <Button 
-                          className="w-full" 
-                          onClick={handleCheckout}
-                          disabled={checkoutMutation.isPending}
-                          data-testid="button-complete-purchase"
-                        >
-                          {checkoutMutation.isPending ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Processing...
-                            </>
-                          ) : (
-                            <>
-                              <Check className="h-4 w-4 mr-2" />
-                              Complete Purchase
-                            </>
-                          )}
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          className="w-full"
-                          onClick={() => setIsCheckingOut(false)}
-                        >
-                          Back to Cart
-                        </Button>
-                      </div>
-                    )}
+                    <p className="mt-4 text-sm text-muted-foreground" data-testid="fundraiser-checkout-unavailable">
+                      Checkout is turned off. A card payment did not create an order, so new purchases are not accepted.
+                    </p>
                   </>
                 )}
               </CardContent>

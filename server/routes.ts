@@ -3322,6 +3322,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // School Applications route
   const schoolApplicationsRouter = await import("./api/school-applications");
   app.use("/api/school-applications", schoolApplicationsRouter.default);
+  const platformSubscriptionsRouter = (await import("./api/platform-subscriptions")).default;
+  app.use("/api/platform-subscriptions", platformSubscriptionsRouter);
 
   // Student registration endpoint for school admins
   app.post("/api/students/register", supabaseAuth, async (req: any, res) => {

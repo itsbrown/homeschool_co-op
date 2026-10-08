@@ -637,6 +637,15 @@ router.post('/memberships/checkout', jwtCheck, async (req: any, res) => {
       });
     }
 
+    const { familyChargeDecision } = await import('../lib/platform-school-billing');
+    const familyCharges = await familyChargeDecision(school.id);
+    if (!familyCharges.allowed) {
+      return res.status(403).json({
+        message: familyCharges.message,
+        error: 'FAMILY_PAYMENTS_GATED',
+      });
+    }
+
     // Get membership fee amount (in cents)
     const membershipFeeAmount = school.membershipFeeAmount || 0;
     if (membershipFeeAmount <= 0) {

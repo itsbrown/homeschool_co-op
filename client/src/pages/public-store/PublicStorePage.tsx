@@ -63,6 +63,8 @@ export default function PublicStorePage() {
     <div className="min-h-screen bg-slate-50 pb-24">
       <PublicStoreHeader
         storeName={store?.name}
+        logoUrl={(store as { logo?: string | null } | undefined)?.logo}
+        brandColor={(store as { brandColor?: string | null } | undefined)?.brandColor}
         cartCount={cartCount}
         cartTotal={cartTotal}
         cartPulse={cartPulse}

@@ -1,5 +1,12 @@
 # App knowledge changelog
 
+## 2026-10-08 (School onboarding and platform billing)
+
+- Approving a school application creates the school, registration code, and a schoolAdmin role for that school only. Existing users keep their family school. Decline requires a reason. `/schools/register` sends ordinary users to `/school-application`.
+- Platform plans live in `server/config/platform-plans.ts`. Checkout is Stripe subscription mode on `schools.platform_stripe_customer_id` (test keys only). ASA stays `internal` (unlimited, family charges on). Other plans cannot charge families until Stripe Connect. Fundraiser checkout returns 503 because payment never wrote an order.
+- SQL: `server/migrations/267-platform-schools.sql`. Apply before deploy. Drizzle `schools` selects the new columns. Never `db:push`.
+- Tenant checks: `server/tests/integration/production-path/tenant-isolation.test.ts`.
+
 ## 2026-10-08 (Route lockdown and tracked PII)
 
 - Child, school roster, debug, backup, migration, payment-import, and admin role-invitation routes now require the matching role. School staff are scoped with `schools.admin_id` / staff `user_roles`, not a stale `users.school_id`. Public school-code signup stays anonymous and does not mint a registration code.

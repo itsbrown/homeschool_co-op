@@ -16,8 +16,37 @@ import {
 } from '../lib/custom-form-submission';
 import { emptyFormPrefill } from '@shared/form-autofill';
 import { storage } from '../storage';
+import { isPlatformAdmin, staffCanAccessSchool } from '../lib/route-access';
+import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
 
 const router = Router();
+
+async function formSchoolAllowed(req: any, schoolId: number | null | undefined): Promise<boolean> {
+  if (isPlatformAdmin(req)) return true;
+  const id = Number(schoolId);
+  if (!Number.isFinite(id) || id <= 0) return false;
+  const userId = Number(req.user?.id ?? req.auth?.dbUserId);
+  if (!Number.isFinite(userId)) return false;
+  return staffCanAccessSchool(
+    {
+      user: {
+        id: userId,
+        email: req.user?.email ?? req.auth?.email,
+        role: req.user?.role ?? req.auth?.role,
+        allRoles: req.user?.allRoles,
+      },
+    },
+    id,
+  );
+}
+
+async function resolvedActingSchoolId(req: any): Promise<number | null> {
+  const userId = Number(req.user?.id ?? req.auth?.dbUserId);
+  if (!Number.isFinite(userId)) return null;
+  const user = await storage.getUser(userId);
+  if (!user) return null;
+  return resolveSchoolIdForUser(user);
+}
 
 const publicSubmitLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -397,7 +426,7 @@ router.post('/forms/:formId/apply-draft', async (req: any, res) => {
 
     const [form] = await db.select().from(customForms).where(eq(customForms.id, formId));
     if (!form) return res.status(404).json({ message: 'Form not found' });
-    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, form.schoolId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -493,7 +522,7 @@ router.get('/templates', async (req: any, res) => {
 // Get all forms for authenticated user's school (extracts schoolId from token)
 router.get('/schools/forms', async (req: any, res) => {
   try {
-    const schoolId = req.auth.schoolId;
+    const schoolId = await resolvedActingSchoolId(req);
     
     if (!schoolId) {
       return res.status(400).json({ message: 'No school associated with user' });
@@ -517,7 +546,7 @@ router.get('/schools/forms', async (req: any, res) => {
 // Create form for authenticated user's school (extracts schoolId from token)
 router.post('/schools/forms', async (req: any, res) => {
   try {
-    const schoolId = req.auth.schoolId;
+    const schoolId = await resolvedActingSchoolId(req);
     
     if (!schoolId) {
       return res.status(400).json({ message: 'No school associated with user' });
@@ -581,7 +610,7 @@ router.get('/forms/:formId', async (req: any, res) => {
     }
     
     // Check ownership
-    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, form.schoolId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -653,7 +682,7 @@ router.put('/forms/:formId', async (req: any, res) => {
     }
     
     // Check ownership - super admin can update any, school admin can update their school's forms
-    if (req.auth.role !== 'superAdmin' && existingForm.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, existingForm.schoolId))) {
       return res.status(403).json({ message: 'You do not have permission to update this form' });
     }
     
@@ -708,7 +737,7 @@ router.delete('/forms/:formId', async (req: any, res) => {
     }
     
     // Check ownership - super admin can delete any, school admin can delete their school's forms
-    if (req.auth.role !== 'superAdmin' && existingForm.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, existingForm.schoolId))) {
       return res.status(403).json({ message: 'You do not have permission to delete this form' });
     }
     
@@ -732,7 +761,7 @@ router.post('/forms/:formId/fields', async (req: any, res) => {
     // Check form ownership
     const [form] = await db.select().from(customForms).where(eq(customForms.id, formId));
     if (!form) return res.status(404).json({ message: 'Form not found' });
-    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, form.schoolId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -768,7 +797,7 @@ router.put('/fields/:fieldId', async (req: any, res) => {
     
     const [form] = await db.select({ schoolId: customForms.schoolId }).from(customForms).where(eq(customForms.id, field.formId));
     if (!form) return res.status(404).json({ message: 'Form not found' });
-    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, form.schoolId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -807,7 +836,7 @@ router.delete('/fields/:fieldId', async (req: any, res) => {
     
     const [form] = await db.select({ schoolId: customForms.schoolId }).from(customForms).where(eq(customForms.id, field.formId));
     if (!form) return res.status(404).json({ message: 'Form not found' });
-    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, form.schoolId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -832,7 +861,7 @@ router.put('/forms/:formId/fields/reorder', async (req: any, res) => {
     // Check form ownership
     const [form] = await db.select({ schoolId: customForms.schoolId }).from(customForms).where(eq(customForms.id, formId));
     if (!form) return res.status(404).json({ message: 'Form not found' });
-    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, form.schoolId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -863,7 +892,7 @@ router.get('/forms/:formId/submissions', async (req: any, res) => {
     // Check form ownership
     const [form] = await db.select({ schoolId: customForms.schoolId }).from(customForms).where(eq(customForms.id, formId));
     if (!form) return res.status(404).json({ message: 'Form not found' });
-    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, form.schoolId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -892,7 +921,7 @@ router.put('/submissions/:submissionId', async (req: any, res) => {
     
     const [form] = await db.select({ schoolId: customForms.schoolId }).from(customForms).where(eq(customForms.id, submission.formId));
     if (!form) return res.status(404).json({ message: 'Form not found' });
-    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, form.schoolId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
     
@@ -939,16 +968,12 @@ router.post('/forms/:formId/clone', async (req: any, res) => {
     
     // Global templates (school 1) may be cloned into any school admin's school
     const isGlobalTemplate = originalForm.isTemplate;
-    if (
-      req.auth.role !== 'superAdmin' &&
-      !isGlobalTemplate &&
-      originalForm.schoolId !== req.auth.schoolId
-    ) {
+    if (!isGlobalTemplate && !(await formSchoolAllowed(req, originalForm.schoolId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const targetSchoolId = req.auth.schoolId;
-    if (!targetSchoolId && req.auth.role !== 'superAdmin') {
+    const targetSchoolId = await resolvedActingSchoolId(req);
+    if (!targetSchoolId && !isPlatformAdmin(req)) {
       return res.status(400).json({ message: 'No school associated with user' });
     }
     
@@ -1028,7 +1053,7 @@ router.get('/submissions/:submissionId/files/:fieldId', async (req: any, res) =>
       return res.status(404).json({ message: 'Form not found' });
     }
 
-    if (req.auth.role !== 'superAdmin' && form.schoolId !== req.auth.schoolId) {
+    if (!(await formSchoolAllowed(req, form.schoolId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
 

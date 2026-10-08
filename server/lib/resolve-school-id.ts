@@ -97,7 +97,9 @@ export async function getAssignableSchoolsForUser(user: User): Promise<Assignabl
     }
   }
 
-  if (user.schoolId != null && user.schoolId > 0) {
+  // A stale users.school_id must not add a second school when this user already
+  // administers one through schools.admin_id or a schoolAdmin role row.
+  if (byId.size === 0 && user.schoolId != null && user.schoolId > 0) {
     const legacy = await getSchoolCoreById(user.schoolId);
     if (legacy) {
       add(legacy.id, legacy.name);

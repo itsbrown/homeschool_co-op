@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth0";
+import { useRole } from "@/contexts/RoleContext";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -38,39 +39,37 @@ type SchoolFormValues = z.infer<typeof schoolFormSchema>;
 
 export default function SchoolRegistrationPage() {
   const { user, isLoading } = useAuth();
+  const { activeRole, allRoles, isLoadingRoles } = useRole();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const platformRoles = [activeRole, ...(allRoles || []), (user as { role?: string } | null)?.role].filter(Boolean);
+  const isPlatformAdmin = platformRoles.some((role) => role === "superAdmin" || role === "admin");
 
-  // Redirect if user is not logged in
+  // Ordinary visitors apply. Only platform admins can create a school directly.
   useEffect(() => {
-    if (!isLoading && !user) {
-      toast({
-        title: "Authentication required",
-        description: "Please log in to register a school.",
-      });
-      setTimeout(() => {
-        setLocation("/login");
-      }, 0);
+    if (isLoading || (user && isLoadingRoles)) return;
+    if (!isPlatformAdmin) {
+      setLocation("/school-application");
     }
-  }, [isLoading, user, toast, setLocation]);
+  }, [isLoading, isLoadingRoles, user, isPlatformAdmin, setLocation]);
 
   const form = useForm<SchoolFormValues>({
     resolver: zodResolver(schoolFormSchema),
     defaultValues: {
-      name: "American Seekers Academy",
+      name: "",
       type: "co-op",
       address: "",
-      city: "Rochester",
-      state: "NY",
-      zipCode: "14618",
+      city: "",
+      state: "",
+      zipCode: "",
       phoneNumber: "",
-      email: "info@americanseekersacademy.org",
-      website: "https://americanseekersacademy.org",
-      description: "American Seekers Academy (ASA) is a private, drop-off homeschool cooperative designed by homeschooling parents to provide a classical education rooted in the Trivium and Quadrivium. Inspired by Hillsdale Academy, ASA offers a structured, 10-week program for grades K-12, emphasizing liberty, capitalism, and American values through vetted curricula from sources like Hillsdale College, Tuttle Twins, and PragerU Kids. Open to all faiths, it integrates the role of the Creator in America's founding without teaching religious doctrine. ASA fosters civic virtue, academic excellence, and personal responsibility, operating as a Private Membership Association to ensure parental rights and privacy. Classes are held Monday, Wednesday, and Friday, focusing on literacy, history, financial literacy, and the arts, cultivating confident, well-rounded students prepared for intellectual and personal growth.",
-      foundedYear: 2025,
-      accreditation: "Private Membership Association",
-      enrollmentSize: 75,
+      email: "",
+      website: null,
+      description: "",
+      foundedYear: null,
+      accreditation: "",
+      enrollmentSize: null,
     },
   });
 

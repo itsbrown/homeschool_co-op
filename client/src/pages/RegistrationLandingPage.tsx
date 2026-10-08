@@ -252,7 +252,7 @@ export default function RegistrationLandingPage() {
             );
 
             toast({
-              title: "Welcome to American Seekers Academy!",
+              title: school?.name ? `Welcome to ${school.name}!` : "Welcome!",
               description:
                 childCount > 0
                   ? `Your profile and ${childCount} student profile${childCount === 1 ? "" : "s"} are saved. Heading to your dashboard…`
@@ -375,10 +375,10 @@ export default function RegistrationLandingPage() {
           ) : (
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                Fall 2025 Registration
+                School registration
               </h1>
               <p className="text-xl text-gray-600 mb-2">
-                American Seekers Academy - Brighton Location
+                Loading this school
               </p>
               <p className="text-lg text-gray-500">
                 Register your child for our classical education program

@@ -16,6 +16,7 @@ async function listSchoolApplications() {
     .orderBy(desc(schoolApplications.submittedAt));
 }
 import { getBrevoApiInstance, logEmailAttempt } from "../lib/email-service";
+import { provisionApprovedSchool } from "../lib/provision-approved-school";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { requireRole } from "../middleware/auth0-auth";
 import { emailsMatch } from "@shared/parent-identity";
@@ -181,7 +182,13 @@ async function sendApplicationConfirmationEmail(email: string, schoolName: strin
 }
 
 // Send application decision email
-async function sendApplicationDecisionEmail(email: string, schoolName: string, approved: boolean, reason?: string): Promise<boolean> {
+async function sendApplicationDecisionEmail(
+  email: string,
+  schoolName: string,
+  approved: boolean,
+  reason?: string,
+  extras?: { registrationCode?: string; createdUser?: boolean; inviteSent?: boolean },
+): Promise<boolean> {
   try {
     if (!brevoApiInstance) {
       console.log('📧 Brevo not configured, skipping decision email');
@@ -207,7 +214,10 @@ async function sendApplicationDecisionEmail(email: string, schoolName: string, a
           ${approved ? `
             <div style="background-color: #F0FDF4; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10B981;">
               <h3 style="margin: 0 0 8px 0; color: #059669;">Congratulations! Your application has been approved.</h3>
-              <p style="margin: 0;">You will receive a separate email with your platform access credentials and setup instructions within the next 24 hours.</p>
+              <p style="margin: 0;">Sign in and open School setup to add a campus, a term, classes, and staff.</p>
+              ${extras?.registrationCode ? `<p style="margin: 8px 0 0 0;"><strong>Family registration code:</strong> ${extras.registrationCode}</p>` : ''}
+              ${extras?.createdUser && !extras?.inviteSent ? `<p style="margin: 8px 0 0 0;">We could not send the sign-in email. Ask the platform admin to resend the account invite.</p>` : ''}
+              ${extras?.createdUser === false ? `<p style="margin: 8px 0 0 0;">Use your existing sign-in. The school admin role is on this new school only.</p>` : ''}
             </div>
           ` : `
             <div style="background-color: #FEF2F2; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #EF4444;">
@@ -348,10 +358,11 @@ router.get("/:id", ...superAdminOnly, async (req, res) => {
 });
 
 // Update application status (Super Admin only)
-router.patch("/:id/status", ...superAdminOnly, async (req, res) => {
+router.patch("/:id/status", ...superAdminOnly, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { status, reviewNotes, reviewerEmail } = req.body;
+    const { status, reviewNotes } = req.body;
+    const reviewerEmail = req.user?.email || 'superAdmin';
 
     if (!['approved', 'declined', 'under_review'].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
@@ -363,43 +374,55 @@ router.patch("/:id/status", ...superAdminOnly, async (req, res) => {
       return res.status(404).json({ message: "Application not found" });
     }
 
-    const previousStatus = application.status;
+    const reason = typeof reviewNotes === 'string' ? reviewNotes.trim() : '';
+    if (status === 'declined' && reason.length < 3) {
+      return res.status(400).json({ message: "A rejection reason is required" });
+    }
 
-    // Update application
+    const previousStatus = application.status;
+    let provision: Awaited<ReturnType<typeof provisionApprovedSchool>> | null = null;
+
+    if (status === 'approved' && previousStatus !== 'approved') {
+      provision = await provisionApprovedSchool(application);
+    }
+
     const updatedApplication = await storage.updateSchoolApplicationStatus(
       id,
       status,
-      reviewerEmail || 'admin',
-      reviewNotes || undefined
+      reviewerEmail,
+      reason || undefined,
+      {
+        schoolId: provision?.schoolId,
+        rejectionReason: status === 'declined' ? reason : null,
+      },
     );
 
-    // Send decision email if status changed to approved/declined
+    let emailSent = false;
     if (previousStatus !== status && ['approved', 'declined'].includes(status)) {
-      const emailSent = await sendApplicationDecisionEmail(
+      emailSent = await sendApplicationDecisionEmail(
         application.adminEmail,
         application.schoolName,
         status === 'approved',
-        reviewNotes
+        reason || undefined,
+        provision
+          ? {
+              registrationCode: provision.registrationCode,
+              createdUser: provision.createdUser,
+              inviteSent: provision.inviteSent,
+            }
+          : undefined,
       );
-
-      // If approved, create school admin invitation
-      if (status === 'approved') {
-        try {
-          // Import the role invitation creation
-          const roleInvitations = await import('./role-invitations');
-          // This would create an invitation for the school admin role
-          console.log(`🎓 Application approved for ${application.schoolName} - school admin invitation should be created`);
-        } catch (error) {
-          console.error('Error creating school admin invitation:', error);
-        }
-      }
     }
 
     console.log(`📋 Application ${id} status updated to ${status} by ${reviewerEmail}`);
 
     res.json({
       message: "Application status updated successfully",
-      application: updatedApplication
+      application: updatedApplication,
+      emailSent,
+      schoolId: provision?.schoolId ?? updatedApplication?.schoolId ?? null,
+      registrationCode: provision?.registrationCode ?? null,
+      inviteSent: provision?.inviteSent ?? false,
     });
   } catch (error) {
     console.error("Error updating application status:", error);

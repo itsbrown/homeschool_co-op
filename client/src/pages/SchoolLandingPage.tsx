@@ -37,6 +37,7 @@ interface School {
   foundedYear?: number;
   registrationCode: string;
   status: string;
+  logo?: string | null;
 }
 
 export default function SchoolLandingPage() {
@@ -123,6 +124,9 @@ export default function SchoolLandingPage() {
       <div className="bg-gradient-to-r from-primary to-primary/80 text-white py-16">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
+            {school.logo ? (
+              <img src={school.logo} alt="" className="mx-auto mb-4 h-16 w-16 rounded bg-white object-contain" />
+            ) : null}
             <h1 className="text-4xl md:text-5xl font-bold mb-4">
               Welcome to {school.name}
             </h1>

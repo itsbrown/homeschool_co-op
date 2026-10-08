@@ -475,11 +475,18 @@ router.get('/all', supabaseAuth, async (req: any, res) => {
       });
     }
     
+    const { isPlatformAdmin, schoolsVisibleToStaff, requestRoleNames } = await import('../lib/route-access');
     const payments = await storage.getAllPayments();
-    
+    const visible = isPlatformAdmin(req)
+      ? null
+      : new Set(await schoolsVisibleToStaff(user, requestRoleNames(req)));
+    const scoped = visible
+      ? payments.filter((payment: any) => payment.schoolId != null && visible.has(Number(payment.schoolId)))
+      : payments;
+
     res.json({
       success: true,
-      payments: payments.map((payment: any) => ({
+      payments: scoped.map((payment: any) => ({
         id: payment.id,
         parentEmail: payment.parentEmail,
         amount: CurrencyUtils.toDisplay(payment.amount || 0),
@@ -524,6 +531,14 @@ router.get('/:paymentId', supabaseAuth, async (req: any, res) => {
       return res.status(404).json({
         success: false,
         error: 'Payment not found'
+      });
+    }
+
+    const { isPlatformAdmin, staffCanAccessSchool } = await import('../lib/route-access');
+    if (!isPlatformAdmin(req) && !(await staffCanAccessSchool(req, (payment as any).schoolId))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Insufficient permissions',
       });
     }
 

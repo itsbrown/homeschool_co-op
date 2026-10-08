@@ -251,6 +251,8 @@ const SchoolDetailsPage = lazy(() => import("./pages/superadmin/SchoolDetailsPag
 const SuperAdminSchoolEditPage = lazy(() => import("./pages/superadmin/SchoolEditPage"));
 const InvitationsPage = lazy(() => import("./pages/superadmin/InvitationsPage"));
 const SchoolApplicationsPage = lazy(() => import('./pages/superadmin/SchoolApplicationsPage'));
+const SchoolSetupWizardPage = lazy(() => import('./pages/schools/SchoolSetupWizardPage'));
+const SchoolPlatformBillingPage = lazy(() => import('./pages/schools/SchoolPlatformBillingPage'));
 const SchoolApplicationPage = lazy(() => import('./pages/SchoolApplicationPage'));
 const SchoolApplicationSuccessPage = lazy(() => import('./pages/SchoolApplicationSuccessPage'));
 const SchoolApplicationStatusPage = lazy(() => import('./pages/SchoolApplicationStatusPage'));
@@ -490,7 +492,8 @@ function Router() {
       pathname.startsWith('/forms/') ||
       pathname.startsWith('/qr/') ||
       pathname.startsWith('/store/') ||
-      pathname.startsWith('/fundraiser/');
+      pathname.startsWith('/fundraiser/') ||
+      pathname.startsWith('/school-application');
     if (!isAuthenticated && !isLoading && !onAuthOrPublicPath) {
       console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
       setLocation(loginPathWithReturnTo(pathname));
@@ -745,6 +748,8 @@ function Router() {
       <Route path="/dashboard" component={DashboardRouter} />
 
       {/* School/Co-op registration routes */}
+      <Route path="/schools/setup" component={SchoolSetupWizardPage} />
+      <Route path="/schools/billing" component={SchoolPlatformBillingPage} />
       <Route path="/schools/register" component={SchoolRegistrationPage} />
       <Route path="/schools/register/confirm" component={SchoolRegistrationConfirmationPage} />
 

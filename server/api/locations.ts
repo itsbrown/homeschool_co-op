@@ -221,6 +221,21 @@ router.post("/", requireSchoolContext, async (req: any, res) => {
 
     console.log(`✅ Creating location for school ${school.name} (ID: ${school.id})`);
 
+    const { assertCampusCapacity } = await import('../lib/platform-school-billing');
+    const { PlanLimitError } = await import('../config/platform-plans');
+    try {
+      await assertCampusCapacity(numericSchoolId);
+    } catch (limitError) {
+      if (limitError instanceof PlanLimitError) {
+        return res.status(403).json({
+          code: limitError.code,
+          message: limitError.message,
+          upgradePath: limitError.upgradePath,
+        });
+      }
+      console.warn('Campus plan limit check skipped:', limitError);
+    }
+
     const { schoolId: _clientSchoolId, isActive: _clientIsActive, ...bodyWithoutSchoolId } =
       req.body ?? {};
     const nameForCode =

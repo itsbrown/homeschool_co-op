@@ -101,7 +101,6 @@ export default function SchoolApplicationsPage() {
       const response = await apiRequest("PATCH", `/api/school-applications/${id}/status`, {
         status,
         reviewNotes,
-        reviewerEmail: "super-admin@asa.com" // This should come from auth context
       });
       if (!response.ok) throw new Error("Failed to update application");
       return response.json();
@@ -161,6 +160,14 @@ export default function SchoolApplicationsPage() {
 
   const submitReview = () => {
     if (!selectedApplication) return;
+    if (reviewStatus === 'declined' && reviewNotes.trim().length < 3) {
+      toast({
+        title: "Reason required",
+        description: "Enter a short reason before declining this application.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     updateApplicationMutation.mutate({
       id: selectedApplication.id,

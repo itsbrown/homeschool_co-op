@@ -75,6 +75,8 @@ export default function PublicStoreItemPage() {
       <div className="min-h-screen bg-slate-50">
         <PublicStoreHeader
           storeName={(store as { name?: string })?.name}
+          logoUrl={(store as { logo?: string | null })?.logo}
+          brandColor={(store as { brandColor?: string | null })?.brandColor}
           cartCount={cartCount}
           cartTotal={cartTotal}
           isAuthenticated={isAuthenticated}
@@ -90,6 +92,8 @@ export default function PublicStoreItemPage() {
       <div className="min-h-screen bg-slate-50">
         <PublicStoreHeader
           storeName={(store as { name?: string })?.name}
+          logoUrl={(store as { logo?: string | null })?.logo}
+          brandColor={(store as { brandColor?: string | null })?.brandColor}
           cartCount={cartCount}
           cartTotal={cartTotal}
           isAuthenticated={isAuthenticated}
@@ -109,6 +113,8 @@ export default function PublicStoreItemPage() {
     <div className="min-h-screen bg-slate-50 pb-24">
       <PublicStoreHeader
         storeName={(store as { name?: string })?.name}
+        logoUrl={(store as { logo?: string | null })?.logo}
+        brandColor={(store as { brandColor?: string | null })?.brandColor}
         cartCount={cartCount}
         cartTotal={cartTotal}
         cartPulse={cartPulse}

@@ -247,6 +247,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
     case 'checkout.session.completed':
       const session = event.data.object as Stripe.Checkout.Session;
       console.log('🛒 Checkout session completed:', session.id);
+
+      if (session.metadata?.type === 'platform_subscription') {
+        const { applyPlatformCheckoutSession } = await import('./lib/platform-school-billing');
+        await applyPlatformCheckoutSession(session);
+        break;
+      }
       
       try {
         // Get the payment intent from the session
@@ -856,9 +862,30 @@ export const webhookHandler = async (req: Request, res: Response) => {
     case 'invoice.payment_failed':
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
-    case 'customer.subscription.deleted':
+    case 'customer.subscription.deleted': {
+      const { applyPlatformSubscriptionObject, findSchoolIdByPlatformSubscription, writeSchoolPlatform } =
+        await import('./lib/platform-school-billing');
+      if (event.type.startsWith('customer.subscription.')) {
+        const handled = await applyPlatformSubscriptionObject(event.data.object as any);
+        if (handled) break;
+      }
+      if (event.type === 'invoice.payment_failed' || event.type === 'invoice.paid') {
+        const invoice = event.data.object as { subscription?: string | { id?: string } | null };
+        const subscriptionId =
+          typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
+        if (subscriptionId) {
+          const schoolId = await findSchoolIdByPlatformSubscription(subscriptionId);
+          if (schoolId) {
+            await writeSchoolPlatform(schoolId, {
+              status: event.type === 'invoice.payment_failed' ? 'past_due' : 'active',
+            });
+            break;
+          }
+        }
+      }
       await processMembershipStripeEvent(event);
       break;
+    }
 
       default:
         console.log('📦 Unhandled event type:', event.type, '- responding with 200 OK');
