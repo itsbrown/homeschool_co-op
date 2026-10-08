@@ -5,6 +5,8 @@ import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
+import { registerPublicSeoRoutes } from "./lib/public-seo-routes";
+import { injectPublicMeta } from "./lib/public-page-html";
 
 const viteLogger = createLogger();
 
@@ -20,6 +22,7 @@ export function log(message: string, source = "express") {
 }
 
 export async function setupVite(app: Express, server: Server) {
+  registerPublicSeoRoutes(app);
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
@@ -61,7 +64,7 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
-      const page = await vite.transformIndexHtml(url, template);
+      const page = await injectPublicMeta(await vite.transformIndexHtml(url, template), req.path);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
@@ -79,13 +82,20 @@ export function serveStatic(app: Express) {
     );
   }
 
+  registerPublicSeoRoutes(app);
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist (never shadow /api/*)
-  app.use("*", (req, res, next) => {
+  app.use("*", async (req, res, next) => {
     if (req.originalUrl.startsWith("/api/") || req.path.startsWith("/api/")) {
       return next();
     }
-    res.sendFile(path.resolve(distPath, "index.html"));
+    try {
+      const template = await fs.promises.readFile(path.resolve(distPath, "index.html"), "utf-8");
+      const page = await injectPublicMeta(template, req.path);
+      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+    } catch (error) {
+      next(error);
+    }
   });
 }

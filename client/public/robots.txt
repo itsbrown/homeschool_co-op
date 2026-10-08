@@ -1,0 +1,25 @@
+User-agent: *
+Allow: /store/
+Allow: /forms/
+Allow: /register/
+Allow: /school/
+Allow: /school-application
+Disallow: /api/
+Disallow: /parent
+Disallow: /schools/
+Disallow: /school-admin
+Disallow: /admin
+Disallow: /superadmin
+Disallow: /dashboard
+Disallow: /payments
+Disallow: /payment
+Disallow: /cart
+Disallow: /children
+Disallow: /educator
+Disallow: /settings
+Disallow: /notifications
+Disallow: /messages
+Disallow: /schedule
+Disallow: /login
+
+Sitemap: https://accounts.americanseekersacademy.com/sitemap.xml
