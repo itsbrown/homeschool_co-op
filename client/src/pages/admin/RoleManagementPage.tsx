@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertCircle, Plus, Send, Trash2, Users, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { apiRequest } from "@/lib/queryClient";
 
 interface RoleInvitation {
   id: number;
@@ -34,7 +35,7 @@ export default function RoleManagementPage() {
   // Get current user's role from user profile API
   const { data: currentUserProfile } = useQuery({
     queryKey: ['/api/user/profile'],
-    queryFn: () => fetch('/api/user/profile').then(res => res.json()),
+    queryFn: () => apiRequest("GET", "/api/user/profile").then(res => res.json()),
     enabled: !!user
   });
 
@@ -62,17 +63,13 @@ export default function RoleManagementPage() {
   // Fetch current role invitations
   const { data: invitations, isLoading } = useQuery({
     queryKey: ['/api/admin/role-invitations'],
-    queryFn: () => fetch('/api/admin/role-invitations').then(res => res.json())
+    queryFn: () => apiRequest("GET", "/api/admin/role-invitations").then(res => res.json())
   });
 
   // Send role invitation mutation
   const sendInvitationMutation = useMutation({
     mutationFn: async (data: { email: string; role: string }) => {
-      const response = await fetch('/api/admin/role-invitations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
+      const response = await apiRequest("POST", "/api/admin/role-invitations", data);
       if (!response.ok) throw new Error('Failed to send invitation');
       return response.json();
     },
@@ -97,9 +94,7 @@ export default function RoleManagementPage() {
   // Revoke invitation mutation
   const revokeInvitationMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetch(`/api/admin/role-invitations/${id}`, {
-        method: 'DELETE'
-      });
+      const response = await apiRequest("DELETE", `/api/admin/role-invitations/${id}`);
       if (!response.ok) throw new Error('Failed to revoke invitation');
       return response.json();
     },

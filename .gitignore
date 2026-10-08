@@ -7,6 +7,25 @@ data/backups/*-*-*T*.json
 # Local file-storage dev state (mutates during dev / E2E seeds; server starts empty if missing)
 data/users.json
 data/locations.json
+
+# Secrets and roster/PII dumps. Do not commit these again.
+db_push_output.txt
+data/*.json
+data/*.json.backup*
+data/archive_legacy_json/*.json
+backups/*.json
+exports/*.csv
+attached_assets/*.csv
+attached_assets/Pasted*
+attached_assets/PAYMENT_DISCREPANCY_REPORT.md
+attached_assets/FIX_ERICA_WILSON_PAYMENT.sql
+docs/audit/fall-2026-*.csv
+docs/audit/spring-pay-reminder-*.json
+docs/audit/grace-mulcahy-*.json
+docs/audit/nina-resser-*.json
+docs/audit/tiffany-torres-*.json
+docs/audit/verryluz-*.json
+docs/audit/heather-jacks-*.json
 dist
 .DS_Store
 server/public

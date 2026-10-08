@@ -8,8 +8,12 @@ import * as fileUpload from 'express-fileupload';
 import { processDocument } from '../services/documentAI';
 import path from 'path';
 import fs from 'fs/promises';
+import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireRole } from '../middleware/auth0-auth';
 
 const router = express.Router();
+
+router.use(supabaseAuth, requireRole(['superAdmin']));
 
 // Configure file upload middleware
 router.use(fileUpload.default({

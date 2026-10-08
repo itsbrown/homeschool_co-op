@@ -149,8 +149,7 @@ const RegistrationSuccessPage = lazy(() => import("@/pages/RegistrationSuccessPa
 const BillingPage = lazy(() => import("@/pages/BillingPage"));
 const PaymentSuccess = lazy(() => import("@/pages/PaymentSuccess"));
 const PaymentHistoryPage = lazy(() => import("@/pages/PaymentHistoryPage"));
-const PlatformSubscriptionPlans = lazy(() => import("@/pages/PaymentPlans"));
-const ClassPaymentPlans = lazy(() => import("@/pages/ClassPaymentPlans"));
+const UnavailablePurchaseFlow = lazy(() => import("@/pages/UnavailablePurchaseFlow"));
 const SessionEnrollmentPage = lazy(() => import("@/pages/SessionEnrollmentPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
@@ -659,29 +658,8 @@ function Router() {
       <Route path="/billing">
         <Redirect to="/payments" />
       </Route>
-      <Route path="/payment-plans" component={PlatformSubscriptionPlans} />
-
-          <Route path="/class-payment-plans/:classId">
-            {(params) => {
-              // Mock data for now - in production this would be fetched based on params.classId
-              const mockClassData = {
-                id: params?.classId || '1',
-                title: 'Sample Class',
-                price: 50000, // $500 in cents
-                depositRequired: 5000, // $50 in cents
-                school: 'American Seekers Academy',
-                schedule: 'Mon, Wed, Fri 10:00-11:00 AM'
-              };
-
-              return (
-                <ClassPaymentPlans
-                  classData={mockClassData}
-                  childName="Student"
-                  onSelectPlan={(plan) => console.log('Selected plan:', plan)}
-                />
-              );
-            }}
-          </Route>
+      <Route path="/payment-plans" component={UnavailablePurchaseFlow} />
+      <Route path="/class-payment-plans/:classId" component={UnavailablePurchaseFlow} />
 
       {/* Authenticated registration system routes */}
       <Route path="/registration/:rest*" component={RegistrationPage} />

@@ -48,6 +48,18 @@ export const supabaseAuth = async (
         if (testUser.isActive === false) {
           return res.status(403).json({ message: 'Account is inactive. Please contact support.' });
         }
+        let testAllRoles: string[] = [];
+        try {
+          const roleRows = await storage.getUserRolesByUserId(testUser.id);
+          testAllRoles = roleRows
+            .filter((row) => row.schoolId == null || row.schoolId === testUser.schoolId)
+            .map((row) => row.role);
+        } catch (rolesErr) {
+          console.error('Error loading allRoles for test user:', rolesErr);
+        }
+        if (testAllRoles.length === 0 && testUser.role) {
+          testAllRoles = [testUser.role];
+        }
         req.user = {
           id: testUser.id,
           email: testUser.email,
@@ -56,6 +68,7 @@ export const supabaseAuth = async (
           permissions: testUser.permissions,
           schoolId: testUser.schoolId,
           name: testUser.name,
+          allRoles: testAllRoles,
         };
         req.auth = {
           payload: {
@@ -66,6 +79,10 @@ export const supabaseAuth = async (
             name: testUser.name,
             permissions: testUser.permissions,
           },
+          role: testUser.role,
+          email: testUser.email,
+          schoolId: testUser.schoolId,
+          dbUserId: testUser.id,
         };
         return next();
       }

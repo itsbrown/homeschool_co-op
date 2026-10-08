@@ -8,6 +8,7 @@ import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import path from "path";
 import { createEnrollmentDataSimple } from "@shared/enrollment-factory";
+import { unpublishedPassword } from "../lib/unpublished-password";
 
 // Import handling modes
 type ImportMode = 'skip' | 'override' | 'update';
@@ -199,7 +200,7 @@ async function processParents(records: any[], results: any, options: ImportOptio
           name: `${parentData.firstName} ${parentData.lastName}`,
           email: parentData.email,
           username: parentData.email, // Use email as username
-          password: 'temp_password_123', // Will need to be reset
+          password: unpublishedPassword(),
           phone: parentData.phone,
           role: parentData.role,
           schoolId: parentData.schoolId,

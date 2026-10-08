@@ -15,6 +15,14 @@ Unused Firebase SDKs were removed from `package.json` (Jul 2026): they had no im
 | Payments | Stripe (PaymentIntents, webhooks, autopay) |
 | CI | GitHub Actions: Tests, Payments CI, E2E (Playwright) |
 
+## Route authorization
+
+Child and roster reads require a Supabase session. A parent can read only their own children (`childMatchesParent`). School staff can read a school when `schools.admin_id` or a staff `user_roles.school_id` matches; a stale `users.school_id` does not grant a second school. `superAdmin` and `admin` can read across schools.
+
+These stay anonymous and minimal: `GET /api/schools/validate-code/:code`, `GET /api/schools/by-code/:code` (contact fields only, no registration-code generation), and `POST /api/school-applications`. Debug, backup, migration, payment CSV import, and admin role-invitation routes are `superAdmin` only.
+
+Helpers: `server/lib/route-access.ts`. Tests: `server/tests/integration/production-path/authz-lockdown.test.ts`.
+
 ## Multi-tenancy
 
 - **`school_id`** scopes schools, locations, classes, enrollments, many admin APIs.

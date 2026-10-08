@@ -10,18 +10,66 @@ import { requireRole } from "../middleware/auth0-auth";
 import { storage } from "../storage";
 import { insertSchoolCore } from "../lib/school-db";
 import {
-  ensureSchoolRegistrationCode,
   findSchoolByRegistrationCode,
   generateUniqueRegistrationCode,
   normalizeRegistrationCode,
 } from "../lib/school-registration-code";
 import { getSchoolCoreByRegistrationCode } from "../lib/school-db";
 import { userRoles } from "@shared/schema";
+import {
+  isPlatformAdmin,
+  isSchoolStaff,
+  requestRoleNames,
+  schoolsVisibleToStaff,
+  staffCanAccessSchool,
+} from "../lib/route-access";
+
+function publicRegistrationSchool(
+  school: {
+    id: number;
+    name: string;
+    type: string;
+    address?: string | null;
+    city: string;
+    state: string;
+    zipCode: string;
+    phoneNumber?: string | null;
+    email?: string | null;
+    website?: string | null;
+    logo?: string | null;
+    description?: string | null;
+    foundedYear?: number | null;
+    accreditation?: string | null;
+    enrollmentSize?: number | null;
+    status: string;
+  },
+  registrationCode: string,
+) {
+  return {
+    id: school.id,
+    name: school.name,
+    type: school.type,
+    address: school.address ?? null,
+    city: school.city,
+    state: school.state,
+    zipCode: school.zipCode,
+    phoneNumber: school.phoneNumber ?? null,
+    email: school.email ?? null,
+    website: school.website ?? null,
+    logo: school.logo ?? null,
+    description: school.description ?? null,
+    foundedYear: school.foundedYear ?? null,
+    accreditation: school.accreditation ?? null,
+    enrollmentSize: school.enrollmentSize ?? null,
+    registrationCode,
+    status: school.status,
+  };
+}
 
 const router = express.Router();
 
-// Create a new school (authenticated admin becomes school owner)
-router.post("/", supabaseAuth, async (req: any, res) => {
+// Platform admins create a school. Do not overwrite their platform role.
+router.post("/", supabaseAuth, requireRole(["superAdmin", "admin"]), async (req: any, res) => {
   try {
     console.log('🏫 Creating school with data:', JSON.stringify(req.body, null, 2));
 
@@ -95,6 +143,7 @@ router.post("/", supabaseAuth, async (req: any, res) => {
       )
       .limit(1);
 
+    const platformAdmin = adminUser.role === 'superAdmin' || adminUser.role === 'admin';
     let activeRoleId = adminUser.activeRoleId ?? null;
     if (existingRole.length === 0) {
       const [roleRow] = await db
@@ -103,20 +152,28 @@ router.post("/", supabaseAuth, async (req: any, res) => {
           userId: adminUser.id,
           role: 'schoolAdmin',
           schoolId: newSchool.id,
-          isPrimary: true,
+          isPrimary: !platformAdmin,
         })
         .returning();
-      activeRoleId = roleRow.id;
-    } else {
+      if (!platformAdmin) {
+        activeRoleId = roleRow.id;
+      }
+    } else if (!platformAdmin) {
       activeRoleId = existingRole[0].id;
     }
 
-    await storage.updateUser(adminUser.id, {
-      schoolId: newSchool.id,
-      role: 'schoolAdmin',
-      activeRole: 'schoolAdmin',
-      activeRoleId,
-    });
+    if (platformAdmin) {
+      await storage.updateUser(adminUser.id, {
+        schoolId: newSchool.id,
+      });
+    } else {
+      await storage.updateUser(adminUser.id, {
+        schoolId: newSchool.id,
+        role: 'schoolAdmin',
+        activeRole: 'schoolAdmin',
+        activeRoleId,
+      });
+    }
 
     console.log('✅ School created and linked to admin:', adminUser.email, newSchool.id);
     res.status(201).json(newSchool);
@@ -126,11 +183,27 @@ router.post("/", supabaseAuth, async (req: any, res) => {
   }
 });
 
-// Get all schools
-router.get("/", async (req, res) => {
+// School directory. Platform admins see every school. School staff see only
+// schools they administer or are assigned to. Parents are not staff.
+router.get("/", supabaseAuth, async (req: any, res) => {
   try {
+    if (!isSchoolStaff(req)) {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+
     const allSchools = await storage.getAllSchools();
-    res.json(allSchools);
+    if (isPlatformAdmin(req)) {
+      return res.json(allSchools);
+    }
+
+    const userId = req.user?.id;
+    const dbUser = typeof userId === "number" ? await storage.getUser(userId) : undefined;
+    if (!dbUser) {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+
+    const visible = new Set(await schoolsVisibleToStaff(dbUser, requestRoleNames(req)));
+    return res.json(allSchools.filter((school) => visible.has(school.id)));
   } catch (error: any) {
     console.error("Error fetching schools:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -173,7 +246,7 @@ router.get("/validate-code/:code", async (req, res) => {
 });
 
 // Get knowledge bases - must be before /:id route to avoid conflicts
-router.get("/knowledge-bases", async (req, res) => {
+router.get("/knowledge-bases", supabaseAuth, async (req, res) => {
   try {
     // Return sample knowledge base data for now
     const sampleKnowledgeBases = [
@@ -353,22 +426,15 @@ router.get("/by-code/:code", async (req, res) => {
       return res.status(404).json({ message: "School not found with this registration code" });
     }
 
-    let school = core;
-    if (!school.registrationCode?.trim()) {
-      const generated = await ensureSchoolRegistrationCode(school.id);
-      if (generated) {
-        school = { ...school, registrationCode: generated };
-      }
-    }
-
-    if (school.status !== 'active') {
+    if (core.status !== 'active') {
       return res.status(403).json({
         message:
           'This school is not currently accepting registrations. Please contact your administrator.',
       });
     }
 
-    res.json(school);
+    const registrationCode = core.registrationCode?.trim() || code;
+    res.json(publicRegistrationSchool(core, registrationCode));
   } catch (error: any) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error fetching school by registration code:", error);
@@ -377,13 +443,17 @@ router.get("/by-code/:code", async (req, res) => {
 });
 
 // Get school by ID
-router.get("/:id", async (req, res) => {
+router.get("/:id", supabaseAuth, async (req: any, res) => {
   try {
     const { id } = req.params;
     const schoolId = parseInt(id);
 
     if (isNaN(schoolId)) {
       return res.status(400).json({ message: "Invalid school ID" });
+    }
+
+    if (!(await staffCanAccessSchool(req, schoolId))) {
+      return res.status(403).json({ message: "Insufficient permissions" });
     }
 
     const db = await getDb();
@@ -395,16 +465,6 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ message: "School not found" });
     }
 
-    const registrationCode = await ensureSchoolRegistrationCode(schoolId);
-    if (registrationCode && registrationCode !== school.registrationCode) {
-      const [updatedSchool] = await db
-        .select()
-        .from(schools)
-        .where(eq(schools.id, schoolId))
-        .limit(1);
-      return res.json(updatedSchool ?? { ...school, registrationCode });
-    }
-
     res.json(school);
   } catch (error: any) {
     console.error("Error fetching school:", error);
@@ -413,8 +473,15 @@ router.get("/:id", async (req, res) => {
 });
 
 // Get staff for a school - placeholder until staff schema is properly defined
-router.get("/:id/staff", async (req, res) => {
+router.get("/:id/staff", supabaseAuth, async (req: any, res) => {
   try {
+    const schoolId = parseInt(req.params.id);
+    if (isNaN(schoolId)) {
+      return res.status(400).json({ message: "Invalid school ID" });
+    }
+    if (!(await staffCanAccessSchool(req, schoolId))) {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
     res.json([]);
   } catch (error: any) {
     console.error("Error fetching staff:", error);
@@ -423,13 +490,17 @@ router.get("/:id/staff", async (req, res) => {
 });
 
 // Get students for a school
-router.get("/:id/students", async (req, res) => {
+router.get("/:id/students", supabaseAuth, async (req: any, res) => {
   try {
     const { id } = req.params;
     const schoolId = parseInt(id);
 
     if (isNaN(schoolId)) {
       return res.status(400).json({ message: "Invalid school ID" });
+    }
+
+    if (!(await staffCanAccessSchool(req, schoolId))) {
+      return res.status(403).json({ message: "Insufficient permissions" });
     }
 
     const db = await getDb();

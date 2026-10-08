@@ -12,6 +12,8 @@ import { supabaseAuth } from "./middleware/supabase-auth";
 import { buildFamilyClassScheduleEvents } from "./lib/family-class-schedule";
 import { childMatchesParent } from "@shared/parent-identity";
 import { buildChildProfilePatch } from "@shared/child-profile-patch";
+import { registerLockedAccountRoutes } from "./api/locked-account-routes";
+import { unpublishedPassword } from "./lib/unpublished-password";
 
 // Type for authenticated requests with our auth structure
 interface AuthenticatedRequest extends Request {
@@ -235,8 +237,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Role update endpoint for Firebase users
-  app.post("/api/auth/update-role", async (req, res) => {
+  // Role update endpoint for Firebase users. Does not persist a role change.
+  app.post("/api/auth/update-role", supabaseAuth, async (req, res) => {
     try {
       const { role } = req.body;
 
@@ -2160,28 +2162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Also mount at /api/parent/enrollments for frontend compatibility
   app.use("/api/parent/enrollments", supabaseAuth, enrollmentsRouter.default);
 
-  // Add children enrollments endpoint
-  app.get("/api/children/:id/enrollments", async (req, res) => {
-    try {
-      const childId = parseInt(req.params.id);
-
-      if (isNaN(childId)) {
-        return res.status(400).json({ message: 'Invalid child ID' });
-      }
-
-      console.log(`📚 Fetching enrollments for child ID: ${childId}`);
-
-      // Get enrollments for this child
-      const enrollments = await storage.getEnrollmentsByChildId(childId);
-
-      console.log(`📚 Found ${enrollments.length} enrollments for child ${childId}:`, enrollments);
-
-      res.json(enrollments);
-    } catch (error) {
-      console.error('Error fetching child enrollments:', error);
-      res.status(500).json({ message: 'Failed to fetch enrollments' });
-    }
-  });
+  registerLockedAccountRoutes(app);
 
   // Family schedule endpoint
   app.get("/api/schedule", jwtCheck, async (req, res) => {
@@ -2206,33 +2187,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching schedule:', error);
       res.status(500).json({ message: 'Failed to fetch schedule' });
-    }
-  });
-
-  // Add individual child endpoint
-  app.get("/api/children/:id", async (req, res) => {
-    try {
-      const childId = parseInt(req.params.id);
-
-      if (isNaN(childId)) {
-        return res.status(400).json({ message: 'Invalid child ID' });
-      }
-
-      console.log(`👶 Fetching child data for ID: ${childId}`);
-
-      // Get child data
-      const child = await storage.getChildById(childId);
-
-      if (!child) {
-        console.log(`❌ Child not found with ID: ${childId}`);
-        return res.status(404).json({ message: 'Child not found' });
-      }
-
-      console.log(`✅ Child found:`, child.firstName, child.lastName);
-      res.json(child);
-    } catch (error) {
-      console.error('Error fetching child:', error);
-      res.status(500).json({ message: 'Failed to fetch child data' });
     }
   });
 
@@ -2298,26 +2252,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Import and register users API router (protected with Supabase auth)
   const usersRouter = await import("./api/users");
   app.use("/api/users", supabaseAuth, usersRouter.default);
-
-  // Add endpoint to get user role by email for authentication
-  app.get("/api/users/role/:email", async (req, res) => {
-    try {
-      const email = req.params.email;
-      if (!email) {
-        return res.status(400).json({ message: "Email is required" });
-      }
-
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      res.json({ role: user.role, email: user.email });
-    } catch (error) {
-      console.error("Error fetching user role:", error);
-      res.status(500).json({ message: "Error fetching user role" });
-    }
-  });
 
   // DEPRECATED: Legacy unauthenticated routes removed - use /api/school-admin/* routes instead
   // These routes had NO authentication and used old file-based data access
@@ -3476,7 +3410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           parentUser = await storage.createUser({
             username: parentEmail, // Use email as username
             email: parentEmail,
-            password: 'temppass123', // Temporary password - parent will set their own
+            password: unpublishedPassword(),
             name: `${firstName}'s Parent`, // Default name
             role: 'parent',
             subscription: 'free'
@@ -3785,43 +3719,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   } else {
     console.log('☁️ Production mode: WebSocket data layer disabled (not compatible with Autoscale deployments)');
   }
-  // Backup management endpoints (development only - dynamically import to avoid side effects in production)
-  app.get("/api/admin/backups", async (req, res) => {
-    try {
-      const { backupService } = await import('./services/backupService.js');
-      const backups = await backupService.listBackups();
-      res.json(backups);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to list backups" });
-    }
-  });
-
-  app.post("/api/admin/backups/create", async (req, res) => {
-    try {
-      const { backupService } = await import('./services/backupService.js');
-      await backupService.performBackup();
-      res.json({ success: true, message: "Backup created successfully" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to create backup" });
-    }
-  });
-
-  app.post("/api/admin/backups/restore/:timestamp", async (req, res) => {
-    try {
-      const { backupService } = await import('./services/backupService.js');
-      const { timestamp } = req.params;
-      const result = await backupService.restoreBackup(timestamp);
-
-      if (result.success) {
-        res.json({ success: true, message: `Restored ${result.restoredCount} files` });
-      } else {
-        res.status(500).json({ error: result.error });
-      }
-    } catch (error) {
-      res.status(500).json({ error: "Failed to restore backup" });
-    }
-  });
-
   // Knowledge base file upload routes
   app.post("/api/knowledge-bases/:id/upload", isAuthenticated, uploadKnowledgeBaseFiles);
   app.get("/api/knowledge-bases/processing/:jobId", isAuthenticated, getProcessingStatus);

@@ -4,9 +4,54 @@ import { z } from "zod";
 import * as brevo from '@getbrevo/brevo';
 import { supabaseStorage } from "../supabase-storage";
 import { storage } from "../storage";
+import { getDb } from "../db";
+import { schoolApplications } from "@shared/schema";
+import { desc } from "drizzle-orm";
+
+async function listSchoolApplications() {
+  const database = await getDb();
+  return database
+    .select()
+    .from(schoolApplications)
+    .orderBy(desc(schoolApplications.submittedAt));
+}
 import { getBrevoApiInstance, logEmailAttempt } from "../lib/email-service";
+import { supabaseAuth } from "../middleware/supabase-auth";
+import { requireRole } from "../middleware/auth0-auth";
+import { emailsMatch } from "@shared/parent-identity";
 
 const router = Router();
+const superAdminOnly = [supabaseAuth, requireRole(["superAdmin"])] as const;
+
+function publicApplicationStatus(app: {
+  id: number;
+  schoolName: string;
+  schoolType: string;
+  adminFirstName: string;
+  adminLastName: string;
+  status: string;
+  submittedAt: Date | string;
+  reviewedAt?: Date | string | null;
+  reviewNotes?: string | null;
+  city?: string | null;
+  state?: string | null;
+  currentStudentCount?: number | null;
+}) {
+  return {
+    id: app.id,
+    schoolName: app.schoolName,
+    schoolType: app.schoolType,
+    adminFirstName: app.adminFirstName,
+    adminLastName: app.adminLastName,
+    status: app.status,
+    submittedAt: app.submittedAt,
+    reviewedAt: app.reviewedAt ?? null,
+    reviewNotes: app.reviewNotes ?? null,
+    city: app.city ?? null,
+    state: app.state ?? null,
+    currentStudentCount: app.currentStudentCount ?? null,
+  };
+}
 
 // Use the single shared Brevo instance from email-service.ts
 const brevoApiInstance = getBrevoApiInstance();
@@ -266,10 +311,9 @@ router.post("/", async (req, res) => {
 });
 
 // Get all applications (Super Admin only)
-router.get("/", async (req, res) => {
+router.get("/", ...superAdminOnly, async (req, res) => {
   try {
-    // TODO: Add super admin authentication check here
-    const applications = await storage.getAllSchoolApplications();
+    const applications = await listSchoolApplications();
     
     // Don't expose sensitive information like tokens
     const sanitizedApplications = applications.map(app => {
@@ -285,7 +329,7 @@ router.get("/", async (req, res) => {
 });
 
 // Get application by ID
-router.get("/:id", async (req, res) => {
+router.get("/:id", ...superAdminOnly, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const application = await storage.getSchoolApplicationById(id);
@@ -304,9 +348,8 @@ router.get("/:id", async (req, res) => {
 });
 
 // Update application status (Super Admin only)
-router.patch("/:id/status", async (req, res) => {
+router.patch("/:id/status", ...superAdminOnly, async (req, res) => {
   try {
-    // TODO: Add super admin authentication check here
     const id = parseInt(req.params.id);
     const { status, reviewNotes, reviewerEmail } = req.body;
 
@@ -365,21 +408,27 @@ router.patch("/:id/status", async (req, res) => {
 });
 
 // Check application status by email
-router.post("/check-status", async (req, res) => {
+router.post("/check-status", supabaseAuth, async (req: any, res) => {
   try {
     const { email } = req.body;
+    const selfEmail = req.user?.email as string | undefined;
+
+    if (!selfEmail) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
 
     if (!email) {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    const allApplications = await storage.getAllSchoolApplications();
+    if (!emailsMatch(selfEmail, email)) {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+
+    const allApplications = await listSchoolApplications();
     const userApplications = allApplications
-      .filter(app => app.adminEmail === email)
-      .map(app => {
-        const { token, adminEmail, ...publicData } = app;
-        return publicData;
-      })
+      .filter(app => emailsMatch(app.adminEmail, email))
+      .map(app => publicApplicationStatus(app))
       .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
 
     res.json({

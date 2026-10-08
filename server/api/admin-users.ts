@@ -2,16 +2,18 @@ import { Router } from 'express';
 import { storage } from '../storage';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireRole } from '../middleware/auth0-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 
 const router = Router();
+const superAdminOnly = [supabaseAuth, requireRole(['superAdmin'])] as const;
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // GET user by email (check if user exists)
-router.get('/users/email/:email', async (req, res) => {
+router.get('/users/email/:email', ...superAdminOnly, async (req, res) => {
   try {
     const email = decodeURIComponent(req.params.email);
     
@@ -48,7 +50,7 @@ router.get('/users/email/:email', async (req, res) => {
 });
 
 // POST create missing user (for parents with enrollments but no user record)
-router.post('/users/create-from-enrollments', async (req, res) => {
+router.post('/users/create-from-enrollments', ...superAdminOnly, async (req, res) => {
   try {
     const { email } = req.body;
     
@@ -210,7 +212,7 @@ router.post('/users/create-from-enrollments', async (req, res) => {
 });
 
 // POST update user role in database and sync with Supabase
-router.post('/users/update-role', async (req, res) => {
+router.post('/users/update-role', ...superAdminOnly, async (req, res) => {
   try {
     const { email, role } = req.body;
     
@@ -333,7 +335,7 @@ router.post('/users/update-role', async (req, res) => {
 });
 
 // POST create Supabase accounts for users missing them (migration utility)
-router.post('/users/migrate-to-supabase', async (req, res) => {
+router.post('/users/migrate-to-supabase', ...superAdminOnly, async (req, res) => {
   try {
     console.log('🔄 Starting migration: creating Supabase accounts for users without supabaseId');
     
@@ -466,7 +468,7 @@ router.post('/users/migrate-to-supabase', async (req, res) => {
 });
 
 // POST sync Supabase role with database role
-router.post('/users/sync-supabase-role', async (req, res) => {
+router.post('/users/sync-supabase-role', ...superAdminOnly, async (req, res) => {
   try {
     const { email } = req.body;
     

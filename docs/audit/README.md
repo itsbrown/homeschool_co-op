@@ -15,6 +15,5 @@ Each report should include:
 
 ## Related docs
 
-- [fall-2026-class-rosters.csv](fall-2026-class-rosters.csv) — Fall 2026 class rosters. Daily overwrite through 2026-09-21 on branch `docs/fall-2026-class-rosters` (`.github/workflows/fall-2026-roster-snapshot.yml`). Local: `node scripts/with-prod-env.mjs -- npx tsx server/scripts/export-fall-2026-class-rosters.ts`.
-- [fall-2026-class-rosters-transitions.csv](fall-2026-class-rosters-transitions.csv) — append-only `pending_to_enrolled` / `pending_added` / `pending_removed` log.
+- Fall 2026 roster CSVs are not tracked on `main` (parent and child contact data). The daily job through 2026-09-21 wrote them on branch `docs/fall-2026-class-rosters`. Local refresh: `node scripts/with-prod-env.mjs -- npx tsx server/scripts/export-fall-2026-class-rosters.ts` (do not commit the CSV).
 - [BALANCE_TRIAGE_PRODUCTION.md](BALANCE_TRIAGE_PRODUCTION.md) — production balance dashboard triage (orphans, cache, schedules).

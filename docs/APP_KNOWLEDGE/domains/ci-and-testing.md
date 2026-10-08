@@ -9,7 +9,7 @@ How GitHub Actions and local test commands relate to merge gates.
 | **Tests** | `tests.yml` | Schema + **production-path** + dev smoke + **client jsdom** |
 | **Payments CI** | payments subset | Billing/webhook tests |
 | **E2E** | Playwright | Dev server boot; placeholder Supabase env OK (see `playwright.config.ts` `envOr`) |
-| **Fall 2026 roster snapshot** | `fall-2026-roster-snapshot.yml` | Not a merge gate. Daily 08:00 ET through **2026-09-21**. Overwrites `docs/audit/fall-2026-class-rosters.csv`; appends pending→enrolled to `docs/audit/fall-2026-class-rosters-transitions.csv`. Pushes to **`docs/fall-2026-class-rosters`** (not `main` — branch protection would reject the bot). Secret: `PROD_DATABASE_URL` (Neon prod, never Railway clone). Cron starts only after this yml is on default `main`. Manual: Actions → Fall 2026 roster snapshot → Run workflow (pick that branch until merged). |
+| **Fall 2026 roster snapshot** | `fall-2026-roster-snapshot.yml` | Not a merge gate. Daily 08:00 ET through **2026-09-21** (ended). Wrote roster CSVs on **`docs/fall-2026-class-rosters`**, not `main`. Those CSVs contain parent contact data and are gitignored on `main`. Do not commit them. Secret: `PROD_DATABASE_URL` (Neon prod, never Railway clone). |
 
 ## Tests job steps (canonical)
 

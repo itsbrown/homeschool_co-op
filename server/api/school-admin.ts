@@ -12,6 +12,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { sendAccountInviteEmail, sendStaffInvitationEmail, sendPasswordResetEmail, getBrevoApiInstance, logEmailAttempt } from '../lib/email-service';
 import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireRole } from '../middleware/auth0-auth';
+import { staffCanAccessSchool } from '../lib/route-access';
+import { unpublishedPassword } from '../lib/unpublished-password';
 import { attachRosterDayTypes } from "../lib/roster-session-day-type";
 import { countRosterDayTypes } from "@shared/roster-day-type";
 import { requireSchoolContext } from '../middleware/require-school-context';
@@ -96,6 +99,32 @@ import {
 import { normalizeEmailForLookup } from '@shared/parent-identity';
 
 const router = Router();
+
+router.use((req, res, next) => {
+  const path = req.path;
+  if (path === '/debug-users' || path === '/test' || path === '/setup-school') {
+    return supabaseAuth(req, res, () => requireRole(['superAdmin'])(req, res, next));
+  }
+
+  const schoolStaff =
+    path.startsWith('/students/by-location') ||
+    path === '/import-users' ||
+    path === '/volunteer-credits' ||
+    path.startsWith('/volunteer-credits/') ||
+    path === '/credits' ||
+    path.startsWith('/credits/') ||
+    /^\/users\/[^/]+\/send-invite$/.test(path) ||
+    (req.method === 'DELETE' && /^\/discounts\/[^/]+$/.test(path)) ||
+    (req.method === 'POST' && /^\/discounts\/[^/]+\/(duplicate|apply)$/.test(path));
+
+  if (schoolStaff) {
+    return supabaseAuth(req, res, () =>
+      requireRole(['schoolAdmin', 'director', 'admin', 'superAdmin'])(req, res, next),
+    );
+  }
+
+  next();
+});
 
 // Shared phone validation: strip non-digits, accept 10-digit or 11-digit starting with 1
 const phoneValidation = z.string().optional().nullable().transform(val => val || null).refine(
@@ -4250,6 +4279,14 @@ router.get("/students/by-location/:locationId", async (req, res) => {
       return res.status(400).json({ message: "Invalid location ID" });
     }
 
+    const location = await storage.getLocationById(locationId);
+    if (!location) {
+      return res.status(404).json({ message: "Location not found" });
+    }
+    if (!(await staffCanAccessSchool(req, location.schoolId))) {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+
     console.log(`📍 Fetching students for location ID: ${locationId}`);
     
     const schoolStudents = await storage.getSchoolStudentsByLocationId(locationId);
@@ -5473,6 +5510,13 @@ router.delete('/discounts/:id', async (req, res) => {
         error: 'Discount not found'
       });
     }
+
+    if (!(await staffCanAccessSchool(req, discount.schoolId))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Insufficient permissions'
+      });
+    }
     
     // Delete the discount
     await storage.deleteDiscount(discountId);
@@ -5510,6 +5554,13 @@ router.post('/discounts/:id/duplicate', async (req, res) => {
       return res.status(404).json({
         success: false,
         error: 'Discount not found'
+      });
+    }
+
+    if (!(await staffCanAccessSchool(req, originalDiscount.schoolId))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Insufficient permissions'
       });
     }
     
@@ -5582,6 +5633,13 @@ router.post('/discounts/:id/apply', async (req, res) => {
       return res.status(404).json({
         success: false,
         error: 'Discount not found'
+      });
+    }
+
+    if (!(await staffCanAccessSchool(req, discount.schoolId))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Insufficient permissions'
       });
     }
     
@@ -5814,7 +5872,7 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
                   lastName: parentData.lastName,
                   phone: parentData.phone,
                   username: parentData.email.split('@')[0] || parentData.email,
-                  password: 'tempPass123!',
+                  password: unpublishedPassword(),
                   name: `${parentData.firstName} ${parentData.lastName}`,
                   role: 'parent',
                   schoolId: Number(schoolId)
@@ -5893,7 +5951,7 @@ router.post('/contact-import', supabaseAuth, requireSchoolContext, async (req: a
                   firstName: staffData.firstName,
                   lastName: staffData.lastName,
                   username: staffData.email.split('@')[0] || staffData.email,
-                  password: 'tempPass123!',
+                  password: unpublishedPassword(),
                   name: `${staffData.firstName} ${staffData.lastName}`,
                   role: 'educator',
                   schoolId: Number(schoolId)
@@ -6352,7 +6410,7 @@ router.post('/users', supabaseAuth, requireSchoolContext, async (req: any, res) 
       email,
       role: role as 'student' | 'parent' | 'learner' | 'educator' | 'mentor' | 'teacher' | 'schoolAdmin' | 'admin' | 'superAdmin',
       phone: phone || null,
-      password: 'pending_setup', // Placeholder - user will set via invite/reset
+      password: unpublishedPassword(), // Placeholder - user will set via invite/reset
       schoolId: Number(schoolId),
       locationId: locationId ? Number(locationId) : null,
       isActive: true
@@ -6785,6 +6843,9 @@ router.post('/import-users', async (req: any, res) => {
       return res.status(400).json({ error: "Valid school ID is required for user import" });
     }
     const schoolId = schoolIdRaw;
+    if (!(await staffCanAccessSchool(req, schoolId))) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
     console.log(`🏫 Importing users for school ID: ${schoolId}`);
     
     const results = {
@@ -6875,7 +6936,7 @@ async function processParentRecords(records: any[], results: any, schoolId: numb
         role: 'parent' as const,
         schoolId: Number(schoolId),
         username: email?.split('@')[0] || '',
-        password: 'tempPass123!' // Temporary password
+        password: unpublishedPassword() // Temporary password
       };
       
       if (!userData.firstName || !userData.lastName || !userData.email) {
@@ -6955,7 +7016,7 @@ async function processStaffRecords(records: any[], results: any, schoolId: numbe
         role: 'educator' as const,
         schoolId: Number(schoolId), // [FIX:v3.0] Convert string to number for Drizzle schema
         username: email?.split('@')[0] || '',
-        password: 'tempPass123!' // Temporary password
+        password: unpublishedPassword() // Temporary password
       };
       
       if (!userData.firstName || !userData.lastName || !userData.email) {
@@ -6985,6 +7046,10 @@ router.post('/users/:userId/send-invite', async (req, res) => {
     const user = await storage.getUser(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!(await staffCanAccessSchool(req, user.schoolId))) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
     }
 
     // Look up the user's actual role from user_roles table (not the deprecated users.role field)

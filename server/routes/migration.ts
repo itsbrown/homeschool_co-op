@@ -3,8 +3,12 @@ import fs from 'fs/promises';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import { pool } from '../db';
+import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireRole } from '../middleware/auth0-auth';
 
 const router = express.Router();
+
+router.use(supabaseAuth, requireRole(['superAdmin']));
 
 async function loadJsonData<T>(filename: string): Promise<T[]> {
   try {

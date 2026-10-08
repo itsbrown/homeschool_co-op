@@ -3,8 +3,12 @@ import { Router, Request, Response } from "express";
 import { storage } from "../storage";
 import { parse } from "csv-parse/sync";
 import { UploadedFile } from "express-fileupload";
+import { supabaseAuth } from "../middleware/supabase-auth";
+import { requireRole } from "../middleware/auth0-auth";
 
 const router = Router();
+
+router.use(supabaseAuth, requireRole(["superAdmin"]));
 
 // Import payment data from CSV
 router.post("/upload-payments", async (req: Request, res: Response) => {
