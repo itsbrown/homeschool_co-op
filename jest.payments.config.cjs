@@ -35,5 +35,7 @@ module.exports = {
     '<rootDir>/server/tests/webhook-scheduled-credit-failure.test.ts',
     '<rootDir>/server/tests/missed-payment-intent-sweep.test.ts',
     '<rootDir>/server/tests/background-jobs-singleton.test.ts',
+    '<rootDir>/server/tests/integration/production-path/tenant-isolation.test.ts',
+    '<rootDir>/server/tests/integration/production-path/school-onboarding.test.ts',
   ],
 };

@@ -3175,6 +3175,19 @@ router.patch("/schools/:id", supabaseAuth, async (req: any, res) => {
       enrollment_size: updateData.enrollmentSize
     };
 
+    const brandColor = updateData.brandColor ?? updateData.brand_color;
+    if (brandColor !== undefined) {
+      try {
+        const { writeSchoolPlatform } = await import('../lib/platform-school-billing');
+        await writeSchoolPlatform(schoolId, { brandColor: brandColor == null ? null : String(brandColor) });
+      } catch (brandError) {
+        const message = brandError instanceof Error ? brandError.message : String(brandError);
+        if (!message.includes('42703') && !message.includes('brand_color')) {
+          throw brandError;
+        }
+      }
+    }
+
     // Remove undefined fields
     Object.keys(dbUpdateData).forEach(key => {
       if (dbUpdateData[key] === undefined) {

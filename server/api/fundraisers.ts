@@ -3,8 +3,6 @@ import { storage } from '../storage';
 import { supabaseAuth } from '../middleware/supabase-auth';
 import { requireSchoolContext } from '../middleware/require-school-context';
 import { z } from 'zod';
-import { getStripeClient } from '../config/stripe';
-
 const router = Router();
 
 // ==================== CAMPAIGN SCHEMAS ====================
@@ -37,23 +35,6 @@ const createProductSchema = z.object({
 });
 
 const updateProductSchema = createProductSchema.partial();
-
-// ==================== CHECKOUT SCHEMA ====================
-const checkoutSchema = z.object({
-  campaignId: z.number().int().positive(),
-  familyLinkId: z.number().int().positive(),
-  customer: z.object({
-    customerName: z.string().min(1, "Name is required"),
-    customerEmail: z.string().email("Valid email is required"),
-    customerPhone: z.string().optional(),
-  }),
-  items: z.array(z.object({
-    productId: z.number().int().positive(),
-    name: z.string(),
-    priceCents: z.number().int().positive(),
-    quantity: z.number().int().positive(),
-  })).min(1, "At least one item is required"),
-});
 
 // ==================== ADMIN CAMPAIGN ROUTES (require auth + school context) ====================
 
@@ -531,104 +512,15 @@ router.get('/store/:campaignId/:familySlug', async (req, res) => {
 });
 
 // ==================== PUBLIC CHECKOUT ROUTE (no auth) ====================
-router.post('/checkout', async (req, res) => {
-  try {
-    const parsed = checkoutSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: 'Invalid checkout data', details: parsed.error.errors });
-    }
-
-    const { campaignId, familyLinkId, customer, items } = parsed.data;
-
-    // Validate campaign exists and is active
-    const campaign = await storage.getFundraiserCampaignById(campaignId);
-    if (!campaign || !campaign.isActive) {
-      return res.status(404).json({ error: 'Campaign not found or not active' });
-    }
-
-    // Check date range
-    const now = new Date();
-    if (campaign.startDate > now || campaign.endDate < now) {
-      return res.status(400).json({ error: 'Campaign is not currently active' });
-    }
-
-    // Validate family link
-    const familyLink = await storage.getFundraiserFamilyLinkById(familyLinkId);
-    if (!familyLink || familyLink.campaignId !== campaignId) {
-      return res.status(400).json({ error: 'Invalid family link' });
-    }
-
-    // Server-side price validation - NEVER trust client prices
-    const products = await storage.getFundraiserProductsByCampaignId(campaignId);
-    const productMap = new Map(products.map(p => [p.id, p]));
-    
-    let serverTotal = 0;
-    let totalCreditEarned = 0;
-    const validatedItems: { productId: number; quantity: number; unitPriceCents: number; creditAmountCents: number }[] = [];
-
-    for (const item of items) {
-      const product = productMap.get(item.productId);
-      if (!product || !product.isActive) {
-        return res.status(400).json({ error: `Product ${item.productId} is not available` });
-      }
-      
-      // Use server-side pricing, not client-side
-      const itemTotal = product.priceCents * item.quantity;
-      serverTotal += itemTotal;
-      totalCreditEarned += product.creditAmountCents * item.quantity;
-      
-      validatedItems.push({
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPriceCents: product.priceCents,
-        creditAmountCents: product.creditAmountCents,
-      });
-    }
-
-    const stripe = await getStripeClient();
-
-    // Create Stripe Checkout Session
-    const lineItems = validatedItems.map(item => {
-      const product = productMap.get(item.productId)!;
-      return {
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: product.name,
-            description: product.description || undefined,
-          },
-          unit_amount: item.unitPriceCents,
-        },
-        quantity: item.quantity,
-      };
-    });
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: 'payment',
-      line_items: lineItems,
-      customer_email: customer.customerEmail,
-      success_url: `${req.protocol}://${req.get('host')}/fundraiser/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.protocol}://${req.get('host')}/fundraiser/${campaignId}/${familyLink.uniqueSlug}`,
-      metadata: {
-        type: 'fundraiser_order',
-        campaignId: campaignId.toString(),
-        familyLinkId: familyLinkId.toString(),
-        userId: familyLink.userId.toString(),
-        customerName: customer.customerName,
-        customerEmail: customer.customerEmail,
-        customerPhone: customer.customerPhone || '',
-        totalCents: serverTotal.toString(),
-        creditEarnedCents: totalCreditEarned.toString(),
-        items: JSON.stringify(validatedItems),
-      },
-    });
-
-    res.json({ checkoutUrl: session.url });
-  } catch (error: any) {
-    console.error('Error creating checkout session:', error);
-    res.status(500).json({ error: 'Failed to create checkout session' });
-  }
+// Checkout is disabled. The session used to charge a card and never write
+// fundraiser_orders. Turning the button off is safer than recording a half
+// ledger (credits, stock) on the platform Stripe account.
+router.post('/checkout', async (_req, res) => {
+  return res.status(503).json({
+    error: 'FUNDRAISER_CHECKOUT_UNAVAILABLE',
+    message:
+      'Fundraiser checkout is turned off. A card payment did not create an order, so new checkouts are not accepted.',
+  });
 });
 
 // ==================== PARENT ROUTES (require auth, no school context needed) ====================

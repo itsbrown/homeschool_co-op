@@ -6,6 +6,7 @@ import { legacyCanCreateClassesAllowed } from "@shared/permissions";
 import { attachAccessScope } from "../middleware/access-scope";
 import { childHasSevereClassroomAllergy } from "@shared/class-allergy-alerts";
 import { supabaseAuth } from "../middleware/supabase-auth";
+import { isPlatformAdmin, requestRoleNames, schoolsVisibleToStaff, staffCanAccessSchool } from "../lib/route-access";
 import {
   MEMBERS_ONLY_ENROLLMENT_NOTICE,
   canSelfEnrollWhenRequireMemberId,
@@ -14,8 +15,50 @@ import {
 
 const router = express.Router();
 
+const STAFF_CLASS_ROLES = new Set([
+  'schoolAdmin', 'director', 'educator', 'teacher', 'mentor', 'instructor', 'admin', 'superAdmin',
+]);
+
+async function catalogSchoolFilter(req: any): Promise<Set<number> | null> {
+  if (!req.user?.id || typeof req.user.id !== 'number') {
+    try {
+      const { getRawPg } = await import('../lib/pg-raw');
+      const rows = await getRawPg().unsafe(
+        `SELECT id FROM schools WHERE platform_plan IS NULL OR platform_plan = 'internal'`,
+      );
+      return new Set((rows as Array<{ id: number }>).map((row) => Number(row.id)));
+    } catch {
+      return null;
+    }
+  }
+  if (isPlatformAdmin(req)) return null;
+  const user = await storage.getUser(req.user.id);
+  if (!user) return new Set();
+  const roles = requestRoleNames(req);
+  if (roles.some((role) => STAFF_CLASS_ROLES.has(role))) {
+    return new Set(await schoolsVisibleToStaff(user, roles));
+  }
+  return user.schoolId ? new Set([user.schoolId]) : new Set();
+}
+
+function classInCatalog(cls: { schoolId?: number | null }, allowed: Set<number> | null): boolean {
+  if (!allowed) return true;
+  if (cls.schoolId == null) return true;
+  return allowed.has(Number(cls.schoolId));
+}
+
+async function canSeeSchoolClass(req: any, schoolId: number | null | undefined): Promise<boolean> {
+  if (schoolId == null) return true;
+  if (isPlatformAdmin(req)) return true;
+  if (await staffCanAccessSchool(req, schoolId)) return true;
+  if (typeof req.user?.id !== 'number') return false;
+  const user = await storage.getUser(req.user.id);
+  if (!user || user.role && STAFF_CLASS_ROLES.has(user.role)) return false;
+  return user.schoolId === schoolId;
+}
+
 // Get all classes with filtering and pagination
-router.get('/', async (req, res) => {
+router.get('/', optionalSupabaseAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
@@ -121,6 +164,9 @@ router.get('/', async (req, res) => {
       });
     }
 
+    const allowedSchools = await catalogSchoolFilter(req);
+    classes = classes.filter((cls) => classInCatalog(cls, allowedSchools));
+
     // Calculate enrollment counts for each class
     const classesWithEnrollmentCounts = await Promise.all(
       classes.map(async (cls) => {
@@ -199,9 +245,14 @@ router.get('/shared/:token', async (req, res) => {
   }
 });
 
-router.get('/:id/roster', async (req, res) => {
+router.get('/:id/roster', supabaseAuth, async (req: any, res) => {
   try {
     const classId = parseInt(req.params.id);
+    const classItem = await storage.getClassById(classId);
+    if (!classItem) return res.status(404).json({ message: 'Class not found' });
+    if (!(await canSeeSchoolClass(req, classItem.schoolId)) || !(await staffCanAccessSchool(req, classItem.schoolId) || isPlatformAdmin(req))) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
     const status = req.query.status as string | undefined;
     const includeParentInfo = String(req.query.includeParentInfo || 'false') === 'true';
     const sortBy = req.query.sortBy as string | undefined;
@@ -234,9 +285,14 @@ router.get('/:id/roster', async (req, res) => {
   }
 });
 
-router.get('/:id/roster/export', async (req, res) => {
+router.get('/:id/roster/export', supabaseAuth, async (req: any, res) => {
   try {
     const classId = parseInt(req.params.id);
+    const classItem = await storage.getClassById(classId);
+    if (!classItem) return res.status(404).json({ message: 'Class not found' });
+    if (!(await staffCanAccessSchool(req, classItem.schoolId) || isPlatformAdmin(req))) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
     const enrollments = (await storage.getAllEnrollments()).filter((e: any) =>
       e.classId === classId || e.marketplaceClassId === classId
     );
@@ -254,7 +310,7 @@ router.get('/:id/roster/export', async (req, res) => {
 });
 
 // Get class by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalSupabaseAuth, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -264,6 +320,17 @@ router.get('/:id', async (req, res) => {
     const classItem = await storage.getClassById(id);
     if (!classItem) {
       return res.status(404).json({ message: 'Class not found' });
+    }
+
+    if (req.user) {
+      if (!(await canSeeSchoolClass(req, classItem.schoolId))) {
+        return res.status(403).json({ message: 'Insufficient permissions' });
+      }
+    } else if (classItem.schoolId != null) {
+      const allowed = await catalogSchoolFilter(req);
+      if (!classInCatalog(classItem, allowed) || classItem.isAdminOnly || classItem.requireMemberId || classItem.enrollmentOpen === false) {
+        return res.status(404).json({ message: 'Class not found' });
+      }
     }
 
     // Calculate enrollment count dynamically
@@ -292,11 +359,19 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', supabaseAuth, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: 'Invalid class ID' });
-    const updated = await storage.updateClass(id, req.body || {});
+    const existing = await storage.getClassById(id);
+    if (!existing) return res.status(404).json({ message: 'Class not found' });
+    if (!(await staffCanAccessSchool(req, existing.schoolId) || isPlatformAdmin(req))) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
+    const body = { ...(req.body || {}) };
+    delete body.schoolId;
+    delete body.school_id;
+    const updated = await storage.updateClass(id, body);
     if (!updated) return res.status(404).json({ message: 'Class not found' });
     return res.json({ class: updated });
   } catch (error) {
@@ -305,10 +380,15 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', supabaseAuth, async (req: any, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: 'Invalid class ID' });
+    const existing = await storage.getClassById(id);
+    if (!existing) return res.status(404).json({ message: 'Class not found' });
+    if (!(await staffCanAccessSchool(req, existing.schoolId) || isPlatformAdmin(req))) {
+      return res.status(403).json({ message: 'Insufficient permissions' });
+    }
 
     const enrollmentsByClass = await storage.getEnrollmentsByClassId(id);
     const allEnrollments = await (storage.getAllEnrollments?.() || Promise.resolve([]));

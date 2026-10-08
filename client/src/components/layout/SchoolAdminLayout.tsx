@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { useLocation } from "wouter";
 import UnifiedSchoolAdminSidebar from "./UnifiedSchoolAdminSidebar";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import { Bell } from "lucide-react";
@@ -6,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useLayoutShell } from "@/contexts/LayoutShellContext";
 import { normalizeNotificationsResponse } from "@/hooks/useNotifications";
 
@@ -16,6 +18,22 @@ interface SchoolAdminLayoutProps {
 
 export default function SchoolAdminLayout({ children, pageTitle }: SchoolAdminLayoutProps) {
   const { hasShell } = useLayoutShell();
+  const [location, setLocation] = useLocation();
+  const { data: platformStatus } = useQuery<{ plan?: string; setupCompletedAt?: string | null }>({
+    queryKey: ["/api/platform-subscriptions/status"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/platform-subscriptions/status");
+      if (!response.ok) return { plan: "internal", setupCompletedAt: "skip" };
+      return response.json();
+    },
+    retry: false,
+  });
+  useEffect(() => {
+    if (!platformStatus || platformStatus.plan === "internal" || platformStatus.setupCompletedAt) return;
+    const path = location.split("?")[0];
+    if (path.startsWith("/schools/setup") || path.startsWith("/schools/billing")) return;
+    setLocation("/schools/setup");
+  }, [platformStatus, location, setLocation]);
   const { data: notifications = [] } = useQuery({
     queryKey: ['/api/notifications'],
     select: normalizeNotificationsResponse,

@@ -6,6 +6,8 @@ import { loginPathWithReturnTo } from "@/lib/auth-return-to";
 
 type PublicStoreHeaderProps = {
   storeName?: string;
+  logoUrl?: string | null;
+  brandColor?: string | null;
   cartCount: number;
   cartTotal: number;
   cartPulse?: boolean;
@@ -15,6 +17,8 @@ type PublicStoreHeaderProps = {
 
 export function PublicStoreHeader({
   storeName,
+  logoUrl,
+  brandColor,
   cartCount,
   cartTotal,
   cartPulse,
@@ -24,8 +28,13 @@ export function PublicStoreHeader({
   return (
     <header className="border-b bg-white sticky top-0 z-10">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-        <div className="min-w-0 pr-4">
-          <h1 className="text-2xl font-semibold truncate">{storeName ?? "Store"}</h1>
+        <div className="min-w-0 pr-4 flex items-center gap-3">
+          {logoUrl ? (
+            <img src={logoUrl} alt="" className="h-10 w-10 rounded object-contain bg-white" />
+          ) : null}
+          <h1 className="text-2xl font-semibold truncate" style={brandColor ? { color: brandColor } : undefined}>
+            {storeName ?? "Store"}
+          </h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!isAuthenticated ? (

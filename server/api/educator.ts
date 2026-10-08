@@ -1475,9 +1475,24 @@ router.get('/class-students/:classId', async (req, res) => {
       return res.status(404).json({ message: 'Class not found' });
     }
 
-    const isAuthorized = 
+    const classSchoolId = targetClass.schoolId != null ? Number(targetClass.schoolId) : null;
+    let educatorSchoolIds = new Set<number>();
+    if (educator.schoolId != null) educatorSchoolIds.add(Number(educator.schoolId));
+    try {
+      const roleRows = await storage.getUserRolesByUserId(educator.id);
+      for (const row of roleRows) {
+        if (row.schoolId != null && ['educator', 'teacher', 'instructor', 'mentor', 'director', 'schoolAdmin'].includes(row.role)) {
+          educatorSchoolIds.add(Number(row.schoolId));
+        }
+      }
+    } catch {
+      /* role lookup is best-effort; school_id still applies */
+    }
+    const sameSchool = classSchoolId == null || educatorSchoolIds.size === 0 || educatorSchoolIds.has(classSchoolId);
+    const isAssigned =
       targetClass.instructorId === educator.id ||
       targetClass.instructorName === educator.name;
+    const isAuthorized = sameSchool && isAssigned;
 
     if (!isAuthorized) {
       console.log(`[EducatorDashboard] Educator ${email} not authorized for class ${classId}`);

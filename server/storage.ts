@@ -5825,9 +5825,18 @@ export class MemStorage implements IStorage {
     }
 
     async createChild(child: InsertChild & { parentId: number }): Promise<Child> {
+      const { PlanLimitError } = await import('./config/platform-plans');
+      const { assertStudentCapacity } = await import('./lib/platform-school-billing');
+      try {
+        await assertStudentCapacity(child.schoolId);
+      } catch (error) {
+        if (error instanceof PlanLimitError) throw error;
+        console.warn('Student plan limit check skipped:', error instanceof Error ? error.message : error);
+      }
       try {
         return await this.dbStorage.createChild(child);
       } catch (error) {
+        if (error instanceof PlanLimitError) throw error;
         return this.memStorage.createChild(child);
       }
     }
@@ -8612,6 +8621,36 @@ export class MemStorage implements IStorage {
       }
       getEventsBySchool(schoolId: number) {
         return this.requireAttendanceDb().getEventsBySchool(schoolId);
+      }
+
+      getSchoolApplicationById(id: number) {
+        return import('./lib/school-application-storage').then((m) => m.getSchoolApplicationById(id));
+      }
+      getSchoolApplicationByEmail(email: string) {
+        return import('./lib/school-application-storage').then(async (m) => {
+          const rows = await m.getSchoolApplicationsByEmail(email);
+          return rows[0];
+        });
+      }
+      getAllSchoolApplications() {
+        return import('./lib/school-application-storage').then((m) => m.listSchoolApplications());
+      }
+      getSchoolApplicationsByStatus(status: 'pending' | 'under_review' | 'approved' | 'declined') {
+        return import('./lib/school-application-storage').then((m) => m.getSchoolApplicationsByStatus(status));
+      }
+      createSchoolApplication(application: any) {
+        return import('./lib/school-application-storage').then((m) => m.createSchoolApplication(application));
+      }
+      updateSchoolApplicationStatus(
+        id: number,
+        status: 'pending' | 'under_review' | 'approved' | 'declined',
+        reviewedBy?: string,
+        reviewNotes?: string,
+        extra?: { schoolId?: number | null; rejectionReason?: string | null },
+      ) {
+        return import('./lib/school-application-storage').then((m) =>
+          m.updateSchoolApplicationStatus(id, status, reviewedBy, reviewNotes, extra),
+        );
       }
 
       // Clear all data from storage (for testing)

@@ -98,7 +98,7 @@ export default function RegistrationPaymentPage() {
       setPaymentProcessed(true);
       toast({
         title: "Registration Successful!",
-        description: "Welcome to American Seekers Academy. Check your email for confirmation.",
+        description: "Your registration is saved. Check your email for confirmation.",
       });
       
       // Send confirmation email
@@ -177,7 +177,7 @@ export default function RegistrationPaymentPage() {
               </div>
               <CardTitle className="text-2xl text-green-900">Registration Complete!</CardTitle>
               <CardDescription className="text-green-700">
-                Welcome to American Seekers Academy
+                Registration complete
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -189,7 +189,7 @@ export default function RegistrationPaymentPage() {
                   <CardContent className="pt-6">
                     <h3 className="font-semibold text-lg">{registrationData.selectedClass.title}</h3>
                     <p className="text-green-700">{registrationData.selectedClass.schedule}</p>
-                    <p className="text-sm text-green-600">Brighton Location</p>
+                    <p className="text-sm text-green-600">{registrationData?.schoolName || "Your school"}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -271,7 +271,7 @@ export default function RegistrationPaymentPage() {
                   <CardContent className="pt-4">
                     <h4 className="font-semibold">{registrationData.selectedClass.title}</h4>
                     <p className="text-sm text-blue-700">{registrationData.selectedClass.schedule}</p>
-                    <p className="text-sm text-blue-600">Brighton Location</p>
+                    <p className="text-sm text-blue-600">{registrationData?.schoolName || "Your school"}</p>
                   </CardContent>
                 </Card>
               </div>

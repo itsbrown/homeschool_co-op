@@ -4,6 +4,7 @@ import { userRoles } from '@shared/schema';
 import { eq, sql } from 'drizzle-orm';
 import type { ProgramEnrollment, User } from '@shared/schema';
 import { getAdminPermittedSchoolAccess } from './resolve-school-id';
+import { getSchoolCoreByAdminId } from './school-db';
 
 export type EnrollmentSchoolScopeInput = Pick<
   ProgramEnrollment,
@@ -62,6 +63,13 @@ export async function resolveAdminSchoolId(req: any, user: User): Promise<number
   );
   if (anyAdminWithSchool?.schoolId) {
     return anyAdminWithSchool.schoolId;
+  }
+
+  if (user.role === 'schoolAdmin' || user.role === 'director') {
+    const administered = await getSchoolCoreByAdminId(user.id);
+    if (administered) {
+      return administered.id;
+    }
   }
 
   if (user.schoolId != null && user.schoolId > 0) {

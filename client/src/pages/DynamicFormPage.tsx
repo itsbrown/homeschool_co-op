@@ -464,7 +464,7 @@ export default function DynamicFormPage() {
   useEffect(() => {
     if (!form) return;
     form_hook.reset(valuesWithPrefill(form));
-    document.title = `${form.title} - American Seekers Academy`;
+    document.title = form.school?.name ? `${form.title} - ${form.school.name}` : form.title;
   }, [form?.id]);
 
   const submitMutation = useMutation({

@@ -205,6 +205,14 @@ router.post('/:storeSlug/checkout', async (req, res) => {
     if (!isStoreCheckoutAllowed()) {
       return res.status(503).json({ message: 'Store checkout is not enabled yet' });
     }
+    const { familyChargeDecision } = await import('../lib/platform-school-billing');
+    const familyCharges = await familyChargeDecision(school.id);
+    if (!familyCharges.allowed) {
+      return res.status(403).json({
+        code: 'FAMILY_PAYMENTS_GATED',
+        message: familyCharges.message,
+      });
+    }
 
     const parsed = checkoutBodySchema.safeParse(req.body);
     if (!parsed.success) {

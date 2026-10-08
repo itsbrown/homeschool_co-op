@@ -33,6 +33,7 @@ import { webhookHandler } from "./webhook-handler";
 import userRolesRouter from "./api/user-roles";
 import meRouter from "./api/me";
 import autoPayRouter, { adminPaymentMethodsRouter } from "./api/auto-pay";
+import { gateMutatingFamilyCharges } from "./middleware/family-charge-gate";
 import cartRouter from "./api/cart";
 import assessmentsRouter from "./api/assessments";
 import lexileRouter from "./api/lexile";
@@ -226,9 +227,9 @@ app.use('/api/file-upload', fileUploadRouter);
 app.use('/api/school-admin/marketing-links', marketingLinksRouter);
 app.use('/api/school-parents', schoolParentsRouter);
 app.use('/api/payments', paymentHistoryRouter);
-app.use('/api/stripe', stripeRoutes);
-app.use("/api/billing", billingRouter);
-app.use("/api/scheduled-payments", scheduledPaymentsRouter);
+app.use('/api/stripe', gateMutatingFamilyCharges, stripeRoutes);
+app.use("/api/billing", gateMutatingFamilyCharges, billingRouter);
+app.use("/api/scheduled-payments", gateMutatingFamilyCharges, scheduledPaymentsRouter);
 app.use("/api/ai-pricing", aiPricingRouter);
 app.use("/api/stripe-migration", stripeMigrationRouter);
 app.use("/api/stripe-webhooks", stripeWebhookRouter);
@@ -237,7 +238,7 @@ app.use("/api/account-import", accountImport);
 app.use("/api/daily-flows", dailyFlowsRoutes);
 app.use("/api/user", userRolesRouter); // Multi-role management endpoints
 app.use("/api/me", meRouter); // Effective permissions for nav/guards
-app.use("/api/user", autoPayRouter); // Payment methods + auto-pay (same /api/user prefix)
+app.use("/api/user", gateMutatingFamilyCharges, autoPayRouter); // Payment methods + auto-pay (same /api/user prefix)
 app.use("/api/admin/users", adminPaymentMethodsRouter);
 // Cart pricing (snapshot / calculate / validate). Each route applies supabaseAuth.
 // Must be registered on the Express app — otherwise /api/cart/* falls through to Vite

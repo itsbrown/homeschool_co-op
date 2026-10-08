@@ -80,6 +80,7 @@ const adminNavGroups: NavGroup[] = [
     icon: Building2,
     items: [
       { title: 'My School', href: '/schools/my-school', icon: School },
+      { title: 'Setup', href: '/schools/setup', icon: School },
       { title: 'Locations', href: '/schools/locations', icon: MapPin },
       { title: 'Classes', href: '/schools/classes', icon: BookOpen },
       { title: 'Sessions', href: '/schools/sessions', icon: Calendar },
@@ -122,6 +123,7 @@ const adminNavGroups: NavGroup[] = [
     title: 'Finance',
     icon: Wallet,
     items: [
+      { title: 'Platform billing', href: '/schools/billing', icon: CreditCard },
       { title: 'Financial Reports', href: '/school-admin/financial-reports', icon: BarChart3 },
       { title: 'School Analytics', href: '/school-admin/analytics', icon: BarChart3 },
       { title: 'Retention Report', href: '/school-admin/retention-report', icon: TrendingUp },

@@ -126,6 +126,21 @@ export const schools = pgTable("schools", {
   storeSlug: text("store_slug").unique(),
   publicStoreEnabled: boolean("public_store_enabled").default(false).notNull(),
   publicStoreSettings: jsonb("public_store_settings").default({}).notNull(),
+
+  /** Hex brand color for this school's public pages. Null keeps the platform default. */
+  brandColor: text("brand_color"),
+  /**
+   * SaaS plan for this school. `internal` is unlimited and is the default so
+   * existing ASA rows are unchanged until a migration sets something else.
+   * New applicant schools are set to `starter` when approved.
+   */
+  platformPlan: text("platform_plan").default("internal").notNull(),
+  /** active | past_due | canceled | incomplete */
+  platformSubscriptionStatus: text("platform_subscription_status").default("active").notNull(),
+  /** Stripe customer for the school's platform fee. Not the parent tuition customer. */
+  platformStripeCustomerId: text("platform_stripe_customer_id"),
+  platformStripeSubscriptionId: text("platform_stripe_subscription_id"),
+  setupCompletedAt: timestamp("setup_completed_at"),
 });
 
 export const insertSchoolSchema = createInsertSchema(schools)
@@ -223,6 +238,11 @@ export const schoolApplications = pgTable("school_applications", {
   
   // Security token for application verification
   token: text("token").notNull().unique(),
+
+  /** Set when approval creates or links a school row. */
+  schoolId: integer("school_id"),
+  /** Required when status is declined. */
+  rejectionReason: text("rejection_reason"),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

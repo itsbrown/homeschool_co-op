@@ -6,6 +6,7 @@ import { sendSMS, isTwilioConfigured, getTwilioConnectionSummary } from '../serv
 import * as brevo from '@getbrevo/brevo';
 import { getUserIdsWithLabelsAtSchool } from '../lib/user-labels';
 import { resolveSchoolIdForUser } from '../lib/resolve-school-id';
+import { isPlatformAdmin, staffCanAccessSchool } from '../lib/route-access';
 import { excludeInactiveUserIds } from '../lib/active-notification-recipients';
 import { isFutureSchedule, parseSchoolWallTime, shouldDeliverNotification } from '@shared/school-timezone';
 
@@ -35,18 +36,72 @@ type CombinedTargetingBody = {
   schoolId?: number;
 };
 
+class ForeignSchoolError extends Error {
+  constructor() {
+    super('Access denied');
+  }
+}
+
+async function callerCanUseSchool(req: any, schoolId: number): Promise<boolean> {
+  if (isPlatformAdmin(req)) return true;
+  if (await staffCanAccessSchool(req, schoolId)) return true;
+  const email = req.user?.email ?? req.auth?.payload?.email;
+  if (!email) return false;
+  const user = await storage.getUserByEmail(email);
+  if (!user) return false;
+  const own = await resolveSchoolIdForUser(user);
+  return own === schoolId;
+}
+
+function deniedForeignSchool(error: unknown, res: any): boolean {
+  if (error instanceof ForeignSchoolError) {
+    res.status(403).json({ message: 'Access denied' });
+    return true;
+  }
+  return false;
+}
+
 async function resolveNotificationSchoolId(
   req: any,
   body?: { schoolId?: number },
 ): Promise<number | null> {
   const fromBody = Number(body?.schoolId ?? req.body?.schoolId ?? req.query?.schoolId);
-  if (Number.isFinite(fromBody) && fromBody > 0) return fromBody;
+  if (Number.isFinite(fromBody) && fromBody > 0) {
+    if (!(await callerCanUseSchool(req, fromBody))) {
+      throw new ForeignSchoolError();
+    }
+    return fromBody;
+  }
 
   const email = req.user?.email ?? req.auth?.payload?.email;
   if (!email) return null;
   const adminUser = await storage.getUserByEmail(email);
   if (!adminUser) return null;
   return resolveSchoolIdForUser(adminUser);
+}
+
+async function callerMayMessageUser(req: any, recipientUserId: number): Promise<boolean> {
+  if (isPlatformAdmin(req)) return true;
+  const recipient = await storage.getUser(Number(recipientUserId));
+  if (!recipient) return false;
+  if (recipient.schoolId == null) return true;
+  return callerCanUseSchool(req, Number(recipient.schoolId));
+}
+
+async function userCanSeeNotification(req: any, notification: any): Promise<boolean> {
+  if (isPlatformAdmin(req)) return true;
+  const userId = Number(req.user?.id);
+  if (!Number.isFinite(userId) || userId < 1) return false;
+  if (Number(notification.senderId) === userId) return true;
+  const targetIds = Array.isArray(notification.targetData?.userIds) ? notification.targetData.userIds : [];
+  if (targetIds.map((id: unknown) => Number(id)).includes(userId)) return true;
+  const recipients = await storage.getNotificationRecipientsByNotificationId(notification.id);
+  if (recipients.some((row: any) => Number(row.recipientId) === userId)) return true;
+  if (notification.senderId) {
+    const sender = await storage.getUser(Number(notification.senderId));
+    if (sender?.schoolId && (await callerCanUseSchool(req, Number(sender.schoolId)))) return true;
+  }
+  return false;
 }
 
 /** Union recipient user IDs from the school notification compose UI (individuals, roles, locations, classes). */
@@ -173,6 +228,10 @@ router.post("/", async (req: any, res) => {
       return res.status(400).json({ message: "userId, title, and message are required" });
     }
 
+    if (!(await callerMayMessageUser(req, Number(userId)))) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     const normalizedType =
       deliveryMethods.includes("email") && deliveryMethods.includes("sms")
         ? "all"
@@ -234,6 +293,7 @@ router.get("/", async (req, res) => {
   try {
     let userId = req.query.userId ? parseInt(req.query.userId as string) : null;
     const role = req.query.role as string;
+    const requestedUserId = userId;
     
     if (!userId) {
       const email =
@@ -255,8 +315,27 @@ router.get("/", async (req, res) => {
       }
     }
     
-    if (isNaN(userId)) {
+    if (userId == null || isNaN(userId)) {
       return res.status(400).json({ message: "Valid user ID required" });
+    }
+
+    if (requestedUserId) {
+      const email =
+        (req as any).auth?.payload?.email ||
+        (req as any).auth?.email ||
+        (req as any).user?.email ||
+        (req as any).session?.userEmail;
+      const actor = email ? await storage.getUserByEmail(email) : null;
+      const readingOwnInbox = actor != null && actor.id === requestedUserId;
+      if (!readingOwnInbox) {
+        const recipient = await storage.getUser(requestedUserId);
+        const allowed =
+          isPlatformAdmin(req) ||
+          (recipient?.schoolId != null && (await callerCanUseSchool(req, Number(recipient.schoolId))));
+        if (!allowed) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
     }
 
     const notifications = await storage.getNotificationsByUserId(userId, role);
@@ -352,6 +431,7 @@ router.post("/preview-recipients", async (req: any, res) => {
     const recipientIds = await resolveCombinedRecipientIds(body, schoolId);
     return res.json({ recipientCount: recipientIds.length });
   } catch (error) {
+    if (deniedForeignSchool(error, res)) return;
     console.error("Error previewing notification recipients:", error);
     return res.status(500).json({ message: "Failed to preview recipients" });
   }
@@ -387,6 +467,9 @@ router.post("/send-combined", async (req: any, res) => {
     }
 
     const schoolId = await resolveNotificationSchoolId(req, req.body);
+    if ((includeAll || !schoolId) && !schoolId && !isPlatformAdmin(req)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
     const recipientIds = await resolveCombinedRecipientIds(
       {
         includeAll,
@@ -437,6 +520,7 @@ router.post("/send-combined", async (req: any, res) => {
       scheduledFor: scheduledAt ? scheduledAt.toISOString() : null,
     });
   } catch (error) {
+    if (deniedForeignSchool(error, res)) return;
     console.error("Error sending combined notification:", error);
     const detail = error instanceof Error ? error.message : String(error);
     console.error("send-combined detail:", detail);
@@ -451,6 +535,9 @@ router.get("/:id", async (req, res) => {
     const all = await storage.getAllNotifications();
     const notification = all.find((n: any) => n.id === id);
     if (!notification) return res.status(404).json({ message: "Notification not found" });
+    if (!(await userCanSeeNotification(req, notification))) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
     return res.status(200).json({
       notification: {
         id: notification.id,
@@ -499,6 +586,12 @@ router.delete("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid notification ID" });
+    const all = await storage.getAllNotifications();
+    const notification = all.find((n: any) => n.id === id);
+    if (!notification) return res.status(404).json({ message: "Notification not found" });
+    if (!(await userCanSeeNotification(req, notification))) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
     await storage.deleteNotification(id);
     return res.status(200).json({ success: true });
   } catch (error) {
@@ -512,6 +605,9 @@ router.post("/broadcast", async (req: any, res) => {
     const { targetRole, locationId, locationIds, title, message, scheduledFor, schoolId: bodySchoolId } = req.body || {};
     if (!title || !message) return res.status(400).json({ message: "title and message are required" });
     const schoolId = await resolveNotificationSchoolId(req, { schoolId: bodySchoolId });
+    if (!schoolId && !isPlatformAdmin(req)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
 
     let recipientIds: number[] = [];
     if (targetRole && schoolId) {
@@ -605,6 +701,7 @@ router.post("/broadcast", async (req: any, res) => {
       },
     });
   } catch (error) {
+    if (deniedForeignSchool(error, res)) return;
     console.error("Error broadcasting notification:", error);
     return res.status(500).json({ message: "Failed to broadcast notification" });
   }
