@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-10-08 (Route lockdown and tracked PII)
+
+- Child, school roster, debug, backup, migration, payment-import, and admin role-invitation routes now require the matching role. School staff are scoped with `schools.admin_id` / staff `user_roles`, not a stale `users.school_id`. Public school-code signup stays anonymous and does not mint a registration code.
+- `data/*.json` roster dumps, `db_push_output.txt`, backup JSON, and contact CSVs are no longer tracked. `GET /payment-plans` and `/class-payment-plans/:classId` render an unavailable notice. No schema change.
+- Tests: `server/tests/integration/production-path/authz-lockdown.test.ts`.
+
 ## 2026-10-06 (Swallowed notification errors still retry)
 
 - `processNotification` sets `failed` and does not throw, so the scheduled tick was counting those rows as delivered and skipping the zero-recipient retry. After `deliverNotification` returns, the tick re-reads status. Only `sent` counts as delivered. `failed` with no recipient rows is requeued (same `claimRecoveries` cap). No migration.

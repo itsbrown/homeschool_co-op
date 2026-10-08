@@ -6,6 +6,7 @@ import ChildRegistrationForm from "@/components/registration/ChildRegistrationFo
 import { useAuth } from "@/components/SupabaseProvider";
 import { useRole } from "@/contexts/RoleContext";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function ChildRegistrationPage() {
   const { childId } = useParams();
@@ -23,10 +24,16 @@ export default function ChildRegistrationPage() {
   // If editing, fetch the child's current information
   const { data: childData, isLoading: childLoading } = useQuery({
     queryKey: ["/api/children", childId],
-    queryFn: () => 
-      childId && !isNaN(Number(childId))
-        ? fetch(`/api/children/${childId}`).then(res => res.json())
-        : Promise.resolve(null),
+    queryFn: async () => {
+      if (!childId || isNaN(Number(childId))) {
+        return null;
+      }
+      const res = await apiRequest("GET", `/api/children/${childId}`);
+      if (!res.ok) {
+        throw new Error("Failed to load child");
+      }
+      return res.json();
+    },
     enabled: !!childId && !isNaN(Number(childId)),
   });
   

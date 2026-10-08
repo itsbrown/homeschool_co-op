@@ -56,7 +56,7 @@ How child grade/age relate to classes and enrollment **today**.
 
 ## Key files
 
-- `docs/audit/fall-2026-class-rosters.csv` — Fall 2026 class rosters (day type + pending + parent contact); daily CI through 2026-09-21 on branch `docs/fall-2026-class-rosters` (`fall-2026-roster-snapshot.yml`); refresh via `server/scripts/export-fall-2026-class-rosters.ts`
+- Fall 2026 class rosters (day type, pending balance, parent contact) are no longer tracked on `main`. The daily snapshot through 2026-09-21 wrote `docs/audit/fall-2026-class-rosters.csv` on branch `docs/fall-2026-class-rosters` only. Do not commit that CSV. Refresh locally with `server/scripts/export-fall-2026-class-rosters.ts` and leave the file untracked.
 - `shared/schema.ts` — `children`, `classes`, `programEnrollments`
 - `shared/grade-levels.ts` — normalize, `gradeAsOfDate` (Dec 31), age−5 helpers, `GRADE_LEVEL_OPTIONS`
 - `server/scripts/apply-fall-move-up-grades-production.ts` — Fall class seats, move-up only, no placement sync

@@ -181,6 +181,7 @@ if (!isAssigned) {
 | 403 `REGISTRATION_REQUIRED` | Unregistered user tried OAuth | User needs school registration link first |
 | 403 `REGISTRATION_REQUIRED` (DB unavailable) | `getDb()` threw during `getUserByEmail` — DB timeout, not a missing user | Check DB connectivity; distinguish from unregistered-user case by checking server logs for DB errors |
 | 403 on school admin routes even with correct role | `requireAdmin` used — allows `'school-admin'` (hyphen) not `'schoolAdmin'` (camelCase) | Replace `requireAdmin` with `requireRole(['schoolAdmin', 'admin', 'superAdmin'])` |
+| Parent or anonymous caller can list another school's children | Route checked login only, or used `users.school_id` while `schools.admin_id` points elsewhere | Use `canReadChild` / `staffCanAccessSchool` in `server/lib/route-access.ts`. School list uses `schoolsVisibleToStaff`, which ignores a stale `users.school_id` once `admin_id` schools exist |
 | 403 “Account is inactive” | `users.is_active` is false (school Users Deactivate) | Reactivate from `/schools/users`. Do not delete the user to restore access. Both `supabaseAuth` and `jwtCheck` must reject; parent `/api/children` uses `jwtCheck` |
 | School owner Deactivate 403 | UI called `/api/user-management/users/:auth0Id/deactivate` (`admin`/`superAdmin` only) | Use `PUT /api/school-admin/users/:id/deactivate` (integer `users.id`) |
 | Staff edit 500 “Error updating staff member” | First `user_roles` row is often `parent`; PUT renamed it to Mentor | `pickStaffRoleRecord` — update the staff row, leave parent |

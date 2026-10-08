@@ -16,12 +16,19 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function createParentTestAccount() {
   try {
+    const email = process.env.TEST_PARENT_EMAIL || 'parent.test@americanseekersacademy.com';
+    const password = process.env.TEST_PARENT_PASSWORD;
+    if (!password) {
+      console.error('Set TEST_PARENT_PASSWORD');
+      process.exit(1);
+    }
+
     console.log('Creating parent test account in Supabase...');
     
     // Create auth user in Supabase
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: 'parent.test@americanseekersacademy.com',
-      password: 'TestParent123!',
+      email,
+      password,
       email_confirm: true,
       user_metadata: {
         full_name: 'Test Parent',
@@ -42,7 +49,7 @@ async function createParentTestAccount() {
         .from('users')
         .insert({
           firebase_uid: authData.user.id,
-          email: 'parent.test@americanseekersacademy.com',
+          email,
           role: 'parent',
           name: 'Test Parent',
           created_at: new Date().toISOString(),
@@ -58,11 +65,9 @@ async function createParentTestAccount() {
       console.log('Note: Users table may not exist, skipping database insert');
     }
 
-    console.log('\n🎉 Parent test account created successfully!');
-    console.log('📧 Email: parent.test@americanseekersacademy.com');
-    console.log('🔒 Password: TestParent123!');
-    console.log('👥 Role: parent');
-    console.log('\nYou can now use this account to test parent functionality.');
+    console.log('\nParent test account created successfully.');
+    console.log('Email:', email);
+    console.log('Role: parent');
 
   } catch (error) {
     console.error('❌ Error creating parent test account:', error);

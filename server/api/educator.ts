@@ -21,6 +21,21 @@ import {
 import { loadEducatorStudentSafetyByChildId } from "../lib/educator-student-safety";
 import { attachRosterDayTypes } from "../lib/roster-session-day-type";
 import { countRosterDayTypes } from "@shared/roster-day-type";
+import { emailsMatch } from "@shared/parent-identity";
+
+function boundEducatorEmail(
+  req: express.Request,
+  supplied: unknown,
+): { ok: true; email: string } | { ok: false; status: number; message: string } {
+  const self = (req as { user?: { email?: string } }).user?.email;
+  if (!self) {
+    return { ok: false, status: 401, message: "Authentication required" };
+  }
+  if (supplied != null && String(supplied).trim() !== "" && !emailsMatch(self, String(supplied))) {
+    return { ok: false, status: 403, message: "Insufficient permissions" };
+  }
+  return { ok: true, email: self };
+}
 
 const router = express.Router();
 
@@ -1323,17 +1338,16 @@ router.get('/active-session', async (req, res) => {
   }
 });
 
-// Legacy routes (without auth middleware for backwards compatibility)
-// TODO: Migrate these to use authentication
+// Legacy email query routes. The email is the signed-in educator, not a caller-supplied id.
 
-// Get classes assigned to a specific educator by email (legacy)
+// Get classes assigned to the signed-in educator (legacy query param kept for the dashboard)
 router.get('/classes', async (req, res) => {
   try {
-    const { email } = req.query;
-    
-    if (!email) {
-      return res.status(400).json({ message: 'Email parameter is required' });
+    const bound = boundEducatorEmail(req, req.query.email);
+    if (!bound.ok) {
+      return res.status(bound.status).json({ message: bound.message });
     }
+    const email = bound.email;
 
     console.log(`[EducatorDashboard] Fetching classes for educator: ${email}`);
 
@@ -1371,11 +1385,11 @@ router.get('/classes', async (req, res) => {
 // Get students for classes taught by a specific educator (legacy)
 router.get('/students', async (req, res) => {
   try {
-    const { email } = req.query;
-    
-    if (!email) {
-      return res.status(400).json({ message: 'Email parameter is required' });
+    const bound = boundEducatorEmail(req, req.query.email);
+    if (!bound.ok) {
+      return res.status(bound.status).json({ message: bound.message });
     }
+    const email = bound.email;
 
     console.log(`[EducatorDashboard] Fetching students for educator: ${email}`);
 
@@ -1441,11 +1455,11 @@ router.get('/students', async (req, res) => {
 router.get('/class-students/:classId', async (req, res) => {
   try {
     const { classId } = req.params;
-    const { email } = req.query;
-    
-    if (!email) {
-      return res.status(400).json({ message: 'Email parameter is required' });
+    const bound = boundEducatorEmail(req, req.query.email);
+    if (!bound.ok) {
+      return res.status(bound.status).json({ message: bound.message });
     }
+    const email = bound.email;
 
     console.log(`[EducatorDashboard] Fetching students for class ${classId}, educator: ${email}`);
 
@@ -3302,11 +3316,11 @@ router.get('/volunteers/search', async (req, res) => {
 // GET /api/educator/notification-data - Get classes with student/parent counts for notifications
 router.get('/notification-data', async (req, res) => {
   try {
-    const email = req.query.email as string;
-    
-    if (!email) {
-      return res.status(400).json({ classes: [], totalParents: 0, error: 'Email required' });
+    const bound = boundEducatorEmail(req, req.query.email);
+    if (!bound.ok) {
+      return res.status(bound.status).json({ classes: [], totalParents: 0, error: bound.message });
     }
+    const email = bound.email;
 
     console.log('[EducatorNotifications] Fetching notification data for:', email);
 
@@ -3441,13 +3455,19 @@ router.post('/notifications/send', async (req, res) => {
   try {
     const { subject, message, sendToAll, classIds, senderEmail } = req.body;
 
-    if (!subject || !message || !senderEmail) {
-      return res.status(400).json({ error: 'Subject, message, and sender email are required' });
+    if (!subject || !message) {
+      return res.status(400).json({ error: 'Subject and message are required' });
     }
 
-    console.log('[EducatorNotifications] Sending notification:', { subject, sendToAll, classIds, senderEmail });
+    const bound = boundEducatorEmail(req, senderEmail);
+    if (!bound.ok) {
+      return res.status(bound.status).json({ error: bound.message });
+    }
+    const resolvedSenderEmail = bound.email;
 
-    const sender = await storage.getUserByEmail(senderEmail);
+    console.log('[EducatorNotifications] Sending notification:', { subject, sendToAll, classIds, senderEmail: resolvedSenderEmail });
+
+    const sender = await storage.getUserByEmail(resolvedSenderEmail);
     if (!sender) {
       return res.status(401).json({ error: 'Sender not found' });
     }
@@ -3547,11 +3567,11 @@ router.post('/notifications/send', async (req, res) => {
 // GET /api/educator/notifications/history - Get sent notifications for educator
 router.get('/notifications/history', async (req, res) => {
   try {
-    const email = req.query.email as string;
-    
-    if (!email) {
-      return res.status(400).json([]);
+    const bound = boundEducatorEmail(req, req.query.email);
+    if (!bound.ok) {
+      return res.status(bound.status).json({ message: bound.message });
     }
+    const email = bound.email;
 
     const user = await storage.getUserByEmail(email);
     if (!user) {

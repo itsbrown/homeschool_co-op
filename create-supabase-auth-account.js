@@ -17,12 +17,19 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 
 async function createSchoolAdminAuthAccount() {
   try {
+    const email = process.env.SCHOOL_ADMIN_AUTH_EMAIL;
+    const password = process.env.SCHOOL_ADMIN_AUTH_PASSWORD;
+    if (!email || !password) {
+      console.error('Set SCHOOL_ADMIN_AUTH_EMAIL and SCHOOL_ADMIN_AUTH_PASSWORD');
+      process.exit(1);
+    }
+
     console.log('Creating Supabase Auth account for school admin...');
     
     // Create auth account
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: 'contact.americanseekersacademy@gmail.com',
-      password: 'SchoolAdmin123!',
+      email,
+      password,
       email_confirm: true,
       user_metadata: {
         full_name: 'ASA School Administrator',
@@ -41,14 +48,14 @@ async function createSchoolAdminAuthAccount() {
           return;
         }
         
-        const existingUser = userData.users.find(u => u.email === 'contact.americanseekersacademy@gmail.com');
+        const existingUser = userData.users.find(u => u.email === email);
         console.log('✅ Found existing auth user:', existingUser?.id);
         
         // Update the database user record with the supabase_id
         const { data: updateData, error: updateError } = await supabase
           .from('users')
           .update({ supabase_id: existingUser?.id })
-          .eq('email', 'contact.americanseekersacademy@gmail.com')
+          .eq('email', email)
           .select()
           .single();
           
@@ -69,7 +76,7 @@ async function createSchoolAdminAuthAccount() {
       const { data: updateData, error: updateError } = await supabase
         .from('users')
         .update({ supabase_id: authData.user?.id })
-        .eq('email', 'contact.americanseekersacademy@gmail.com')
+        .eq('email', email)
         .select()
         .single();
         

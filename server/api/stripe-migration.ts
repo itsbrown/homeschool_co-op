@@ -1,8 +1,12 @@
 import express from 'express';
 import { storage } from '../storage';
 import { StripeEnrollmentMigration } from '../scripts/migrate-to-stripe';
+import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireRole } from '../middleware/auth0-auth';
 
 const router = express.Router();
+
+router.use(supabaseAuth, requireRole(['superAdmin']));
 
 /**
  * Migration API endpoints for moving to Stripe native payments

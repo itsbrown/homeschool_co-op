@@ -1,7 +1,11 @@
 import express from 'express';
 import { MemStorage } from '../storage';
+import { supabaseAuth } from '../middleware/supabase-auth';
+import { requireRole } from '../middleware/auth0-auth';
 
 const router = express.Router();
+
+router.use(supabaseAuth, requireRole(['superAdmin']));
 
 /**
  * Clean up legacy payment system - migrate all enrollments to Stripe

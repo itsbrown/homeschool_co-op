@@ -28,16 +28,11 @@ This project works best when **`main` matches `origin/main` and stays clean**, a
 - **Do not do long-running work on a branch that is already merged** (e.g. old PR branch). After merge, switch back to `main`, pull, and delete the local branch.
 - **Keep `git stash list` small.** Stash is for quick context switches, not archival storage.
 
-## Tracked JSON fixtures under `data/`
+## Local JSON under `data/`
 
-Files such as `data/children.json`, `data/users.json`, and similar are **tracked** so tests and local dev can share a baseline. Local edits are fine for development, but they should not sit modified forever:
+`data/*.json` is gitignored. Those files held child birthdates, parent emails, and staff contact data. The API starts with an empty file store when a JSON file is missing (`server/file-storage.ts`). Do not `git add -f` them, and do not commit roster CSVs, backup JSON, or `db_push_output.txt`.
 
-- **Intentional changes** (new fixture data for a test or feature): commit them on the **feature branch** with the code that needs them.
-- **Accidental / personal dev drift**: before switching branches or opening a PR from a noisy tree, restore or isolate them:
-  ```bash
-  git restore data/children.json data/users.json data/locations.json data/payment-history.json
-  ```
-  Adjust paths to match what you changed. If you must keep local data and switch branches, use **stash** (including untracked if needed: `git stash push -u -m "local data"`).
+Local copies are fine for development. Keep them out of commits. If a branch switch needs to preserve a local file, stash it (`git stash push -u -m "local data"`).
 
 ## Parallel work: worktrees (recommended use)
 

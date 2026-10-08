@@ -25,7 +25,7 @@ export default function SubscriptionSuccess() {
             description: "No session ID found. Please try again.",
             variant: "destructive",
           });
-          navigate("/payment-plans");
+          navigate("/payments");
           return;
         }
 

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Upload, FileText, Users, CreditCard, GraduationCap } from 'lucide-react';
+import { apiRequest } from '@/lib/queryClient';
 
 export default function DataImportPage() {
   const [uploading, setUploading] = useState(false);
@@ -32,10 +33,8 @@ export default function DataImportPage() {
     }
 
     try {
-      const response = await fetch(`/api/${endpoint}`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
+      const response = await apiRequest('POST', `/api/${endpoint}`, formData, {
+        passthroughStatuses: [400, 401, 403, 413, 500],
       });
 
       const data = await response.json();

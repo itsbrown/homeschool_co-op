@@ -5,8 +5,12 @@ import { storage } from "../storage";
 import { systemRoles } from "@shared/schema";
 import type { SystemRole } from "@shared/schema";
 import { getBrevoApiInstance, logEmailAttempt } from "../lib/email-service";
+import { supabaseAuth } from "../middleware/supabase-auth";
+import { requireRole } from "../middleware/auth0-auth";
 
 const router = Router();
+
+router.use(supabaseAuth, requireRole(["superAdmin"]));
 
 // Map invitation fields to camelCase DTO (handles both snake_case from DB and camelCase from storage)
 function mapInvitationToDTO(invitation: any) {

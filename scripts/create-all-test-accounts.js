@@ -14,25 +14,34 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Test accounts to create
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    console.error(`Missing ${name}`);
+    process.exit(1);
+  }
+  return value;
+}
+
+// Test accounts to create. Passwords come from the environment, never from this file.
 const testAccounts = [
   {
-    email: 'schooladmin.test@americanseekersacademy.com',
-    password: 'SchoolAdmin123!',
+    email: process.env.TEST_SCHOOL_ADMIN_EMAIL || 'schooladmin.test@americanseekersacademy.com',
+    password: requiredEnv('TEST_SCHOOL_ADMIN_PASSWORD'),
     role: 'school_admin',
     name: 'Test School Admin',
     description: 'School administrator test account'
   },
   {
-    email: 'educator.test@americanseekersacademy.com',
-    password: 'Educator123!',
+    email: process.env.TEST_EDUCATOR_EMAIL || 'educator.test@americanseekersacademy.com',
+    password: requiredEnv('TEST_EDUCATOR_PASSWORD'),
     role: 'educator',
     name: 'Test Educator',
     description: 'Educator/teacher test account'
   },
   {
-    email: 'learner.test@americanseekersacademy.com',
-    password: 'Learner123!',
+    email: process.env.TEST_LEARNER_EMAIL || 'learner.test@americanseekersacademy.com',
+    password: requiredEnv('TEST_LEARNER_PASSWORD'),
     role: 'learner',
     name: 'Test Learner',
     description: 'Student/learner test account'
@@ -111,11 +120,6 @@ async function createAllTestAccounts() {
   console.log('═══════════════════════════════════════════════════════════════');
   
   // Include the parent account we created earlier
-  console.log('👨‍👩‍👧‍👦 PARENT ACCOUNT:');
-  console.log('📧 Email: parent.test@americanseekersacademy.com');
-  console.log('🔒 Password: TestParent123!');
-  console.log('👥 Role: parent\n');
-  
   testAccounts.forEach(account => {
     const roleEmoji = {
       'school_admin': '🏫',
@@ -125,7 +129,6 @@ async function createAllTestAccounts() {
     
     console.log(`${roleEmoji} ${account.description.toUpperCase()}:`);
     console.log(`📧 Email: ${account.email}`);
-    console.log(`🔒 Password: ${account.password}`);
     console.log(`👥 Role: ${account.role}\n`);
   });
   
