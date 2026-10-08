@@ -10,6 +10,8 @@ Parallel **store lane** at `/store/:storeSlug` — isolated from member `/cart` 
 | Global checkout | `PUBLIC_STORE_CHECKOUT_ENABLED=true` or same as above |
 | Per school | `schools.public_store_enabled` + `schools.store_slug` |
 
+The accounts host rewrites `title`, description, `og:url` (`https://accounts.americanseekersacademy.com`), and `og:image` for `/store/:slug` and `/store/:slug/:item` (events use the same item URL). `GET /sitemap.xml` lists those pages. `GET /robots.txt` disallows private app routes.
+
 ## Admin
 
 - **Public Store** → `/school-admin/public-store` (settings, **classes & programs**, products, orders) — sidebar item under **Finance** when `enabled_features.publicStore` or the school has activated the store
