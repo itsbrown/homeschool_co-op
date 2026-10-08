@@ -29,6 +29,7 @@ function applicationBody(email: string, schoolName: string) {
     reference1Email: "ref@example.com",
     reference1Relationship: "Board member",
     agreesToTerms: true,
+    agreesToDataSharing: true,
   };
 }
 
