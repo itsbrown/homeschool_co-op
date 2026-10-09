@@ -17,7 +17,14 @@ import {
   Target,
   Users,
 } from "lucide-react";
-import { asTrimmedStrings, formatGroupLabels } from "@/lib/week-plan-lesson-content";
+import { withSnackHandwashingStatement } from "@shared/snack-handwashing";
+import {
+  asTrimmedStrings,
+  formatGroupLabels,
+  lessonLinkLabels,
+  lessonLinksFromBlock,
+  type LessonLinkAssetLabel,
+} from "@/lib/week-plan-lesson-content";
 
 export type WeekPlanBlockDetail = {
   title: string;
@@ -31,6 +38,8 @@ export type WeekPlanBlockDetail = {
   materials?: unknown;
   homework?: string | null;
   resources?: unknown;
+  /** Catalog rows used to name a link when its URL matches a file. */
+  linkAssets?: LessonLinkAssetLabel[];
   /** e.g. "Monday · 9:00 AM – 10:00 AM" */
   timeLabel?: string;
 };
@@ -79,135 +88,166 @@ function DetailSection({
   );
 }
 
-/** Read-only lesson body, shared by the side sheet and the family day sheet. */
-export function WeekPlanBlockDetailBody({ block }: { block: WeekPlanBlockDetail }) {
-  const description = block.description || "";
+/** Read-only lesson body shared by the side sheet and the family day sheet. */
+export function WeekPlanBlockDetailBody({
+  block,
+  hideLessonLinks = false,
+}: {
+  block: WeekPlanBlockDetail;
+  /** Parents must not see Drive / lesson URLs. Staff sheets keep links. */
+  hideLessonLinks?: boolean;
+}) {
+  const title = block.title || "";
+  const description = withSnackHandwashingStatement(title, block.description);
+  const blockType = block.blockType || "flexible";
+  const isCompleted = block.isCompleted || false;
   const objectives = asTrimmedStrings(block.objectives);
   const groups = formatGroupLabels(block.groups);
   const materials = asTrimmedStrings(block.materials);
-  const resources = asTrimmedStrings(block.resources);
-  const lessonLink = block.lessonLink || "";
+  const lessonLinks = hideLessonLinks ? [] : lessonLinksFromBlock(block);
+  const lessonLinkLabelsForBlock = lessonLinkLabels(lessonLinks, {
+    lessonTitle: title,
+    assets: block.linkAssets,
+  });
   const notes = block.notes || "";
   const homework = block.homework || "";
-  const extraLinks = resources.filter((url) => url !== lessonLink);
 
   return (
-        <div className="space-y-6">
-          {description && (
-            <DetailSection label="What we are teaching">
-              <p
-                className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap"
-                data-testid="schedule-block-description"
-              >
-                {description}
-              </p>
-            </DetailSection>
+    <div>
+      <div className="mb-6">
+        {block.timeLabel && (
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="h-3.5 w-3.5 text-slate-400" />
+            <p className="text-slate-500 text-sm">{block.timeLabel}</p>
+          </div>
+        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {blockTypeBadgeLg(blockType)}
+          {isCompleted && (
+            <Badge className="px-2.5 py-0.5 bg-green-100 text-green-700 border-green-200 hover:bg-green-100 flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Completed
+            </Badge>
           )}
-
-          {objectives.length > 0 && (
-            <DetailSection
-              label="Learning Objectives"
-              icon={<Target className="h-3.5 w-3.5 text-purple-500" />}
-            >
-              <ul className="space-y-2" data-testid="schedule-block-objectives">
-                {objectives.map((obj, i) => (
-                  <li key={i} className="flex gap-2 text-sm text-slate-700">
-                    <span className="text-purple-400 font-bold flex-shrink-0 mt-0.5">•</span>
-                    <span>{obj}</span>
-                  </li>
-                ))}
-              </ul>
-            </DetailSection>
-          )}
-
-          {materials.length > 0 && (
-            <DetailSection
-              label="Materials"
-              icon={<Package className="h-3.5 w-3.5 text-emerald-500" />}
-            >
-              <ul className="space-y-1.5" data-testid="schedule-block-materials">
-                {materials.map((item, i) => (
-                  <li key={i} className="text-sm text-slate-700">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </DetailSection>
-          )}
-
-          {groups.length > 0 && (
-            <DetailSection
-              label="Groups"
-              icon={<Users className="h-3.5 w-3.5 text-amber-500" />}
-            >
-              <div className="flex flex-wrap gap-2">
-                {groups.map((g, i) => (
-                  <Badge
-                    key={i}
-                    className="px-2.5 py-1 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50 text-sm"
-                  >
-                    {g}
-                  </Badge>
-                ))}
-              </div>
-            </DetailSection>
-          )}
-
-          {homework && (
-            <DetailSection
-              label="Homework"
-              icon={<BookOpen className="h-3.5 w-3.5 text-blue-500" />}
-            >
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                {homework}
-              </p>
-            </DetailSection>
-          )}
-
-          {notes && (
-            <DetailSection label="Teaching notes">
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-amber-50 border border-amber-100 rounded-md p-3">
-                {notes}
-              </p>
-            </DetailSection>
-          )}
-
-          {(lessonLink || extraLinks.length > 0) && (
-            <DetailSection label="Resources">
-              <div className="space-y-2">
-                {lessonLink && (
-                  <Button asChild variant="outline" className="w-full justify-between">
-                    <a href={lessonLink} target="_blank" rel="noopener noreferrer">
-                      <span>Open Lesson</span>
-                      <ExternalLink className="h-4 w-4 text-slate-400" />
-                    </a>
-                  </Button>
-                )}
-                {extraLinks.map((url) => (
-                  <Button key={url} asChild variant="outline" className="w-full justify-between">
-                    <a href={url} target="_blank" rel="noopener noreferrer">
-                      <span className="truncate text-left">{url}</span>
-                      <ExternalLink className="h-4 w-4 text-slate-400 shrink-0" />
-                    </a>
-                  </Button>
-                ))}
-              </div>
-            </DetailSection>
-          )}
-
-          {!description &&
-            !objectives.length &&
-            !materials.length &&
-            !groups.length &&
-            !homework &&
-            !notes &&
-            !lessonLink &&
-            extraLinks.length === 0 && (
-              <p className="text-sm text-slate-400 italic text-center py-4">
-                No additional details for this block.
-              </p>
-            )}
         </div>
+        <h3 className="text-xl font-bold text-slate-900 leading-snug mt-2">
+          {title || <span className="text-slate-400 italic">No title set</span>}
+        </h3>
+      </div>
+
+      <div className="space-y-6">
+        {description && (
+          <DetailSection label="What we are teaching">
+            <p
+              className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap"
+              data-testid="schedule-block-description"
+            >
+              {description}
+            </p>
+          </DetailSection>
+        )}
+
+        {objectives.length > 0 && (
+          <DetailSection
+            label="Learning Objectives"
+            icon={<Target className="h-3.5 w-3.5 text-purple-500" />}
+          >
+            <ul className="space-y-2" data-testid="schedule-block-objectives">
+              {objectives.map((obj, i) => (
+                <li key={i} className="flex gap-2 text-sm text-slate-700">
+                  <span className="text-purple-400 font-bold flex-shrink-0 mt-0.5">•</span>
+                  <span>{obj}</span>
+                </li>
+              ))}
+            </ul>
+          </DetailSection>
+        )}
+
+        {materials.length > 0 && (
+          <DetailSection
+            label="Materials"
+            icon={<Package className="h-3.5 w-3.5 text-emerald-500" />}
+          >
+            <ul className="space-y-1.5" data-testid="schedule-block-materials">
+              {materials.map((item, i) => (
+                <li key={i} className="text-sm text-slate-700">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </DetailSection>
+        )}
+
+        {groups.length > 0 && (
+          <DetailSection
+            label="Groups"
+            icon={<Users className="h-3.5 w-3.5 text-amber-500" />}
+          >
+            <div className="flex flex-wrap gap-2">
+              {groups.map((g, i) => (
+                <Badge
+                  key={i}
+                  className="px-2.5 py-1 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50 text-sm"
+                >
+                  {g}
+                </Badge>
+              ))}
+            </div>
+          </DetailSection>
+        )}
+
+        {homework && (
+          <DetailSection
+            label="Homework"
+            icon={<BookOpen className="h-3.5 w-3.5 text-blue-500" />}
+          >
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+              {homework}
+            </p>
+          </DetailSection>
+        )}
+
+        {notes && (
+          <DetailSection label="Teaching notes">
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-amber-50 border border-amber-100 rounded-md p-3">
+              {notes}
+            </p>
+          </DetailSection>
+        )}
+
+        {lessonLinks.length > 0 && (
+          <DetailSection label="Resources">
+            <div className="space-y-2">
+              {lessonLinks.map((url, index) => (
+                <Button
+                  key={`${url}-${index}`}
+                  asChild
+                  variant="outline"
+                  className="w-full justify-between"
+                >
+                  <a href={url} target="_blank" rel="noopener noreferrer">
+                    <span className="truncate text-left">{lessonLinkLabelsForBlock[index]}</span>
+                    <ExternalLink className="h-4 w-4 text-slate-400 shrink-0" />
+                  </a>
+                </Button>
+              ))}
+            </div>
+          </DetailSection>
+        )}
+
+        {!description &&
+          !objectives.length &&
+          !materials.length &&
+          !groups.length &&
+          !homework &&
+          !notes &&
+          lessonLinks.length === 0 && (
+            <p className="text-sm text-slate-400 italic text-center py-4">
+              No additional details for this block.
+            </p>
+          )}
+      </div>
+    </div>
   );
 }
 
@@ -226,8 +266,6 @@ export function WeekPlanBlockDetailSheet({
   if (!block) return null;
 
   const title = block.title || "";
-  const blockType = block.blockType || "flexible";
-  const isCompleted = block.isCompleted || false;
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -237,27 +275,9 @@ export function WeekPlanBlockDetailSheet({
         aria-label={`Block details for ${title || "this block"}`}
         data-testid="schedule-block-detail"
       >
-        <SheetHeader className="mb-6">
-          {block.timeLabel && (
-            <div className="flex items-center gap-2 mb-1">
-              <Clock className="h-3.5 w-3.5 text-slate-400" />
-              <SheetDescription className="text-slate-500 text-sm">
-                {block.timeLabel}
-              </SheetDescription>
-            </div>
-          )}
-          <div className="flex items-center gap-2 flex-wrap">
-            {blockTypeBadgeLg(blockType)}
-            {isCompleted && (
-              <Badge className="px-2.5 py-0.5 bg-green-100 text-green-700 border-green-200 hover:bg-green-100 flex items-center gap-1">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Completed
-              </Badge>
-            )}
-          </div>
-          <SheetTitle className="text-xl font-bold text-slate-900 leading-snug mt-2">
-            {title || <span className="text-slate-400 italic">No title set</span>}
-          </SheetTitle>
+        <SheetHeader className="sr-only">
+          <SheetTitle>{title || "Lesson"}</SheetTitle>
+          <SheetDescription>{block.timeLabel || "Lesson details"}</SheetDescription>
         </SheetHeader>
         <WeekPlanBlockDetailBody block={block} />
       </SheetContent>

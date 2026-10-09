@@ -1,5 +1,9 @@
 /** Helpers for week-plan lesson teaching content (cards, print, detail sheet). */
 
+import { collectLessonLinks, expandLessonLinkFields } from "@shared/lesson-links";
+
+export { expandLessonLinkFields };
+
 export type WeekPlanGroup =
   | string
   | {
@@ -14,6 +18,110 @@ export function asTrimmedStrings(value: unknown): string[] {
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+}
+
+/** Unique lesson URLs: primary `lessonLink` first, then `resources`, no empties/dupes. */
+export function lessonLinksFromBlock(block: {
+  lessonLink?: string | null;
+  resources?: unknown;
+}): string[] {
+  return collectLessonLinks(block);
+}
+
+/** Persist first URL on `lesson_link` and the full unique list on `resources` (legacy readers keep working). */
+export function splitLessonLinks(links: unknown): {
+  lessonLink: string | null;
+  resources: string[];
+} {
+  const unique = lessonLinksFromBlock({ resources: links });
+  return {
+    lessonLink: unique[0] || null,
+    resources: unique,
+  };
+}
+
+export function lessonLinksForForm(block: {
+  lessonLink?: string | null;
+  resources?: unknown;
+}): string[] {
+  const links = lessonLinksFromBlock(block);
+  return links.length ? links : [""];
+}
+
+export type LessonLinkAssetLabel = {
+  title?: string | null;
+  name?: string | null;
+  webViewLink?: string | null;
+};
+
+function driveFileIdOrNull(url: string): string | null {
+  const trimmed = url.trim();
+  const match = trimmed.match(/\/(?:document|file|presentation|spreadsheets)\/d\/([a-zA-Z0-9_-]+)/)
+    || trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return match?.[1] ?? null;
+}
+
+/** Title of the catalog file this URL actually opens, when we have one. */
+export function lessonLinkAssetTitle(url: string, assets?: LessonLinkAssetLabel[]): string | null {
+  const fileId = driveFileIdOrNull(url);
+  const match = (assets || []).find((asset) => {
+    const link = (asset.webViewLink || "").trim();
+    if (!link) return false;
+    if (fileId && driveFileIdOrNull(link) === fileId) return true;
+    return link === url.trim();
+  });
+  const title = (match?.title || match?.name || "").trim();
+  return title || null;
+}
+
+function hostLabel(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "Link";
+  }
+}
+
+/**
+ * Link text on a week card or lesson sheet.
+ * The first link uses the lesson title, so a stale catalog name or "Open Drive"
+ * is not shown in its place. Any other link uses the catalog file name when
+ * that file is the URL, otherwise the site name.
+ */
+export function lessonLinkButtonLabel(
+  url: string,
+  index: number,
+  options?: {
+    lessonTitle?: string | null;
+    assets?: LessonLinkAssetLabel[];
+  },
+): string {
+  const lessonTitle = (options?.lessonTitle || "").trim();
+  const fileTitle = lessonLinkAssetTitle(url, options?.assets);
+  if (index === 0 && lessonTitle) return lessonTitle;
+  if (fileTitle) return fileTitle;
+  if (index === 0) return "Open lesson";
+  return hostLabel(url);
+}
+
+/** Same rules as `lessonLinkButtonLabel`, with a number when two links would share a label. */
+export function lessonLinkLabels(
+  urls: string[],
+  options?: {
+    lessonTitle?: string | null;
+    assets?: LessonLinkAssetLabel[];
+  },
+): string[] {
+  const raw = urls.map((url, index) => lessonLinkButtonLabel(url, index, options));
+  const totals = new Map<string, number>();
+  for (const label of raw) totals.set(label, (totals.get(label) || 0) + 1);
+  const seen = new Map<string, number>();
+  return raw.map((label) => {
+    if ((totals.get(label) || 0) < 2) return label;
+    const n = (seen.get(label) || 0) + 1;
+    seen.set(label, n);
+    return `${label} (${n})`;
+  });
 }
 
 /** First non-empty paragraph of a lesson description, optionally truncated for dense grids/print. */

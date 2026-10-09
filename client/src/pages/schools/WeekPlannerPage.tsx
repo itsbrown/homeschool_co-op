@@ -49,7 +49,11 @@ import {
 } from "@/components/schedule/WeekPlanBlockDetailSheet";
 import {
   asTrimmedStrings,
-  lessonTeachingPreview,
+  lessonLinkLabels,
+  expandLessonLinkFields,
+  lessonLinksForForm,
+  lessonLinksFromBlock,
+  splitLessonLinks,
 } from "@/lib/week-plan-lesson-content";
 import {
   buildAsaPrintColumnsFromWeekPlan,
@@ -108,7 +112,7 @@ interface BlockFormData {
   description: string;
   objectives: string[];
   groups: { name: string; students: string; notes: string }[];
-  lessonLink: string;
+  lessonLinks: string[];
   notes: string;
   materials: string[];
   homework: string;
@@ -120,7 +124,7 @@ const emptyBlockForm: BlockFormData = {
   description: "",
   objectives: [],
   groups: [],
-  lessonLink: "",
+  lessonLinks: [""],
   notes: "",
   materials: [],
   homework: "",
@@ -549,7 +553,10 @@ export default function WeekPlannerPage() {
         objectives: row.objectives?.length ? row.objectives : prev.objectives,
         materials: row.materials?.length ? row.materials : prev.materials,
         homework: row.homework || prev.homework,
-        lessonLink: row.lessonLink || prev.lessonLink,
+        lessonLinks: lessonLinksForForm({
+          lessonLink: prev.lessonLinks.find(Boolean) || row.lessonLink,
+          resources: [...prev.lessonLinks, row.lessonLink],
+        }),
         notes: row.notes || prev.notes,
         curriculumAssetId: row.curriculumAssetId ?? prev.curriculumAssetId,
       }));
@@ -655,7 +662,7 @@ export default function WeekPlannerPage() {
       description: block.description || "",
       objectives: asTrimmedStrings(block.objectives),
       groups: normalizeEditGroups(block.groups),
-      lessonLink: block.lessonLink || "",
+      lessonLinks: lessonLinksForForm(block),
       notes: block.notes || "",
       materials: asTrimmedStrings(block.materials),
       homework: block.homework || "",
@@ -670,7 +677,7 @@ export default function WeekPlannerPage() {
       description: blockForm.description || null,
       objectives: blockForm.objectives.filter(Boolean),
       groups: blockForm.groups.filter((g) => g.name),
-      lessonLink: blockForm.lessonLink || null,
+      ...splitLessonLinks(blockForm.lessonLinks),
       notes: blockForm.notes || null,
       materials: blockForm.materials.filter(Boolean),
       homework: blockForm.homework || null,
@@ -846,6 +853,7 @@ export default function WeekPlannerPage() {
         description: weekBlock?.description || skeletonBlock.defaultDescription || null,
         objectives: weekBlock?.objectives,
         lessonLink: weekBlock?.lessonLink ?? null,
+        resources: weekBlock?.resources,
       })),
     })),
   );
@@ -1223,56 +1231,71 @@ export default function WeekPlannerPage() {
                                     wb?.title || sb.defaultTitle,
                                     wb?.description || sb.defaultDescription,
                                   );
-                                  const preview = lessonTeachingPreview({
-                                    description: fullDescription,
-                                    objectives: wb?.objectives,
-                                    materials: wb?.materials,
-                                  });
-                                  const leftoverMaterials = asTrimmedStrings(wb?.materials).length - preview.materials.length;
+                                  const objectives = asTrimmedStrings(wb?.objectives);
+                                  const materials = asTrimmedStrings(wb?.materials);
+                                  const homework = (wb?.homework || "").trim();
+                                  const notes = (wb?.notes || "").trim();
                                   return (
                                     <>
-                                      {preview.descriptionPreview && (
+                                      {fullDescription && (
                                         <p
-                                          className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap line-clamp-6"
+                                          className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap"
                                           data-testid={`week-block-description-${wb?.id ?? `slot-${sb.id}`}`}
                                         >
-                                          {preview.descriptionPreview}
+                                          {fullDescription}
                                         </p>
                                       )}
-                                      {preview.objectives.length > 0 && (
+                                      {objectives.length > 0 && (
                                         <ul className="mt-1.5 space-y-1" data-testid={`week-block-objectives-${wb?.id ?? `slot-${sb.id}`}`}>
-                                          {preview.objectives.map((obj) => (
+                                          {objectives.map((obj) => (
                                             <li key={obj} className="flex gap-1.5 text-xs text-slate-600">
                                               <Target className="h-3 w-3 mt-0.5 shrink-0 text-emerald-600" />
-                                              <span className="line-clamp-2">{obj}</span>
+                                              <span>{obj}</span>
                                             </li>
                                           ))}
                                         </ul>
                                       )}
-                                      {preview.materials.length > 0 && (
+                                      {materials.length > 0 && (
                                         <p className="text-[11px] text-slate-500 mt-1.5 flex items-start gap-1">
                                           <Package className="h-3 w-3 mt-0.5 shrink-0" />
-                                          <span>
-                                            {preview.materials.join(" · ")}
-                                            {leftoverMaterials > 0 ? ` +${leftoverMaterials} more` : ""}
-                                          </span>
+                                          <span>{materials.join(" · ")}</span>
+                                        </p>
+                                      )}
+                                      {homework && (
+                                        <p className="text-[11px] text-slate-600 mt-1.5 whitespace-pre-wrap" data-testid={`week-block-homework-${wb?.id ?? `slot-${sb.id}`}`}>
+                                          <span className="font-medium">Homework: </span>
+                                          {homework}
+                                        </p>
+                                      )}
+                                      {notes && (
+                                        <p className="text-[11px] text-slate-600 mt-1 whitespace-pre-wrap" data-testid={`week-block-notes-${wb?.id ?? `slot-${sb.id}`}`}>
+                                          <span className="font-medium">Notes: </span>
+                                          {notes}
                                         </p>
                                       )}
                                     </>
                                   );
                                 })()}
-                                {wb?.lessonLink && (
-                                  <a
-                                    href={wb.lessonLink}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-blue-600 flex items-center gap-1 mt-1"
-                                    data-testid={`week-block-drive-link-${wb.id}`}
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                    {assetsById.get(wb.curriculumAssetId ?? -1)?.title || "Open Drive"}
-                                  </a>
-                                )}
+                                {(() => {
+                                  const links = lessonLinksFromBlock(wb);
+                                  const labels = lessonLinkLabels(links, {
+                                    lessonTitle: wb.title || sb.defaultTitle,
+                                    assets: driveCatalog?.assets,
+                                  });
+                                  return links.map((url, index) => (
+                                    <a
+                                      key={`${wb.id}-${url}-${index}`}
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-blue-600 flex items-center gap-1 mt-1"
+                                      data-testid={`week-block-drive-link-${wb.id}-${index}`}
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                      {labels[index]}
+                                    </a>
+                                  ));
+                                })()}
                                 <Badge
                                   variant="outline"
                                   className="mt-1 text-[10px]"
@@ -1288,7 +1311,12 @@ export default function WeekPlannerPage() {
                                 size="sm"
                                 className="h-7 px-2 text-xs"
                                 data-testid={`week-block-details-${wb?.id ?? `slot-${sb.id}`}`}
-                                onClick={() => setDetailBlock(toBlockDetail(sb, wb))}
+                                onClick={() =>
+                                  setDetailBlock({
+                                    ...toBlockDetail(sb, wb),
+                                    linkAssets: driveCatalog?.assets,
+                                  })
+                                }
                               >
                                 <Eye className="h-3 w-3 mr-1" />
                                 Lesson
@@ -1551,6 +1579,52 @@ export default function WeekPlannerPage() {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
+                <Label>Lesson links</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBlockForm({ ...blockForm, lessonLinks: [...blockForm.lessonLinks, ""] })}
+                  data-testid="week-block-add-lesson-link"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add link
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Add a Doc, a PDF, and any other files. Paste several URLs into one row and they split apart.
+              </p>
+              {blockForm.lessonLinks.map((link, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    type="text"
+                    inputMode="url"
+                    value={link}
+                    onChange={(e) => {
+                      const updated = [...blockForm.lessonLinks];
+                      updated[i] = e.target.value;
+                      setBlockForm({ ...blockForm, lessonLinks: expandLessonLinkFields(updated) });
+                    }}
+                    placeholder={i === 0 ? "https://… (primary lesson)" : "https://… (another file)"}
+                    data-testid={`week-block-lesson-link-${i}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const next = blockForm.lessonLinks.filter((_, idx) => idx !== i);
+                      setBlockForm({ ...blockForm, lessonLinks: next.length ? next : [""] });
+                    }}
+                    aria-label={`Remove lesson link ${i + 1}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
                 <Label>Objectives</Label>
                 <Button
                   type="button" variant="ghost" size="sm"
@@ -1662,15 +1736,6 @@ export default function WeekPlannerPage() {
                   />
                 </div>
               ))}
-            </div>
-            <div className="space-y-2">
-              <Label>Lesson Link</Label>
-              <Input
-                type="url"
-                value={blockForm.lessonLink}
-                onChange={(e) => setBlockForm({ ...blockForm, lessonLink: e.target.value })}
-                placeholder="https://..."
-              />
             </div>
             <div className="space-y-2">
               <Label>Homework</Label>
@@ -1869,7 +1934,10 @@ export default function WeekPlannerPage() {
                       data: {
                         curriculumAssetId: asset.id,
                         title: asset.title || asset.name,
-                        lessonLink: asset.webViewLink,
+                        ...splitLessonLinks([
+                          asset.webViewLink,
+                          ...lessonLinksFromBlock(swapBlock),
+                        ]),
                         objectives: asset.objectives || [],
                         materials: asset.materials || [],
                       },

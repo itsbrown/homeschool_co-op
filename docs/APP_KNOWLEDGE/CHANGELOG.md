@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-10-09 (Week Planner cards and lesson links)
+
+- Week Planner cards show the full description, every objective and material, homework, and notes. The first lesson link uses the lesson title. Later links use the Drive catalog title only when that file’s URL matches; otherwise the hostname. Duplicate labels are numbered. The Lesson sheet uses the same labels.
+- Edit Block accepts multiple lesson links (Add link; paste splits on spaces or `|`). The first URL stays on `lesson_link`; the full list is `resources`. CSV export joins them with ` | `. No migration.
+- Parent week-plan reads omit `lessonLink` and `resources`.
+
 ## 2026-10-06 (Swallowed notification errors still retry)
 
 - `processNotification` sets `failed` and does not throw, so the scheduled tick was counting those rows as delivered and skipping the zero-recipient retry. After `deliverNotification` returns, the tick re-reads status. Only `sent` counts as delivered. `failed` with no recipient rows is requeued (same `claimRecoveries` cap). No migration.

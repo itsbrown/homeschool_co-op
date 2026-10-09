@@ -113,9 +113,9 @@ export const WEEK_PLAN_BLOCK_CSV_FIELDS = [
   },
   {
     key: "lesson_link",
-    label: "Lesson link",
+    label: "Lesson links",
     required: false,
-    description: "URL to lesson materials",
+    description: "One or more URLs, separated by spaces or |",
   },
   {
     key: "notes",

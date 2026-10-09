@@ -412,6 +412,7 @@ export async function bulkUpdateWeekPlanBlocks(
     materials?: string[] | null;
     homework?: string | null;
     lessonLink?: string | null;
+    resources?: string[] | null;
     notes?: string | null;
     curriculumAssetId?: number | null;
   }>,
@@ -432,6 +433,7 @@ export async function bulkUpdateWeekPlanBlocks(
           materials: u.materials ?? current.materials,
           homework: u.homework ?? current.homework,
           lessonLink: u.lessonLink ?? current.lessonLink,
+          ...(u.resources !== undefined ? { resources: u.resources } : {}),
           notes: u.notes ?? current.notes,
           curriculumAssetId:
             u.curriculumAssetId !== undefined ? u.curriculumAssetId : current.curriculumAssetId,
@@ -448,6 +450,7 @@ export async function bulkUpdateWeekPlanBlocks(
         materials: u.materials ?? [],
         homework: u.homework ?? null,
         lessonLink: u.lessonLink ?? null,
+        resources: u.resources ?? [],
         notes: u.notes ?? null,
         curriculumAssetId: u.curriculumAssetId ?? null,
         updatedBy: userId,
