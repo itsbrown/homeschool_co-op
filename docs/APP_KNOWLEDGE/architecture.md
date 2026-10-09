@@ -9,7 +9,7 @@ High-level map for agents. See [SYSTEM_DOCUMENTATION.md](../SYSTEM_DOCUMENTATION
 | API | Express (`server/`), TypeScript |
 | Client | React, Vite, TanStack Query, Shadcn/Tailwind |
 | DB | PostgreSQL via Drizzle (`shared/schema.ts`) |
-| Auth | Supabase (JWT); legacy Auth0 fields in schema |
+| Auth | Supabase JWT (live). Auth0 filenames and Passport are not the session. [Parent concierge](../parent-concierge/architecture.md) |
 
 Unused Firebase SDKs were removed from `package.json` (Jul 2026): they had no imports and pulled Replit-blocked `websocket-driver`. Do not re-add them.
 | Payments | Stripe (PaymentIntents, webhooks, autopay) |
@@ -40,6 +40,10 @@ Helpers: `shared/school-timezone.ts`. Edit Event must load the input with `forma
 Scheduled notifications use the same wall-time parser. A future `scheduledFor` stays `scheduled` until `startScheduledNotificationJob` (every 60s, same `ENABLE_BACKGROUND_JOBS` worker as reminders). Production does not run that job until the flag is true and the process is restarted. No extra Replit cron.
 
 A throw while delivering one claimed row must not skip the rest of the batch. The tick requeues that row only when it has no `notification_recipients` (up to 3 times, counted in `delivery_stats.claimRecoveries`). If any recipient row exists, it is marked `failed` and not sent again. The same rule recovers rows left in `sending` for 15 minutes. `processNotification` swallows errors and sets `failed` without throwing; the tick re-reads status and only counts `sent` as delivered. A quiet `failed` with zero recipient rows is requeued the same way. No schema change.
+
+## Parent concierge (Phase 0, not built)
+
+Chat-first design is [../parent-concierge/ADR-001.md](../parent-concierge/ADR-001.md): an Express route using the Vercel AI SDK and AI Gateway, not a second Vercel app and not the unmounted Anthropic router in `server/api/parent-concierge.ts`. Tools are `get_my_family`, `get_week_materials`, `rsvp_event`, and `start_enrollment_inquiry` (SendGrid lead to Corey). No Stripe. A parent sees only their own `children` / `child_guardians` rows. Dev copies use `scripts/mask-prod-to-dev.mjs` (source read-only; refuses a prod-looking target). No schema change in that phase.
 
 ## Schema changes
 

@@ -10,6 +10,12 @@
 - Edit Block accepts multiple lesson links (Add link; paste splits on spaces or `|`). The first URL stays on `lesson_link`; the full list is `resources`. CSV export joins them with ` | `. No migration.
 - Parent week-plan reads omit `lessonLink` and `resources`.
 
+## 2026-10-09 (Parent concierge Phase 0)
+
+- Live parent auth is Supabase JWT (`SupabaseProvider`, `supabaseAuth`). `auth0-auth.ts` `jwtCheck` also verifies Supabase tokens. Auth0 React is not mounted. Passport is not imported. Docs: [parent-concierge/architecture.md](../parent-concierge/architecture.md).
+- No `parents` table. RSVP that exists is `store_products.rsvp` plus order-item metadata, not `events`. ADR-001 chooses an Express route plus Vercel AI Gateway over a separate Vercel deploy. Guardrails: own family, no Stripe, human handoff, no child marketing profile.
+- `scripts/mask-prod-to-dev.mjs` is a one-way prod→dev mask (source read-only; refuses equal or prod-looking targets). Not run against a database. No migration and no `db:push`.
+
 ## 2026-10-06 (Swallowed notification errors still retry)
 
 - `processNotification` sets `failed` and does not throw, so the scheduled tick was counting those rows as delivered and skipping the zero-recipient retry. After `deliverNotification` returns, the tick re-reads status. Only `sent` counts as delivered. `failed` with no recipient rows is requeued (same `claimRecoveries` cap). No migration.
