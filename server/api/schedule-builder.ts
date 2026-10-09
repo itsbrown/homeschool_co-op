@@ -34,6 +34,7 @@ import { parse as csvParse } from "csv-parse/sync";
 import { stringify as csvStringify } from "csv-stringify/sync";
 import { UploadedFile } from "express-fileupload";
 import { extractDriveFileId } from "@shared/lesson-push";
+import { collectLessonLinks, urlsFromLessonLinkText } from "@shared/lesson-links";
 import { classBandFromClass, parseCurriculumFilename } from "@shared/curriculum-drive";
 import {
   DriveListError,
@@ -66,6 +67,16 @@ function normalizeTimeHhMm(raw: unknown): string | null {
 
 const ADMIN_ROLES = ['schoolAdmin', 'admin', 'superAdmin', 'director'];
 const CONSUMER_READ_ROLES = ['schoolAdmin', 'admin', 'superAdmin', 'director', 'parent', 'teacher', 'educator'];
+
+/** Parents see titles and teaching notes, not Drive / lesson URLs. */
+function omitLessonLinksFromBlock<T extends { lessonLink?: unknown; resources?: unknown }>(block: T): T {
+  return { ...block, lessonLink: null, resources: [] };
+}
+
+function isParentConsumerRole(req: { user?: { activeRole?: string; role?: string }; auth?: { role?: string } }): boolean {
+  const role = req.user?.activeRole || req.auth?.role || req.user?.role;
+  return role === "parent";
+}
 
 function getMondayWeekStart(from: Date = new Date()): string {
   const d = new Date(from);
@@ -475,7 +486,7 @@ router.get(
           if (!weekPlanBlocksCache.has(plan.id)) {
             weekPlanBlocksCache.set(plan.id, await storage.getWeekPlanBlocksByWeekPlanId(plan.id));
           }
-          blocks = weekPlanBlocksCache.get(plan.id)!;
+          blocks = weekPlanBlocksCache.get(plan.id)!.map(omitLessonLinksFromBlock);
 
           if (plan.skeletonId) {
             if (!skeletonCache.has(plan.skeletonId)) {
@@ -538,7 +549,8 @@ router.get(
       const schoolId = parseInt(req.schoolId);
       if (plan.schoolId !== schoolId) return res.status(403).json({ message: "Access denied" });
       const blocks = await storage.getWeekPlanBlocksByWeekPlanId(id);
-      res.json({ ...plan, blocks });
+      const safeBlocks = isParentConsumerRole(req) ? blocks.map(omitLessonLinksFromBlock) : blocks;
+      res.json({ ...plan, blocks: safeBlocks });
     } catch (error) {
       console.error("Error fetching week plan:", error);
       res.status(500).json({ message: "Failed to fetch week plan" });
@@ -1104,7 +1116,7 @@ router.get(
           wb?.title || sb.defaultTitle || "",
           wb?.description || "",
           objectives,
-          wb?.lessonLink || "",
+          wb ? collectLessonLinks(wb).join(" | ") : "",
           wb?.notes || "",
         ];
       });
@@ -1241,12 +1253,14 @@ router.post(
           .split(";")
           .map((s: string) => s.trim())
           .filter(Boolean);
+        const lessonLinks = urlsFromLessonLinkText(String(r.lesson_link || ""));
         updates.push({
           skeletonBlockId: skeleton.id,
           title,
           description: (r.description || "").trim() || null,
           objectives,
-          lessonLink: (r.lesson_link || "").trim() || null,
+          lessonLink: lessonLinks[0] ?? null,
+          ...(lessonLinks.length ? { resources: lessonLinks } : {}),
           notes: (r.notes || "").trim() || null,
         });
       }
