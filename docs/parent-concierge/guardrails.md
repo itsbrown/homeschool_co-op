@@ -43,4 +43,4 @@ The assistant's prose is not an approval, a placement, or a receipt.
 
 ## Dev data
 
-Use a masked dev database ([masking.md](./masking.md)) when building tools. Do not point a concierge experiment at production, and do not run `db:push` to get there.
+Use a masked dev database ([masking.md](./masking.md)) when building tools. The mask source is the production `DATABASE_URL` (app Postgres on Replit), opened read-only, ideally with a read-only role. Do not point a concierge experiment at production, and do not run `db:push` to get there. Do not pause Supabase `moivwjuglwwfrhqeewju` (live Auth only). ASA Platform Prod and ASA Platform 2026 hold no live data.

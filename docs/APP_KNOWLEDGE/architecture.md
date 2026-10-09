@@ -43,7 +43,7 @@ A throw while delivering one claimed row must not skip the rest of the batch. Th
 
 ## Parent concierge (Phase 0, not built)
 
-Chat-first design is [../parent-concierge/ADR-001.md](../parent-concierge/ADR-001.md): an Express route using the Vercel AI SDK and AI Gateway, not a second Vercel app and not the unmounted Anthropic router in `server/api/parent-concierge.ts`. Tools are `get_my_family`, `get_week_materials`, `rsvp_event`, and `start_enrollment_inquiry` (SendGrid lead to Corey). No Stripe. A parent sees only their own `children` / `child_guardians` rows. Dev copies use `scripts/mask-prod-to-dev.mjs` (source read-only; refuses a prod-looking target). No schema change in that phase.
+Chat-first design is [../parent-concierge/ADR-001.md](../parent-concierge/ADR-001.md): an Express route using the Vercel AI SDK and AI Gateway, not a second Vercel app and not the unmounted Anthropic router in `server/api/parent-concierge.ts`. Tools are `get_my_family`, `get_week_materials`, `rsvp_event`, and `start_enrollment_inquiry` (SendGrid lead to Corey). No Stripe. A parent sees only their own `children` / `child_guardians` rows. Live app data is the Postgres on Replit (`DATABASE_URL`); Replit-managed vs Neon is unconfirmed. Live Auth is Supabase `moivwjuglwwfrhqeewju` only and must never be paused. ASA Platform Prod and ASA Platform 2026 hold no live data. Dev copies use `scripts/mask-prod-to-dev.mjs` with that production `DATABASE_URL` opened read-only (ideally a read-only role) and refuse a prod-looking target. Stores and flows: [../parent-concierge/data-flows.md](../parent-concierge/data-flows.md). No schema change in that phase.
 
 ## Schema changes
 

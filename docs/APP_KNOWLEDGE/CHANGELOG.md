@@ -10,6 +10,10 @@
 - Edit Block accepts multiple lesson links (Add link; paste splits on spaces or `|`). The first URL stays on `lesson_link`; the full list is `resources`. CSV export joins them with ` | `. No migration.
 - Parent week-plan reads omit `lessonLink` and `resources`.
 
+## 2026-10-09 (Parent concierge data stores)
+
+- Live app data is the Postgres behind the Replit app (`DATABASE_URL`). Replit-managed vs Neon is unconfirmed. Supabase `moivwjuglwwfrhqeewju` is Auth only and must never be paused. ASA Platform Prod and ASA Platform 2026 hold no live data. Mask source is that production URL, read-only, ideally a read-only role. See [parent-concierge/data-flows.md](../parent-concierge/data-flows.md).
+
 ## 2026-10-09 (Parent concierge Phase 0)
 
 - Live parent auth is Supabase JWT (`SupabaseProvider`, `supabaseAuth`). `auth0-auth.ts` `jwtCheck` also verifies Supabase tokens. Auth0 React is not mounted. Passport is not imported. Docs: [parent-concierge/architecture.md](../parent-concierge/architecture.md).

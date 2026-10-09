@@ -1,5 +1,12 @@
 # Parent concierge changelog
 
+## 2026-10-09 (data stores)
+
+- Added [data-flows.md](./data-flows.md) and linked it from the README.
+- Live app data is the Postgres behind the Replit app (`DATABASE_URL`). Replit-managed vs Neon is still unconfirmed.
+- Supabase `moivwjuglwwfrhqeewju` is live Auth only and must never be paused. ASA Platform Prod and ASA Platform 2026 are old and hold no live data.
+- The mask source is that production `DATABASE_URL`, opened read-only, ideally with a read-only role. Docs only. The script was not changed and was not run.
+
 ## 2026-10-09
 
 Phase 0. Docs only, plus the prod → dev mask script and its unit tests.

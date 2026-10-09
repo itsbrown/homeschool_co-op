@@ -9,8 +9,7 @@ How GitHub Actions and local test commands relate to merge gates.
 | **Tests** | `tests.yml` | Schema + **production-path** + dev smoke + **client jsdom** |
 | **Payments CI** | payments subset | Billing/webhook tests |
 | **E2E** | Playwright | Dev server boot; placeholder Supabase env OK (see `playwright.config.ts` `envOr`) |
-
-`fall-2026-roster-snapshot.yml` is **deleted**. A workflow with no `on:` block is invalid, and leaving `workflow_dispatch` was not safe: the job read prod (`PROD_DATABASE_URL`) and committed real student rosters to the public branch `docs/fall-2026-class-rosters`. Do not add the file back. The branch and the CSV files are unchanged in this change. Follow-ups, not done here: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
+`fall-2026-roster-snapshot.yml` is **deleted** (#154, merged to `main`). A workflow with no `on:` block is invalid, and leaving `workflow_dispatch` was not safe: the job read prod (`PROD_DATABASE_URL`, the app Postgres on Replit; Replit-managed vs Neon is unconfirmed; never the Railway clone) and committed real student rosters to the public branch `docs/fall-2026-class-rosters`. Do not add the file back. The branch and the CSV files are unchanged in that change. Follow-ups, not done here: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
 
 ## Tests job steps (canonical)
 

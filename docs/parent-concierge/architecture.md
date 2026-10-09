@@ -17,6 +17,8 @@ Three mechanisms exist in the repo. One is live.
 
 Database role and `school_id` come from Postgres (`users`, `user_roles`), not from Supabase `user_metadata`. Concierge tools must use `req.user.id` (integer). The Supabase UUID is `req.user.sub` and is not a foreign key on `children`.
 
+Live Auth is Supabase project `moivwjuglwwfrhqeewju` only. It stores credentials, not app tables, and it must never be paused. **ASA Platform Prod** and **ASA Platform 2026** are old Supabase projects and hold no live data. Live family rows are in the app's Postgres on Replit (`DATABASE_URL`). Whether that database is Replit-managed or Neon is still unconfirmed. See [data-flows.md](./data-flows.md).
+
 `hooks/useAuth0.ts` is a misnamed wrapper around `useSupabase()`. Older pages import it. New concierge UI should use `useAuth()` from `SupabaseProvider`, same as `ParentConciergePage` already does.
 
 ## Family, classes, events

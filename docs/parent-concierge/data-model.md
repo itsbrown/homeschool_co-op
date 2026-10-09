@@ -1,6 +1,6 @@
 # Parent concierge data model
 
-Source of truth: `shared/schema.ts` and `server/migrations/`. `docs/DATA_MODELS.md` is an older overview (it still describes Neon and columns `users` does not have). Use this page for concierge work.
+Source of truth for columns: `shared/schema.ts` and `server/migrations/`. Live rows are the app's Postgres on Replit (`DATABASE_URL`). Whether that database is Replit-managed or Neon is still unconfirmed. `docs/DATA_MODELS.md` is an older overview (it describes Neon as the host, and columns `users` does not have). Use this page for concierge work. Supabase `moivwjuglwwfrhqeewju` is Auth only. ASA Platform Prod and ASA Platform 2026 hold no live data.
 
 There is **no `parents` table** and **no `event_rsvps` table**.
 

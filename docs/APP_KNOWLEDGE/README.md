@@ -40,7 +40,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 | [domains/supply-lists.md](./domains/supply-lists.md) | Class/session supply items; household shopping list; shop/affiliate links |
 | [domains/grades-ages-classes.md](./domains/grades-ages-classes.md) | Child grade/age vs class targeting; roster; school + class emergency contact lists |
 | [domains/educator-ui.md](./domains/educator-ui.md) | Mentor `/educator/*`, staff invite → first login, roster, sessions |
-| [../parent-concierge/README.md](../parent-concierge/README.md) | Phase 0 parent concierge: live auth, family/class/RSVP model, ADR-001 (Express + AI Gateway), guardrails, prod→dev mask |
+| [../parent-concierge/README.md](../parent-concierge/README.md) | Phase 0 parent concierge: live auth, family/class/RSVP model, [data flows](../parent-concierge/data-flows.md), ADR-001 (Express + AI Gateway), guardrails, prod→dev mask |
 | [runbooks/merge-replit-prod.md](./runbooks/merge-replit-prod.md) | Merge → Replit → prod SQL |
 | [../PERMISSIONS_ROLLOUT.md](../PERMISSIONS_ROLLOUT.md) | Staff nav permissions, school-wide scope, SQL (no db:push) |
 | [runbooks/public-mentor-application-form.md](./runbooks/public-mentor-application-form.md) | Mentor form: seed, clone/provision, public URL |

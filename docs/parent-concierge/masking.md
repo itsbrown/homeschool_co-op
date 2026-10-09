@@ -4,7 +4,7 @@ Script: `scripts/mask-prod-to-dev.mjs`
 Rules (no I/O): `scripts/lib/prod-to-dev-mask.mjs`
 Tests: `node --test scripts/lib/prod-to-dev-mask.test.mjs`
 
-The script copies a fixed set of tables from a production database into a dev database. Production is opened **read-only**. Writes go only to the target, and only after the target is shown not to be the source and not to look like production.
+The script copies a fixed set of tables from production into a dev database. The source is the production `DATABASE_URL`: the app's Postgres on Replit (Replit-managed vs Neon is still unconfirmed). Pass that URL as `MASK_SOURCE_DATABASE_URL`. The script opens it **read-only**. Prefer a read-only database role on that URL so a session setting is not the only thing stopping a write. Writes go only to the target, and only after the target is shown not to be the source and not to look like production.
 
 Phase 0 does not run the script. Do not point it at a real database to "try it."
 
@@ -20,7 +20,7 @@ node scripts/mask-prod-to-dev.mjs
 node scripts/mask-prod-to-dev.mjs --execute
 ```
 
-The script reads `MASK_SOURCE_DATABASE_URL` and `MASK_TARGET_DATABASE_URL` only. It does not use `DATABASE_URL`, so an app env pointed at prod cannot become the write target by accident.
+The script reads `MASK_SOURCE_DATABASE_URL` and `MASK_TARGET_DATABASE_URL` only. It does not pick up the process `DATABASE_URL` by itself, so an app env pointed at prod cannot become the write target by accident. The value you put in `MASK_SOURCE_DATABASE_URL` is still that production `DATABASE_URL`, opened read-only, ideally with a read-only role. Supabase is not a data source for this copy. Project `moivwjuglwwfrhqeewju` is Auth only and must never be paused. ASA Platform Prod and ASA Platform 2026 hold no live data.
 
 It does not run `db:push`, does not create tables, and does not create a Supabase project. The target must already have the schema (additive SQL applied on a dev database).
 
