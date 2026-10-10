@@ -6,6 +6,17 @@
 - Writes are accepted only for a local or dev target. The database name must include `dev`, `mask`, `scratch`, `local`, or `test`. Neon, Supabase, and Replit hosts are refused, as are prod-looking and source-equal targets.
 - Test fixtures in `scripts/lib/prod-to-dev-mask.test.mjs` are synthetic. The script was not run against a database.
 
+## 2026-10-10 (Phase 1)
+
+- Chat page: `/concierge` (anonymous) and `/parent/concierge` (signed-in shell). `POST /api/concierge/chat` uses the Vercel AI SDK and AI Gateway. `CONCIERGE_AI_MOCK=1` skips the gateway.
+- Tools: `get_my_family`, `get_week_materials`, `rsvp_event`, `start_enrollment_inquiry`. Actor is `req.user.id` only. Anonymous callers get the enrollment corpus and the inquiry tool.
+- Leads: `sendConciergeLeadEmail` calls SendGrid only. Missing `SENDGRID_API_KEY` or `CONCIERGE_LEAD_EMAIL` fails visibly. No Brevo fallback. No `program_enrollments` write.
+- Analytics: additive `server/migrations/268-concierge-events.sql` (`concierge_turn`, `concierge_tool`). Not `user_activity_events`. Metadata sanitizer drops profile keys and long strings. Number 267 left for the unmerged school-setup migration.
+- `rsvp_event` records a $0 store order (`metadata.rsvp`) and hands off when any enabled attendee price is above 0. It does not call Stripe or `fulfillStoreCheckoutWithoutPayment`.
+- Local seed: `scripts/seed-concierge-local.ts` plus `CONCIERGE_LOCAL_DATABASE_URL`. Fake `@example.invalid` families only. Refuses non-local hosts. Does not `db:push`.
+- `server/api/parent-concierge.ts` stays unmounted.
+- Tests: `server/tests/concierge-guardrails.test.ts` and `server/tests/integration/concierge-phase1.integration.test.ts` against local Postgres. No Playwright spec.
+
 ## 2026-10-09 (data stores)
 
 - Added [data-flows.md](./data-flows.md) and linked it from the README.

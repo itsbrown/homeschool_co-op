@@ -42,7 +42,7 @@ Parent calendar reads `GET /api/calendar-events/parent/events` (child campuses, 
 
 ## Where the chat runs
 
-ADR-001 recommends an **Express route on this process**, not a separate Vercel deploy. The Vite page stays at `/parent/concierge` inside `ParentAppShell` and posts to that route with the existing bearer token.
+ADR-001 is implemented as an **Express route on this process**, not a separate Vercel deploy. Anonymous visitors use `/concierge` (public allowlist). Signed-in parents use `/parent/concierge` inside `ParentAppShell`. Both post to `POST /api/concierge/chat`. Auth is optional: no bearer and no `x-test-user-email` means an anonymous turn. The actor id is `req.user.id` only.
 
 The Vercel AI SDK (`ai`) and AI Gateway are HTTP clients. They do not require Next.js or hosting the UI on Vercel. Model calls leave the Express handler with `AI_GATEWAY_API_KEY`. Family queries stay in-process, behind `supabaseAuth`.
 
@@ -50,10 +50,10 @@ The Vercel AI SDK (`ai`) and AI Gateway are HTTP clients. They do not require Ne
 
 ## Analytics and leads
 
-Chat turns and tool calls are product analytics, not the checkout funnel and not the engagement report that slices by child age and gender. `user_activity_events.event_type` only allows `login`, `page_view`, `session_start`, `session_end`, and `heartbeat` (`server/migrations/253-school-analytics-events.sql`). A later phase adds a separate table with an additive SQL file under `server/migrations/`. This phase does not.
+Chat turns and tool calls are product analytics, not the checkout funnel and not the engagement report that slices by child age and gender. `user_activity_events.event_type` only allows `login`, `page_view`, `session_start`, `session_end`, and `heartbeat` (`server/migrations/253-school-analytics-events.sql`). Phase 1 writes `concierge_events` from `server/migrations/268-concierge-events.sql`. Apply that file by hand on a preview database. Do not `db:push`.
 
 Enrollment leads go to Corey through the existing SendGrid path in `server/lib/email-service.ts` (`SENDGRID_API_KEY`). The tool does not insert `program_enrollments`.
 
 ## Schema changes
 
-Production changes are additive SQL files. Do not run `npm run db:push` or `drizzle-kit push` against a database that has real families. This phase adds no migration.
+Production changes are additive SQL files. Do not run `npm run db:push` or `drizzle-kit push` against a database that has real families. Phase 1's only migration is `server/migrations/268-concierge-events.sql`. The local seed applies that SQL to a localhost database whose name contains `local` or `test`. Bootstrapping an empty local database with `drizzle-kit push` was a one-time environment setup so `supabaseAuth`'s user lookup could see the full `users` table. That push is not a shipped script and must not be pointed at prod.

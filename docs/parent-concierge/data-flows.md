@@ -78,7 +78,7 @@ The live Auth project is `moivwjuglwwfrhqeewju` and it must never be paused. If 
 - **Week plans:** `weekly_skeletons`, `skeleton_blocks`, `week_plans`, `week_plan_blocks`, `curriculum_assets`, `supply_items`, `daily_flow_*`.
 - **Events / RSVP:** `events` exists but has no RSVP; live RSVP is a store event product (`store_products` rsvp) → `store_orders` / `store_order_items` / `store_checkout_snapshots`. [code + PR #152]
 - **Payments:** `payments`, `scheduled_payments`, `family_payment_plans`, `payment_allocations`, `refunds`, `refund_events`, `stripe_payment_history` (no `school_id`), `stripe_subscription_schedules`, `payment_receipts`, `payment_verification_logs`, `credits`, `credit_holds`, `unified_credit_usage_logs`, `discounts`, `discount_applications`.
-- **Logs/analytics:** `email_log`, `audit_logs`, `pii_access_logs`, `error_logs`, `user_activity_events`, `checkout_funnel_events`, `notifications`, `notification_recipients`.
+- **Logs/analytics:** `email_log`, `audit_logs`, `pii_access_logs`, `error_logs`, `user_activity_events`, `checkout_funnel_events`, `concierge_events` (Phase 1, migration 268; not the engagement report), `notifications`, `notification_recipients`.
 - PR #150 (unmerged) adds `schools.platform_*`, `brand_color`, `setup_completed_at`, `school_applications.school_id/rejection_reason` via migration 267. [audit]
 
 ## 5. Data movements
@@ -93,7 +93,7 @@ Stripe key comes from env or from the Replit Stripe connector when `REPLIT_DEPLO
 **Imports / exports:** `POST /api/school-admin/import-users`, `POST /api/payment-import/upload-payments`, `admin-users` create-from-enrollments / migrate-to-supabase (unauthenticated on main, locked in PR #149); authenticated CSV export of users and children. [audit]
 **Roster snapshot:** GitHub Action, daily 08:00 ET, reads prod via `PROD_DATABASE_URL`, commits real roster CSVs to branch `docs/fall-2026-class-rosters` of a **public** repo. Window was "through 2026-09-21". [code]
 **Google Drive:** Week Planner cards link Drive files; server reads via service account. [code/reported]
-**AI:** Anthropic/OpenAI keys used by enrollment assistant, insights, form builder. Family/child data may be sent to these. [code names; payload not traced]
+**AI:** Anthropic/OpenAI keys used by enrollment assistant, insights, form builder. Family/child data may be sent to these. [code names; payload not traced] Parent concierge Phase 1 is separate: `POST /api/concierge/chat` calls Vercel AI Gateway (`AI_GATEWAY_API_KEY`) only when `CONCIERGE_AI_MOCK` is unset. Sensitive messages (payment, medical, custody, enrollment change, child registration) are handed off before any model call. Anonymous grounding is a static corpus, not a crawl of the site.
 
 ## 6. Environments
 

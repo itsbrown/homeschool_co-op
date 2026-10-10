@@ -1,3 +1,7 @@
+/**
+ * Unmounted Anthropic concierge. Do not import this router from server/index.ts.
+ * Phase 1 chat is server/api/concierge-chat.ts (Vercel AI SDK + AI Gateway).
+ */
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import rateLimit from 'express-rate-limit';

@@ -631,6 +631,38 @@ export async function sendEmail(
   return sendViaBrevo(to, toName, subject, htmlContent, textContent, emailType);
 }
 
+/**
+ * Concierge enrollment leads go to Corey through SendGrid only.
+ * If SENDGRID_API_KEY is missing, this returns false and does not use Brevo.
+ */
+export async function sendConciergeLeadEmail(data: {
+  toEmail: string;
+  toName: string;
+  subject: string;
+  htmlContent: string;
+  textContent: string;
+}): Promise<boolean> {
+  if (!process.env.SENDGRID_API_KEY) {
+    console.error("[concierge] SENDGRID_API_KEY is not set; lead email was not sent");
+    await logEmailAttempt({
+      recipientEmail: data.toEmail,
+      type: "concierge_lead",
+      subject: data.subject,
+      status: "failed",
+      error: "SENDGRID_API_KEY is not set",
+    });
+    return false;
+  }
+  return sendViaSendGrid(
+    data.toEmail,
+    data.toName,
+    data.subject,
+    data.htmlContent,
+    data.textContent,
+    "concierge_lead",
+  );
+}
+
 export async function sendProgressReportEmail(data: {
   parentEmail: string;
   parentName: string;

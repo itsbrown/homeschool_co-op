@@ -17,6 +17,14 @@
 
 - Deleted `.github/workflows/fall-2026-roster-snapshot.yml`. A workflow with no `on:` block is invalid, and `workflow_dispatch` was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. Do not restore the file. Roster and family CSV/JSON files on `main` are listed in the PR and are not deleted here. Follow-ups: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
 
+## 2026-10-10 (Parent concierge Phase 1)
+
+- `POST /api/concierge/chat` is the concierge. `server/api/parent-concierge.ts` stays unmounted (Anthropic, payments, cart). Do not mount it.
+- Signed-in tools (`get_my_family`, `get_week_materials`, `rsvp_event`) use `req.user.id` and `children.parent_id` / `child_guardians.guardian_user_id`. Tool arguments cannot select another family. `rsvp_event` writes a $0 store order or hands off; it does not call Stripe.
+- `start_enrollment_inquiry` uses `sendConciergeLeadEmail` (SendGrid only, `CONCIERGE_LEAD_EMAIL`). Anonymous answers come from `enrollment-corpus.ts`, not a live site crawl.
+- Analytics table is `concierge_events` in `server/migrations/268-concierge-events.sql` (267 is claimed by unmerged school-setup work). Apply the SQL by hand. Chat still returns if the insert fails (`analyticsLogged: false`).
+- Local seed `scripts/seed-concierge-local.ts` requires `CONCIERGE_LOCAL_DATABASE_URL` on localhost and a database name containing `local` or `test`. Fake families only. Not `db:push`.
+
 ## 2026-10-10 (Do not pause live Auth)
 
 - **Incident 2026-10-09:** an agent paused Supabase `moivwjuglwwfrhqeewju` (display name "Adaptive Learning Program") thinking it was a test project. It is live production Auth. Portal logins were likely down from about 2:33 to 2:52 PM ET.

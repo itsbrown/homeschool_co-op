@@ -55,6 +55,7 @@ import scheduleBuilderRouter from "./api/schedule-builder";
 import scheduleAiRouter from "./api/schedule-ai";
 import calendarEventsRouter from "./api/calendar-events";
 import calendarFeedRouter from "./api/calendar-feed";
+import conciergeChatRouter from "./api/concierge-chat";
 import { registerObjectStorageRoutes } from './replit_integrations/object_storage';
 import {
   isE2eObjectStorageStubEnabled,
@@ -265,6 +266,7 @@ app.use("/api/schedule-builder", scheduleBuilderRouter);
 app.use("/api/schedule-ai", scheduleAiRouter);
 app.use("/api/calendar-events", calendarEventsRouter);
 app.use("/api/calendar", calendarFeedRouter);
+app.use("/api/concierge", conciergeChatRouter);
 
 // Test endpoints for development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
