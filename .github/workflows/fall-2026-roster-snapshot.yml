@@ -1,20 +1,15 @@
-# Daily Fall 2026 class roster snapshot through 2026-09-21 (America/New_York).
-# Overwrites docs/audit/fall-2026-class-rosters.csv and appends pending→enrolled
-# rows to docs/audit/fall-2026-class-rosters-transitions.csv.
-#
-# Commits land on docs/fall-2026-class-rosters (not main). main is protected
-# (required review + payments check), so GITHUB_TOKEN cannot push CSV there.
-# Cron only runs after this workflow file exists on the default branch.
-#
-# Required GitHub secret: PROD_DATABASE_URL — Neon production (same as .env.prod).
-# Never point this at the Railway clone / .env / asa_test.
+# Disabled because it published real student rosters to a public repo.
+# The daily schedule (cron 0 12 * * *, 08:00 America/New_York during EDT)
+# read production with PROD_DATABASE_URL and committed class rosters to
+# docs/fall-2026-class-rosters. workflow_dispatch was not harmless: it skipped
+# the end date and passed --force, then pushed the same CSVs to that branch.
+# There was no push trigger. Schedule, push, and workflow_dispatch are all
+# removed. Do not restore them and do not run this workflow. The branch
+# docs/fall-2026-class-rosters is left in place.
 
 name: Fall 2026 roster snapshot
 
-on:
-  schedule:
-    - cron: '0 12 * * *' # 08:00 America/New_York during EDT
-  workflow_dispatch:
+# No `on:` triggers. GitHub will not schedule or dispatch this file.
 
 permissions:
   contents: write

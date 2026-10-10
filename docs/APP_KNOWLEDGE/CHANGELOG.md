@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-10-10 (Disable Fall 2026 roster snapshot workflow)
+
+- `.github/workflows/fall-2026-roster-snapshot.yml` no longer has a schedule or `workflow_dispatch`. Manual dispatch was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. There was no push trigger. Do not restore triggers or run the workflow. The branch and the CSV files are unchanged.
+
 ## 2026-10-09 (Week Planner cards and lesson links)
 
 - Week Planner cards show the full description, every objective and material, homework, and notes. The first lesson link uses the lesson title. Later links use the Drive catalog title only when that file’s URL matches; otherwise the hostname. Duplicate labels are numbered. The Lesson sheet uses the same labels.
