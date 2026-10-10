@@ -9,6 +9,7 @@ How GitHub Actions and local test commands relate to merge gates.
 | **Tests** | `tests.yml` | Schema + **production-path** + dev smoke + **client jsdom** |
 | **Payments CI** | payments subset | Billing/webhook tests |
 | **E2E** | Playwright | Dev server boot; placeholder Supabase env OK (see `playwright.config.ts` `envOr`) |
+
 `fall-2026-roster-snapshot.yml` is **deleted** (#154, merged to `main`). A workflow with no `on:` block is invalid, and leaving `workflow_dispatch` was not safe: the job read prod (`PROD_DATABASE_URL`, the app Postgres on Replit; Replit-managed vs Neon is unconfirmed; never the Railway clone) and committed real student rosters to the public branch `docs/fall-2026-class-rosters`. Do not add the file back. The branch and the CSV files are unchanged in that change. Follow-ups, not done here: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
 
 ## Tests job steps (canonical)
@@ -52,7 +53,7 @@ Production-path prerequisites: Postgres + `node scripts/ci-db-push.mjs`. See `se
 | Full command index | [`docs/E2E_COMMANDS.md`](../../E2E_COMMANDS.md) |
 | Seed/login helper | [`e2e/helpers/requireLinkedSeed.ts`](../../../e2e/helpers/requireLinkedSeed.ts) — fail if seed/Supabase missing |
 | Cursor rule | `.cursor/rules/e2e-seed-gate.mdc` |
-| Local DB | `.env` `DATABASE_URL` = Railway **clone** (dev). Never `.env.prod` / `with-prod-env.mjs` for Playwright |
+| Local DB | `.env` `DATABASE_URL` = Railway **clone** (dev). Never `.env.prod`, `with-prod-env.mjs`, live Stripe keys, or real ASA families |
 | CI workflow | `.github/workflows/e2e.yml` — `CI=true npm run test:e2e` |
 | Config | `playwright.config.ts` — `webServer: npm run dev`, port 5000, `PLAYWRIGHT_WEB_SERVER=true` |
 | Public forms lane | [`e2e/public-custom-forms.spec.ts`](../../e2e/public-custom-forms.spec.ts); domain doc [`custom-forms-public-access.md`](custom-forms-public-access.md) |
@@ -94,7 +95,8 @@ Protocol: `~/.cursor/skills/maintain-app-knowledge/SKILL.md` (Step 2 = edit file
 | Edit Class lead mentor: HTML `Cannot POST /api/admin/educators/class-assignments` | Router file existed, never mounted in `registerRoutes` | Mount before `/api/admin`; gate: `admin-educators-mount.test.ts` |
 | E2E seed returns HTML / no data | Port 5000 reused by server without `/api/test` | `node scripts/free-port-5000.mjs` or `CI=true` for fresh `webServer` |
 | Playwright report green but skipped | `test.skip` on missing `supabaseLinked` | `requireLinkedSeed`; symlink `.env` + `.env.e2e` in worktrees |
-| E2E against live Stripe/prod | Loaded `.env.prod` | Use `.env` (Railway clone) + `.env.e2e` only |
+| E2E against live Stripe/prod | Loaded `.env.prod` or a live Stripe key | Use `.env` (Railway clone) + `.env.e2e` only. Never real ASA families |
+| Schema pushed onto prod | `db:push` / `drizzle-kit push` against production | Additive SQL in `server/migrations/` only. `scripts/ci-db-push.mjs` is `asa_test` bootstrap |
 
 ## Key files
 

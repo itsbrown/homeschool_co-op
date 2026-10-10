@@ -2,6 +2,8 @@
 
 Checklist after registration/locations (or any schema-touching) work.
 
+Never pause or modify the Replit app or any Supabase project without Corey's explicit OK. Display names are misleading. Supabase `moivwjuglwwfrhqeewju` ("Adaptive Learning Program") is live Auth — see [Live Auth](../architecture.md#live-auth-do-not-pause). Production schema is additive SQL in `server/migrations/` only. Never `db:push` against prod.
+
 ## 1. Merge to `main`
 
 - PR checks green: **Tests**, **Payments CI**, **E2E** (as applicable).

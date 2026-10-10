@@ -16,7 +16,9 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 
 ## Non-negotiables
 
-- **Production / shared dev DB:** additive SQL only (`server/migrations/*.sql`). **Never** `db:push` / `drizzle-kit push` on databases with real users.
+- **Supabase and Replit:** Never pause or modify any Supabase or Replit project without Corey's explicit OK. Display names are misleading — check what a project is used for before acting. Incident 2026-10-09: an agent paused Supabase `moivwjuglwwfrhqeewju` (display name "Adaptive Learning Program") thinking it was a test project. It is live production Auth. Portal logins were likely down from about 2:33 to 2:52 PM ET. The free plan allows 2 active projects, and the sign-in project can auto-pause when idle. Detail: [architecture.md](./architecture.md#live-auth-do-not-pause).
+- **Production schema:** additive SQL only (`server/migrations/*.sql`). Never `db:push` or `drizzle-kit push` against production. `scripts/ci-db-push.mjs` is the CI `asa_test` bootstrap only.
+- **Tests:** Never use `.env.prod`, live Stripe keys, or real ASA families. Local Playwright uses `.env` (Railway clone) + `.env.e2e`.
 - **School context:** Admin workflows must resolve school via `schools.admin_id`, not only `users.school_id` (misalignment caused registration/location bugs).
 - **Postgres in tests:** Integration tests that claim production path must use real Postgres; mem/file `CombinedStorage` fallback invalidates results.
 - **CI merge gate (Tests workflow):** schema verify → production-path → dev server smoke → client jsdom. Full `test:server` (700+ tests) is local / Payments CI, not the PR Tests job.

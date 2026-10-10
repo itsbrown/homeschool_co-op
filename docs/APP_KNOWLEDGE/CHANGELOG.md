@@ -4,6 +4,13 @@
 
 - Deleted `.github/workflows/fall-2026-roster-snapshot.yml`. A workflow with no `on:` block is invalid, and `workflow_dispatch` was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. Do not restore the file. Roster and family CSV/JSON files on `main` are listed in the PR and are not deleted here. Follow-ups: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
 
+## 2026-10-10 (Do not pause live Auth)
+
+- **Incident 2026-10-09:** an agent paused Supabase `moivwjuglwwfrhqeewju` (display name "Adaptive Learning Program") thinking it was a test project. It is live production Auth. Portal logins were likely down from about 2:33 to 2:52 PM ET.
+- Never pause or modify any Supabase or Replit project without Corey's explicit OK. Project names are misleading; check what a project is used for before acting.
+- The Supabase free plan allows 2 active projects, and the sign-in project can auto-pause when idle.
+- Never `db:push` or any schema push against prod; additive SQL migrations only. Never use `.env.prod` or live Stripe keys, and never use real ASA families in tests.
+
 ## 2026-10-09 (Week Planner cards and lesson links)
 
 - Week Planner cards show the full description, every objective and material, homework, and notes. The first lesson link uses the lesson title. Later links use the Drive catalog title only when that file’s URL matches; otherwise the hostname. Duplicate labels are numbered. The Lesson sheet uses the same labels.
