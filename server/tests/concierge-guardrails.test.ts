@@ -75,8 +75,10 @@ describe("concierge guardrails", () => {
   it("uses the gateway only when a key is configured", () => {
     const previousMock = process.env.CONCIERGE_AI_MOCK;
     const previousKey = process.env.AI_GATEWAY_API_KEY;
+    const previousDemo = process.env.PREVIEW_DEMO_MODE;
     delete process.env.CONCIERGE_AI_MOCK;
     delete process.env.AI_GATEWAY_API_KEY;
+    delete process.env.PREVIEW_DEMO_MODE;
     expect(resolveConciergeMode()).toBe("unconfigured");
     process.env.AI_GATEWAY_API_KEY = "test-not-a-real-key";
     expect(resolveConciergeMode()).toBe("gateway");
@@ -86,6 +88,8 @@ describe("concierge guardrails", () => {
     else process.env.CONCIERGE_AI_MOCK = previousMock;
     if (previousKey === undefined) delete process.env.AI_GATEWAY_API_KEY;
     else process.env.AI_GATEWAY_API_KEY = previousKey;
+    if (previousDemo === undefined) delete process.env.PREVIEW_DEMO_MODE;
+    else process.env.PREVIEW_DEMO_MODE = previousDemo;
   });
 
   it("refuses to seed anything but local postgres", () => {

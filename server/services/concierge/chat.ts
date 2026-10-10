@@ -21,10 +21,6 @@ const TOOL_LINE = /^tool:([a-z_]+)(?:\s+(\{[\s\S]*\}))?\s*$/;
 function summarizeTool(result: Record<string, unknown>): string {
   if (typeof result.message === "string") return result.message;
   if (typeof result.error === "string") return result.error;
-  if (result.ok === true && Array.isArray(result.children)) {
-    const names = (result.children as Array<{ firstName?: string }>).map((child) => child.firstName).filter(Boolean);
-    return names.length ? `Your children: ${names.join(", ")}.` : "I didn't find any children on this account.";
-  }
   if (result.ok === true && result.weekStart && Array.isArray(result.children)) {
     const titles = (result.children as Array<{ classTitle?: string; blocks?: Array<{ title?: string | null }> }>)
       .flatMap((row) => [row.classTitle, ...(row.blocks ?? []).map((block) => block.title)])
@@ -32,6 +28,10 @@ function summarizeTool(result: Record<string, unknown>): string {
     return titles.length
       ? `Week of ${result.weekStart}: ${titles.join("; ")}.`
       : `I didn't find published materials for the week of ${result.weekStart}.`;
+  }
+  if (result.ok === true && Array.isArray(result.children)) {
+    const names = (result.children as Array<{ firstName?: string }>).map((child) => child.firstName).filter(Boolean);
+    return names.length ? `Your children: ${names.join(", ")}.` : "I didn't find any children on this account.";
   }
   if (result.ok === true && result.orderId) {
     return `You're RSVP'd for ${result.eventName}. There is no charge.`;

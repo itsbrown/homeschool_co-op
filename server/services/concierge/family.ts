@@ -12,6 +12,8 @@ import {
 } from "@shared/schema";
 import { getPublishedWeekPlansForClassIds } from "../../lib/schedule-builder-db";
 import { assertParentUserId } from "./guardrails";
+import { isPreviewDemoRequested } from "./preview-demo-guard";
+import { previewGetMyFamily, previewGetWeekMaterials } from "./preview-memory";
 
 export type FamilyChild = {
   id: number;
@@ -120,6 +122,7 @@ async function campusNames(locationIds: number[]): Promise<Map<number, string>> 
 }
 
 export async function getMyFamily(userId: number, requestedChildId?: number): Promise<FamilySnapshot | { ok: false; error: string }> {
+  if (isPreviewDemoRequested()) return previewGetMyFamily(userId, requestedChildId);
   const id = assertParentUserId(userId);
   const parent = await loadParent(id);
   if (!parent) return { ok: false, error: "Parent account was not found." };
@@ -204,6 +207,7 @@ export async function getWeekMaterials(
     }
   | { ok: false; error: string }
 > {
+  if (isPreviewDemoRequested()) return previewGetWeekMaterials(userId, input);
   const id = assertParentUserId(userId);
   const parent = await loadParent(id);
   if (!parent) return { ok: false, error: "Parent account was not found." };

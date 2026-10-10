@@ -11,6 +11,8 @@ import { generateStoreAccessToken } from "../../lib/store-config";
 import { createStoreOrder, createStoreOrderItem } from "../../lib/store-storage";
 import { assertParentUserId } from "./guardrails";
 import { getMyFamily } from "./family";
+import { isPreviewDemoRequested } from "./preview-demo-guard";
+import { previewRsvpEvent } from "./preview-memory";
 
 async function countPaidAttendees(productId: number): Promise<Partial<Record<StoreAttendeeType, number>>> {
   const db = await getDb();
@@ -55,6 +57,7 @@ export async function rsvpEvent(
   answerInput: unknown,
   eventProductId: number,
 ): Promise<RsvpToolResult> {
+  if (isPreviewDemoRequested()) return previewRsvpEvent(userId, answerInput, eventProductId);
   const id = assertParentUserId(userId);
   const db = await getDb();
   const [parent] = await db

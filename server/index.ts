@@ -2,6 +2,16 @@
 import "./local-env";
 // Load test environment configuration (conditionally based on NODE_ENV)
 import "./test-env-loader";
+import { assertPreviewDemoAllowed, isPreviewDemoRequested } from "./services/concierge/preview-demo-guard";
+
+if (isPreviewDemoRequested()) {
+  try {
+    assertPreviewDemoAllowed();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    if (process.env.NODE_ENV !== "test") process.exit(1);
+  }
+}
 
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";

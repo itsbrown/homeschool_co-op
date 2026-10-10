@@ -11,11 +11,28 @@ import {
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
+export const previewDemoMode = import.meta.env.VITE_PREVIEW_DEMO_MODE === "1";
+
+if (!previewDemoMode && (!supabaseUrl || !supabaseAnonKey)) {
   throw new Error("Missing Supabase environment variables");
 }
 
-const supabaseClient = createClient(supabaseUrl, supabaseAnonKey); // Renamed to supabaseClient to avoid conflict
+const demoSupabaseStub = {
+  auth: {
+    getSession: async () => ({ data: { session: null }, error: null }),
+    refreshSession: async () => ({ data: { session: null }, error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    signInWithPassword: async () => ({ data: { user: null, session: null }, error: new Error("Preview demo does not use Supabase") }),
+    signUp: async () => ({ data: { user: null, session: null }, error: new Error("Preview demo does not use Supabase") }),
+    signOut: async () => ({ error: null }),
+    signInWithOAuth: async () => ({ data: { provider: "google", url: null }, error: new Error("Preview demo does not use Supabase") }),
+    resetPasswordForEmail: async () => ({ data: {}, error: null }),
+  },
+};
+
+const supabaseClient = previewDemoMode
+  ? (demoSupabaseStub as unknown as ReturnType<typeof createClient>)
+  : createClient(supabaseUrl, supabaseAnonKey);
 
 interface AuthContextType {
   user: User | null;
@@ -28,6 +45,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<any>;
   resetPassword: (email: string) => Promise<any>;
+  signInDemoParent: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -52,7 +70,38 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  function demoUser(email: string, name: string): User {
+    return {
+      id: "preview-demo",
+      email,
+      app_metadata: {},
+      user_metadata: { name },
+      aud: "preview-demo",
+      created_at: "",
+    } as User;
+  }
+
   useEffect(() => {
+    if (previewDemoMode) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const response = await fetch("/api/preview-demo/session", { credentials: "include" });
+          const body = await response.json().catch(() => ({}));
+          if (!cancelled && body?.signedIn && body.parent?.email) {
+            setUser(demoUser(body.parent.email, body.parent.name ?? ""));
+          }
+        } catch (err) {
+          console.error("Preview demo session check failed:", err);
+        } finally {
+          if (!cancelled) setIsLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
     // Get initial session with error handling
     const initializeAuth = async () => {
       try {
@@ -200,7 +249,33 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
     return { data, error };
   };
 
+  const signInDemoParent = async () => {
+    if (!previewDemoMode) {
+      throw new Error("Demo sign-in is only available on the preview.");
+    }
+    const response = await fetch("/api/preview-demo/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ parentKey: "avery" }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body?.parent?.email) {
+      throw new Error(typeof body.error === "string" ? body.error : "Demo sign-in failed.");
+    }
+    setUser(demoUser(body.parent.email, body.parent.name ?? "Avery Quinn"));
+    setError(null);
+    setIsLoading(false);
+  };
+
   const signOut = async () => {
+    if (previewDemoMode) {
+      await fetch("/api/preview-demo/sign-out", { method: "POST", credentials: "include" });
+      setUser(null);
+      setSession(null);
+      setIsLoading(false);
+      return;
+    }
     try {
       console.log('🚪 Starting logout process...');
 
@@ -287,6 +362,7 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({
     signOut,
     signInWithGoogle,
     resetPassword,
+    signInDemoParent,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

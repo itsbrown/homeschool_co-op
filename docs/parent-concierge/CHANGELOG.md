@@ -6,6 +6,13 @@
 - Writes are accepted only for a local or dev target. The database name must include `dev`, `mask`, `scratch`, `local`, or `test`. Neon, Supabase, and Replit hosts are refused, as are prod-looking and source-equal targets.
 - Test fixtures in `scripts/lib/prod-to-dev-mask.test.mjs` are synthetic. The script was not run against a database.
 
+## 2026-10-10 (Vercel preview)
+
+- `vercel.json` builds the Vite client to `dist/public` and leaves `package.json` `build` / `start` for Replit.
+- `api/index.ts` wraps `server/preview/express-app.ts`. That app does not import `server/index.ts` or Supabase.
+- `PREVIEW_DEMO_MODE` uses in-memory fake families. Demo sign-in replaces Supabase. Leads are logged unless `CONCIERGE_LEAD_EMAIL` and `SENDGRID_API_KEY` are both set. Analytics stay in memory.
+- The guard refuses demo mode when `NODE_ENV=production` on Replit, or when `DATABASE_URL` looks like production. See [preview.md](./preview.md).
+
 ## 2026-10-10 (Phase 1)
 
 - Chat page: `/concierge` (anonymous) and `/parent/concierge` (signed-in shell). `POST /api/concierge/chat` uses the Vercel AI SDK and AI Gateway. `CONCIERGE_AI_MOCK=1` skips the gateway.

@@ -6,6 +6,7 @@ import { getDb } from "../../server/db";
 import {
   childGuardians,
   children,
+  categories,
   classes,
   conciergeEvents,
   locations,
@@ -110,6 +111,7 @@ async function deletePreviousFakeSchool(): Promise<void> {
     }
     await db.delete(children).where(eq(children.schoolId, school.id));
     await db.delete(classes).where(eq(classes.schoolId, school.id));
+    await db.delete(categories).where(eq(categories.schoolId, school.id));
     if (userIds.length > 0) await db.delete(users).where(inArray(users.id, userIds));
     await db.delete(locations).where(eq(locations.schoolId, school.id));
     await db.delete(schools).where(eq(schools.id, school.id));

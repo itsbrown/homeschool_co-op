@@ -14,6 +14,7 @@ The running app is **Vite + React + Express + Drizzle** on PostgreSQL. It is not
 | [data-flows.md](./data-flows.md) | Where live data and Auth sit, and how they move |
 | [masking.md](./masking.md) | One-way prod → dev mask. Source is production `DATABASE_URL`, read-only |
 | [guardrails.md](./guardrails.md) | Own family only, no Stripe, human handoff, no marketing profiles of children |
+| [preview.md](./preview.md) | Vercel preview settings, `PREVIEW_DEMO_MODE`, in-memory fake families |
 | [CHANGELOG.md](./CHANGELOG.md) | Dated notes for this folder |
 
 Operational hub: [../APP_KNOWLEDGE/README.md](../APP_KNOWLEDGE/README.md).
@@ -36,17 +37,11 @@ Operational hub: [../APP_KNOWLEDGE/README.md](../APP_KNOWLEDGE/README.md).
 
 `scripts/seed-concierge-local.ts` writes fake families (first names, age bands, classes, store events, week-plan blocks) only when `CONCIERGE_LOCAL_DATABASE_URL` is local Postgres whose database name contains `local` or `test`. It refuses production, Supabase, Neon, Railway, and Replit hosts. It applies migration 268 with SQL. It does not call `db:push`. Tests use `@example.invalid` addresses. No real families.
 
-## Preview env (names only)
+## Vercel preview
 
-Set on the preview host, then apply `server/migrations/268-concierge-events.sql`:
+The preview is a separate Vercel project. It does not use the Replit `build` or `start` scripts and does not need a database. Settings, env names, and the demo-mode guard are in [preview.md](./preview.md).
 
-- `AI_GATEWAY_API_KEY` (required for a live model)
-- `AI_GATEWAY_MODEL` (optional; default `anthropic/claude-sonnet-4.5`)
-- `CONCIERGE_LEAD_EMAIL`
-- `SENDGRID_API_KEY` and `SENDGRID_FROM_EMAIL` (existing SendGrid sender)
-- Existing `DATABASE_URL` and Supabase auth env (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
-
-Leave `CONCIERGE_AI_MOCK` unset when the preview should call the gateway. Do not commit key values.
+Required preview env: `PREVIEW_DEMO_MODE=1`. The build command sets `VITE_PREVIEW_DEMO_MODE=1`. Optional: `AI_GATEWAY_API_KEY`, `AI_GATEWAY_MODEL`, `CONCIERGE_LEAD_EMAIL`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`. Do not set a production `DATABASE_URL` or Supabase keys for this preview. Do not set `PREVIEW_DEMO_MODE` on the Replit production VM.
 
 ## What this phase does not do
 

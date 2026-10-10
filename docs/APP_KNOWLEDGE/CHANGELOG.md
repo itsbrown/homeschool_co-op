@@ -17,6 +17,11 @@
 
 - Deleted `.github/workflows/fall-2026-roster-snapshot.yml`. A workflow with no `on:` block is invalid, and `workflow_dispatch` was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. Do not restore the file. Roster and family CSV/JSON files on `main` are listed in the PR and are not deleted here. Follow-ups: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
 
+## 2026-10-10 (Parent concierge Vercel preview)
+
+- Vercel preview settings are in [parent-concierge/preview.md](../parent-concierge/preview.md). Framework preset Other, root `.`, build `VITE_PREVIEW_DEMO_MODE=1 npx vite build`, output `dist/public`. Replit `build` and `start` are unchanged.
+- `PREVIEW_DEMO_MODE` is in-memory only. It refuses to start on Replit production or when `DATABASE_URL` looks like production. Supabase is not called. SendGrid sends only when `CONCIERGE_LEAD_EMAIL` and `SENDGRID_API_KEY` are both set.
+
 ## 2026-10-10 (Parent concierge Phase 1)
 
 - `POST /api/concierge/chat` is the concierge. `server/api/parent-concierge.ts` stays unmounted (Anthropic, payments, cart). Do not mount it.

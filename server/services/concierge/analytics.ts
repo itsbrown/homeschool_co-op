@@ -1,6 +1,8 @@
 import { getDb } from "../../db";
 import { conciergeEvents } from "@shared/schema";
 import { sanitizeConciergeMetadata } from "./guardrails";
+import { isPreviewDemoRequested } from "./preview-demo-guard";
+import { recordPreviewDemoAnalytics } from "./preview-memory";
 
 export type ConciergeAnalyticsInput = {
   schoolId: number | null;
@@ -13,6 +15,10 @@ export type ConciergeAnalyticsInput = {
 };
 
 export async function logConciergeEvent(input: ConciergeAnalyticsInput): Promise<void> {
+  if (isPreviewDemoRequested()) {
+    recordPreviewDemoAnalytics(input);
+    return;
+  }
   const db = await getDb();
   await db.insert(conciergeEvents).values({
     schoolId: input.schoolId,

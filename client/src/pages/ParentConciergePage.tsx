@@ -25,7 +25,8 @@ const PARENT_STARTERS = [
 ];
 
 export default function ParentConciergePage() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, signInDemoParent } = useAuth();
+  const previewDemo = import.meta.env.VITE_PREVIEW_DEMO_MODE === "1";
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
@@ -82,6 +83,11 @@ export default function ParentConciergePage() {
         <p className="mt-2 text-xs text-muted-foreground">
           I can't take payment, register a child, or change an enrollment. A reply here is not an approval or a receipt.
         </p>
+        {previewDemo && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Preview demo. These families are fake and stay in memory. Supabase is not used.
+          </p>
+        )}
       </header>
 
       <div
@@ -156,11 +162,25 @@ export default function ParentConciergePage() {
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap gap-3 text-sm">
+            {previewDemo && !isAuthenticated && (
+              <Button
+                type="button"
+                variant="outline"
+                data-testid="concierge-demo-sign-in"
+                onClick={() => {
+                  void signInDemoParent().catch((err) => {
+                    setError(err instanceof Error ? err.message : "Demo sign-in failed.");
+                  });
+                }}
+              >
+                Sign in as fake parent
+              </Button>
+            )}
             {isAuthenticated ? (
               <Link href="/parent/home" className="text-primary underline-offset-4 hover:underline">
                 Browse on your own
               </Link>
-            ) : (
+            ) : previewDemo ? null : (
               <>
                 <Link href="/register" className="text-primary underline-offset-4 hover:underline">
                   Enroll with a school code

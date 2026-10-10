@@ -3,6 +3,8 @@ import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { supabaseAuth } from "../middleware/supabase-auth";
 import { runConciergeChat } from "../services/concierge/chat";
+import { attachPreviewDemoUser } from "../services/concierge/preview-auth";
+import { assertPreviewDemoAllowed, isPreviewDemoRequested, PreviewDemoRefused } from "../services/concierge/preview-demo-guard";
 
 const router = Router();
 
@@ -22,6 +24,16 @@ const bodySchema = z.object({
 }).strip();
 
 function optionalSupabaseAuth(req: any, res: any, next: any) {
+  if (isPreviewDemoRequested()) {
+    try {
+      assertPreviewDemoAllowed();
+    } catch (error) {
+      const message = error instanceof PreviewDemoRefused ? error.message : "Preview demo is not available.";
+      return res.status(503).json({ error: message });
+    }
+    attachPreviewDemoUser(req);
+    return next();
+  }
   const hasBearer = typeof req.headers.authorization === "string" && req.headers.authorization.startsWith("Bearer ");
   const hasTestUser = process.env.NODE_ENV === "test" && req.headers["x-test-user-email"];
   const hasSession = Boolean(req.session?.userId);

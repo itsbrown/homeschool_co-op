@@ -3,6 +3,8 @@ import { getDb } from "../../db";
 import { users } from "@shared/schema";
 import { sendConciergeLeadEmail } from "../../lib/email-service";
 import { assertParentUserId } from "./guardrails";
+import { isPreviewDemoRequested } from "./preview-demo-guard";
+import { previewStartEnrollmentInquiry } from "./preview-memory";
 
 export type InquiryInput = {
   question: string;
@@ -27,6 +29,7 @@ export async function startEnrollmentInquiry(
   input: InquiryInput,
   send: typeof sendConciergeLeadEmail = sendConciergeLeadEmail,
 ): Promise<InquiryResult> {
+  if (isPreviewDemoRequested()) return previewStartEnrollmentInquiry(userId, input, send);
   const question = input.question?.trim() ?? "";
   if (!question) return { ok: false, handoff: true, error: "Add the question you want Corey to see." };
 

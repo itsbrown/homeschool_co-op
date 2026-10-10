@@ -185,6 +185,8 @@ Implemented: `docs/parent-concierge/ADR-001.md`. Express route `POST /api/concie
 
 `server/api/parent-concierge.ts` is **not mounted** and does not follow that ADR (direct Anthropic, payment and cart tools). Do not mount it. Other assistants stay on `@anthropic-ai/sdk` until an ADR moves them.
 
+Vercel preview only: `docs/parent-concierge/preview.md`. `PREVIEW_DEMO_MODE=1` uses in-memory fake families and does not call Supabase. Do not set that flag on the Replit production VM. Do not change `npm run build` or `npm start` for the preview; those remain the Replit scripts.
+
 ## Common Pitfalls
 
 - **AI unavailable crashes endpoint** → didn't check `isAvailable()` before calling → always check and return 503 with helpful message
