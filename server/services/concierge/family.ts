@@ -79,14 +79,15 @@ async function loadParent(userId: number) {
   return parent ?? null;
 }
 
-async function loadFamilyChildren(userId: number): Promise<ChildRow[]> {
+async function loadFamilyChildren(userId: number, schoolId: number): Promise<ChildRow[]> {
   const db = await getDb();
   const guardianLinks = await db
     .select({ childId: childGuardians.childId })
     .from(childGuardians)
-    .where(eq(childGuardians.guardianUserId, userId));
+    .innerJoin(children, eq(children.id, childGuardians.childId))
+    .where(and(eq(childGuardians.guardianUserId, userId), eq(children.schoolId, schoolId)));
   const guardianChildIds = guardianLinks.map((row) => row.childId);
-  const childFilter = guardianChildIds.length
+  const ownership = guardianChildIds.length
     ? or(eq(children.parentId, userId), inArray(children.id, guardianChildIds))
     : eq(children.parentId, userId);
 
@@ -100,13 +101,19 @@ async function loadFamilyChildren(userId: number): Promise<ChildRow[]> {
       locationId: children.locationId,
     })
     .from(children)
-    .where(childFilter!);
+    .where(and(ownership, eq(children.schoolId, schoolId)));
 }
 
-function narrowToRequestedChild(rows: ChildRow[], requestedChildId?: number): ChildRow[] {
-  if (requestedChildId == null) return rows;
+const CHILD_NOT_IN_FAMILY = "That child is not in your family.";
+
+function selectRequestedChild(
+  rows: ChildRow[],
+  requestedChildId?: number,
+): { ok: true; rows: ChildRow[] } | { ok: false; error: string } {
+  if (requestedChildId == null) return { ok: true, rows };
   const match = rows.filter((row) => row.id === requestedChildId);
-  return match.length > 0 ? match : rows;
+  if (match.length === 0) return { ok: false, error: CHILD_NOT_IN_FAMILY };
+  return { ok: true, rows: match };
 }
 
 async function campusNames(locationIds: number[]): Promise<Map<number, string>> {
@@ -126,19 +133,22 @@ export async function getMyFamily(userId: number, requestedChildId?: number): Pr
   const id = assertParentUserId(userId);
   const parent = await loadParent(id);
   if (!parent) return { ok: false, error: "Parent account was not found." };
-
-  const db = await getDb();
-  let schoolName: string | null = null;
-  if (parent.schoolId != null) {
-    const [school] = await db
-      .select({ name: schools.name })
-      .from(schools)
-      .where(eq(schools.id, parent.schoolId))
-      .limit(1);
-    schoolName = school?.name ?? null;
+  if (parent.schoolId == null) {
+    return { ok: false, error: "This account is not linked to a school." };
   }
 
-  const childRows = narrowToRequestedChild(await loadFamilyChildren(id), requestedChildId);
+  const db = await getDb();
+  const [school] = await db
+    .select({ name: schools.name })
+    .from(schools)
+    .where(eq(schools.id, parent.schoolId))
+    .limit(1);
+  const schoolName = school?.name ?? null;
+
+  const owned = await loadFamilyChildren(id, parent.schoolId);
+  const selected = selectRequestedChild(owned, requestedChildId);
+  if (!selected.ok) return selected;
+  const childRows = selected.rows;
   const locationIds = [
     ...childRows.map((row) => row.locationId),
     parent.locationId,
@@ -154,7 +164,10 @@ export async function getMyFamily(userId: number, requestedChildId?: number): Pr
           className: programEnrollments.className,
         })
         .from(programEnrollments)
-        .where(inArray(programEnrollments.childId, childIds))
+        .where(and(
+          inArray(programEnrollments.childId, childIds),
+          eq(programEnrollments.schoolId, parent.schoolId),
+        ))
     : [];
 
   return {
@@ -211,9 +224,15 @@ export async function getWeekMaterials(
   const id = assertParentUserId(userId);
   const parent = await loadParent(id);
   if (!parent) return { ok: false, error: "Parent account was not found." };
+  if (parent.schoolId == null) {
+    return { ok: false, error: "This account is not linked to a school." };
+  }
 
   const weekStart = resolveWeekStart(input.weekStart);
-  const childRows = narrowToRequestedChild(await loadFamilyChildren(id), input.childId);
+  const owned = await loadFamilyChildren(id, parent.schoolId);
+  const selected = selectRequestedChild(owned, input.childId);
+  if (!selected.ok) return selected;
+  const childRows = selected.rows;
   const childIds = childRows.map((row) => row.id);
   if (childIds.length === 0) return { ok: true, weekStart, children: [] };
 
@@ -227,29 +246,26 @@ export async function getWeekMaterials(
       schoolId: programEnrollments.schoolId,
     })
     .from(programEnrollments)
-    .where(and(inArray(programEnrollments.childId, childIds), eq(programEnrollments.status, "enrolled")));
+    .where(and(
+      inArray(programEnrollments.childId, childIds),
+      eq(programEnrollments.status, "enrolled"),
+      eq(programEnrollments.schoolId, parent.schoolId),
+    ));
 
-  const pairs: Array<{ childId: number; classId: number; schoolId: number }> = [];
+  const pairs: Array<{ childId: number; classId: number }> = [];
   const seen = new Set<string>();
   for (const enrollment of enrollmentRows) {
+    if (enrollment.schoolId !== parent.schoolId) continue;
     const classId = enrollment.marketplaceClassId ?? enrollment.classId;
     if (classId == null) continue;
     const key = `${enrollment.childId}:${classId}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    pairs.push({ childId: enrollment.childId, classId, schoolId: enrollment.schoolId });
+    pairs.push({ childId: enrollment.childId, classId });
   }
-
-  const schoolIds = new Set<number>();
-  if (parent.schoolId != null) schoolIds.add(parent.schoolId);
-  for (const pair of pairs) schoolIds.add(pair.schoolId);
 
   const classIds = Array.from(new Set(pairs.map((pair) => pair.classId)));
-  const plans = [];
-  for (const schoolId of schoolIds) {
-    const rows = await getPublishedWeekPlansForClassIds(schoolId, classIds, weekStart);
-    plans.push(...rows);
-  }
+  const plans = await getPublishedWeekPlansForClassIds(parent.schoolId, classIds, weekStart);
   const planByClass = new Map<number, (typeof plans)[number]>();
   for (const plan of plans) {
     if (plan.classId != null && !planByClass.has(plan.classId)) planByClass.set(plan.classId, plan);
@@ -297,7 +313,7 @@ export async function getWeekMaterials(
       const [cls] = await db
         .select({ title: classes.title })
         .from(classes)
-        .where(eq(classes.id, pair.classId))
+        .where(and(eq(classes.id, pair.classId), eq(classes.schoolId, parent.schoolId)))
         .limit(1);
       if (cls?.title) classTitle = cls.title;
     }

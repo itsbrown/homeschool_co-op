@@ -49,9 +49,17 @@ export function attachPreviewDemoUser(req: { headers: any; user?: { id: number; 
   req.user = { id: parent.id, schoolId: parent.schoolId, email: parent.email };
 }
 
-export function previewDemoCookie(parentId: number, clear = false): string {
-  const secure = process.env.VERCEL === "1" ? "; Secure" : "";
+export function previewDemoCookie(parentId: number, clear = false, secure = false): string {
+  const secureAttr = secure ? "; Secure" : "";
   const maxAge = clear ? 0 : 60 * 60 * 24 * 7;
   const value = clear ? "" : String(parentId);
-  return `${PREVIEW_DEMO_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+  return `${PREVIEW_DEMO_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secureAttr}`;
+}
+
+/** Vercel terminates TLS at the edge, so trust x-forwarded-proto as well as req.secure. */
+export function previewRequestIsHttps(req: { secure?: boolean; headers?: Record<string, unknown> }): boolean {
+  if (req.secure) return true;
+  const raw = req.headers?.["x-forwarded-proto"];
+  const first = Array.isArray(raw) ? raw[0] : raw;
+  return typeof first === "string" && first.split(",")[0].trim().toLowerCase() === "https";
 }

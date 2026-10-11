@@ -1,6 +1,6 @@
 # School analytics
 
-**Last updated:** 2026-10-10
+**Last updated:** 2026-10-11
 
 Unified school-admin analytics: **app engagement**, **cart abandonment**, and **student progress** (Lexile trends/bands, Math Level distribution, and placement coverage). Parent-facing progress charts use the same progress analytics service with parent scoping.
 
@@ -22,7 +22,7 @@ Sidebar: **Finance → School Analytics**.
 |-------|---------|
 | `user_activity_events` | Login, page_view, session_start/end, heartbeat |
 | `checkout_funnel_events` | Member cart + public store funnel steps |
-| `concierge_events` | Parent concierge turns and tool calls only. Migration `268-concierge-events.sql`. Not this engagement report. See [parent-concierge](../../parent-concierge/README.md). |
+| `concierge_events` | Parent concierge turns and tool calls only. Migration `268-concierge-events.sql`, applied as SQL after `267-platform-schools.sql`. Never `db:push`. Not this engagement report. See [parent-concierge](../../parent-concierge/README.md). |
 
 Migration: `server/migrations/253-school-analytics-events.sql`; idempotent bootstrap in `server/init-db.ts`.
 

@@ -1,6 +1,6 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "../../db";
-import { children, storeOrderItems, storeOrders, storeProducts, users } from "@shared/schema";
+import { storeOrderItems, storeOrders, storeProducts, users } from "@shared/schema";
 import {
   parseStoreEventRsvp,
   priceEventRsvp,
@@ -10,7 +10,6 @@ import {
 import { generateStoreAccessToken } from "../../lib/store-config";
 import { createStoreOrder, createStoreOrderItem } from "../../lib/store-storage";
 import { assertParentUserId } from "./guardrails";
-import { getMyFamily } from "./family";
 import { isPreviewDemoRequested } from "./preview-demo-guard";
 import { previewRsvpEvent } from "./preview-memory";
 
@@ -51,6 +50,7 @@ export type RsvpToolResult =
  * Records a $0 store-event RSVP for the signed-in parent.
  * Uses store_orders.parent_id and store_order_items.metadata.rsvp.
  * Does not call Stripe, does not write a payment row, and does not update another parent's order.
+ * The event row is loaded only when its school_id is the session parent's school.
  */
 export async function rsvpEvent(
   userId: number,
@@ -71,18 +71,8 @@ export async function rsvpEvent(
     .where(eq(users.id, id))
     .limit(1);
   if (!parent) return { ok: false, handoff: false, error: "Parent account was not found." };
-
-  const family = await getMyFamily(id);
-  const schoolIds = new Set<number>();
-  if (parent.schoolId != null) schoolIds.add(parent.schoolId);
-  if (family.ok && family.children.length > 0) {
-    const rows = await db
-      .select({ schoolId: children.schoolId })
-      .from(children)
-      .where(inArray(children.id, family.children.map((child) => child.id)));
-    for (const row of rows) {
-      if (row.schoolId != null) schoolIds.add(row.schoolId);
-    }
+  if (parent.schoolId == null) {
+    return { ok: false, handoff: false, error: "Event not found." };
   }
 
   const [product] = await db
@@ -95,10 +85,15 @@ export async function rsvpEvent(
       rsvp: storeProducts.rsvp,
     })
     .from(storeProducts)
-    .where(eq(storeProducts.id, eventProductId))
+    .where(and(
+      eq(storeProducts.id, eventProductId),
+      eq(storeProducts.schoolId, parent.schoolId),
+      eq(storeProducts.productKind, "event"),
+      eq(storeProducts.isActive, true),
+    ))
     .limit(1);
 
-  if (!product || product.productKind !== "event" || !product.isActive || !schoolIds.has(product.schoolId)) {
+  if (!product) {
     return { ok: false, handoff: false, error: "Event not found." };
   }
 

@@ -17,6 +17,12 @@
 
 - Deleted `.github/workflows/fall-2026-roster-snapshot.yml`. A workflow with no `on:` block is invalid, and `workflow_dispatch` was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. Do not restore the file. Roster and family CSV/JSON files on `main` are listed in the PR and are not deleted here. Follow-ups: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
 
+## 2026-10-11 (Parent concierge review)
+
+- Preview demo starts only with `PREVIEW_DEMO_MODE` and `VERCEL=1`. It refuses `REPLIT_DEPLOYMENT`, `REPL_ID`-style env, and a production-looking `DATABASE_URL`. Do not require `VERCEL_ENV=preview`: `asa-concierge-preview.vercel.app` is that project's production alias. See [parent-concierge/preview.md](../parent-concierge/preview.md).
+- Family tools filter by the session user and `users.school_id`. A foreign `childId` is refused before data is returned. RSVP loads the event only when `school_id` matches. Public `/concierge` has no session, so those tools are not executed.
+- `server/migrations/268-concierge-events.sql` stays after #150's `267-platform-schools.sql`. Apply it as SQL only. Never `db:push`.
+
 ## 2026-10-10 (Parent concierge Vercel preview)
 
 - Vercel preview settings are in [parent-concierge/preview.md](../parent-concierge/preview.md). Framework preset Other, root `.`, build `VITE_PREVIEW_DEMO_MODE=1 npx vite build`, output `dist/public`. Replit `build` and `start` are unchanged.

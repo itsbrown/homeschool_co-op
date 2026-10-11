@@ -5,6 +5,7 @@ import { runConciergeChat } from "../services/concierge/chat";
 import {
   attachPreviewDemoUser,
   previewDemoCookie,
+  previewRequestIsHttps,
 } from "../services/concierge/preview-auth";
 import { previewDemoParentByKey } from "../services/concierge/preview-memory";
 import { assertPreviewDemoAllowed, PreviewDemoRefused } from "../services/concierge/preview-demo-guard";
@@ -54,15 +55,15 @@ export function createPreviewExpressApp() {
     }
     const parent = previewDemoParentByKey(parsed.data.parentKey);
     if (!parent) return res.status(404).json({ error: "That demo parent does not exist." });
-    res.setHeader("Set-Cookie", previewDemoCookie(parent.id));
+    res.setHeader("Set-Cookie", previewDemoCookie(parent.id, false, previewRequestIsHttps(req)));
     return res.json({
       signedIn: true,
       parent: { id: parent.id, name: parent.name, email: parent.email },
     });
   });
 
-  app.post("/api/preview-demo/sign-out", (_req, res) => {
-    res.setHeader("Set-Cookie", previewDemoCookie(0, true));
+  app.post("/api/preview-demo/sign-out", (req, res) => {
+    res.setHeader("Set-Cookie", previewDemoCookie(0, true, previewRequestIsHttps(req)));
     return res.json({ signedIn: false });
   });
 

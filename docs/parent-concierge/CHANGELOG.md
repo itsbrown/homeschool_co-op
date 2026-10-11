@@ -6,6 +6,13 @@
 - Writes are accepted only for a local or dev target. The database name must include `dev`, `mask`, `scratch`, `local`, or `test`. Neon, Supabase, and Replit hosts are refused, as are prod-looking and source-equal targets.
 - Test fixtures in `scripts/lib/prod-to-dev-mask.test.mjs` are synthetic. The script was not run against a database.
 
+## 2026-10-11 (Review: demo guard, school scope)
+
+- Demo mode starts only when `PREVIEW_DEMO_MODE` is set and `VERCEL=1`. It refuses `REPLIT_DEPLOYMENT`, any `REPL_ID`-style variable, and a production-looking `DATABASE_URL`. It does not require `VERCEL_ENV=preview`, because `asa-concierge-preview` uses its Vercel production alias.
+- `get_my_family`, `get_week_materials`, and `rsvp_event` use the session user and that user's school. A `childId` outside that family is refused before the tool returns data. An event is loaded only when `store_products.school_id` is the parent's school.
+- An unauthenticated `POST /api/concierge/chat` (the public `/concierge` page) answers from the enrollment corpus. Family tool text does not query family, week, or RSVP data.
+- `268-concierge-events.sql` stays numbered after #150's `267-platform-schools.sql`. Apply it as a SQL migration only. Never `db:push`.
+
 ## 2026-10-10 (Vercel preview)
 
 - `vercel.json` builds the Vite client to `dist/public` and leaves `package.json` `build` / `start` for Replit.

@@ -26,8 +26,8 @@ Do not claim you can see their children, their week plan, or their RSVPs. Ask th
   return `${shared}
 
 The parent is signed in. You may call only these tools: ${CONCIERGE_TOOL_NAMES.join(", ")}.
-- get_my_family and get_week_materials ignore any parent, email, or child id that is not already this parent's. Never pass another family's id.
-- rsvp_event records a free store-event RSVP for this parent only. If the event has a price, tell them a person will follow up. Do not start checkout.
+- get_my_family and get_week_materials use this signed-in parent and their school. A child id that is not already in that family is refused. Never pass another family's id.
+- rsvp_event records a free store-event RSVP for this parent only when the event belongs to their school. If the event has a price, tell them a person will follow up. Do not start checkout.
 - start_enrollment_inquiry emails Corey. It does not enroll anyone.
 You do not have the family list until you call get_my_family. Do not guess children's names.`;
 }

@@ -12,13 +12,22 @@ export function isPreviewDemoRequested(): boolean {
   return TRUTHY.has((process.env.PREVIEW_DEMO_MODE || "").trim().toLowerCase());
 }
 
-export function isReplitRuntime(): boolean {
-  return Boolean(
-    process.env.REPL_ID ||
-      process.env.REPLIT_DEPLOYMENT ||
-      process.env.REPL_OWNER ||
-      process.env.REPLIT_DEV_DOMAIN,
-  );
+function envSet(name: string): boolean {
+  return Boolean(process.env[name]?.trim());
+}
+
+/**
+ * Replit marks a process with REPL_ID, REPL_OWNER, REPL_SLUG, or any REPLIT_* variable.
+ * Returns the first name that is set, or null.
+ */
+export function replitStyleEnvName(): string | null {
+  if (envSet("REPL_ID")) return "REPL_ID";
+  if (envSet("REPL_OWNER")) return "REPL_OWNER";
+  if (envSet("REPL_SLUG")) return "REPL_SLUG";
+  const replitKey = Object.keys(process.env)
+    .filter((key) => key.startsWith("REPLIT_") && envSet(key))
+    .sort()[0];
+  return replitKey ?? null;
 }
 
 /**
@@ -48,16 +57,27 @@ export function databaseUrlLooksLikeProd(url: string | undefined): boolean {
 }
 
 /**
- * Demo mode may run on a Vercel preview (NODE_ENV is production there).
- * It must not run when this process is Replit production, or when DATABASE_URL
- * points at a hosted or production-named database.
+ * Demo mode runs only on the Vercel project that serves this preview.
+ * That project uses its Vercel production alias, so VERCEL_ENV is not checked.
  * When the flag is unset, this returns without throwing.
  */
 export function assertPreviewDemoAllowed(): void {
   if (!isPreviewDemoRequested()) return;
-  if (process.env.NODE_ENV === "production" && isReplitRuntime()) {
+
+  if (process.env.VERCEL !== "1") {
     throw new PreviewDemoRefused(
-      "Refusing PREVIEW_DEMO_MODE because NODE_ENV=production on Replit",
+      "Refusing PREVIEW_DEMO_MODE because VERCEL=1 is required",
+    );
+  }
+  if (envSet("REPLIT_DEPLOYMENT")) {
+    throw new PreviewDemoRefused(
+      "Refusing PREVIEW_DEMO_MODE because REPLIT_DEPLOYMENT is set",
+    );
+  }
+  const replitEnv = replitStyleEnvName();
+  if (replitEnv) {
+    throw new PreviewDemoRefused(
+      `Refusing PREVIEW_DEMO_MODE because a Replit environment variable is set (${replitEnv})`,
     );
   }
   if (databaseUrlLooksLikeProd(process.env.DATABASE_URL)) {

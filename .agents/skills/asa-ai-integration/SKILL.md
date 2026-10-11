@@ -100,14 +100,15 @@ const response = await anthropic.messages.create({
 - **Pages**: `/concierge` is public. `/parent/concierge` is inside `ParentAppShell`.
 - **Frontend**: `client/src/pages/ParentConciergePage.tsx` (plain React text, no `dangerouslySetInnerHTML`)
 - **Backend**: `server/services/concierge/*` and `server/api/concierge-chat.ts`
-- **Tools** (server ignores model-supplied parent, user, email, and child ids):
-  1. `get_my_family` — signed-in user and children where `parent_id` or `child_guardians.guardian_user_id` is `req.user.id`
-  2. `get_week_materials` — published week-plan blocks for those children's enrolled classes
-  3. `rsvp_event` — $0 store RSVP for an event in the parent's school. Any enabled attendee price above 0 is a handoff. No Stripe.
+- **Tools** (server ignores model-supplied parent, user, email, and child ids; session user and `users.school_id` only):
+  1. `get_my_family` — children in that school where `parent_id` or `child_guardians.guardian_user_id` is `req.user.id`. A `childId` outside that set is refused before any family payload is returned.
+  2. `get_week_materials` — published week-plan blocks for those children's enrolled classes at that school. Same `childId` check, before plans are loaded.
+  3. `rsvp_event` — $0 store RSVP only when `store_products.school_id` is the parent's school. The product is not loaded by id alone. Any enabled attendee price above 0 is a handoff. No Stripe.
   4. `start_enrollment_inquiry` — SendGrid lead to Corey via `sendConciergeLeadEmail`. No Brevo fallback. No enrollment row.
-- **Anonymous**: enrollment corpus only, plus the inquiry tool. Family tools are not offered.
+- **Anonymous**: public `/concierge` posts with no session. The server answers from the enrollment corpus (and the inquiry tool). Family tools are not executed.
+- **Preview demo**: `PREVIEW_DEMO_MODE` plus `VERCEL=1`. Refuse `REPLIT_DEPLOYMENT`, any `REPL_ID`-style env, and a production-looking `DATABASE_URL`. Do not require `VERCEL_ENV=preview`.
 - **Sensitive text** (payment, medical, custody, enrollment change, child registration) returns a handoff and does not call the model.
-- **Analytics**: `concierge_events` (`server/migrations/268-concierge-events.sql`). Not `user_activity_events`.
+- **Analytics**: `concierge_events` (`server/migrations/268-concierge-events.sql`), SQL only, after `267-platform-schools.sql`. Never `db:push`. Not `user_activity_events`.
 - **Do not mount** `server/api/parent-concierge.ts`. That file is the old unmounted Anthropic router (`check_payments`, `check_credits`, `add_to_cart`, `register_child`). It is not this concierge.
 - **Routing rule**: "Browse on your own" points to `/parent/home` when the parent is signed in.
 

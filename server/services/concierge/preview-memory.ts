@@ -49,6 +49,7 @@ type DemoChild = {
   lastName: string;
   gradeLevel: string;
   campus: string;
+  schoolId: number;
   parentId: number;
   guardianIds: number[];
   enrollments: Array<{ status: string; className: string; classId: number | null }>;
@@ -111,6 +112,7 @@ const children: DemoChild[] = [
     lastName: "Student",
     gradeLevel: "prek_k",
     campus: "Lakeside",
+    schoolId: PREVIEW_DEMO_IDS.school,
     parentId: PREVIEW_DEMO_IDS.avery,
     guardianIds: [PREVIEW_DEMO_IDS.casey],
     enrollments: [{ status: "enrolled", className: "Nature Journaling", classId: PREVIEW_DEMO_IDS.nature }],
@@ -121,6 +123,7 @@ const children: DemoChild[] = [
     lastName: "Student",
     gradeLevel: "grades_1_3",
     campus: "Lakeside",
+    schoolId: PREVIEW_DEMO_IDS.school,
     parentId: PREVIEW_DEMO_IDS.avery,
     guardianIds: [],
     enrollments: [],
@@ -131,6 +134,7 @@ const children: DemoChild[] = [
     lastName: "Student",
     gradeLevel: "grades_4_8",
     campus: "Lakeside",
+    schoolId: PREVIEW_DEMO_IDS.school,
     parentId: PREVIEW_DEMO_IDS.blake,
     guardianIds: [],
     enrollments: [{ status: "enrolled", className: "Studio Art", classId: PREVIEW_DEMO_IDS.studio }],
@@ -141,6 +145,7 @@ const children: DemoChild[] = [
     lastName: "Student",
     gradeLevel: "grades_9_12",
     campus: "Lakeside",
+    schoolId: PREVIEW_DEMO_IDS.school,
     parentId: PREVIEW_DEMO_IDS.blake,
     guardianIds: [],
     enrollments: [],
@@ -236,8 +241,22 @@ export function previewDemoParentById(id: number): DemoParent | null {
   return parents.find((parent) => parent.id === id) ?? null;
 }
 
-function familyChildren(userId: number): DemoChild[] {
-  return children.filter((child) => child.parentId === userId || child.guardianIds.includes(userId));
+const CHILD_NOT_IN_FAMILY = "That child is not in your family.";
+
+function familyChildren(userId: number, schoolId: number): DemoChild[] {
+  return children.filter((child) =>
+    child.schoolId === schoolId && (child.parentId === userId || child.guardianIds.includes(userId)),
+  );
+}
+
+function selectRequestedChild(
+  rows: DemoChild[],
+  requestedChildId?: number,
+): { ok: true; rows: DemoChild[] } | { ok: false; error: string } {
+  if (requestedChildId == null) return { ok: true, rows };
+  const match = rows.filter((row) => row.id === requestedChildId);
+  if (match.length === 0) return { ok: false, error: CHILD_NOT_IN_FAMILY };
+  return { ok: true, rows: match };
 }
 
 export function previewGetMyFamily(
@@ -248,11 +267,9 @@ export function previewGetMyFamily(
   const id = assertParentUserId(userId);
   const parent = previewDemoParentById(id);
   if (!parent) return { ok: false, error: "Parent account was not found." };
-  let rows = familyChildren(id);
-  if (requestedChildId != null) {
-    const match = rows.filter((row) => row.id === requestedChildId);
-    if (match.length > 0) rows = match;
-  }
+  const selected = selectRequestedChild(familyChildren(id, parent.schoolId), requestedChildId);
+  if (!selected.ok) return selected;
+  const rows = selected.rows;
   return {
     ok: true,
     parent: {
@@ -308,11 +325,9 @@ export function previewGetWeekMaterials(
   const weekStart = input.weekStart && /^\d{4}-\d{2}-\d{2}$/.test(input.weekStart)
     ? input.weekStart
     : PREVIEW_DEMO_WEEK_START;
-  let rows = familyChildren(id);
-  if (input.childId != null) {
-    const match = rows.filter((row) => row.id === input.childId);
-    if (match.length > 0) rows = match;
-  }
+  const selected = selectRequestedChild(familyChildren(id, parent.schoolId), input.childId);
+  if (!selected.ok) return selected;
+  const rows = selected.rows;
   const out = [];
   for (const child of rows) {
     for (const enrollment of child.enrollments) {

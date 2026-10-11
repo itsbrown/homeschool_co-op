@@ -4,7 +4,7 @@ import { detectSensitiveRequest, handoffMessage } from "./guardrails";
 import { gatewayModelId, resolveConciergeMode } from "./mode";
 import { buildConciergeSystemPrompt } from "./prompts";
 import { executeConciergeTool, type ConciergeActor } from "./tools";
-import { isConciergeToolName, toolsForActor } from "./tool-names";
+import { isConciergeToolName, toolsForActor, type ConciergeToolName } from "./tool-names";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -17,6 +17,8 @@ export type ConciergeChatResult = {
 };
 
 const TOOL_LINE = /^tool:([a-z_]+)(?:\s+(\{[\s\S]*\}))?\s*$/;
+
+const FAMILY_TOOLS = new Set<ConciergeToolName>(["get_my_family", "get_week_materials", "rsvp_event"]);
 
 function summarizeTool(result: Record<string, unknown>): string {
   if (typeof result.message === "string") return result.message;
@@ -43,6 +45,10 @@ async function runMock(actor: ConciergeActor, latest: string): Promise<{ reply: 
   const toolMatch = latest.match(TOOL_LINE);
   if (toolMatch) {
     const name = toolMatch[1];
+    if (!actor.userId && FAMILY_TOOLS.has(name as ConciergeToolName)) {
+      const grounded = answerFromEnrollmentCorpus("sign in parent login account");
+      return { reply: grounded.text, handoff: false, toolsUsed: [] };
+    }
     let args: unknown = {};
     if (toolMatch[2]) {
       try {

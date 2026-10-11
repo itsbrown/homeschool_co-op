@@ -21,8 +21,13 @@ const saved = {
   demo: process.env.PREVIEW_DEMO_MODE,
   nodeEnv: process.env.NODE_ENV,
   databaseUrl: process.env.DATABASE_URL,
+  vercel: process.env.VERCEL,
+  vercelEnv: process.env.VERCEL_ENV,
   replId: process.env.REPL_ID,
+  replOwner: process.env.REPL_OWNER,
+  replSlug: process.env.REPL_SLUG,
   replitDeployment: process.env.REPLIT_DEPLOYMENT,
+  replitDevDomain: process.env.REPLIT_DEV_DOMAIN,
   lead: process.env.CONCIERGE_LEAD_EMAIL,
   sendgrid: process.env.SENDGRID_API_KEY,
   mock: process.env.CONCIERGE_AI_MOCK,
@@ -37,19 +42,33 @@ function restoreEnv() {
   assign("PREVIEW_DEMO_MODE", saved.demo);
   assign("NODE_ENV", saved.nodeEnv);
   assign("DATABASE_URL", saved.databaseUrl);
+  assign("VERCEL", saved.vercel);
+  assign("VERCEL_ENV", saved.vercelEnv);
   assign("REPL_ID", saved.replId);
+  assign("REPL_OWNER", saved.replOwner);
+  assign("REPL_SLUG", saved.replSlug);
   assign("REPLIT_DEPLOYMENT", saved.replitDeployment);
+  assign("REPLIT_DEV_DOMAIN", saved.replitDevDomain);
   assign("CONCIERGE_LEAD_EMAIL", saved.lead);
   assign("SENDGRID_API_KEY", saved.sendgrid);
   assign("CONCIERGE_AI_MOCK", saved.mock);
   assign("AI_GATEWAY_API_KEY", saved.gateway);
 }
 
+function clearReplitEnv() {
+  delete process.env.REPL_ID;
+  delete process.env.REPL_OWNER;
+  delete process.env.REPL_SLUG;
+  delete process.env.REPLIT_DEPLOYMENT;
+  delete process.env.REPLIT_DEV_DOMAIN;
+}
+
 function enableDemo() {
   process.env.PREVIEW_DEMO_MODE = "1";
+  process.env.VERCEL = "1";
+  process.env.VERCEL_ENV = "production";
   process.env.NODE_ENV = "production";
-  delete process.env.REPL_ID;
-  delete process.env.REPLIT_DEPLOYMENT;
+  clearReplitEnv();
   delete process.env.DATABASE_URL;
   delete process.env.CONCIERGE_LEAD_EMAIL;
   delete process.env.SENDGRID_API_KEY;
@@ -63,17 +82,37 @@ afterEach(() => {
 });
 
 describe("preview demo guard", () => {
-  it("refuses Replit production and production-looking database URLs", () => {
+  it("requires VERCEL=1 and refuses Replit or a production-looking database", () => {
     process.env.PREVIEW_DEMO_MODE = "1";
     process.env.NODE_ENV = "production";
-    process.env.REPL_ID = "repl-1";
+    process.env.VERCEL_ENV = "production";
+    delete process.env.VERCEL;
+    clearReplitEnv();
     delete process.env.DATABASE_URL;
-    expect(() => assertPreviewDemoAllowed()).toThrow(/NODE_ENV=production on Replit/);
+    expect(() => assertPreviewDemoAllowed()).toThrow(/VERCEL=1 is required/);
+
+    process.env.VERCEL = "1";
+    process.env.REPLIT_DEPLOYMENT = "1";
+    expect(() => assertPreviewDemoAllowed()).toThrow(/REPLIT_DEPLOYMENT is set/);
+
+    delete process.env.REPLIT_DEPLOYMENT;
+    process.env.NODE_ENV = "development";
+    process.env.REPL_ID = "repl-1";
+    expect(() => assertPreviewDemoAllowed()).toThrow(/REPL_ID/);
 
     delete process.env.REPL_ID;
-    process.env.NODE_ENV = "development";
+    process.env.REPL_OWNER = "owner";
+    expect(() => assertPreviewDemoAllowed()).toThrow(/REPL_OWNER/);
+    delete process.env.REPL_OWNER;
+    process.env.REPL_SLUG = "asa";
+    expect(() => assertPreviewDemoAllowed()).toThrow(/REPL_SLUG/);
+    delete process.env.REPL_SLUG;
+    process.env.REPLIT_DEV_DOMAIN = "abc.replit.dev";
+    expect(() => assertPreviewDemoAllowed()).toThrow(/REPLIT_DEV_DOMAIN/);
+
+    clearReplitEnv();
     process.env.DATABASE_URL = "postgresql://user:pass@ep-cool-night.neon.tech/asa";
-    expect(() => assertPreviewDemoAllowed()).toThrow(PreviewDemoRefused);
+    expect(() => assertPreviewDemoAllowed()).toThrow(/DATABASE_URL looks like production/);
     expect(databaseUrlLooksLikeProd("postgresql://user:pass@db.supabase.co/postgres")).toBe(true);
     expect(databaseUrlLooksLikeProd("postgresql://user:pass@localhost/asa_prod")).toBe(true);
     expect(databaseUrlLooksLikeProd("postgresql://user:pass@127.0.0.1/asa_concierge_local")).toBe(false);
@@ -81,10 +120,12 @@ describe("preview demo guard", () => {
 
     delete process.env.DATABASE_URL;
     process.env.NODE_ENV = "production";
+    process.env.VERCEL_ENV = "production";
     expect(() => assertPreviewDemoAllowed()).not.toThrow();
 
     delete process.env.PREVIEW_DEMO_MODE;
     process.env.DATABASE_URL = "postgresql://user:pass@ep-cool-night.neon.tech/asa";
+    process.env.REPLIT_DEPLOYMENT = "1";
     expect(() => assertPreviewDemoAllowed()).not.toThrow();
   });
 
@@ -124,7 +165,21 @@ describe("preview demo concierge", () => {
     expect(anon.body.reply).toContain("registration code");
     expect(anon.body.reply).not.toContain("Rowan");
 
-    const avery = await request(app)
+    const familyAnon = await request(app)
+      .post("/api/concierge/chat")
+      .send({
+        messages: [{
+          role: "user",
+          content: `tool:get_my_family {"childId":${PREVIEW_DEMO_IDS.skyler}}`,
+        }],
+      });
+    expect(familyAnon.status).toBe(200);
+    expect(familyAnon.body.toolsUsed).toEqual([]);
+    expect(familyAnon.body.reply.toLowerCase()).toContain("sign in");
+    expect(familyAnon.body.reply).not.toContain("Rowan");
+    expect(familyAnon.body.reply).not.toContain("Skyler");
+
+    const refusedChild = await request(app)
       .post("/api/concierge/chat")
       .set("x-preview-demo-parent", "avery")
       .send({
@@ -133,6 +188,15 @@ describe("preview demo concierge", () => {
           content: `tool:get_my_family {"childId":${PREVIEW_DEMO_IDS.skyler}}`,
         }],
       });
+    expect(refusedChild.status).toBe(200);
+    expect(refusedChild.body.reply).toContain("not in your family");
+    expect(refusedChild.body.reply).not.toContain("Skyler");
+    expect(refusedChild.body.reply).not.toContain("Rowan");
+
+    const avery = await request(app)
+      .post("/api/concierge/chat")
+      .set("x-preview-demo-parent", "avery")
+      .send({ messages: [{ role: "user", content: "tool:get_my_family {}" }] });
     expect(avery.status).toBe(200);
     expect(avery.body.reply).toContain("Rowan");
     expect(avery.body.reply).toContain("Quinn");
@@ -144,6 +208,19 @@ describe("preview demo concierge", () => {
       .send({ messages: [{ role: "user", content: "tool:get_my_family {}" }] });
     expect(blake.body.reply).toContain("Skyler");
     expect(blake.body.reply).not.toContain("Rowan");
+
+    const foreignWeek = await request(app)
+      .post("/api/concierge/chat")
+      .set("x-preview-demo-parent", "avery")
+      .send({
+        messages: [{
+          role: "user",
+          content: `tool:get_week_materials {"childId":${PREVIEW_DEMO_IDS.skyler}}`,
+        }],
+      });
+    expect(foreignWeek.body.reply).toContain("not in your family");
+    expect(foreignWeek.body.reply).not.toContain("Leaf rubbings");
+    expect(foreignWeek.body.reply).not.toContain("Skyler");
 
     const week = await request(app)
       .post("/api/concierge/chat")
@@ -178,6 +255,18 @@ describe("preview demo concierge", () => {
     expect(free.body.reply).toContain("Lakeside picnic");
     expect(free.body.handoff).toBe(false);
 
+    const otherSchoolEvent = await request(app)
+      .post("/api/concierge/chat")
+      .set("x-preview-demo-parent", "avery")
+      .send({
+        messages: [{
+          role: "user",
+          content: 'tool:rsvp_event {"eventProductId":99,"attendees":[{"type":"adult","quantity":1}],"meals":[],"otherNote":null}',
+        }],
+      });
+    expect(otherSchoolEvent.body.reply).toBe("Event not found.");
+    expect(otherSchoolEvent.body.reply).not.toContain("Harvest supper");
+
     const inquiry = await request(app)
       .post("/api/concierge/chat")
       .send({
@@ -211,6 +300,14 @@ describe("preview demo concierge", () => {
     const signed = await agent.post("/api/preview-demo/sign-in").send({ parentKey: "avery" });
     expect(signed.status).toBe(200);
     expect(signed.body.parent.email).toBe("avery.quinn@example.invalid");
+    const setCookie = String(signed.headers["set-cookie"]);
+    expect(setCookie).toContain("asa_preview_parent=");
+    expect(setCookie).not.toContain("Secure");
+    const httpsCookie = await request(app)
+      .post("/api/preview-demo/sign-in")
+      .set("x-forwarded-proto", "https")
+      .send({ parentKey: "avery" });
+    expect(String(httpsCookie.headers["set-cookie"])).toContain("Secure");
     const session = await agent.get("/api/preview-demo/session");
     expect(session.body.signedIn).toBe(true);
     const chat = await agent.post("/api/concierge/chat").send({

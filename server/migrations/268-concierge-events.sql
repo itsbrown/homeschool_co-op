@@ -1,4 +1,7 @@
 -- Parent concierge analytics (additive).
+-- Apply this file as SQL only, after server/migrations/267-platform-schools.sql
+-- (PR #150, school onboarding). Never apply it with db:push or drizzle-kit push.
+-- Keep the number 268 so it stays ordered after 267. Do not renumber.
 -- Not user_activity_events: that check constraint only allows login, page_view,
 -- session_start, session_end, and heartbeat, and those rows feed engagement
 -- slices by child age and gender. Do not export this table to Brevo or marketing_links.

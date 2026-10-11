@@ -30,7 +30,7 @@ Operational hub: [../APP_KNOWLEDGE/README.md](../APP_KNOWLEDGE/README.md).
 - `/concierge` and `/parent/concierge` render the chat-first `ParentConciergePage`. Anonymous visitors get enrollment answers from `server/services/concierge/enrollment-corpus.ts` (home page, registration screen, and the ADR lead sentence). Signed-in parents can call `get_my_family`, `get_week_materials`, and `rsvp_event`, scoped to `users.id` and `children.parent_id` / `child_guardians.guardian_user_id`.
 - `POST /api/concierge/chat` is mounted from `server/index.ts`. The model path is the Vercel AI SDK through AI Gateway (`AI_GATEWAY_API_KEY`, optional `AI_GATEWAY_MODEL`). `CONCIERGE_AI_MOCK=1` answers without calling the gateway (tests and local screenshots).
 - `start_enrollment_inquiry` emails Corey via `sendConciergeLeadEmail` (SendGrid only). Recipient `CONCIERGE_LEAD_EMAIL`. If SendGrid is missing, the tool fails and does not fall through to Brevo.
-- Chat turns and tool calls insert `concierge_events` (`server/migrations/268-concierge-events.sql`). Number 267 is left for the unmerged school-setup migration noted in [data-flows.md](./data-flows.md). Apply 268 by hand. Do not `db:push`.
+- Chat turns and tool calls insert `concierge_events` (`server/migrations/268-concierge-events.sql`). Apply it as SQL only, after PR #150's `267-platform-schools.sql`. Never `db:push` or `drizzle-kit push`.
 - `server/api/parent-concierge.ts` stays **unmounted**. It still calls Anthropic and still has payment, credit, and cart tools. Do not mount it.
 
 ## Local fake data
@@ -41,7 +41,7 @@ Operational hub: [../APP_KNOWLEDGE/README.md](../APP_KNOWLEDGE/README.md).
 
 The preview is a separate Vercel project. It does not use the Replit `build` or `start` scripts and does not need a database. Settings, env names, and the demo-mode guard are in [preview.md](./preview.md).
 
-Required preview env: `PREVIEW_DEMO_MODE=1`. The build command sets `VITE_PREVIEW_DEMO_MODE=1`. Optional: `AI_GATEWAY_API_KEY`, `AI_GATEWAY_MODEL`, `CONCIERGE_LEAD_EMAIL`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`. Do not set a production `DATABASE_URL` or Supabase keys for this preview. Do not set `PREVIEW_DEMO_MODE` on the Replit production VM.
+Required preview env: `PREVIEW_DEMO_MODE=1`. Vercel sets `VERCEL=1`. The build command sets `VITE_PREVIEW_DEMO_MODE=1`. Optional: `AI_GATEWAY_API_KEY`, `AI_GATEWAY_MODEL`, `CONCIERGE_LEAD_EMAIL`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`. Do not require `VERCEL_ENV=preview`: this project serves the demo on its production alias. Do not set a production `DATABASE_URL` or Supabase keys for this preview. Do not set `PREVIEW_DEMO_MODE` on the Replit production VM. The guard also refuses `REPLIT_DEPLOYMENT` and any `REPL_ID`-style variable.
 
 ## What this phase does not do
 

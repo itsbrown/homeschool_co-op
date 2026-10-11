@@ -5,7 +5,7 @@ import { eq, isNull } from "drizzle-orm";
 import { sendConciergeLeadEmail } from "../../lib/email-service";
 import conciergeChatRouter from "../../api/concierge-chat";
 import { getDb } from "../../db";
-import { conciergeEvents, schools, storeOrderItems, storeOrders, storeProducts } from "@shared/schema";
+import { children, conciergeEvents, schools, storeOrderItems, storeOrders, storeProducts, users } from "@shared/schema";
 import { emptyStoreEventRsvp, STORE_ATTENDEE_TYPES } from "@shared/store-event-rsvp";
 import { seedConciergeLocal, type ConciergeLocalSeed } from "../../../scripts/lib/concierge-local-seed";
 import { executeConciergeTool } from "../../services/concierge/tools";
@@ -31,6 +31,7 @@ describeIntegration("concierge phase 1 on local postgres", () => {
   let app: express.Application;
 
   beforeAll(async () => {
+    delete process.env.PREVIEW_DEMO_MODE;
     process.env.CONCIERGE_AI_MOCK = "1";
     process.env.CONCIERGE_LEAD_EMAIL = "corey@example.invalid";
     process.env.SENDGRID_API_KEY = "test-not-a-real-key";
@@ -39,6 +40,7 @@ describeIntegration("concierge phase 1 on local postgres", () => {
   }, 60000);
 
   beforeEach(() => {
+    delete process.env.PREVIEW_DEMO_MODE;
     mockLead.mockReset();
     mockLead.mockResolvedValue(true);
     process.env.CONCIERGE_AI_MOCK = "1";
@@ -51,7 +53,51 @@ describeIntegration("concierge phase 1 on local postgres", () => {
   });
 
   it("returns only the signed-in parent's children, including a guardian link", async () => {
-    const avery = await getMyFamily(seeded.parents.avery.id, seeded.children.skyler.id);
+    const foreign = await getMyFamily(seeded.parents.avery.id, seeded.children.skyler.id);
+    expect(foreign).toEqual({ ok: false, error: "That child is not in your family." });
+    expect(JSON.stringify(foreign)).not.toContain("Skyler");
+    expect(JSON.stringify(foreign)).not.toContain("Quinn");
+
+    const db = await getDb();
+    const [otherSchool] = await db.insert(schools).values({
+      name: "Harbor Campus Co-op",
+      type: "co-op",
+      adminId: seeded.parents.avery.id,
+      city: "Elsewhere",
+      state: "NY",
+      zipCode: "00000",
+      email: `harbor-${Date.now()}@example.invalid`,
+      status: "active",
+      registrationCode: `CONCIERGE-HARBOR-${Date.now()}`,
+    }).returning({ id: schools.id });
+    const [harbor] = await db.insert(children).values({
+      parentId: seeded.parents.avery.id,
+      parentEmail: seeded.parents.avery.email,
+      firstName: "Harbor",
+      lastName: "Student",
+      birthdate: "2015-06-01",
+      gradeLevel: "grades_1_3",
+      schoolId: otherSchool.id,
+    }).returning({ id: children.id });
+    const [unscoped] = await db.insert(users).values({
+      username: `unscoped-${Date.now()}`,
+      email: `unscoped-${Date.now()}@example.invalid`,
+      password: "masked-no-login",
+      role: "parent",
+      name: "Unscoped Parent",
+      schoolId: null,
+    }).returning({ id: users.id });
+
+    const crossSchool = await getMyFamily(seeded.parents.avery.id);
+    expect(crossSchool.ok).toBe(true);
+    expect(JSON.stringify(crossSchool)).not.toContain("Harbor");
+    const harborLookup = await getMyFamily(seeded.parents.avery.id, harbor.id);
+    expect(harborLookup).toEqual({ ok: false, error: "That child is not in your family." });
+    expect(JSON.stringify(harborLookup)).not.toContain("Harbor");
+    const noSchool = await getMyFamily(unscoped.id);
+    expect(noSchool).toEqual({ ok: false, error: "This account is not linked to a school." });
+
+    const avery = await getMyFamily(seeded.parents.avery.id);
     expect(avery.ok).toBe(true);
     if (!avery.ok) return;
     expect(names(avery).sort()).toEqual(["Quinn", "Rowan"]);
@@ -80,8 +126,10 @@ describeIntegration("concierge phase 1 on local postgres", () => {
       { userId: seeded.parents.blake.id, parentId: seeded.parents.blake.id, childId: seeded.children.skyler.id },
       { userId: seeded.parents.avery.id, schoolId: seeded.schoolId },
     );
-    expect(JSON.stringify(result)).toContain("Rowan");
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).toContain("not in your family");
     expect(JSON.stringify(result)).not.toContain("Skyler");
+    expect(JSON.stringify(result)).not.toContain("Rowan");
 
     const anonymous = await executeConciergeTool(
       "get_my_family",
@@ -94,9 +142,17 @@ describeIntegration("concierge phase 1 on local postgres", () => {
   });
 
   it("shows published week materials only for the signed-in family's enrolled classes", async () => {
-    const avery = await getWeekMaterials(seeded.parents.avery.id, {
+    const foreign = await getWeekMaterials(seeded.parents.avery.id, {
       weekStart: seeded.weekStart,
       childId: seeded.children.skyler.id,
+    });
+    expect(foreign).toEqual({ ok: false, error: "That child is not in your family." });
+    expect(JSON.stringify(foreign)).not.toContain("Color wheel");
+    expect(JSON.stringify(foreign)).not.toContain("Skyler");
+    expect(JSON.stringify(foreign)).not.toContain("Leaf rubbings");
+
+    const avery = await getWeekMaterials(seeded.parents.avery.id, {
+      weekStart: seeded.weekStart,
     });
     expect(avery.ok).toBe(true);
     if (!avery.ok) return;
@@ -279,7 +335,35 @@ describeIntegration("concierge phase 1 on local postgres", () => {
     expect(response.body.reply).not.toContain("Skyler");
     expect(response.body.toolsUsed).toEqual([]);
 
+    const familyTool = await request(app)
+      .post("/api/concierge/chat")
+      .send({
+        messages: [{
+          role: "user",
+          content: `tool:get_my_family {"userId":${seeded.parents.blake.id},"childId":${seeded.children.skyler.id}}`,
+        }],
+      });
+    expect(familyTool.status).toBe(200);
+    expect(familyTool.body.toolsUsed).toEqual([]);
+    expect(familyTool.body.reply.toLowerCase()).toContain("sign in");
+    expect(familyTool.body.reply).not.toContain("Rowan");
+    expect(familyTool.body.reply).not.toContain("Skyler");
+
     const db = await getDb();
+    const ordersBefore = await db.select({ id: storeOrders.id }).from(storeOrders);
+    const rsvpTool = await request(app)
+      .post("/api/concierge/chat")
+      .send({
+        messages: [{
+          role: "user",
+          content: `tool:rsvp_event {"eventProductId":${seeded.events.free.id},"attendees":[{"type":"adult","quantity":1}]}`,
+        }],
+      });
+    expect(rsvpTool.body.toolsUsed).toEqual([]);
+    expect(rsvpTool.body.reply).not.toContain("Lakeside picnic");
+    const ordersAfter = await db.select({ id: storeOrders.id }).from(storeOrders);
+    expect(ordersAfter).toHaveLength(ordersBefore.length);
+
     const turns = await db.select().from(conciergeEvents).where(isNull(conciergeEvents.userId));
     const turn = turns.find((row) => row.eventType === "concierge_turn");
     expect(turn).toBeTruthy();
@@ -300,15 +384,23 @@ describeIntegration("concierge phase 1 on local postgres", () => {
         }],
       });
     expect(response.status).toBe(200);
-    expect(response.body.reply).toContain("Rowan");
+    expect(response.body.reply).toContain("not in your family");
     expect(response.body.reply).not.toContain("Skyler");
+    expect(response.body.reply).not.toContain("Rowan");
     expect(response.body.toolsUsed).toEqual(["get_my_family"]);
+
+    const own = await request(app)
+      .post("/api/concierge/chat")
+      .set("x-test-user-email", seeded.parents.avery.email)
+      .send({ messages: [{ role: "user", content: "tool:get_my_family {}" }] });
+    expect(own.body.reply).toContain("Rowan");
+    expect(own.body.reply).not.toContain("Skyler");
 
     const db = await getDb();
     const rows = await db.select().from(conciergeEvents).where(eq(conciergeEvents.userId, seeded.parents.avery.id));
-    const toolRow = rows.find((row) => row.eventType === "concierge_tool" && row.toolName === "get_my_family");
+    const toolRow = rows.find((row) => row.eventType === "concierge_tool" && row.toolName === "get_my_family" && row.ok === false);
     const turnRow = rows.find((row) => row.eventType === "concierge_turn");
-    expect(toolRow?.ok).toBe(true);
+    expect(toolRow?.ok).toBe(false);
     expect(turnRow?.eventType).toBe("concierge_turn");
     const meta = JSON.stringify(rows.map((row) => row.metadata));
     expect(meta).not.toContain("Rowan");

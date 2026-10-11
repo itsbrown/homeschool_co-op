@@ -100,7 +100,7 @@ A $0 event can be recorded without Stripe. A priced attendee type goes through s
 
 ## Concierge analytics
 
-`concierge_events` (`server/migrations/268-concierge-events.sql`, also `shared/schema.ts`):
+`concierge_events` (`server/migrations/268-concierge-events.sql`, also `shared/schema.ts`). Apply the SQL file after `267-platform-schools.sql`. Never `db:push`:
 
 | Column | Role |
 |--------|------|

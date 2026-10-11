@@ -2,7 +2,7 @@
 
 The Replit production app is unchanged. `package.json` `build` and `start` still compile and boot `server/index.ts` on port 5000. This page is only the Vercel preview of the parent concierge.
 
-The preview does not use a database. `PREVIEW_DEMO_MODE` serves fake families from memory (Avery Quinn, Blake Rivera, Casey Nguyen, and children Rowan, Quinn, Skyler, Reese with age bands). Anonymous chat uses the enrollment notes. **Sign in as fake parent** signs in as Avery Quinn and does not call Supabase. SendGrid runs only when both `CONCIERGE_LEAD_EMAIL` and `SENDGRID_API_KEY` are set; otherwise the lead is logged in memory. Analytics stay in memory (`concierge_events` is not written).
+The demo sign-in cookie is `Secure` only when the request is HTTPS (`x-forwarded-proto`), which Vercel sets on the public alias. The preview does not use a database. `PREVIEW_DEMO_MODE` serves fake families from memory (Avery Quinn, Blake Rivera, Casey Nguyen, and children Rowan, Quinn, Skyler, Reese with age bands). Anonymous chat uses the enrollment notes. **Sign in as fake parent** signs in as Avery Quinn and does not call Supabase. SendGrid runs only when both `CONCIERGE_LEAD_EMAIL` and `SENDGRID_API_KEY` are set; otherwise the lead is logged in memory. Analytics stay in memory (`concierge_events` is not written).
 
 ## Project settings
 
@@ -34,16 +34,19 @@ Set these on the Vercel project for Preview. Do not put values in git.
 | `SENDGRID_API_KEY` | no | Same as above. |
 | `SENDGRID_FROM_EMAIL` | no | Existing sender, only if SendGrid is used. |
 
-Do not set `DATABASE_URL` to production, Neon, Supabase, Railway, or Replit. Do not set Supabase keys for this preview. Do not set `PREVIEW_DEMO_MODE` on the Replit production VM.
+Do not set `DATABASE_URL` to production, Neon, Supabase, Railway, or Replit. Do not set Supabase keys for this preview. Do not set `PREVIEW_DEMO_MODE` on the Replit production VM. `VERCEL` is set by Vercel. Do not set `VERCEL_ENV`; `production` on this project's alias is expected.
 
 ## Guard
 
-`assertPreviewDemoAllowed` refuses to start demo mode when:
+`assertPreviewDemoAllowed` runs only when `PREVIEW_DEMO_MODE` is set. Demo mode is allowed when `VERCEL=1` (Vercel sets this; do not set it on Replit to bypass the guard) and all of the following are true:
 
-- `NODE_ENV=production` and the process is on Replit (`REPL_ID`, `REPLIT_DEPLOYMENT`, `REPL_OWNER`, or `REPLIT_DEV_DOMAIN`), or
-- `DATABASE_URL` looks like production (hosted host, or a database name containing `prod`).
+- `REPLIT_DEPLOYMENT` is unset
+- no Replit-style variable is set (`REPL_ID`, `REPL_OWNER`, `REPL_SLUG`, or any `REPLIT_*`)
+- `DATABASE_URL` is empty or does not look like production (hosted host, or a database name containing `prod`)
 
-`server/index.ts` runs that check at boot. A Vercel preview has `NODE_ENV=production` and is not Replit, so the flag is allowed there. An empty `DATABASE_URL` is allowed.
+The project `asa-concierge-preview` serves this demo on its Vercel production alias (`asa-concierge-preview.vercel.app`). `VERCEL_ENV` may be `production` there. The guard does not require `VERCEL_ENV=preview`.
+
+`server/index.ts` runs the check at boot. Setting `PREVIEW_DEMO_MODE` on the Replit app exits the process. An empty `DATABASE_URL` is allowed on Vercel.
 
 ## What the preview is not
 
