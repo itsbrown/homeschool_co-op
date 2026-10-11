@@ -184,6 +184,12 @@ const messages = [
 ];
 ```
 
+## Parent concierge (planned, not the live Anthropic router)
+
+Phase 0 design: `docs/parent-concierge/ADR-001.md`. The new chat uses the Vercel AI SDK and AI Gateway from an **Express** route (this repo is Vite + Express, not Next.js). Tools are only `get_my_family`, `get_week_materials`, `rsvp_event`, and `start_enrollment_inquiry`. Leads go to Corey via SendGrid. No Stripe, no cart, no child marketing profile.
+
+`server/api/parent-concierge.ts` is **not mounted** and does not follow that ADR (direct Anthropic, payment and cart tools). Do not mount it as the concierge. Other assistants stay on `@anthropic-ai/sdk` until an ADR moves them.
+
 ## Common Pitfalls
 
 - **AI unavailable crashes endpoint** → didn't check `isAvailable()` before calling → always check and return 503 with helpful message
@@ -195,6 +201,7 @@ const messages = [
 - **pdf-parse crashes server on startup** → top-level import triggers test file read → use dynamic import of `pdf-parse/lib/pdf-parse.js` (see Knowledge Base section)
 - **XSS from AI content** → used `dangerouslySetInnerHTML` with AI-generated text → use safe React rendering, never trust AI output as raw HTML
 - **Concierge routing loop** → "Browse on your own" links point to `/dashboard` which is the concierge itself → always link to `/parent/home` for the legacy dashboard
+- **Mounting `parent-concierge.ts` to ship ADR-001** → that router is unmounted, calls Anthropic, and exposes payments → new Express route, AI Gateway, tools in the ADR only
 
 ## Best Practices
 

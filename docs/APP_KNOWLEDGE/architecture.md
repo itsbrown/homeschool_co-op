@@ -9,17 +9,28 @@ High-level map for agents. See [SYSTEM_DOCUMENTATION.md](../SYSTEM_DOCUMENTATION
 | API | Express (`server/`), TypeScript |
 | Client | React, Vite, TanStack Query, Shadcn/Tailwind |
 | DB | PostgreSQL via Drizzle (`shared/schema.ts`) |
-| Auth | Supabase (JWT); legacy Auth0 fields in schema |
-
-Unused Firebase SDKs were removed from `package.json` (Jul 2026): they had no imports and pulled Replit-blocked `websocket-driver`. Do not re-add them.
+| Auth | Supabase JWT (live). Auth0 filenames and Passport are not the session. [Parent concierge](../parent-concierge/architecture.md) |
 | Payments | Stripe (PaymentIntents, webhooks, autopay) |
 | CI | GitHub Actions: Tests, Payments CI, E2E (Playwright) |
+
+Unused Firebase SDKs were removed from `package.json` (Jul 2026): they had no imports and pulled Replit-blocked `websocket-driver`. Do not re-add them.
+
+## Live Auth (do not pause)
+
+Supabase ref `moivwjuglwwfrhqeewju` is live production Auth for portal sign-in. Its display name is **Adaptive Learning Program**. That name does not mean it is a test or learning sandbox. ASA Platform Prod and ASA Platform 2026 are old and hold no live data. App rows live in the Postgres on Replit (`DATABASE_URL`), not in Supabase Postgres.
+
+**Incident 2026-10-09.** An agent paused `moivwjuglwwfrhqeewju` because the display name looked like a test project. Portal logins were likely down from about 2:33 to 2:52 PM ET.
+
+**Rule.** Never pause or modify any Supabase or Replit project without Corey's explicit OK. Check what a project is used for before acting. Project names are misleading.
+
+**Free plan.** The Supabase free plan allows 2 active projects. The sign-in project can auto-pause when idle. An idle pause of `moivwjuglwwfrhqeewju` takes portal login down the same way a manual pause does.
 
 ## Multi-tenancy
 
 - **`school_id`** scopes schools, locations, classes, enrollments, many admin APIs.
 - **`requireSchoolContext`** middleware injects resolved school on authenticated routes.
 - **Resolve school for admin:** `server/lib/resolve-school-id.ts` — prefers school where `schools.admin_id = user.id` when `users.school_id` is misaligned (production incident).
+- **Platform plan** is `schools.platform_plan` (`internal` for ASA). New schools start on `starter` after approval. Family card charges are allowed only for `internal` until Stripe Connect. Tests: `tenant-isolation.test.ts`. This lands with PR #150; the note is here so the shared doc keeps both sides.
 
 ## Storage
 
@@ -41,13 +52,17 @@ Scheduled notifications use the same wall-time parser. A future `scheduledFor` s
 
 A throw while delivering one claimed row must not skip the rest of the batch. The tick requeues that row only when it has no `notification_recipients` (up to 3 times, counted in `delivery_stats.claimRecoveries`). If any recipient row exists, it is marked `failed` and not sent again. The same rule recovers rows left in `sending` for 15 minutes. `processNotification` swallows errors and sets `failed` without throwing; the tick re-reads status and only counts `sent` as delivered. A quiet `failed` with zero recipient rows is requeued the same way. No schema change.
 
+## Parent concierge (Phase 0, not built)
+
+Chat-first design is [../parent-concierge/ADR-001.md](../parent-concierge/ADR-001.md): an Express route using the Vercel AI SDK and AI Gateway, not a second Vercel app and not the unmounted Anthropic router in `server/api/parent-concierge.ts`. Tools are `get_my_family`, `get_week_materials`, `rsvp_event`, and `start_enrollment_inquiry` (SendGrid lead to Corey). No Stripe. A parent sees only their own `children` / `child_guardians` rows. Live app data is the Postgres on Replit (`DATABASE_URL`); Replit-managed vs Neon is unconfirmed. Live Auth is Supabase `moivwjuglwwfrhqeewju` only — [do not pause it](#live-auth-do-not-pause). ASA Platform Prod and ASA Platform 2026 hold no live data. Dev copies use `scripts/mask-prod-to-dev.mjs` with that production `DATABASE_URL` opened read-only (ideally a read-only role) and refuse a prod-looking target. Stores and flows: [../parent-concierge/data-flows.md](../parent-concierge/data-flows.md). No schema change in that phase. Production schema stays additive SQL, never `db:push`.
+
 ## Schema changes
 
 | Environment | Method |
 |-------------|--------|
 | CI `asa_test` | `node scripts/ci-db-push.mjs` (bootstrap `role` enum + `drizzle-kit push --force`) |
 | Local test DB | Same scripts; `scripts/verify-core-schema.mjs`, `scripts/verify-f001-schema.mjs` |
-| Production | Additive SQL in `server/migrations/` — **not** `db:push` |
+| Production | Additive SQL in `server/migrations/` only. Never `db:push` or `drizzle-kit push` against prod |
 
 ## Registration / locations (critical path)
 

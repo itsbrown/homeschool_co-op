@@ -1,14 +1,44 @@
 # App knowledge changelog
 
+## 2026-10-11 (Mask target, roster workflow, shared docs)
+
+- Rebased this branch onto `main`. #154 is merged: `.github/workflows/fall-2026-roster-snapshot.yml` is deleted. Do not add it back. `PROD_DATABASE_URL` was the app Postgres on Replit (Replit-managed vs Neon unconfirmed), never the Railway clone.
+- The mask script reads production only through a read-only transaction (`default_transaction_read_only=on`) or a read-only role (`reader`, `readonly`, `read_only`). It writes only to a local or dev target: the database name must include `dev`, `mask`, `scratch`, `local`, or `test`, and the host must not be Neon, Supabase, or Replit. A prod-looking or source-equal target is refused. Mask test fixtures are synthetic (`example.com`, `555` numbers, `@masked.invalid`).
+- Shared docs also keep PR #150's school-onboarding notes (platform plan, fundraiser checkout off, `267-platform-schools.sql`) so that overlap does not drop either side. The feature code stays on #150.
+
+## 2026-10-08 (School onboarding and platform billing)
+
+- Approving a school application creates the school, registration code, and a schoolAdmin role for that school only. Existing users keep their family school. Decline requires a reason. `/schools/register` sends ordinary users to `/school-application`.
+- Platform plans live in `server/config/platform-plans.ts`. Checkout is Stripe subscription mode on `schools.platform_stripe_customer_id` (test keys only). ASA stays `internal` (unlimited, family charges on). Other plans cannot charge families until Stripe Connect. Fundraiser checkout returns 503 because payment never wrote an order.
+- SQL: `server/migrations/267-platform-schools.sql`. Apply before deploy. Drizzle `schools` selects the new columns. Never `db:push`.
+- Tenant checks: `server/tests/integration/production-path/tenant-isolation.test.ts`. These notes are copied from open PR #150 so the shared changelog keeps both sides. The code is not in this branch.
+
 ## 2026-10-11 (Delete Fall 2026 roster snapshot workflow)
 
 - Deleted `.github/workflows/fall-2026-roster-snapshot.yml`. A workflow with no `on:` block is invalid, and `workflow_dispatch` was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. Do not restore the file. Roster and family CSV/JSON files on `main` are listed in the PR and are not deleted here. Follow-ups: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
+
+## 2026-10-10 (Do not pause live Auth)
+
+- **Incident 2026-10-09:** an agent paused Supabase `moivwjuglwwfrhqeewju` (display name "Adaptive Learning Program") thinking it was a test project. It is live production Auth. Portal logins were likely down from about 2:33 to 2:52 PM ET.
+- Never pause or modify any Supabase or Replit project without Corey's explicit OK. Project names are misleading; check what a project is used for before acting.
+- The Supabase free plan allows 2 active projects, and the sign-in project can auto-pause when idle.
+- Never `db:push` or any schema push against prod; additive SQL migrations only. Never use `.env.prod` or live Stripe keys, and never use real ASA families in tests.
 
 ## 2026-10-09 (Week Planner cards and lesson links)
 
 - Week Planner cards show the full description, every objective and material, homework, and notes. The first lesson link uses the lesson title. Later links use the Drive catalog title only when that file’s URL matches; otherwise the hostname. Duplicate labels are numbered. The Lesson sheet uses the same labels.
 - Edit Block accepts multiple lesson links (Add link; paste splits on spaces or `|`). The first URL stays on `lesson_link`; the full list is `resources`. CSV export joins them with ` | `. No migration.
 - Parent week-plan reads omit `lessonLink` and `resources`.
+
+## 2026-10-09 (Parent concierge data stores)
+
+- Live app data is the Postgres behind the Replit app (`DATABASE_URL`). Replit-managed vs Neon is unconfirmed. Supabase `moivwjuglwwfrhqeewju` is Auth only and must never be paused. ASA Platform Prod and ASA Platform 2026 hold no live data. Mask source is that production URL, read-only, ideally a read-only role. See [parent-concierge/data-flows.md](../parent-concierge/data-flows.md).
+
+## 2026-10-09 (Parent concierge Phase 0)
+
+- Live parent auth is Supabase JWT (`SupabaseProvider`, `supabaseAuth`). `auth0-auth.ts` `jwtCheck` also verifies Supabase tokens. Auth0 React is not mounted. Passport is not imported. Docs: [parent-concierge/architecture.md](../parent-concierge/architecture.md).
+- No `parents` table. RSVP that exists is `store_products.rsvp` plus order-item metadata, not `events`. ADR-001 chooses an Express route plus Vercel AI Gateway over a separate Vercel deploy. Guardrails: own family, no Stripe, human handoff, no child marketing profile.
+- `scripts/mask-prod-to-dev.mjs` is a one-way prod→dev mask (source read-only; refuses equal or prod-looking targets). Not run against a database. No migration and no `db:push`.
 
 ## 2026-10-06 (Swallowed notification errors still retry)
 

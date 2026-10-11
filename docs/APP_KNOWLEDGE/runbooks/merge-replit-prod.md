@@ -2,6 +2,8 @@
 
 Checklist after registration/locations (or any schema-touching) work.
 
+Never pause or modify the Replit app or any Supabase project without Corey's explicit OK. Display names are misleading. Supabase `moivwjuglwwfrhqeewju` ("Adaptive Learning Program") is live Auth — see [Live Auth](../architecture.md#live-auth-do-not-pause). Production schema is additive SQL in `server/migrations/` only. Never `db:push` against prod.
+
 ## 1. Merge to `main`
 
 - PR checks green: **Tests**, **Payments CI**, **E2E** (as applicable).
@@ -73,6 +75,7 @@ Apply **additive** SQL only when columns/tables are missing:
 | `server/migrations/264-children-math-level.sql` | `children.current_math_level` + **Math Level** assessment type. Apply **before or with** deploy of student-profile Math Level card. Boot `ensureMathLevelSchema` / `init-db` are idempotent. Never `db:push`. |
 | `server/migrations/265-week-planner-drive.sql` | Week Planner Drive: `classes.drive_folder_id`, `skeleton_blocks.drive_folder_id`, `curriculum_assets`, `week_plan_blocks.curriculum_asset_id`. Idempotent. Apply **before or with** this publish. Boot `init-db` also ALTER/CREATE IF NOT EXISTS. Never `db:push`. |
 | `server/migrations/266-store-event-products.sql` | Public store events: `store_products.rsvp` jsonb and `product_kind` includes `event`. Idempotent. Apply **before or with** publish. Non-prod `ensurePublicStoreSchema` applies it; production does not. Never `db:push`. |
+| `server/migrations/267-platform-schools.sql` | Additive: `schools.brand_color`, `platform_plan` (default `internal`), `platform_subscription_status`, Stripe customer/subscription ids, `setup_completed_at`; `school_applications.school_id`, `rejection_reason`. Apply **before** deploy of PR #150. Drizzle selects the new school columns and will 500 until this runs. Never `db:push`. |
 
 Verify with read-only checks or `scripts/verify-f001-schema.mjs` against a **non-prod** mirror when possible.
 
