@@ -36,3 +36,11 @@ vite.config.ts.*
 
 # Jest integration DB probe (written by globalSetup)
 .jest-cache/
+
+# Session cookie and agreement PDFs. PR #149's gitignore does not cover these.
+/cookies.txt
+/uploads/*MEMBER_AGREEMENT*.pdf
+/uploads/*VOLUNTEER__MENTOR_AGREEMENT*.pdf
+# Paste logs whose names contain parentEmail or user-email. PR #149 ignores attached_assets/Pasted* once merged.
+/attached_assets/Pasted--Created-database-enrollments-with-IDs-37-Creating-Stripe-payment-plan-parentEmail-c-*
+/attached_assets/Pasted--Is-authenticated-false-Current-cart-items-before-API-call-0-No-user-email-available-for-cart-*

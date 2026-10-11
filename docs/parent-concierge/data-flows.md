@@ -126,7 +126,7 @@ Env var names (from `process.env.*` in `server/`, `shared/`) [code]:
 ## 8. Risks
 
 1. **Prod host vendor unconfirmed.** Live rows are in the app Postgres on Replit. A code comment says Replit-managed; the roster workflow comment says `PROD_DATABASE_URL` is Neon (same as `.env.prod`). Confirm the host name before any prod→dev copy. The mask source is that production `DATABASE_URL`, opened read-only, ideally with a read-only role.
-2. **Real rosters committed to a public repo** by the daily workflow (branch `docs/fall-2026-class-rosters`), plus tracked PII files, `uploads/`, `cookies.txt`, and a Supabase Postgres password in `db_push_output.txt`.
+2. **Real rosters committed to a public repo** on branch `docs/fall-2026-class-rosters` (the daily workflow file is deleted; do not add it back). PR #149 removes the tracked roster CSVs, family JSON, `data/*.json`, and `db_push_output.txt` from the tree. This follow-up removes `cookies.txt` and two agreement PDFs. Copies remain in git history until the scrub in [history-scrub-dry-run.md](../APP_KNOWLEDGE/runbooks/history-scrub-dry-run.md). That scrub was not pushed.
 3. **Auth single point of failure:** Supabase `moivwjuglwwfrhqeewju` is live Auth only and must never be paused. Pausing it blocks all logins. ASA Platform Prod and ASA Platform 2026 are old and hold no live data; do not treat them as a failover.
 4. **Email-keyed identity mapping:** changing a user's email in Supabase without the DB (or vice versa) breaks login or attaches to the wrong row.
 5. **No RLS, privileged DB role**; many child/roster routes open on main until PR #149 merges.
