@@ -9,7 +9,8 @@ How GitHub Actions and local test commands relate to merge gates.
 | **Tests** | `tests.yml` | Schema + **production-path** + dev smoke + **client jsdom** |
 | **Payments CI** | payments subset | Billing/webhook tests |
 | **E2E** | Playwright | Dev server boot; placeholder Supabase env OK (see `playwright.config.ts` `envOr`) |
-| **Fall 2026 roster snapshot** | `fall-2026-roster-snapshot.yml` | Not a merge gate. Daily 08:00 ET through **2026-09-21**. Overwrites `docs/audit/fall-2026-class-rosters.csv`; appends pending→enrolled to `docs/audit/fall-2026-class-rosters-transitions.csv`. Pushes to **`docs/fall-2026-class-rosters`** (not `main` — branch protection would reject the bot). Secret: `PROD_DATABASE_URL` (Neon prod, never Railway clone). Cron starts only after this yml is on default `main`. Manual: Actions → Fall 2026 roster snapshot → Run workflow (pick that branch until merged). |
+
+`fall-2026-roster-snapshot.yml` is **deleted**. A workflow with no `on:` block is invalid, and leaving `workflow_dispatch` was not safe: the job read prod (`PROD_DATABASE_URL`) and committed real student rosters to the public branch `docs/fall-2026-class-rosters`. Do not add the file back. The branch and the CSV files are unchanged in this change. Follow-ups, not done here: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
 
 ## Tests job steps (canonical)
 

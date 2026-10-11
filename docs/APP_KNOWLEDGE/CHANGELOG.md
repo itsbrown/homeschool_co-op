@@ -1,5 +1,9 @@
 # App knowledge changelog
 
+## 2026-10-11 (Delete Fall 2026 roster snapshot workflow)
+
+- Deleted `.github/workflows/fall-2026-roster-snapshot.yml`. A workflow with no `on:` block is invalid, and `workflow_dispatch` was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. Do not restore the file. Roster and family CSV/JSON files on `main` are listed in the PR and are not deleted here. Follow-ups: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
+
 ## 2026-10-09 (Week Planner cards and lesson links)
 
 - Week Planner cards show the full description, every objective and material, homework, and notes. The first lesson link uses the lesson title. Later links use the Drive catalog title only when that file’s URL matches; otherwise the hostname. Duplicate labels are numbered. The Lesson sheet uses the same labels.
@@ -227,7 +231,7 @@
 
 ## 2026-08-28 (Daily Fall 2026 roster snapshot through Sep 21)
 
-- GitHub Action `fall-2026-roster-snapshot.yml` runs daily 08:00 ET through **2026-09-21**, overwrites `docs/audit/fall-2026-class-rosters.csv`, appends pending→enrolled to `docs/audit/fall-2026-class-rosters-transitions.csv`. Commits go to **`docs/fall-2026-class-rosters`** (not protected `main`). Secret `PROD_DATABASE_URL` (Neon prod). Cron needs the yml on default `main`. Local refresh still: `export-fall-2026-class-rosters.ts`.
+- GitHub Action `fall-2026-roster-snapshot.yml` ran daily 08:00 ET through **2026-09-21**, overwrote `docs/audit/fall-2026-class-rosters.csv`, and appended pending→enrolled to `docs/audit/fall-2026-class-rosters-transitions.csv`. Commits went to **`docs/fall-2026-class-rosters`** (not protected `main`). Secret `PROD_DATABASE_URL` (Neon prod). **Deleted 2026-10-11** — do not restore the workflow.
 
 ## 2026-08-28 (Fall 2026 class rosters CSV)
 

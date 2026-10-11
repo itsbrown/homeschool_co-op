@@ -343,5 +343,5 @@ If it returns data → `NODE_ENV` is not set to `production` in the deployment e
 - `docs/E2E_COMMANDS.md` — Playwright command + spec catalog
 - `.cursor/rules/e2e-seed-gate.mdc` — always-on seed/login gate
 - `client/src/lib/queryClient.ts` — API client configuration
-- `.github/workflows/fall-2026-roster-snapshot.yml` — daily prod roster CSV through 2026-09-21 on `docs/fall-2026-class-rosters` (`PROD_DATABASE_URL`)
+- `.github/workflows/fall-2026-roster-snapshot.yml` — **deleted** (2026-10-11). It published real student rosters from prod (`PROD_DATABASE_URL`) to public branch `docs/fall-2026-class-rosters`. Do not add it back. Leave that branch in place until a follow-up deletes it, scrubs history, and rotates `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
 - `replit.md` — project documentation and architecture notes
