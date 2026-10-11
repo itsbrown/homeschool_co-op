@@ -491,7 +491,8 @@ function Router() {
       pathname.startsWith('/forms/') ||
       pathname.startsWith('/qr/') ||
       pathname.startsWith('/store/') ||
-      pathname.startsWith('/fundraiser/');
+      pathname.startsWith('/fundraiser/') ||
+      pathname === '/concierge';
     if (!isAuthenticated && !isLoading && !onAuthOrPublicPath) {
       console.log(`🔒 Redirecting unauthenticated user from ${location} to login`);
       setLocation(loginPathWithReturnTo(pathname));
@@ -596,6 +597,7 @@ function Router() {
       <Route path="/old-login" component={Login} />
       <Route path="/school-admin-login" component={SchoolAdminLogin} />
       <Route path="/register" component={Register} />
+      <Route path="/concierge" component={ParentConciergePage} />
 
 
       <Route path="/curriculum" component={Curriculum} />

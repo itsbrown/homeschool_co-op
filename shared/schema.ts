@@ -3569,6 +3569,32 @@ export const insertCheckoutFunnelEventSchema = createInsertSchema(checkoutFunnel
 export type InsertCheckoutFunnelEvent = z.infer<typeof insertCheckoutFunnelEventSchema>;
 export type CheckoutFunnelEvent = typeof checkoutFunnelEvents.$inferSelect;
 
+/**
+ * Parent concierge chat analytics. Not user_activity_events (that check
+ * constraint cannot store these types and feeds age/gender engagement slices).
+ * Metadata must not hold child birthdate, medical text, allergies, or a segment.
+ */
+export const conciergeEventTypes = ["concierge_turn", "concierge_tool"] as const;
+
+export const conciergeEvents = pgTable("concierge_events", {
+  id: serial("id").primaryKey(),
+  schoolId: integer("school_id").references(() => schools.id, { onDelete: "set null" }),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  eventType: text("event_type").notNull(),
+  toolName: text("tool_name"),
+  ok: boolean("ok"),
+  latencyMs: integer("latency_ms"),
+  metadata: jsonb("metadata").default({}).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertConciergeEventSchema = createInsertSchema(conciergeEvents).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertConciergeEvent = z.infer<typeof insertConciergeEventSchema>;
+export type ConciergeEvent = typeof conciergeEvents.$inferSelect;
+
 export const programDeliveryDocuments = pgTable("program_delivery_documents", {
   id: serial("id").primaryKey(),
   schoolId: integer("school_id").notNull().references(() => schools.id, { onDelete: "cascade" }),

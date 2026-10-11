@@ -91,30 +91,28 @@ const response = await anthropic.messages.create({
 - **Service**: `cfoInsightsService.ts`
 - **Purpose**: Financial analytics and insights for school administrators
 
-### 7. Parent AI Concierge
-- **Purpose**: Default parent landing page — an action-capable AI assistant for managing enrollments, payments, child registration, and school questions through conversational interface
-- **Endpoint**: `POST /api/parent-concierge/chat`
-- **Model**: `claude-sonnet-4-20250514` (tool-use API)
-- **Rate limit**: 20 requests/minute
-- **Route**: `/dashboard` (parent role default), also `/parent/concierge`
-- **Legacy dashboard**: `/parent/home` (non-AI parent dashboard)
-- **Frontend**: `client/src/pages/ParentConciergePage.tsx`
-- **Backend**: `server/api/parent-concierge.ts`
-- **Architecture**: Uses Claude tool-use API — Claude decides which tools to call based on the conversation. The backend executes tool calls in a loop until Claude produces a final text response.
-- **8 action tools**:
-  1. `lookup_classes` — search available classes (optional: search query, child age)
-  2. `check_enrollments` — check enrollment status for parent's children
-  3. `check_payments` — check payment status, upcoming payments, balances
-  4. `check_credits` — check available credit balance (volunteer, referral, etc.)
-  5. `check_waitlist` — check waitlist positions for children
-  6. `search_knowledge_base` — search school KB for policies, curriculum, schedules
-  7. `add_to_cart` — add class to parent's cart (classId, childId, paymentPlan). Returns structured `cartActions` in the API response; the frontend `ParentConciergePage` picks these up and calls `addItem()` on `CartContext` so the item goes through the normal cart → checkout → Stripe flow. Does NOT create enrollments directly — AI is advisory only.
-  8. `register_child` — register a new child (firstName, lastName, age, gradeLevel)
-- **Cart action flow**: When `add_to_cart` tool executes, the backend returns a `cartActions` array in the JSON response. The frontend processes these by calling `useCart().addItem()` for each action, which adds items to the real cart (localStorage + CartContext). The parent then proceeds to checkout normally.
-- **Context injected**: Parent name, children list, membership status, school name — built fresh for each message via `buildSystemPrompt()`
-- **Graceful fallback**: When Anthropic is unavailable, the UI shows a fallback card with quick-action links to browse classes, check payments, etc. instead of the chat interface
-- **XSS prevention**: AI response content must NEVER use `dangerouslySetInnerHTML`. Use safe React rendering with manual string parsing (see `SafeMessageContent` component)
-- **Routing rule**: All "Browse on your own" links in the concierge must point to `/parent/home` (legacy dashboard), not `/dashboard`, to avoid routing loop
+### 7. Parent concierge (Phase 1)
+- **Purpose**: Chat for enrollment questions, and for a signed-in parent's own family, published week materials, and free event RSVPs. It does not take payment, open a cart, or register a child.
+- **Endpoint**: `POST /api/concierge/chat` (mounted from `server/index.ts`)
+- **Model**: Vercel AI SDK `generateText` through AI Gateway. Default model id `anthropic/claude-sonnet-4.5` (`AI_GATEWAY_MODEL` overrides). `CONCIERGE_AI_MOCK=1` never calls the gateway.
+- **Env names**: `AI_GATEWAY_API_KEY`, `AI_GATEWAY_MODEL`, `CONCIERGE_LEAD_EMAIL`, `CONCIERGE_AI_MOCK`. SendGrid uses the existing `SENDGRID_API_KEY` and `SENDGRID_FROM_EMAIL`. Do not commit values.
+- **Rate limit**: 20 requests/minute (1000 when `NODE_ENV=test`)
+- **Pages**: `/concierge` is public. `/parent/concierge` is inside `ParentAppShell`.
+- **Frontend**: `client/src/pages/ParentConciergePage.tsx` (plain React text, no `dangerouslySetInnerHTML`)
+- **Backend**: `server/services/concierge/*` and `server/api/concierge-chat.ts`
+- **Tools** (server ignores model-supplied parent, user, email, and child ids; session user and `users.school_id` only):
+  1. `get_my_family` — children in that school where `parent_id` or `child_guardians.guardian_user_id` is `req.user.id`. A `childId` outside that set is refused before any family payload is returned.
+  2. `get_week_materials` — published week-plan blocks for those children's enrolled classes at that school. Same `childId` check, before plans are loaded.
+  3. `rsvp_event` — $0 store RSVP only when `store_products.school_id` is the parent's school. The product is not loaded by id alone. Any enabled attendee price above 0 is a handoff. No Stripe.
+  4. `start_enrollment_inquiry` — SendGrid lead to Corey via `sendConciergeLeadEmail`. No Brevo fallback. No enrollment row.
+- **Anonymous**: public `/concierge` posts with no session. The server answers from the enrollment corpus (and the inquiry tool). Family tools are not executed.
+- **Preview demo**: `PREVIEW_DEMO_MODE` plus `VERCEL=1`. Refuse `REPLIT_DEPLOYMENT`, any `REPL_ID`-style env, and any value of `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, or `VITE_SUPABASE_ANON_KEY`. `VERCEL_ENV=production` is allowed only for project `prj_CAJuC46Z8ur1WKWqgdr1VnHkVUZj` or host `asa-concierge-preview.vercel.app`. The main `server/index.ts` app ignores the demo cookie when the flag is off.
+- **Test import**: the cookie test sets `CONCIERGE_SKIP_SERVER_START=1` only around its `server/index.ts` import. Do not skip startup for every `NODE_ENV=test` run. Merge order is #149, then #150 (SQL 267), then this PR (SQL 268). Never `db:push`.
+- **Public page**: `/concierge` is on the unauthenticated allowlists in `App.tsx` and `queryClient.ts` (the same lists #149 uses for `/fundraiser/` and the other public prefixes). `/parent/concierge` stays inside the parent shell.
+- **Sensitive text** (payment, medical, custody, enrollment change, child registration) returns a handoff and does not call the model.
+- **Analytics**: `concierge_events` (`server/migrations/268-concierge-events.sql`), SQL only, after `267-platform-schools.sql`. Never `db:push`. Not `user_activity_events`.
+- **Do not mount** `server/api/parent-concierge.ts`. That file is the old unmounted Anthropic router (`check_payments`, `check_credits`, `add_to_cart`, `register_child`). It is not this concierge.
+- **Routing rule**: "Browse on your own" points to `/parent/home` when the parent is signed in.
 
 ### 8. Form Smart Builder
 - **Purpose**: School-admin conversational form designer — proposes field drafts for review; never auto-publishes
@@ -184,11 +182,13 @@ const messages = [
 ];
 ```
 
-## Parent concierge (planned, not the live Anthropic router)
+## Parent concierge (Phase 1, not the Anthropic router)
 
-Phase 0 design: `docs/parent-concierge/ADR-001.md`. The new chat uses the Vercel AI SDK and AI Gateway from an **Express** route (this repo is Vite + Express, not Next.js). Tools are only `get_my_family`, `get_week_materials`, `rsvp_event`, and `start_enrollment_inquiry`. Leads go to Corey via SendGrid. No Stripe, no cart, no child marketing profile.
+Implemented: `docs/parent-concierge/ADR-001.md`. Express route `POST /api/concierge/chat`. Vercel AI SDK and AI Gateway (this repo is Vite + Express, not Next.js). Tools are only `get_my_family`, `get_week_materials`, `rsvp_event`, and `start_enrollment_inquiry`. Leads go to Corey via SendGrid (`sendConciergeLeadEmail`). No Stripe, no cart, no child marketing profile. Local fake seed: `npx tsx scripts/seed-concierge-local.ts` with `CONCIERGE_LOCAL_DATABASE_URL`.
 
-`server/api/parent-concierge.ts` is **not mounted** and does not follow that ADR (direct Anthropic, payment and cart tools). Do not mount it as the concierge. Other assistants stay on `@anthropic-ai/sdk` until an ADR moves them.
+`server/api/parent-concierge.ts` is **not mounted** and does not follow that ADR (direct Anthropic, payment and cart tools). Do not mount it. Other assistants stay on `@anthropic-ai/sdk` until an ADR moves them.
+
+Vercel preview only: `docs/parent-concierge/preview.md`. `PREVIEW_DEMO_MODE=1` uses in-memory fake families and does not call Supabase. Do not set that flag on the Replit production VM. Do not change `npm run build` or `npm start` for the preview; those remain the Replit scripts.
 
 ## Common Pitfalls
 
@@ -232,8 +232,10 @@ Phase 0 design: `docs/parent-concierge/ADR-001.md`. The new chat uses the Vercel
 - `server/api/enrollment-assistant.ts` — enrollment assistant API endpoint
 - `server/api/payment-help.ts` — payment help assistant API endpoint
 - `server/api/smart-tutorial.ts` — smart tutorial system API endpoint
-- `server/api/parent-concierge.ts` — Parent AI Concierge API endpoint (tool-use pattern)
-- `client/src/pages/ParentConciergePage.tsx` — Parent AI Concierge frontend (chat UI, context sidebar, fallback)
+- `server/api/concierge-chat.ts` — Phase 1 parent concierge route
+- `server/services/concierge/` — tools, guardrails, gateway/mock chat, analytics
+- `server/api/parent-concierge.ts` — unmounted Anthropic router; do not mount
+- `client/src/pages/ParentConciergePage.tsx` — chat-first concierge page
 - `server/services/aiContentAnalyzer.ts` — document content analysis
 - `server/services/knowledgeBaseProcessor.ts` — knowledge base document processing, content extraction
 - `server/services/knowledgeBaseExtraction.ts` — knowledge base extraction utilities

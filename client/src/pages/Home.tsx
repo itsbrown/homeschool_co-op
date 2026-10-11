@@ -101,6 +101,11 @@ export default function Home() {
                 Parent Login
               </Button>
             </Link>
+            <Link href="/concierge">
+              <Button variant="outline" size="lg" className="w-full sm:w-auto text-base px-8">
+                Ask about enrollment
+              </Button>
+            </Link>
           </div>
         </div>
       </section>

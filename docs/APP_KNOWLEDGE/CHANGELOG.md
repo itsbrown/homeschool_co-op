@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-10-11 (Parent concierge test startup)
+
+- `CONCIERGE_SKIP_SERVER_START=1` is the only switch that skips `server/index.ts` startup. The concierge cookie test sets it. The Tests workflow does not. `NODE_ENV=test` still runs `registerRoutes` and returns before `listen`, same as `main`.
+- Merge this lane as #149, then #150 (migration 267), then #155 (migration 268). SQL only. Never `db:push`.
+
 ## 2026-10-11 (Mask target, roster workflow, shared docs)
 
 - Rebased this branch onto `main`. #154 is merged: `.github/workflows/fall-2026-roster-snapshot.yml` is deleted. Do not add it back. `PROD_DATABASE_URL` was the app Postgres on Replit (Replit-managed vs Neon unconfirmed), never the Railway clone.
@@ -16,6 +21,31 @@
 ## 2026-10-11 (Delete Fall 2026 roster snapshot workflow)
 
 - Deleted `.github/workflows/fall-2026-roster-snapshot.yml`. A workflow with no `on:` block is invalid, and `workflow_dispatch` was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. Do not restore the file. Roster and family CSV/JSON files on `main` are listed in the PR and are not deleted here. Follow-ups: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
+
+## 2026-10-11 (Parent concierge demo env)
+
+- Demo mode refuses if `DATABASE_URL` or any of `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` is set. No host or database-name matching.
+- `VERCEL_ENV=production` is allowed only when `VERCEL_PROJECT_ID` is `prj_CAJuC46Z8ur1WKWqgdr1VnHkVUZj` or `VERCEL_PROJECT_PRODUCTION_URL` is `asa-concierge-preview.vercel.app`.
+- The main server ignores the demo cookie unless demo mode is on. Public `/concierge` belongs on #149's allowlists in `App.tsx` and `client/src/lib/queryClient.ts`. #154 does not change those lists. This branch is rebased onto `main` after the #152 squash.
+
+## 2026-10-11 (Parent concierge review)
+
+- Preview demo starts only with `PREVIEW_DEMO_MODE` and `VERCEL=1`. It refuses `REPLIT_DEPLOYMENT`, `REPL_ID`-style env, and a production-looking `DATABASE_URL`. Do not require `VERCEL_ENV=preview`: `asa-concierge-preview.vercel.app` is that project's production alias. See [parent-concierge/preview.md](../parent-concierge/preview.md).
+- Family tools filter by the session user and `users.school_id`. A foreign `childId` is refused before data is returned. RSVP loads the event only when `school_id` matches. Public `/concierge` has no session, so those tools are not executed.
+- `server/migrations/268-concierge-events.sql` stays after #150's `267-platform-schools.sql`. Apply it as SQL only. Never `db:push`.
+
+## 2026-10-10 (Parent concierge Vercel preview)
+
+- Vercel preview settings are in [parent-concierge/preview.md](../parent-concierge/preview.md). Framework preset Other, root `.`, build `VITE_PREVIEW_DEMO_MODE=1 npx vite build`, output `dist/public`. Replit `build` and `start` are unchanged.
+- `PREVIEW_DEMO_MODE` is in-memory only. It refuses to start on Replit production or when `DATABASE_URL` looks like production. Supabase is not called. SendGrid sends only when `CONCIERGE_LEAD_EMAIL` and `SENDGRID_API_KEY` are both set.
+
+## 2026-10-10 (Parent concierge Phase 1)
+
+- `POST /api/concierge/chat` is the concierge. `server/api/parent-concierge.ts` stays unmounted (Anthropic, payments, cart). Do not mount it.
+- Signed-in tools (`get_my_family`, `get_week_materials`, `rsvp_event`) use `req.user.id` and `children.parent_id` / `child_guardians.guardian_user_id`. Tool arguments cannot select another family. `rsvp_event` writes a $0 store order or hands off; it does not call Stripe.
+- `start_enrollment_inquiry` uses `sendConciergeLeadEmail` (SendGrid only, `CONCIERGE_LEAD_EMAIL`). Anonymous answers come from `enrollment-corpus.ts`, not a live site crawl.
+- Analytics table is `concierge_events` in `server/migrations/268-concierge-events.sql` (267 is claimed by unmerged school-setup work). Apply the SQL by hand. Chat still returns if the insert fails (`analyticsLogged: false`).
+- Local seed `scripts/seed-concierge-local.ts` requires `CONCIERGE_LOCAL_DATABASE_URL` on localhost and a database name containing `local` or `test`. Fake families only. Not `db:push`.
 
 ## 2026-10-10 (Do not pause live Auth)
 

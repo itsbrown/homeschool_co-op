@@ -37,7 +37,7 @@ A parent is a `users` row.
 | `birthdate` | `date`, required. There is no stored age. Age bands in analytics are computed (`prek_k`, `grades_1_3`, `grades_4_8`, `grades_9_12`, `adult`). |
 | `grade_level` | Required display label (`1st Grade`), not the class slug (`1st-grade`). |
 | `school_id`, `location_id` | Campus. |
-| `allergies`, `medical_info`, `special_needs`, `gender`, Lexile / math fields | Sensitive. Not concierge tool output in Phase 0. The mask drops them. |
+| `allergies`, `medical_info`, `special_needs`, `gender`, Lexile / math fields | Sensitive. Phase 1 tools do not select them. The mask drops them. |
 
 `child_guardians` links another `users.id` to a child (`guardian_user_id`, `relationship`, `is_primary`). `get_my_family` includes those children.
 
@@ -97,3 +97,16 @@ A $0 event can be recorded without Stripe. A priced attendee type goes through s
 - `school_class_enrollments` as the only roster
 - `checkout_funnel_events` or `user_activity_events` as the chat log
 - `marketing_links` / `link_analytics` as a place to store child attributes
+
+## Concierge analytics
+
+`concierge_events` (`server/migrations/268-concierge-events.sql`, also `shared/schema.ts`). Apply the SQL file after `267-platform-schools.sql`. Never `db:push`:
+
+| Column | Role |
+|--------|------|
+| `school_id`, `user_id` | Nullable. Anonymous turns leave `user_id` null. |
+| `event_type` | `concierge_turn` or `concierge_tool` |
+| `tool_name`, `ok`, `latency_ms` | Tool rows. Turn rows leave `tool_name` null. |
+| `metadata` | jsonb. Allowed keys in practice: `anonymous`, `handoff`, `handoffCode`, `messageChars`, `mode`, `toolCount`. Sanitizer drops profile-like keys and long strings. |
+
+`rsvp_event` writes a $0 `store_orders` row (`status` paid, `total_cents` 0, no Stripe ids) and `store_order_items.metadata.rsvp`. It does not call `fulfillStoreCheckoutWithoutPayment`. If any enabled attendee `priceCents` is above 0, the tool hands off and writes no order.

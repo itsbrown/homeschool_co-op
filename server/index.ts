@@ -2,6 +2,16 @@
 import "./local-env";
 // Load test environment configuration (conditionally based on NODE_ENV)
 import "./test-env-loader";
+import { assertPreviewDemoAllowed, isPreviewDemoRequested } from "./services/concierge/preview-demo-guard";
+
+if (isPreviewDemoRequested()) {
+  try {
+    assertPreviewDemoAllowed();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    if (process.env.NODE_ENV !== "test") process.exit(1);
+  }
+}
 
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
@@ -55,6 +65,7 @@ import scheduleBuilderRouter from "./api/schedule-builder";
 import scheduleAiRouter from "./api/schedule-ai";
 import calendarEventsRouter from "./api/calendar-events";
 import calendarFeedRouter from "./api/calendar-feed";
+import conciergeChatRouter from "./api/concierge-chat";
 import { registerObjectStorageRoutes } from './replit_integrations/object_storage';
 import {
   isE2eObjectStorageStubEnabled,
@@ -265,6 +276,7 @@ app.use("/api/schedule-builder", scheduleBuilderRouter);
 app.use("/api/schedule-ai", scheduleAiRouter);
 app.use("/api/calendar-events", calendarEventsRouter);
 app.use("/api/calendar", calendarFeedRouter);
+app.use("/api/concierge", conciergeChatRouter);
 
 // Test endpoints for development
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
@@ -350,6 +362,12 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
 
 (async () => {
   try {
+  // The concierge cookie test imports this module and sets
+  // CONCIERGE_SKIP_SERVER_START=1 so registerRoutes / init-db do not run.
+  // Every other test run, and npm run dev, follow the same startup as main.
+  if (process.env.CONCIERGE_SKIP_SERVER_START === "1") {
+    return;
+  }
   // Import and apply auth middleware for admin routes
   const { supabaseAuth } = await import("./middleware/supabase-auth");
   const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");
