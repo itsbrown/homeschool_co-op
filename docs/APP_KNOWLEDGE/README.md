@@ -48,6 +48,7 @@ Multi-tenant school management for co-ops and academies: registration, campuses/
 | [runbooks/public-mentor-application-form.md](./runbooks/public-mentor-application-form.md) | Mentor form: seed, clone/provision, public URL |
 | [runbooks/checkout-payment-e2e-audit.md](./runbooks/checkout-payment-e2e-audit.md) | Member-cart payment options matrix + Playwright specs |
 | [runbooks/google-drive-service-account.md](./runbooks/google-drive-service-account.md) | Create/install Drive service-account key so Week Planner Connect folder can list files |
+| [runbooks/history-scrub-dry-run.md](./runbooks/history-scrub-dry-run.md) | Dry run only: paths and counts for a git history scrub of leaked roster and family files. No push. |
 | [CHANGELOG.md](./CHANGELOG.md) | Knowledge updates by date |
 
 ### Existing project docs (authoritative for depth)

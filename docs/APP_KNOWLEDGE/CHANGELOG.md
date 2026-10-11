@@ -1,5 +1,11 @@
 # App knowledge changelog
 
+## 2026-10-11 (Public-repo family data: tree delete left to #149, history scrub dry run)
+
+- This change removes only tracked files that open PR #149 does not already `git rm`: `cookies.txt`, two agreement PDFs under `uploads/`, and three `attached_assets/Pasted*` logs whose names contain `parentEmail` or `user-email`. `parents_template.csv` stays: it is an HTML document, 0 email-shaped tokens.
+- Roster CSVs, `docs/audit` family JSON, `exports/brevo-contacts.csv`, `data/*.json`, `db_push_output.txt`, the scheduled-payments backup, and the attached_assets contact CSVs are left to #149 so the two PRs do not delete the same paths.
+- History scrub is dry-run only. Commands, path list, and counts: [runbooks/history-scrub-dry-run.md](./runbooks/history-scrub-dry-run.md). A scrub does not recall clones or caches. Make the repo private and rotate the named secrets.
+
 ## 2026-10-11 (Mask target, roster workflow, shared docs)
 
 - Rebased this branch onto `main`. #154 is merged: `.github/workflows/fall-2026-roster-snapshot.yml` is deleted. Do not add it back. `PROD_DATABASE_URL` was the app Postgres on Replit (Replit-managed vs Neon unconfirmed), never the Railway clone.
