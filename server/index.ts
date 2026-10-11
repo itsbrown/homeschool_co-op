@@ -362,9 +362,10 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
 
 (async () => {
   try {
-  // Jest imports the exported app for route checks. Do not register the rest of the
-  // process or open init-db from that import.
-  if (process.env.NODE_ENV === "test") {
+  // The concierge cookie test imports this module and sets
+  // CONCIERGE_SKIP_SERVER_START=1 so registerRoutes / init-db do not run.
+  // Every other test run, and npm run dev, follow the same startup as main.
+  if (process.env.CONCIERGE_SKIP_SERVER_START === "1") {
     return;
   }
   // Import and apply auth middleware for admin routes

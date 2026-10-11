@@ -48,6 +48,8 @@ Do not set `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SU
 
 `server/index.ts` runs the check at boot. With demo mode off, that process does not read the `asa_preview_parent` cookie. Setting `PREVIEW_DEMO_MODE` on the Replit app exits the process.
 
+The concierge Jest file that imports `server/index.ts` sets `CONCIERGE_SKIP_SERVER_START=1` before that import, inside `jest.isolateModulesAsync`, so `registerRoutes` and `init-db` do not run for that one case. The flag is unset everywhere else. `NODE_ENV=test` still follows the same startup as `main`: register routes, skip Vite, and return before `listen`.
+
 ## What the preview is not
 
 It is not the full school app. Payments, cart, and the unmounted Anthropic router are not part of this function. It is not a production deploy. Migration `268-concierge-events.sql` is not applied by the preview, because analytics stay in memory.

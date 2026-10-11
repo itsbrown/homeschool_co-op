@@ -1,5 +1,10 @@
 # Parent concierge changelog
 
+## 2026-10-11 (Review: test startup flag and merge order)
+
+- `server/index.ts` skips `registerRoutes` and `init-db` only when `CONCIERGE_SKIP_SERVER_START=1`. The concierge cookie test sets that flag. Other test runs and `npm run dev` start the same way as `main`.
+- Merge order: #149, then #150 (`267-platform-schools.sql`), then #155 (`268-concierge-events.sql`). Apply those files as SQL. Never `db:push`.
+
 ## 2026-10-11 (mask read and write guards)
 
 - Source reads are accepted only for a read-only transaction (`default_transaction_read_only=on`) or a read-only role (`reader`, `readonly`, `read_only`).

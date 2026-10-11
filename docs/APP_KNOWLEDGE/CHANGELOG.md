@@ -1,5 +1,10 @@
 # App knowledge changelog
 
+## 2026-10-11 (Parent concierge test startup)
+
+- `CONCIERGE_SKIP_SERVER_START=1` is the only switch that skips `server/index.ts` startup. The concierge cookie test sets it. The Tests workflow does not. `NODE_ENV=test` still runs `registerRoutes` and returns before `listen`, same as `main`.
+- Merge this lane as #149, then #150 (migration 267), then #155 (migration 268). SQL only. Never `db:push`.
+
 ## 2026-10-11 (Mask target, roster workflow, shared docs)
 
 - Rebased this branch onto `main`. #154 is merged: `.github/workflows/fall-2026-roster-snapshot.yml` is deleted. Do not add it back. `PROD_DATABASE_URL` was the app Postgres on Replit (Replit-managed vs Neon unconfirmed), never the Railway clone.

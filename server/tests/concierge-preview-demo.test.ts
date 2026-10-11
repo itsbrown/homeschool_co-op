@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterEach, describe, expect, it } from "@jest/globals";
+import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import request from "supertest";
 import {
   assertPreviewDemoAllowed,
@@ -39,6 +39,7 @@ const saved = {
   sendgrid: process.env.SENDGRID_API_KEY,
   mock: process.env.CONCIERGE_AI_MOCK,
   gateway: process.env.AI_GATEWAY_API_KEY,
+  skipServerStart: process.env.CONCIERGE_SKIP_SERVER_START,
 };
 
 function restoreEnv() {
@@ -66,6 +67,7 @@ function restoreEnv() {
   assign("SENDGRID_API_KEY", saved.sendgrid);
   assign("CONCIERGE_AI_MOCK", saved.mock);
   assign("AI_GATEWAY_API_KEY", saved.gateway);
+  assign("CONCIERGE_SKIP_SERVER_START", saved.skipServerStart);
 }
 
 function clearReplitEnv() {
@@ -366,8 +368,13 @@ describe("main Express server", () => {
     delete process.env.PREVIEW_DEMO_MODE;
     process.env.CONCIERGE_AI_MOCK = "1";
     delete process.env.AI_GATEWAY_API_KEY;
-    const { default: app } = await import("../index");
-    const response = await request(app)
+    process.env.CONCIERGE_SKIP_SERVER_START = "1";
+    let app: import("express").Express | undefined;
+    await jest.isolateModulesAsync(async () => {
+      const imported = await import("../index");
+      app = imported.default;
+    });
+    const response = await request(app!)
       .post("/api/concierge/chat")
       .set("Cookie", "asa_preview_parent=2")
       .set("x-preview-demo-parent", "avery")

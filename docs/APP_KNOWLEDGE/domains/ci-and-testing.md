@@ -24,6 +24,8 @@ How GitHub Actions and local test commands relate to merge gates.
 
 **Not in PR Tests gate:** full `npm run test:server` (700+ tests, Stripe/HTTP, ~45m failures). Run locally with `npm test` or debug in Payments CI.
 
+`server/index.ts` startup in that job matches `main`: `registerRoutes` runs, Vite is skipped, and the process returns before `listen`. `CONCIERGE_SKIP_SERVER_START=1` is set only by the concierge cookie test, not by this workflow.
+
 ## Env (Tests job)
 
 - `DATABASE_URL` / `TEST_DATABASE_URL` → `asa_test` Postgres service
