@@ -1,8 +1,8 @@
 # App knowledge changelog
 
-## 2026-10-10 (Disable Fall 2026 roster snapshot workflow)
+## 2026-10-11 (Delete Fall 2026 roster snapshot workflow)
 
-- `.github/workflows/fall-2026-roster-snapshot.yml` no longer has a schedule or `workflow_dispatch`. Manual dispatch was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. There was no push trigger. Do not restore triggers or run the workflow. The branch and the CSV files are unchanged.
+- Deleted `.github/workflows/fall-2026-roster-snapshot.yml`. A workflow with no `on:` block is invalid, and `workflow_dispatch` was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. Do not restore the file. Roster and family CSV/JSON files on `main` are listed in the PR and are not deleted here. Follow-ups: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
 
 ## 2026-10-09 (Week Planner cards and lesson links)
 
@@ -231,7 +231,7 @@
 
 ## 2026-08-28 (Daily Fall 2026 roster snapshot through Sep 21)
 
-- GitHub Action `fall-2026-roster-snapshot.yml` runs daily 08:00 ET through **2026-09-21**, overwrites `docs/audit/fall-2026-class-rosters.csv`, appends pending→enrolled to `docs/audit/fall-2026-class-rosters-transitions.csv`. Commits go to **`docs/fall-2026-class-rosters`** (not protected `main`). Secret `PROD_DATABASE_URL` (Neon prod). Cron needs the yml on default `main`. Local refresh still: `export-fall-2026-class-rosters.ts`.
+- GitHub Action `fall-2026-roster-snapshot.yml` ran daily 08:00 ET through **2026-09-21**, overwrote `docs/audit/fall-2026-class-rosters.csv`, and appended pending→enrolled to `docs/audit/fall-2026-class-rosters-transitions.csv`. Commits went to **`docs/fall-2026-class-rosters`** (not protected `main`). Secret `PROD_DATABASE_URL` (Neon prod). **Deleted 2026-10-11** — do not restore the workflow.
 
 ## 2026-08-28 (Fall 2026 class rosters CSV)
 
