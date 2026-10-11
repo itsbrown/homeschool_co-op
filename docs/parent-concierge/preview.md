@@ -34,7 +34,7 @@ Set these on the Vercel project for Preview. Do not put values in git.
 | `SENDGRID_API_KEY` | no | Same as above. |
 | `SENDGRID_FROM_EMAIL` | no | Existing sender, only if SendGrid is used. |
 
-Do not set `DATABASE_URL` to production, Neon, Supabase, Railway, or Replit. Do not set Supabase keys for this preview. Do not set `PREVIEW_DEMO_MODE` on the Replit production VM. `VERCEL` is set by Vercel. Do not set `VERCEL_ENV`; `production` on this project's alias is expected.
+Do not set `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, or `VITE_SUPABASE_ANON_KEY` at all. Any value blocks demo mode. Do not set `PREVIEW_DEMO_MODE` on the Replit production VM. `VERCEL` is set by Vercel.
 
 ## Guard
 
@@ -42,11 +42,11 @@ Do not set `DATABASE_URL` to production, Neon, Supabase, Railway, or Replit. Do 
 
 - `REPLIT_DEPLOYMENT` is unset
 - no Replit-style variable is set (`REPL_ID`, `REPL_OWNER`, `REPL_SLUG`, or any `REPLIT_*`)
-- `DATABASE_URL` is empty or does not look like production (hosted host, or a database name containing `prod`)
+- `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY` are all unset. The guard does not inspect the value.
 
-The project `asa-concierge-preview` serves this demo on its Vercel production alias (`asa-concierge-preview.vercel.app`). `VERCEL_ENV` may be `production` there. The guard does not require `VERCEL_ENV=preview`.
+`VERCEL_ENV=preview` (or an unset `VERCEL_ENV`) is allowed. `VERCEL_ENV=production` is allowed only when `VERCEL_PROJECT_ID` is `prj_CAJuC46Z8ur1WKWqgdr1VnHkVUZj` or `VERCEL_PROJECT_PRODUCTION_URL` is `asa-concierge-preview.vercel.app`. That is the project whose production alias serves this demo. Any other project's production env is refused.
 
-`server/index.ts` runs the check at boot. Setting `PREVIEW_DEMO_MODE` on the Replit app exits the process. An empty `DATABASE_URL` is allowed on Vercel.
+`server/index.ts` runs the check at boot. With demo mode off, that process does not read the `asa_preview_parent` cookie. Setting `PREVIEW_DEMO_MODE` on the Replit app exits the process.
 
 ## What the preview is not
 

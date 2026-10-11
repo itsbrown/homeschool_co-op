@@ -41,7 +41,7 @@ Operational hub: [../APP_KNOWLEDGE/README.md](../APP_KNOWLEDGE/README.md).
 
 The preview is a separate Vercel project. It does not use the Replit `build` or `start` scripts and does not need a database. Settings, env names, and the demo-mode guard are in [preview.md](./preview.md).
 
-Required preview env: `PREVIEW_DEMO_MODE=1`. Vercel sets `VERCEL=1`. The build command sets `VITE_PREVIEW_DEMO_MODE=1`. Optional: `AI_GATEWAY_API_KEY`, `AI_GATEWAY_MODEL`, `CONCIERGE_LEAD_EMAIL`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`. Do not require `VERCEL_ENV=preview`: this project serves the demo on its production alias. Do not set a production `DATABASE_URL` or Supabase keys for this preview. Do not set `PREVIEW_DEMO_MODE` on the Replit production VM. The guard also refuses `REPLIT_DEPLOYMENT` and any `REPL_ID`-style variable.
+Required preview env: `PREVIEW_DEMO_MODE=1`. Vercel sets `VERCEL=1`. The build command sets `VITE_PREVIEW_DEMO_MODE=1`. Optional: `AI_GATEWAY_API_KEY`, `AI_GATEWAY_MODEL`, `CONCIERGE_LEAD_EMAIL`, `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`. `VERCEL_ENV=production` is allowed only for project `prj_CAJuC46Z8ur1WKWqgdr1VnHkVUZj` or host `asa-concierge-preview.vercel.app`. Do not set `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, or `VITE_SUPABASE_ANON_KEY` on this preview. Do not set `PREVIEW_DEMO_MODE` on the Replit production VM. The guard also refuses `REPLIT_DEPLOYMENT` and any `REPL_ID`-style variable.
 
 ## What this phase does not do
 

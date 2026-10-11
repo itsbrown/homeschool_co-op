@@ -6,6 +6,13 @@
 - Writes are accepted only for a local or dev target. The database name must include `dev`, `mask`, `scratch`, `local`, or `test`. Neon, Supabase, and Replit hosts are refused, as are prod-looking and source-equal targets.
 - Test fixtures in `scripts/lib/prod-to-dev-mask.test.mjs` are synthetic. The script was not run against a database.
 
+## 2026-10-11 (Review: demo env and public allowlist)
+
+- Demo mode refuses when `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, or `VITE_SUPABASE_ANON_KEY` is set. The value is not pattern-matched.
+- `VERCEL_ENV=production` is allowed only for Vercel project `prj_CAJuC46Z8ur1WKWqgdr1VnHkVUZj` or production host `asa-concierge-preview.vercel.app`.
+- `server/index.ts` ignores `asa_preview_parent` when demo mode is off.
+- `/concierge` is on both public allowlists #149 uses (`App.tsx` and `queryClient.ts`). `/parent/concierge` is not. #154 does not change those lists. The branch is rebased onto `main` after the #152 squash.
+
 ## 2026-10-11 (Review: demo guard, school scope)
 
 - Demo mode starts only when `PREVIEW_DEMO_MODE` is set and `VERCEL=1`. It refuses `REPLIT_DEPLOYMENT`, any `REPL_ID`-style variable, and a production-looking `DATABASE_URL`. It does not require `VERCEL_ENV=preview`, because `asa-concierge-preview` uses its Vercel production alias.

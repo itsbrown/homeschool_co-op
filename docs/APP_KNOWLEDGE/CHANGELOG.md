@@ -17,6 +17,12 @@
 
 - Deleted `.github/workflows/fall-2026-roster-snapshot.yml`. A workflow with no `on:` block is invalid, and `workflow_dispatch` was not harmless: it read prod via `PROD_DATABASE_URL` and pushed class roster CSVs to the public branch `docs/fall-2026-class-rosters`. Do not restore the file. Roster and family CSV/JSON files on `main` are listed in the PR and are not deleted here. Follow-ups: delete branch `docs/fall-2026-class-rosters`, scrub history, and rotate `PROD_DATABASE_URL` and `ROSTER_SNAPSHOT_TOKEN`.
 
+## 2026-10-11 (Parent concierge demo env)
+
+- Demo mode refuses if `DATABASE_URL` or any of `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` is set. No host or database-name matching.
+- `VERCEL_ENV=production` is allowed only when `VERCEL_PROJECT_ID` is `prj_CAJuC46Z8ur1WKWqgdr1VnHkVUZj` or `VERCEL_PROJECT_PRODUCTION_URL` is `asa-concierge-preview.vercel.app`.
+- The main server ignores the demo cookie unless demo mode is on. Public `/concierge` belongs on #149's allowlists in `App.tsx` and `client/src/lib/queryClient.ts`. #154 does not change those lists. This branch is rebased onto `main` after the #152 squash.
+
 ## 2026-10-11 (Parent concierge review)
 
 - Preview demo starts only with `PREVIEW_DEMO_MODE` and `VERCEL=1`. It refuses `REPLIT_DEPLOYMENT`, `REPL_ID`-style env, and a production-looking `DATABASE_URL`. Do not require `VERCEL_ENV=preview`: `asa-concierge-preview.vercel.app` is that project's production alias. See [parent-concierge/preview.md](../parent-concierge/preview.md).

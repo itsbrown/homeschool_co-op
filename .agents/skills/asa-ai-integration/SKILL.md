@@ -106,7 +106,8 @@ const response = await anthropic.messages.create({
   3. `rsvp_event` — $0 store RSVP only when `store_products.school_id` is the parent's school. The product is not loaded by id alone. Any enabled attendee price above 0 is a handoff. No Stripe.
   4. `start_enrollment_inquiry` — SendGrid lead to Corey via `sendConciergeLeadEmail`. No Brevo fallback. No enrollment row.
 - **Anonymous**: public `/concierge` posts with no session. The server answers from the enrollment corpus (and the inquiry tool). Family tools are not executed.
-- **Preview demo**: `PREVIEW_DEMO_MODE` plus `VERCEL=1`. Refuse `REPLIT_DEPLOYMENT`, any `REPL_ID`-style env, and a production-looking `DATABASE_URL`. Do not require `VERCEL_ENV=preview`.
+- **Preview demo**: `PREVIEW_DEMO_MODE` plus `VERCEL=1`. Refuse `REPLIT_DEPLOYMENT`, any `REPL_ID`-style env, and any value of `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, or `VITE_SUPABASE_ANON_KEY`. `VERCEL_ENV=production` is allowed only for project `prj_CAJuC46Z8ur1WKWqgdr1VnHkVUZj` or host `asa-concierge-preview.vercel.app`. The main `server/index.ts` app ignores the demo cookie when the flag is off.
+- **Public page**: `/concierge` is on the unauthenticated allowlists in `App.tsx` and `queryClient.ts` (the same lists #149 uses for `/fundraiser/` and the other public prefixes). `/parent/concierge` stays inside the parent shell.
 - **Sensitive text** (payment, medical, custody, enrollment change, child registration) returns a handoff and does not call the model.
 - **Analytics**: `concierge_events` (`server/migrations/268-concierge-events.sql`), SQL only, after `267-platform-schools.sql`. Never `db:push`. Not `user_activity_events`.
 - **Do not mount** `server/api/parent-concierge.ts`. That file is the old unmounted Anthropic router (`check_payments`, `check_credits`, `add_to_cart`, `register_child`). It is not this concierge.

@@ -4,8 +4,9 @@ import { afterEach, describe, expect, it } from "@jest/globals";
 import request from "supertest";
 import {
   assertPreviewDemoAllowed,
-  databaseUrlLooksLikeProd,
-  PreviewDemoRefused,
+  CONCIERGE_PREVIEW_PROJECT_ID,
+  CONCIERGE_PREVIEW_PRODUCTION_HOST,
+  DEMO_BLOCKED_ENV,
 } from "../services/concierge/preview-demo-guard";
 import {
   previewDemoAnalytics,
@@ -23,6 +24,12 @@ const saved = {
   databaseUrl: process.env.DATABASE_URL,
   vercel: process.env.VERCEL,
   vercelEnv: process.env.VERCEL_ENV,
+  vercelProjectId: process.env.VERCEL_PROJECT_ID,
+  vercelProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL,
+  supabaseUrl: process.env.SUPABASE_URL,
+  supabaseServiceRole: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  viteSupabaseUrl: process.env.VITE_SUPABASE_URL,
+  viteSupabaseAnon: process.env.VITE_SUPABASE_ANON_KEY,
   replId: process.env.REPL_ID,
   replOwner: process.env.REPL_OWNER,
   replSlug: process.env.REPL_SLUG,
@@ -44,6 +51,12 @@ function restoreEnv() {
   assign("DATABASE_URL", saved.databaseUrl);
   assign("VERCEL", saved.vercel);
   assign("VERCEL_ENV", saved.vercelEnv);
+  assign("VERCEL_PROJECT_ID", saved.vercelProjectId);
+  assign("VERCEL_PROJECT_PRODUCTION_URL", saved.vercelProductionUrl);
+  assign("SUPABASE_URL", saved.supabaseUrl);
+  assign("SUPABASE_SERVICE_ROLE_KEY", saved.supabaseServiceRole);
+  assign("VITE_SUPABASE_URL", saved.viteSupabaseUrl);
+  assign("VITE_SUPABASE_ANON_KEY", saved.viteSupabaseAnon);
   assign("REPL_ID", saved.replId);
   assign("REPL_OWNER", saved.replOwner);
   assign("REPL_SLUG", saved.replSlug);
@@ -63,13 +76,19 @@ function clearReplitEnv() {
   delete process.env.REPLIT_DEV_DOMAIN;
 }
 
+function clearDemoBlockedEnv() {
+  for (const name of DEMO_BLOCKED_ENV) delete process.env[name];
+}
+
 function enableDemo() {
   process.env.PREVIEW_DEMO_MODE = "1";
   process.env.VERCEL = "1";
   process.env.VERCEL_ENV = "production";
+  process.env.VERCEL_PROJECT_ID = CONCIERGE_PREVIEW_PROJECT_ID;
+  delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
   process.env.NODE_ENV = "production";
   clearReplitEnv();
-  delete process.env.DATABASE_URL;
+  clearDemoBlockedEnv();
   delete process.env.CONCIERGE_LEAD_EMAIL;
   delete process.env.SENDGRID_API_KEY;
   delete process.env.AI_GATEWAY_API_KEY;
@@ -82,13 +101,14 @@ afterEach(() => {
 });
 
 describe("preview demo guard", () => {
-  it("requires VERCEL=1 and refuses Replit or a production-looking database", () => {
+  it("requires VERCEL=1 and refuses Replit or any database or Supabase env", () => {
     process.env.PREVIEW_DEMO_MODE = "1";
     process.env.NODE_ENV = "production";
     process.env.VERCEL_ENV = "production";
+    process.env.VERCEL_PROJECT_ID = CONCIERGE_PREVIEW_PROJECT_ID;
     delete process.env.VERCEL;
     clearReplitEnv();
-    delete process.env.DATABASE_URL;
+    clearDemoBlockedEnv();
     expect(() => assertPreviewDemoAllowed()).toThrow(/VERCEL=1 is required/);
 
     process.env.VERCEL = "1";
@@ -111,21 +131,44 @@ describe("preview demo guard", () => {
     expect(() => assertPreviewDemoAllowed()).toThrow(/REPLIT_DEV_DOMAIN/);
 
     clearReplitEnv();
-    process.env.DATABASE_URL = "postgresql://user:pass@ep-cool-night.neon.tech/asa";
-    expect(() => assertPreviewDemoAllowed()).toThrow(/DATABASE_URL looks like production/);
-    expect(databaseUrlLooksLikeProd("postgresql://user:pass@db.supabase.co/postgres")).toBe(true);
-    expect(databaseUrlLooksLikeProd("postgresql://user:pass@localhost/asa_prod")).toBe(true);
-    expect(databaseUrlLooksLikeProd("postgresql://user:pass@127.0.0.1/asa_concierge_local")).toBe(false);
-    expect(databaseUrlLooksLikeProd(undefined)).toBe(false);
+    process.env.VERCEL_ENV = "preview";
+    delete process.env.VERCEL_PROJECT_ID;
+    for (const name of DEMO_BLOCKED_ENV) {
+      clearDemoBlockedEnv();
+      process.env[name] = name === "DATABASE_URL"
+        ? "postgresql://user:pass@127.0.0.1:5432/asa_concierge_local"
+        : "present";
+      expect(() => assertPreviewDemoAllowed()).toThrow(new RegExp(`${name} is set`));
+    }
 
-    delete process.env.DATABASE_URL;
-    process.env.NODE_ENV = "production";
+    clearDemoBlockedEnv();
     process.env.VERCEL_ENV = "production";
+    delete process.env.VERCEL_PROJECT_ID;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    expect(() => assertPreviewDemoAllowed()).toThrow(/concierge preview project/);
+
+    process.env.VERCEL_PROJECT_ID = "prj_someone_else";
+    process.env.VERCEL_PROJECT_PRODUCTION_URL = "other-app.vercel.app";
+    expect(() => assertPreviewDemoAllowed()).toThrow(/concierge preview project/);
+
+    process.env.VERCEL_PROJECT_ID = CONCIERGE_PREVIEW_PROJECT_ID;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+    expect(() => assertPreviewDemoAllowed()).not.toThrow();
+
+    delete process.env.VERCEL_PROJECT_ID;
+    process.env.VERCEL_PROJECT_PRODUCTION_URL = CONCIERGE_PREVIEW_PRODUCTION_HOST;
+    expect(() => assertPreviewDemoAllowed()).not.toThrow();
+
+    process.env.VERCEL_ENV = "preview";
+    delete process.env.VERCEL_PROJECT_ID;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
     expect(() => assertPreviewDemoAllowed()).not.toThrow();
 
     delete process.env.PREVIEW_DEMO_MODE;
-    process.env.DATABASE_URL = "postgresql://user:pass@ep-cool-night.neon.tech/asa";
+    process.env.DATABASE_URL = "postgresql://user:pass@127.0.0.1:5432/asa_concierge_local";
+    process.env.SUPABASE_URL = "https://example.supabase.co";
     process.env.REPLIT_DEPLOYMENT = "1";
+    process.env.VERCEL_ENV = "production";
     expect(() => assertPreviewDemoAllowed()).not.toThrow();
   });
 
@@ -315,5 +358,47 @@ describe("preview demo concierge", () => {
     });
     expect(chat.body.reply).toContain("Rowan");
     expect(chat.body.reply).not.toContain("Skyler");
+  });
+});
+
+describe("main Express server", () => {
+  it("ignores the demo cookie when demo mode is off", async () => {
+    delete process.env.PREVIEW_DEMO_MODE;
+    process.env.CONCIERGE_AI_MOCK = "1";
+    delete process.env.AI_GATEWAY_API_KEY;
+    const { default: app } = await import("../index");
+    const response = await request(app)
+      .post("/api/concierge/chat")
+      .set("Cookie", "asa_preview_parent=2")
+      .set("x-preview-demo-parent", "avery")
+      .send({ messages: [{ role: "user", content: "tool:get_my_family {}" }] });
+    expect(response.status).toBe(200);
+    expect(response.body.toolsUsed).toEqual([]);
+    expect(response.body.reply.toLowerCase()).toContain("sign in");
+    expect(response.body.reply).not.toContain("Rowan");
+    expect(response.body.reply).not.toContain("Avery");
+    expect(response.body.reply).not.toContain("Quinn");
+  });
+});
+
+describe("public route allowlist", () => {
+  it("keeps /concierge on the same public lists #149 uses, and not the signed-in parent path", () => {
+    const appTsx = readFileSync(resolve(root, "client/src/App.tsx"), "utf8");
+    const queryClient = readFileSync(resolve(root, "client/src/lib/queryClient.ts"), "utf8");
+    const appBlock = appTsx.slice(
+      appTsx.indexOf("const onAuthOrPublicPath"),
+      appTsx.indexOf("Redirecting unauthenticated"),
+    );
+    expect(appBlock).toContain("pathname.startsWith('/fundraiser/')");
+    expect(appBlock).toContain("pathname === '/concierge'");
+    expect(appBlock).not.toContain("/parent/concierge");
+
+    const queryBlock = queryClient.slice(
+      queryClient.indexOf("const isOnPublicPath"),
+      queryClient.indexOf("if (!isOnPublicPath)"),
+    );
+    expect(queryBlock).toContain("currentPath.startsWith('/fundraiser/')");
+    expect(queryBlock).toContain("currentPath === '/concierge'");
+    expect(queryBlock).not.toContain("/parent/concierge");
   });
 });

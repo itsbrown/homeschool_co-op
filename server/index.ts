@@ -362,6 +362,11 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
 
 (async () => {
   try {
+  // Jest imports the exported app for route checks. Do not register the rest of the
+  // process or open init-db from that import.
+  if (process.env.NODE_ENV === "test") {
+    return;
+  }
   // Import and apply auth middleware for admin routes
   const { supabaseAuth } = await import("./middleware/supabase-auth");
   const { jwtCheck, requireRole } = await import("./middleware/auth0-auth");

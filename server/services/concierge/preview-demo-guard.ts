@@ -7,6 +7,19 @@ export class PreviewDemoRefused extends Error {
 
 const TRUTHY = new Set(["1", "true", "yes", "on"]);
 
+/** Vercel project `asa-concierge-preview`. Production alias is allowed only for this project. */
+export const CONCIERGE_PREVIEW_PROJECT_ID = "prj_CAJuC46Z8ur1WKWqgdr1VnHkVUZj";
+export const CONCIERGE_PREVIEW_PRODUCTION_HOST = "asa-concierge-preview.vercel.app";
+
+/** Any non-empty value blocks demo mode. Presence is enough; the value is not inspected. */
+export const DEMO_BLOCKED_ENV = [
+  "DATABASE_URL",
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "VITE_SUPABASE_URL",
+  "VITE_SUPABASE_ANON_KEY",
+] as const;
+
 /** True when the operator asked for the no-database preview. Does not mean it is safe. */
 export function isPreviewDemoRequested(): boolean {
   return TRUTHY.has((process.env.PREVIEW_DEMO_MODE || "").trim().toLowerCase());
@@ -30,35 +43,24 @@ export function replitStyleEnvName(): string | null {
   return replitKey ?? null;
 }
 
-/**
- * A URL looks like production when it points at a hosted app database
- * or the database name contains "prod". An empty URL does not.
- */
-export function databaseUrlLooksLikeProd(url: string | undefined): boolean {
-  if (!url || !url.trim()) return false;
-  const lower = url.toLowerCase();
-  if (
-    lower.includes("supabase") ||
-    lower.includes("neon.tech") ||
-    lower.includes("neon.database") ||
-    lower.includes("rlwy.net") ||
-    lower.includes("replit")
-  ) {
-    return true;
-  }
-  try {
-    const parsed = new URL(lower.replace(/^postgres(ql)?:\/\//, "https://"));
-    const dbName = decodeURIComponent((parsed.pathname || "").replace(/^\//, "").split("/")[0] || "");
-    if (dbName.includes("prod")) return true;
-  } catch {
-    return true;
-  }
-  return false;
+function isConciergePreviewProductionUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  const trimmed = value.trim().toLowerCase().replace(/\/$/, "");
+  return (
+    trimmed === CONCIERGE_PREVIEW_PRODUCTION_HOST ||
+    trimmed === `https://${CONCIERGE_PREVIEW_PRODUCTION_HOST}`
+  );
+}
+
+/** True only for the concierge preview Vercel project, by id or by its production hostname. */
+export function isConciergePreviewProject(): boolean {
+  if (process.env.VERCEL_PROJECT_ID === CONCIERGE_PREVIEW_PROJECT_ID) return true;
+  return isConciergePreviewProductionUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL);
 }
 
 /**
- * Demo mode runs only on the Vercel project that serves this preview.
- * That project uses its Vercel production alias, so VERCEL_ENV is not checked.
+ * Demo mode runs only on Vercel, and only with no database or Supabase configuration.
+ * VERCEL_ENV=production is allowed only for the concierge preview project.
  * When the flag is unset, this returns without throwing.
  */
 export function assertPreviewDemoAllowed(): void {
@@ -80,10 +82,17 @@ export function assertPreviewDemoAllowed(): void {
       `Refusing PREVIEW_DEMO_MODE because a Replit environment variable is set (${replitEnv})`,
     );
   }
-  if (databaseUrlLooksLikeProd(process.env.DATABASE_URL)) {
+  if ((process.env.VERCEL_ENV || "").trim() === "production" && !isConciergePreviewProject()) {
     throw new PreviewDemoRefused(
-      "Refusing PREVIEW_DEMO_MODE because DATABASE_URL looks like production",
+      "Refusing PREVIEW_DEMO_MODE because VERCEL_ENV=production is only allowed for the concierge preview project",
     );
+  }
+  for (const name of DEMO_BLOCKED_ENV) {
+    if (envSet(name)) {
+      throw new PreviewDemoRefused(
+        `Refusing PREVIEW_DEMO_MODE because ${name} is set`,
+      );
+    }
   }
 }
 

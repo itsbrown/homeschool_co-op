@@ -104,12 +104,19 @@ async function deletePreviousFakeSchool(): Promise<void> {
 
     await db.delete(programEnrollments).where(eq(programEnrollments.schoolId, school.id));
 
-    const kids = await db.select({ id: children.id }).from(children).where(eq(children.schoolId, school.id));
-    const kidIds = kids.map((row) => row.id);
+    const kidsBySchool = await db.select({ id: children.id }).from(children).where(eq(children.schoolId, school.id));
+    const kidsByParent = userIds.length
+      ? await db.select({ id: children.id }).from(children).where(inArray(children.parentId, userIds))
+      : [];
+    const kidIds = Array.from(new Set([...kidsBySchool, ...kidsByParent].map((row) => row.id)));
     if (kidIds.length > 0) {
       await db.delete(childGuardians).where(inArray(childGuardians.childId, kidIds));
+      await db.delete(programEnrollments).where(inArray(programEnrollments.childId, kidIds));
+      await db.delete(children).where(inArray(children.id, kidIds));
     }
-    await db.delete(children).where(eq(children.schoolId, school.id));
+    if (userIds.length > 0) {
+      await db.delete(childGuardians).where(inArray(childGuardians.guardianUserId, userIds));
+    }
     await db.delete(classes).where(eq(classes.schoolId, school.id));
     await db.delete(categories).where(eq(categories.schoolId, school.id));
     if (userIds.length > 0) await db.delete(users).where(inArray(users.id, userIds));
