@@ -35,8 +35,7 @@ flowchart LR
   JOBS[In-process jobs<br/>ENABLE_BACKGROUND_JOBS=true] --> PG
   JOBS --> ST
   JOBS --> EM
-  GHA[GitHub Action daily<br/>roster snapshot] -->|PROD_DATABASE_URL read| PG
-  GHA -->|commits CSV| GH[(GitHub branch<br/>docs/fall-2026-class-rosters)]
+  GHA[Roster snapshot workflow<br/>deleted in #154]
   RW[(Railway Postgres clone<br/>tokaido.proxy.rlwy.net)] --- TEST[Local dev + Playwright e2e]
 ```
 
@@ -55,7 +54,7 @@ flowchart LR
 | Google Cloud Storage / Document AI | OCR/document processing (`GOOGLE_CLOUD_STORAGE_BUCKET`, `GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID`) | `server/services/documentAI.ts` | [code]; whether used in prod unknown |
 | Stripe (one account) | Customers, PaymentIntents, Checkout Sessions, subscriptions, refunds | API, autopay job | [code]/[audit] |
 | Railway Postgres clone | Test/e2e copy | local dev, Playwright `/api/test/*` seeds | [reported]; `TEST_DATABASE_URL` name [code] |
-| GitHub branch `docs/fall-2026-class-rosters` | Daily Fall 2026 class roster CSV + transitions, read from prod | GitHub Action | [code] `.github/workflows/fall-2026-roster-snapshot.yml` |
+| GitHub branch `docs/fall-2026-class-rosters` | Historical Fall 2026 roster CSV. The daily workflow is deleted (#154, on `main`). | none | Do not restore `.github/workflows/fall-2026-roster-snapshot.yml` |
 | Sentry | Errors (scrubbed via `shared/sentry-scrub.ts`) | server/client | [code]; DSN set in prod unknown |
 
 ## 3. Auth flow and id mapping

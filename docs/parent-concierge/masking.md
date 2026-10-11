@@ -4,7 +4,7 @@ Script: `scripts/mask-prod-to-dev.mjs`
 Rules (no I/O): `scripts/lib/prod-to-dev-mask.mjs`
 Tests: `node --test scripts/lib/prod-to-dev-mask.test.mjs`
 
-The script copies a fixed set of tables from production into a dev database. The source is the production `DATABASE_URL`: the app's Postgres on Replit (Replit-managed vs Neon is still unconfirmed). Pass that URL as `MASK_SOURCE_DATABASE_URL`. The script opens it **read-only**. Prefer a read-only database role on that URL so a session setting is not the only thing stopping a write. Writes go only to the target, and only after the target is shown not to be the source and not to look like production.
+The script copies a fixed set of tables from production into a dev database. The source is the production `DATABASE_URL`: the app's Postgres on Replit (Replit-managed vs Neon is still unconfirmed). Pass that URL as `MASK_SOURCE_DATABASE_URL`. The source session starts with `default_transaction_read_only=on`. Before any write, the script accepts the source only when that setting is `on` or the connected role name is a read-only role (`reader`, `readonly`, or `read_only`). Writes go only to a local or dev target: the database name must include `dev`, `mask`, `scratch`, `local`, or `test`, and the host must not be Neon, Supabase, or Replit. A prod-looking host or database, or a target that equals the source, is still refused.
 
 Phase 0 does not run the script. Do not point it at a real database to "try it."
 
@@ -34,12 +34,13 @@ It does not run `db:push`, does not create tables, and does not create a Supabas
 | `same_database` | Host, port, and database name match, even if the password differs |
 | `target_looks_like_prod` | Target host or database name contains `prod` or `production` as a label. This wins over a dev-like database name, so `prod-db.internal/asa_dev` is still refused |
 | `same_host` | Same server as the source, and the target database name does not contain `dev`, `mask`, `scratch`, `local`, or `test` |
+| `target_not_local_or_dev` | Target database name is not an explicit dev name, or the host is Neon, Supabase, or Replit |
 | `production_process` | `NODE_ENV=production` |
 | `missing_url` / `invalid_url` | Either URL is missing or not a postgres URL |
 
 On `--execute`, after connect and before any target write:
 
-- The source session must report `default_transaction_read_only = on`. The client is started with `-c default_transaction_read_only=on`.
+- The source must be a read-only transaction (`default_transaction_read_only = on`, set with `-c default_transaction_read_only=on`) or a read-only role (`reader`, `readonly`, `read_only`). Otherwise the script stops before any target write.
 - `current_database()` on each connection must match the database name in that URL.
 - Source SQL is `select *` on the allowlist only. `assertSqlIsSelect` rejects insert, update, delete, truncate, and the rest.
 - `TRUNCATE ... RESTART IDENTITY CASCADE` runs inside a transaction on the **target**. Cascade clears dev rows that point at the copied parents (including payment rows on that dev database). It is never issued on the source.

@@ -15,7 +15,7 @@ import {
   SOURCE_STARTUP_OPTIONS,
   assertConnectedEndpoints,
   assertSafeMaskTarget,
-  assertSourceReadOnlySetting,
+  assertSourceReadOnlyAccess,
   describeIdentity,
   planCopy,
   selectAllSql,
@@ -80,8 +80,13 @@ async function executeCopy(sourceUrl, targetUrl, verdict) {
   });
 
   try {
-    const [sourceSetting] = await source`select current_setting('default_transaction_read_only') as v`;
-    assertSourceReadOnlySetting(sourceSetting?.v);
+    const [sourceSetting] = await source`
+      select current_setting('default_transaction_read_only') as v, current_user as role
+    `;
+    assertSourceReadOnlyAccess({
+      transactionReadOnly: sourceSetting?.v,
+      role: sourceSetting?.role,
+    });
     const [sourceDb] = await source`select current_database() as name`;
     const [targetDb] = await target`select current_database() as name`;
     assertConnectedEndpoints({

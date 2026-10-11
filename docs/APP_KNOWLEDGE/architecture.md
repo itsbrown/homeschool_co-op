@@ -30,6 +30,7 @@ Supabase ref `moivwjuglwwfrhqeewju` is live production Auth for portal sign-in. 
 - **`school_id`** scopes schools, locations, classes, enrollments, many admin APIs.
 - **`requireSchoolContext`** middleware injects resolved school on authenticated routes.
 - **Resolve school for admin:** `server/lib/resolve-school-id.ts` — prefers school where `schools.admin_id = user.id` when `users.school_id` is misaligned (production incident).
+- **Platform plan** is `schools.platform_plan` (`internal` for ASA). New schools start on `starter` after approval. Family card charges are allowed only for `internal` until Stripe Connect. Tests: `tenant-isolation.test.ts`. This lands with PR #150; the note is here so the shared doc keeps both sides.
 
 ## Storage
 

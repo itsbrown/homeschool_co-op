@@ -58,6 +58,8 @@ const LAST_NAMES = [
 
 const PROD_LABEL = /(^|[^a-z0-9])(prod|production)([^a-z0-9]|$)/i;
 const DEV_DATABASE = /(dev|mask|scratch|local|test)/i;
+const READ_ONLY_ROLE = /(^|[^a-z0-9])(readonly|read_only|reader)([^a-z0-9]|$)/i;
+const HOSTED_WRITE_HOST = /(^|\.)(neon\.tech|supabase\.co|supabase\.com|replit\.dev|replit\.app|replit\.com)$/i;
 
 const BAND_AGE = {
   prek_k: 4,
@@ -155,7 +157,8 @@ export function looksLikeProd(identity) {
 }
 
 /**
- * Refuse when the target is the source database or looks like production.
+ * Refuse when the target is the source database, looks like production,
+ * is a hosted Neon/Supabase/Replit database, or is not an explicit dev database.
  * Password differences do not make two URLs different databases.
  */
 export function assertSafeMaskTarget({ sourceUrl, targetUrl, nodeEnv = process.env.NODE_ENV }) {
@@ -193,7 +196,33 @@ export function assertSafeMaskTarget({ sourceUrl, targetUrl, nodeEnv = process.e
       );
     }
   }
+  if (HOSTED_WRITE_HOST.test(target.host)) {
+    throw new MaskRefused(
+      "target_not_local_or_dev",
+      `Target host ${target.host} is hosted. Writes go only to a local or dev database.`,
+    );
+  }
+  if (!DEV_DATABASE.test(target.database)) {
+    throw new MaskRefused(
+      "target_not_local_or_dev",
+      "Target database name must include dev, mask, scratch, local, or test",
+    );
+  }
   return { source, target };
+}
+
+/**
+ * The source read is allowed only when the session is read-only, or the
+ * connected role name is a read-only role (reader, readonly, read_only).
+ */
+export function assertSourceReadOnlyAccess({ transactionReadOnly, role }) {
+  const sessionOn = String(transactionReadOnly ?? "").trim().toLowerCase() === "on";
+  const roleOk = READ_ONLY_ROLE.test(String(role ?? ""));
+  if (sessionOn || roleOk) return;
+  throw new MaskRefused(
+    "source_not_readonly",
+    "Source must use a read-only transaction (default_transaction_read_only=on) or a read-only role",
+  );
 }
 
 export function assertSourceReadOnlySetting(value) {

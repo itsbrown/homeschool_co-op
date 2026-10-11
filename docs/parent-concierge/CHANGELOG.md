@@ -1,5 +1,11 @@
 # Parent concierge changelog
 
+## 2026-10-11 (mask read and write guards)
+
+- Source reads are accepted only for a read-only transaction (`default_transaction_read_only=on`) or a read-only role (`reader`, `readonly`, `read_only`).
+- Writes are accepted only for a local or dev target. The database name must include `dev`, `mask`, `scratch`, `local`, or `test`. Neon, Supabase, and Replit hosts are refused, as are prod-looking and source-equal targets.
+- Test fixtures in `scripts/lib/prod-to-dev-mask.test.mjs` are synthetic. The script was not run against a database.
+
 ## 2026-10-09 (data stores)
 
 - Added [data-flows.md](./data-flows.md) and linked it from the README.

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   COPY_TABLES,
@@ -9,6 +10,7 @@ import {
   anchorBirthdate,
   assertConnectedEndpoints,
   assertSafeMaskTarget,
+  assertSourceReadOnlyAccess,
   assertSourceReadOnlySetting,
   assertSqlIsSelect,
   planCopy,
@@ -89,6 +91,51 @@ test("accepts a local dev target that is not the source", () => {
   const verdict = assertSafeMaskTarget({ sourceUrl: SOURCE, targetUrl: TARGET, nodeEnv: "development" });
   assert.equal(verdict.source.database, "asa");
   assert.equal(verdict.target.host, "127.0.0.1");
+});
+
+test("refuses a write target that is not local or an explicit dev database", () => {
+  refused(() =>
+    assertSafeMaskTarget({
+      sourceUrl: SOURCE,
+      targetUrl: "postgresql://dev:secret@127.0.0.1:5432/asa",
+      nodeEnv: "development",
+    }),
+  );
+  refused(() =>
+    assertSafeMaskTarget({
+      sourceUrl: SOURCE,
+      targetUrl: "postgresql://dev:secret@ep-example.neon.tech:5432/asa_dev",
+      nodeEnv: "development",
+    }),
+  );
+  refused(() =>
+    assertSafeMaskTarget({
+      sourceUrl: SOURCE,
+      targetUrl: "postgresql://dev:secret@db.supabase.co:5432/asa_local",
+      nodeEnv: "development",
+    }),
+  );
+});
+
+test("source read requires a read-only transaction or a read-only role", () => {
+  assertSourceReadOnlyAccess({ transactionReadOnly: "on", role: "app" });
+  assertSourceReadOnlyAccess({ transactionReadOnly: "off", role: "asa_readonly" });
+  assertSourceReadOnlyAccess({ transactionReadOnly: "off", role: "reader" });
+  refused(() => assertSourceReadOnlyAccess({ transactionReadOnly: "off", role: "app" }));
+  refused(() => assertSourceReadOnlyAccess({ transactionReadOnly: "", role: "" }));
+});
+
+test("every mask test fixture is synthetic", () => {
+  const src = readFileSync(new URL("./prod-to-dev-mask.test.mjs", import.meta.url), "utf8")
+    .replace(/postgres(?:ql)?:\/\/\S+/g, "");
+  const emails = src.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) ?? [];
+  assert.ok(emails.length > 0);
+  for (const email of emails) {
+    assert.match(email, /@(example\.com|masked\.invalid|zoom\.example)$/);
+  }
+  const phones = src.match(/\b\d{3}-\d{3}-\d{4}\b/g) ?? [];
+  assert.ok(phones.length > 0);
+  for (const phone of phones) assert.match(phone, /555/);
 });
 
 test("connected database names must match the checked URLs", () => {
